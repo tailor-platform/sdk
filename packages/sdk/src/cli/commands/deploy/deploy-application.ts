@@ -2,6 +2,7 @@ import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { internalError } from "#/cli/shared/errors";
 import type { Application, ConfigServices } from "#/cli/services/application";
 import type { ApplicationSettings } from "#/configure/config/types";
+import type { WorkspaceApplication } from "#/parser/app-config/types";
 
 /** An application a deploy plans, with the services its GraphQL API exposes. */
 export type DeployApplication = {
@@ -25,6 +26,30 @@ export function deployApplicationOf(application: Readonly<Application>): DeployA
     authNamespace: getApplicationAuthNamespace(application),
     settings: { cors, allowedIpAddresses, disableIntrospection, metadata },
   };
+}
+
+/**
+ * Describe the applications of a workspace config as a deploy plans them.
+ * @param apps - The workspace's `apps`, by application name
+ * @returns The applications to plan, in config order
+ */
+export function workspaceDeployApplications(
+  apps: Readonly<Record<string, WorkspaceApplication>>,
+): DeployApplication[] {
+  return Object.entries(apps).map(([name, app]) => {
+    const { db, resolver, idp, auth, ...settings } = app;
+    return {
+      name,
+      subgraphs: [
+        ...db.map((namespace) => ({ Type: "tailordb", Name: namespace })),
+        ...resolver.map((namespace) => ({ Type: "pipeline", Name: namespace })),
+        ...(idp === undefined ? [] : [{ Type: "idp", Name: idp }]),
+        ...(auth === undefined ? [] : [{ Type: "auth", Name: auth }]),
+      ],
+      authNamespace: auth,
+      settings,
+    };
+  });
 }
 
 type AuthNamespaceContext = {

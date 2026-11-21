@@ -295,13 +295,13 @@ export async function confirmWorkspaceTakeover(
 /**
  * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
- * @param appName - Target application name
+ * @param appName - Target application name, or undefined for a workspace config
  * @param mode - Whether to prompt, auto-confirm, or only report
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmUnmanagedResources(
   resources: UnmanagedResource[],
-  appName: string,
+  appName: string | undefined,
   mode: ConfirmMode,
 ): Promise<void> {
   if (resources.length === 0) return;
@@ -321,14 +321,14 @@ export async function confirmUnmanagedResources(
 
   if (mode === "dry-run") return;
   if (mode === "yes") {
-    logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
+    logger.success(`Adding to ${managerOf(appName)} (--yes flag specified)...`, {
       mode: "plain",
     });
     return;
   }
 
   const confirmed = await prompt.confirm({
-    message: `Allow tailor to manage these resources for "${appName}"?`,
+    message: `Allow tailor to manage these resources for ${managerOf(appName)}?`,
     default: false,
   });
   if (!confirmed) {
@@ -340,6 +340,10 @@ export async function confirmUnmanagedResources(
     `,
     });
   }
+}
+
+function managerOf(appName: string | undefined): string {
+  return appName === undefined ? "this workspace config" : `"${appName}"`;
 }
 
 export interface ImportantResourceDeletion {

@@ -56,7 +56,13 @@ function plannedDeployment(
   owner: DeployOwner = { kind: "application", name, id: undefined },
 ): PlannedDeployment {
   return {
-    application: { name },
+    source: {
+      kind: "config",
+      config: { name, path: `/${name}/tailor.config.ts` },
+      application: { name },
+    },
+    application: {},
+    envOverrides: { resolver: {}, auth: {} },
     applications: [{ name, subgraphs: [], authNamespace: undefined, settings: {} }],
     owner,
     ...results,
@@ -1867,7 +1873,14 @@ function fakeTarget(
   const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
   const resolverNames = Object.keys(bundles.resolvers ?? {});
   const appName = bundles.appName ?? `fake-app-${fakeTargetSequence}`;
+  const configPath = fakeConfigPath(bundles.configDir ?? `apps/fake-app-${fakeTargetSequence}`);
   return {
+    source: {
+      kind: "config",
+      config: { name: appName, path: configPath },
+      application: { name: appName },
+    },
+    envOverrides: { resolver: {}, auth: {} },
     owner: { kind: "application", name: appName, id: undefined },
     applications: [
       { name: appName, subgraphs: [], authNamespace: bundles.authNamespace, settings: {} },
@@ -1903,7 +1916,7 @@ function fakeTarget(
       secrets: (bundles.vaultNames ?? []).map((vaultName) => ({ vaultName })),
     },
     config: {
-      path: fakeConfigPath(bundles.configDir ?? `apps/fake-app-${fakeTargetSequence}`),
+      path: configPath,
       workflow: {
         executionPolicies: Object.fromEntries(
           (bundles.executionPolicyNames ?? []).map((name) => [name, { name }]),
@@ -1988,11 +2001,11 @@ describe("multi-config deployment orchestration", () => {
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       planTarget: async (params) => {
-        started.push(params.target.application.name);
+        started.push(params.target.applications[0]!.name);
         await new Promise<void>((resolve) => {
           releases.push(resolve);
         });
-        return plannedDeployment(params.target.application.name, emptyPlanResults());
+        return plannedDeployment(params.target.applications[0]!.name, emptyPlanResults());
       },
     });
 
@@ -2002,11 +2015,14 @@ describe("multi-config deployment orchestration", () => {
     await expect(planPromise).resolves.toHaveLength(2);
   });
 
-  test("forwards skip and matches previous deployments by application name", async () => {
+  test("forwards skip and matches previous deployments by config path", async () => {
     const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
     const skip = new Set(["staticWebsite"] as const);
-    const previousBuyer = plannedDeployment("buyer", emptyPlanResults());
-    const previousSupplier = plannedDeployment("supplier", emptyPlanResults());
+    const previousBuyer = { ...plannedDeployment("buyer", emptyPlanResults()), ...targets[0] };
+    const previousSupplier = {
+      ...plannedDeployment("supplier", emptyPlanResults()),
+      ...targets[1],
+    };
     const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
 
     await planDeploymentTargets({
@@ -2019,11 +2035,11 @@ describe("multi-config deployment orchestration", () => {
       previousDeployments: [previousSupplier, previousBuyer],
       planTarget: async (params) => {
         received.push({
-          appName: params.target.application.name,
+          appName: params.target.applications[0]!.name,
           skip: params.skip,
           previous: params.previous,
         });
-        return plannedDeployment(params.target.application.name, emptyPlanResults());
+        return plannedDeployment(params.target.applications[0]!.name, emptyPlanResults());
       },
     });
 
@@ -2035,9 +2051,23 @@ describe("multi-config deployment orchestration", () => {
 });
 
 describe("needsEnvRebuild", () => {
-  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
-    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  function deploymentWithEnv(
+    env: Record<string, string | number | boolean>,
+    envOverrides: PlannedDeployment["envOverrides"] = { resolver: {}, auth: {} },
+  ): PlannedDeployment {
+    return { application: { env }, envOverrides } as unknown as PlannedDeployment;
   }
+
+  test("is true when only an env override references a site this deploy declares", () => {
+    const deployments = [
+      deploymentWithEnv(
+        { siteUrl: "https://already-resolved.example.com" },
+        { resolver: {}, auth: { "shop-auth": { callbackUrl: "my-site:url/callback" } } },
+      ),
+    ];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
 
   test("is true when env references a site this deploy declares", () => {
     const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
@@ -2069,7 +2099,10 @@ describe("needsEnvRebuild", () => {
 
 describe("assertEnvResolvedAfterRebuild", () => {
   function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
-    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+    return {
+      application: { env },
+      envOverrides: { resolver: {}, auth: {} },
+    } as unknown as PlannedDeployment;
   }
 
   test("does not throw when env holds no placeholder for a locally declared site", () => {
@@ -2648,7 +2681,7 @@ describe("collectPlannedMachineUsers", () => {
 
 describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
   function loadedConfig(staticWebsites: ReadonlyArray<{ name: string }>) {
-    return { config: { staticWebsites } } as never;
+    return { kind: "config", config: { staticWebsites } } as never;
   }
 
   test("collects static website names across every config", () => {

@@ -111,6 +111,11 @@ const PLAN_MARKERS = {
 
 function deployment(name: string): PlannedDeployment {
   return {
+    source: {
+      kind: "config",
+      config: { name, path: `/${name}/tailor.config.ts` },
+      application: { name },
+    },
     application: { name },
     ...Object.fromEntries(
       Object.entries(PLAN_MARKERS).map(([kind, marker]) => [kind, { marker: `${name}-${marker}` }]),

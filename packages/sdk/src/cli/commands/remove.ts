@@ -156,7 +156,7 @@ async function execRemove(
   // planned deletions are already final.
   assertStaticWebsiteDeletesNotOffered(plans.staticWebsite);
   await assertResourcesNotInUse({
-    deployments: [{ application, applications: ctx.applications, ...plans }],
+    deployments: [{ owner, application, applications: ctx.applications, ...plans }],
     command: "remove",
     client,
     workspaceId,
