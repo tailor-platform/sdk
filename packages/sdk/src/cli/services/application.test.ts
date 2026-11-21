@@ -1688,6 +1688,60 @@ export default createResolver({
     );
   });
 
+  test("names the Auth service that defines the string invoker of a workflow a resolver starts", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({ name: "main-job", body: () => undefined });
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    fs.mkdirSync(path.join(tmpDir, "resolvers"));
+    fs.writeFileSync(
+      path.join(tmpDir, "resolvers", "start.ts"),
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+import workflow from "../workflow";
+
+export default createResolver({
+  name: "start",
+  operation: "mutation",
+  permission: "allowAnonymous",
+  output: t.string(),
+  body: async () => workflow.start(undefined, { invoker: "batch" }),
+});
+`,
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        workflow: { files: ["./workflow.ts"] },
+        resolver: { "shop-api": { files: ["./resolvers/*.ts"] } },
+        auth: {
+          "shop-auth": defineAuth("shop-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+          }),
+          "admin-auth": defineAuth("admin-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { batch: { attributes: { role: "ADMIN" } } },
+          }),
+        },
+        apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    expect(bundledScripts.resolvers.get("shop-api:start")).toContain(
+      "invoker:{namespace:`admin-auth`,machineUserName:`batch`}",
+    );
+  });
+
   test("asks for table names unique across the workspace", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
     for (const namespace of ["customer", "ledger"]) {

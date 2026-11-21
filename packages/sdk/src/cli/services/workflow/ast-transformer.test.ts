@@ -40,6 +40,7 @@ function transformStartCalls(
   workflowFileMap?: Map<string, string>,
   currentFilePath = path.resolve("test.ts"),
   authNamespace?: string,
+  machineUserAuthNamespaces?: StartContext["machineUserAuthNamespaces"],
 ) {
   const localBindings = new Map<string, StartTarget>();
   for (const [name, jobName] of jobNameMap) {
@@ -63,7 +64,7 @@ function transformStartCalls(
     });
   }
 
-  const context: StartContext = { modules, authNamespace };
+  const context: StartContext = { modules, authNamespace, machineUserAuthNamespaces };
   return transformStartCallsWithContext(source, context, currentFilePath).toString();
 }
 
@@ -1034,6 +1035,62 @@ await myWorkflow.start({ id: 2 }, { invoker: "kiosk" });
         ],
         ["my-workflow", { id: 2 }, { invoker: "kiosk" }],
       ]);
+    });
+  });
+  describe("workflow start invokers in a config with several Auth services", () => {
+    const machineUserAuthNamespaces = new Map([
+      ["batch", ["admin-auth"]],
+      ["seeder", ["shop-auth", "admin-auth"]],
+    ]);
+    const transform = (options: string) =>
+      transformStartCalls(
+        `await myWorkflow.start({ id: 1 }, ${options});`,
+        new Map([["myWorkflow", "my-workflow"]]),
+        new Map<string, string>(),
+        undefined,
+        undefined,
+        undefined,
+        machineUserAuthNamespaces,
+      );
+
+    test("names the Auth service of a string literal invoker that one Auth service defines", async () => {
+      const result = transform('{ invoker: "batch" }');
+      const startWorkflow = vi.fn(async () => "run-id");
+      vi.stubGlobal("tailor", { workflow: { startWorkflow } });
+      using dir = tempDir("start-literal-invoker-");
+      const file = path.join(dir.dir, "start.mjs");
+      fs.writeFileSync(file, result);
+      try {
+        await import(file);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+
+      expect(startWorkflow).toHaveBeenCalledWith(
+        "my-workflow",
+        { id: 1 },
+        { authInvoker: { namespace: "admin-auth", machineUserName: "batch" } },
+      );
+    });
+
+    test.for([
+      { invoker: '"seeder"', code: "WORKFLOW_START_INVOKER_AMBIGUOUS" },
+      { invoker: '"ghost"', code: "WORKFLOW_START_INVOKER_NOT_FOUND" },
+      { invoker: "machineUser", code: "WORKFLOW_START_INVOKER_UNRESOLVED" },
+    ])("rejects the invoker $invoker", ({ invoker, code }) => {
+      expect(() => transform(`{ invoker: ${invoker} }`)).toThrow(expect.objectContaining({ code }));
+    });
+
+    test("rejects options it cannot read", () => {
+      expect(() => transform("options")).toThrow(
+        expect.objectContaining({ code: "WORKFLOW_START_INVOKER_UNRESOLVED" }),
+      );
+    });
+
+    test("keeps an invoker that names its Auth service", () => {
+      expect(() =>
+        transform('{ invoker: { namespace: "shop-auth", machineUserName: "seeder" } }'),
+      ).not.toThrow();
     });
   });
   describe("job start transformation", () => {

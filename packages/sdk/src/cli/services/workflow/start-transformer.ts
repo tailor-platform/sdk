@@ -19,6 +19,7 @@ import {
   type Replacement,
   type StartCallInfo,
   applyReplacements,
+  findProperty,
   getModuleExportName,
   getNamespaceStartCallInfo,
   getStartCallInfo,
@@ -302,6 +303,10 @@ export function transformStartCalls(
       text: prefix,
     });
     const normalizeOptions = call.kind === "workflow" && optionsRange;
+    if (normalizeOptions && startContext.machineUserAuthNamespaces) {
+      const invoker = resolveStartInvoker(call, startContext.machineUserAuthNamespaces);
+      if (invoker) replacements.push(invoker);
+    }
     if (optionsRange) {
       replacements.push({
         start: argsRange.end,
@@ -322,6 +327,88 @@ export function transformStartCalls(
     transformed.prepend(buildNormalizerHelperSource(authNamespace));
   }
   return transformed;
+}
+
+function startInvokerError(
+  call: ResolvedStartCall,
+  code: string,
+  message: string,
+  suggestion: string,
+): CLIError {
+  return CLIError({
+    code,
+    message: `${call.identifierName}.start() ${message}`,
+    suggestion,
+    context: { workflow: call.targetName },
+  });
+}
+
+const OBJECT_INVOKER_SUGGESTION =
+  'Pass the invoker as a string literal, or name its Auth service with { invoker: { namespace: "<auth>", machineUserName: "<machine user>" } }.';
+
+/**
+ * Resolve the string-literal invoker of a workflow start in a config with several Auth services,
+ * whose runtime cannot tell which Auth service a machine user name belongs to.
+ * @param call - The start call
+ * @param machineUserAuthNamespaces - Auth namespaces that define each machine user
+ * @returns The rewrite of a string-literal invoker into the form that names its Auth service, or undefined when the call needs none
+ */
+function resolveStartInvoker(
+  call: ResolvedStartCall,
+  machineUserAuthNamespaces: ReadonlyMap<string, readonly string[]>,
+): Replacement | undefined {
+  const { options } = call;
+  if (options?.type !== "ObjectExpression") {
+    throw startInvokerError(
+      call,
+      "WORKFLOW_START_INVOKER_UNRESOLVED",
+      "passes options the build cannot read, so it cannot tell which Auth service the invoker belongs to.",
+      "Pass the options as an object literal.",
+    );
+  }
+  if (options.properties.some((property) => property.type !== "Property")) {
+    throw startInvokerError(
+      call,
+      "WORKFLOW_START_INVOKER_UNRESOLVED",
+      "spreads its options, so the build cannot tell which Auth service the invoker belongs to.",
+      "Write the invoker in the options object literal.",
+    );
+  }
+  const invoker = findProperty(options.properties, "invoker");
+  if (!invoker || invoker.value.type === "ObjectExpression") return undefined;
+  const { value } = invoker;
+  if (value.type !== "Literal" || typeof value.value !== "string") {
+    throw startInvokerError(
+      call,
+      "WORKFLOW_START_INVOKER_UNRESOLVED",
+      "passes an invoker the build cannot read, and the config has several Auth services.",
+      OBJECT_INVOKER_SUGGESTION,
+    );
+  }
+  const machineUserName = value.value;
+  const namespaces = machineUserAuthNamespaces.get(machineUserName) ?? [];
+  const [namespace, ...others] = namespaces;
+  if (namespace === undefined) {
+    throw startInvokerError(
+      call,
+      "WORKFLOW_START_INVOKER_NOT_FOUND",
+      `runs as "${machineUserName}", which no Auth service of the config defines.`,
+      "Define the machine user in one of the config's Auth services, or name an existing one.",
+    );
+  }
+  if (others.length > 0) {
+    throw startInvokerError(
+      call,
+      "WORKFLOW_START_INVOKER_AMBIGUOUS",
+      `runs as "${machineUserName}", which the Auth services ${namespaces.join(", ")} all define.`,
+      `Name the Auth service: { invoker: { namespace: "${namespace}", machineUserName: "${machineUserName}" } }.`,
+    );
+  }
+  return {
+    start: value.start,
+    end: value.end,
+    text: `{ namespace: ${JSON.stringify(namespace)}, machineUserName: ${JSON.stringify(machineUserName)} }`,
+  };
 }
 
 export function createStartTransformPlugin(
