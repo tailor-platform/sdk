@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -43,13 +44,44 @@ export default {
     return configFile;
   }
 
+  test("calls the hook of the Auth service keyed by its name", async () => {
+    const configFile = writeConfig(`
+const handler = (name) => async ({ env }) => ({ name, env });
+
+export default {
+  auth: {
+    "shop-auth": { hooks: { beforeLogin: { handler: handler("shop-auth") } } },
+    "admin-auth": { hooks: { beforeLogin: { handler: handler("admin-auth") } } },
+  },
+};
+`);
+
+    const bundled = await bundleAuthHooks({
+      configPath: configFile,
+      authName: "admin-auth",
+      authKey: "admin-auth",
+      env: { REGION: "jp" },
+      baseDir: path.dirname(configFile),
+    });
+
+    const bundleFile = path.join(path.dirname(configFile), "hook.mjs");
+    fs.writeFileSync(
+      bundleFile,
+      assertDefined(bundled.get("auth-hook--admin-auth--before-login"), "hook bundle missing"),
+    );
+    const { main } = await import(pathToFileURL(bundleFile).href);
+    await expect(main({ claims: {} })).resolves.toEqual({
+      name: "admin-auth",
+      env: { REGION: "jp" },
+    });
+  });
+
   test("injects the config env into the before-login hook args", async () => {
     const configFile = writeConfig();
 
     const bundled = await bundleAuthHooks({
       configPath: configFile,
       authName: "my-auth",
-      handlerAccessPath: "auth.hooks.beforeLogin.handler",
       env: { ENVIRONMENT: "staging", RETRIES: 3 },
       baseDir: path.dirname(configFile),
     });
@@ -78,7 +110,6 @@ export default {
     const bundled = await bundleAuthHooks({
       configPath: configFile,
       authName: "my-auth",
-      handlerAccessPath: "auth.hooks.beforeLogin.handler",
       baseDir: path.dirname(configFile),
     });
 
@@ -109,7 +140,6 @@ export default {
     const bundled = await bundleAuthHooks({
       configPath: configFile,
       authName: "my-auth",
-      handlerAccessPath: "auth.hooks.beforeLogin.handler",
       baseDir: path.dirname(configFile),
       inlineSourcemap: true,
       inlineSourcemapDependencySources: true,
@@ -132,7 +162,6 @@ export default {
     const bundled = await bundleAuthHooks({
       configPath: configFile,
       authName: "my-auth",
-      handlerAccessPath: "auth.hooks.beforeLogin.handler",
       baseDir: path.dirname(configFile),
     });
 
@@ -155,7 +184,6 @@ export default {
     const bundled = await bundleAuthHooks({
       configPath: configFile,
       authName: "my-auth",
-      handlerAccessPath: "auth.hooks.beforeLogin.handler",
       bundleLogLevel: "WARN",
       baseDir: path.dirname(configFile),
     });
@@ -172,7 +200,6 @@ export default {
       await bundleAuthHooks({
         configPath: configFile,
         authName: "my-auth",
-        handlerAccessPath: "auth.hooks.beforeLogin.handler",
         baseDir,
       });
 
@@ -198,7 +225,6 @@ export default { auth: { hooks: { beforeLogin: { handler } } } };
       const bundled = await bundleAuthHooks({
         configPath: configFile,
         authName: "my-auth",
-        handlerAccessPath: "auth.hooks.beforeLogin.handler",
         baseDir: tmpDir,
         dateDefault: "temporal",
       });

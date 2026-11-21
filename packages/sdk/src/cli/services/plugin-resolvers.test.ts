@@ -15,7 +15,7 @@ import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { defineConfig } from "#/configure/config/index";
-import { defineWorkspace } from "#/configure/config/workspace";
+import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
 import {
@@ -273,18 +273,85 @@ describe("plugin-generated resolvers", () => {
       },
     ]);
     const workspace = loadedWorkspace(
-      defineWorkspace({ db: { main: { files: [] } }, apps: {} }),
+      defineWorkspace({
+        db: { main: { files: [] } },
+        resolver: { main: { files: [] } },
+        apps: {},
+      }),
       configPath,
     );
-    const { tailorDBServices } = defineWorkspaceServices({ workspace, pluginManager });
+    const { tailorDBServices, resolverServices } = defineWorkspaceServices({
+      workspace,
+      pluginManager,
+    });
     for (const tailordb of tailorDBServices) {
       await tailordb.loadTypes();
       await tailordb.processNamespacePlugins();
     }
-    const [resolverService] = definePluginResolverServices(workspace, pluginManager);
+    expect(definePluginResolverServices(workspace, pluginManager)).toEqual([]);
+    const [resolverService] = resolverServices;
     await resolverService!.loadResolvers();
     return Object.keys(resolverService!.resolvers);
   }
+
+  async function processWorkspacePlugins(config: unknown) {
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onTailorDBNamespaceLoaded: () => ({
+          resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
+        }),
+      },
+    ]);
+    const workspace = loadedWorkspace(config, path.join(baseDir, "tailor.config.ts"));
+    for (const tailordb of defineWorkspaceServices({ workspace, pluginManager }).tailorDBServices) {
+      await tailordb.loadTypes();
+      await tailordb.processNamespacePlugins();
+    }
+    return { workspace, pluginManager };
+  }
+
+  test("rejects resolvers a plugin generates into namespaces a workspace config does not declare", async () => {
+    const { workspace, pluginManager } = await processWorkspacePlugins(
+      defineWorkspace({
+        db: { main: { files: [] }, sales: { files: [] }, ledger: { files: [] } },
+        resolver: { ledger: { files: [] } },
+        apps: {},
+      }),
+    );
+
+    expect(() => definePluginResolverServices(workspace, pluginManager)).toThrow(
+      expect.objectContaining({
+        code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+        message:
+          'Plugins generate resolvers into resolver namespaces this config does not declare: "main" (plugin "greeting"), "sales" (plugin "greeting").',
+        suggestion:
+          'Declare each namespace under "resolver", e.g. resolver: { "main": { files: [] } }, and list it in the "resolver" of the apps that expose it.',
+        context: {
+          resourceType: "pipeline.service",
+          namespaces: [
+            { namespace: "main", pluginIds: ["greeting"] },
+            { namespace: "sales", pluginIds: ["greeting"] },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("suggests only declaring the namespace for a defineApp() config", async () => {
+    const { workspace, pluginManager } = await processWorkspacePlugins(
+      defineApp({ name: "shop", db: { main: { files: [] } } }),
+    );
+
+    expect(() => definePluginResolverServices(workspace, pluginManager)).toThrow(
+      expect.objectContaining({
+        code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+        suggestion:
+          'Declare each namespace under "resolver", e.g. resolver: { "main": { files: [] } }.',
+      }),
+    );
+  });
 
   test("generates a workspace's resolver files at the same project-relative path in every checkout", async () => {
     const generatedFiles: string[][] = [];
