@@ -15,12 +15,13 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import {
   buildMetaRequest,
   type DeployOwner,
+  type MetadataLabelWrite,
   resourceTrn,
   withExtraLabels,
   writeMetadataLabelsDirect,
 } from "#/cli/commands/deploy/label";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
-import { getOrNull, isNotFoundError } from "#/cli/shared/client";
+import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
@@ -34,9 +35,25 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 
 const CHUNK_SIZE = 64 * 1024;
 
-/** Owner recorded in the labels of every temporary resource. */
+/**
+ * Owner recorded in the labels of every temporary resource. With no `owner` the resources carry
+ * only `labels`, so a deploy never claims them.
+ */
 interface TemporaryResourceOwner {
-  owner: DeployOwner;
+  /** With no owner the resources carry only `labels`, so a deploy never claims them. */
+  owner: DeployOwner | undefined;
+  /** Labels written to every resource besides the owner's. */
+  labels?: Record<string, string>;
+}
+
+async function temporaryLabelWrite(
+  params: TemporaryResourceOwner,
+  trn: string,
+  extraLabels?: Record<string, string>,
+): Promise<MetadataLabelWrite> {
+  const metadata = { ...params.labels, ...extraLabels };
+  if (params.owner === undefined) return { trn, labels: metadata };
+  return withExtraLabels(await buildMetaRequest({ trn, owner: params.owner }), metadata);
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
@@ -61,7 +78,7 @@ export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
 export async function uploadTemporaryFunction(
   params: UploadTemporaryFunctionParams,
 ): Promise<void> {
-  const { client, workspaceId, name, code, description, owner, mode = "create" } = params;
+  const { client, workspaceId, name, code, description, mode = "create" } = params;
   const content = `${params.prelude ?? ""}${code}`;
   const buffer = Buffer.from(content, "utf-8");
   const info = {
@@ -95,10 +112,7 @@ export async function uploadTemporaryFunction(
   }
   await writeMetadataLabelsDirect(
     client,
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "function_registry", name),
-      owner,
-    }),
+    await temporaryLabelWrite(params, resourceTrn(workspaceId, "function_registry", name)),
   );
 }
 
@@ -111,10 +125,14 @@ export interface TeardownTemporaryWorkflowParams {
   workflowId: string | undefined;
   /** Job functions created under the shared name. */
   jobFunctionNames?: readonly string[];
+  /** Functions registered under the shared name (default: the shared name). */
+  functionNames?: readonly string[];
   /** What the resources run, used in warnings (e.g. `migration`). */
   subject: string;
   /** Sentence of the warning telling how a resource left behind gets removed. */
   leftoverNote: string;
+  /** Receives the warning for a resource that could not be removed (default: `logger.warn`) */
+  warn?: (message: string) => void;
 }
 
 /**
@@ -124,11 +142,13 @@ export interface TeardownTemporaryWorkflowParams {
  * outcome, so every removal is attempted and an unexpected failure is reported
  * as a warning rather than raised.
  * @param params - Resources to remove
+ * @returns Whether every resource is gone
  */
 export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
-): Promise<void> {
+): Promise<boolean> {
   const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
+  const warn = params.warn ?? ((message: string) => logger.warn(message));
   const jobFunctionNames = params.jobFunctionNames ?? [name];
   const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
   if (workflowId) {
@@ -141,8 +161,15 @@ export async function teardownTemporaryWorkflow(
       () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }),
     ]);
   }
-  steps.push(["function", name, () => client.deleteFunctionRegistry({ workspaceId, name })]);
+  for (const functionName of params.functionNames ?? [name]) {
+    steps.push([
+      "function",
+      functionName,
+      () => client.deleteFunctionRegistry({ workspaceId, name: functionName }),
+    ]);
+  }
 
+  let removedAll = true;
   for (const [label, resource, run] of steps) {
     try {
       await run();
@@ -150,12 +177,14 @@ export async function teardownTemporaryWorkflow(
       // An already-absent resource means teardown's goal is met; anything else
       // leaves a resource behind and has to stay diagnosable.
       if (isNotFoundError(error)) continue;
-      logger.warn(
+      removedAll = false;
+      warn(
         `Could not remove the temporary ${subject} ${label} '${resource}': ` +
           `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
       );
     }
   }
+  return removedAll;
 }
 
 /**
@@ -200,6 +229,32 @@ export async function listTemporaryWorkflowExecutions(
 }
 
 /**
+ * List every execution of a temporary workflow, following the pages, newest first.
+ * @param client - Operator client
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @returns The executions, or none when the workflow does not exist
+ */
+export async function listAllTemporaryWorkflowExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<WorkflowExecution[]> {
+  return fetchPaged(async (pageToken, pageSize) => {
+    const response = await getOrNull(() =>
+      client.listWorkflowExecutions({
+        workspaceId,
+        workflowName: name,
+        pageToken,
+        pageSize,
+        pageDirection: PageDirection.DESC,
+      }),
+    );
+    return [response?.executions ?? [], response?.nextPageToken ?? ""];
+  });
+}
+
+/**
  * Remove any leftovers from an earlier interrupted run under the same name.
  *
  * The resource name is stable per run kind and `createFunctionRegistry` is
@@ -221,6 +276,10 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
   name: string;
   /** Job functions to create on the uploaded function, the main one included. */
   jobFunctionNames: readonly string[];
+  /** Function each job function runs, by job function name (default: the shared name). */
+  scriptRefs?: Readonly<Record<string, string>>;
+  /** Main job function of the workflow (default: the shared name). */
+  mainJobFunctionName?: string;
   /** What the resources run, used in errors (e.g. `migration`). */
   subject: string;
   /** Extra labels for the workflow. */
@@ -230,34 +289,37 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
 /** Ids of the resources {@link createTemporaryWorkflow} created, as soon as each exists. */
 export interface CreatedTemporaryWorkflow {
   workflowId?: string;
+  /** Job functions this call created, so a failure rolls back only those */
+  jobFunctionNames?: string[];
 }
 
 /**
  * Create the job functions and the workflow for an uploaded function,
  * labeling each as it is created.
  * @param params - Resources to create
- * @param created - Receives the workflow id before labeling, so teardown can remove it
+ * @param created - Receives the workflow id and the job function names before labeling, so teardown can remove them
  * @returns Workflow id
  */
 export async function createTemporaryWorkflow(
   params: CreateTemporaryWorkflowParams,
   created: CreatedTemporaryWorkflow,
 ): Promise<string> {
-  const { client, workspaceId, name, owner, subject } = params;
+  const { client, workspaceId, name, subject } = params;
   const versions: Record<string, bigint> = {};
   for (const jobFunctionName of params.jobFunctionNames) {
     const { jobFunction } = await client.createWorkflowJobFunction({
       workspaceId,
       jobFunctionName,
-      scriptRef: name,
+      scriptRef: params.scriptRefs?.[jobFunctionName] ?? name,
       publishExecutionEvents: false,
     });
+    (created.jobFunctionNames ??= []).push(jobFunctionName);
     await writeMetadataLabelsDirect(
       client,
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-        owner,
-      }),
+      await temporaryLabelWrite(
+        params,
+        resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
+      ),
     );
     const version = jobFunction?.version;
     if (version === undefined) {
@@ -271,7 +333,7 @@ export async function createTemporaryWorkflow(
   const { workflow } = await client.createWorkflow({
     workspaceId,
     workflowName: name,
-    mainJobFunctionName: name,
+    mainJobFunctionName: params.mainJobFunctionName ?? name,
     jobFunctions: versions,
   });
   const workflowId = workflow?.id;
@@ -281,13 +343,17 @@ export async function createTemporaryWorkflow(
   created.workflowId = workflowId;
   await writeMetadataLabelsDirect(
     client,
-    withExtraLabels(
-      await buildMetaRequest({ trn: resourceTrn(workspaceId, "workflow", name), owner }),
-      params.workflowLabels ?? {},
+    await temporaryLabelWrite(
+      params,
+      resourceTrn(workspaceId, "workflow", name),
+      params.workflowLabels,
     ),
   );
   return workflowId;
 }
+
+/** Code of the error {@link pollUntilTerminal} throws when its deadline passes. */
+export const POLL_DEADLINE_EXCEEDED = "WORKFLOW_POLL_DEADLINE_EXCEEDED";
 
 export interface PollExecutionOptions {
   /** Called with each polled execution that is still active. */
@@ -304,6 +370,8 @@ export interface PollUntilTerminalParams {
   pollInterval: number;
   /** What the execution runs, used in errors (e.g. `Migration`). */
   subject: string;
+  /** Epoch milliseconds after which polling stops with {@link POLL_DEADLINE_EXCEEDED} */
+  deadline?: number;
   options?: PollExecutionOptions;
 }
 
@@ -316,17 +384,48 @@ export interface PollUntilTerminalParams {
 export async function pollUntilTerminal(
   params: PollUntilTerminalParams,
 ): Promise<WorkflowExecution> {
-  const { client, workspaceId, executionId, pollInterval, subject, options = {} } = params;
+  const {
+    client,
+    workspaceId,
+    executionId,
+    pollInterval,
+    subject,
+    deadline,
+    options = {},
+  } = params;
+  const throwIfPastDeadline = (expired = false) => {
+    if (deadline === undefined || (!expired && Date.now() < deadline)) return;
+    throw CLIError({
+      code: POLL_DEADLINE_EXCEEDED,
+      message: `${subject} workflow execution '${executionId}' did not finish in time.`,
+    });
+  };
+  const sleepUntilNextPoll = async () => {
+    throwIfPastDeadline();
+    const wait =
+      deadline === undefined ? pollInterval : Math.min(pollInterval, deadline - Date.now());
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  };
   // loop exits when the workflow execution reaches a terminal status
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   while (true) {
     let execution: WorkflowExecution | undefined;
+    let lookupSignal: AbortSignal | undefined;
     try {
-      ({ execution } = await client.getWorkflowExecution({ workspaceId, executionId }));
+      throwIfPastDeadline();
+      if (deadline !== undefined) {
+        lookupSignal = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+      }
+      const request = { workspaceId, executionId };
+      ({ execution } = await (lookupSignal
+        ? client.getWorkflowExecution(request, { signal: lookupSignal })
+        : client.getWorkflowExecution(request)));
     } catch (error) {
+      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
+      throwIfPastDeadline(lookupSignal?.aborted);
       if (!isRetryableWaitError(error)) throw error;
       options.onPollFailed?.();
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await sleepUntilNextPoll();
       continue;
     }
     if (!execution) {
@@ -337,7 +436,7 @@ export async function pollUntilTerminal(
     }
     if (!isExecutionActive(execution)) return execution;
     await options.onActive?.(execution);
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+    await sleepUntilNextPoll();
   }
 }
 

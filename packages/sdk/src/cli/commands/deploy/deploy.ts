@@ -15,6 +15,7 @@ import { logger } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
+import { reclaimFinishedWorkflowRuns } from "#/cli/shared/workflow-run";
 import { withSpan } from "#/cli/telemetry/index";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
@@ -1191,6 +1192,13 @@ async function deployInternal(
           profile: options?.profile,
         });
     if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
+
+    const reclaimedRuns = (
+      await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() })
+    )?.removed.length;
+    if (reclaimedRuns) {
+      logger.info(`Removed the resources of ${reclaimedRuns} finished \`workflow run\` run(s).`);
+    }
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {

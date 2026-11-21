@@ -1,12 +1,21 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
   WorkflowExecution_Status,
+  WorkflowJobExecution_Status,
+  type WorkflowExecution,
   type WorkflowExecutionSchema,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { logger } from "./logger";
-import { assertNoActiveScriptWorkflow, withScriptWorkflow } from "./script-workflow";
+import {
+  assertNoActiveScriptWorkflow,
+  liveMainJobExecutionId,
+  mainJobExecutionId,
+  outcomeJobExecutionId,
+  readOutcome,
+  withScriptWorkflow,
+} from "./script-workflow";
 import type { ScriptInvoker } from "./script-executor";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { FunctionLogEntrySchema } from "@tailor-platform/tailor-proto/function_resource_pb";
@@ -80,7 +89,13 @@ function createMockClient(options: MockClientOptions = {}) {
       Promise.resolve({
         execution: {
           status: options.status ?? WorkflowExecution_Status.SUCCESS,
-          jobExecutions: [{ executionId: "fn-1" }],
+          jobExecutions: [
+            {
+              executionId: "fn-1",
+              kind: { case: "jobFunction", value: { name: "job" } },
+              position: { depth: 0, parentWorkflowJobExecutionId: "" },
+            },
+          ],
         },
       }),
     getFunctionExecution: () =>
@@ -354,5 +369,330 @@ describe("assertNoActiveScriptWorkflow", () => {
     await expect(
       assertNoActiveScriptWorkflow({ client, workspaceId: "ws", names: ["a"] }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("the main job of a workflow execution", () => {
+  const row = (
+    executionId: string,
+    depth: number,
+    kind: "jobFunction" | "wait" = "jobFunction",
+  ) => ({
+    executionId,
+    kind: { case: kind, value: { name: "job" } },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const executionOf = (...rows: ReturnType<typeof row>[]) =>
+    ({
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+
+  test("is the job at depth 0 even when the jobs it started are listed after it", () => {
+    expect(mainJobExecutionId(executionOf(row("fn-main", 0), row("fn-child", 1)))).toBe("fn-main");
+  });
+
+  test("is the job at depth 0 even when the jobs it started are listed before it", () => {
+    expect(mainJobExecutionId(executionOf(row("fn-child", 1), row("fn-main", 0)))).toBe("fn-main");
+  });
+
+  test("is the last row at depth 0 when the main job was recorded more than once", () => {
+    expect(
+      mainJobExecutionId(executionOf(row("fn-first", 0), row("fn-child", 1), row("fn-last", 0))),
+    ).toBe("fn-last");
+  });
+
+  test("is never a wait checkpoint, which runs no function", () => {
+    expect(mainJobExecutionId(executionOf(row("nil", 0, "wait"), row("fn-main", 0)))).toBe(
+      "fn-main",
+    );
+  });
+
+  test("is read for the result, not the job it started", async () => {
+    const client = mockOperatorClient({
+      getFunctionExecution: async (request) => ({
+        execution: {
+          logEntries: [],
+          result: request.executionId === "fn-main" ? '"main"' : '"child"',
+        },
+      }),
+    });
+
+    const outcome = await readOutcome({
+      client: client,
+      workspaceId: "ws",
+      execution: executionOf(row("fn-main", 0), row("fn-child", 1)),
+      pollInterval: 1,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      logs: "",
+      result: '"main"',
+      jobFunctionName: "job",
+    });
+  });
+});
+
+describe("the job a finished run's outcome is read from", () => {
+  const job = (executionId: string, depth: number, status: WorkflowJobExecution_Status) => ({
+    executionId,
+    status,
+    kind: { case: "jobFunction", value: { name: "job" } },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const failedRun = (...rows: ReturnType<typeof job>[]) =>
+    ({
+      status: WorkflowExecution_Status.FAILED,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+  const { FAILED, SUCCESS } = WorkflowJobExecution_Status;
+
+  test("is the deepest job that failed, since the main job only reports that a job it started did not return", () => {
+    expect(
+      outcomeJobExecutionId(failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, FAILED))),
+    ).toBe("fn-child");
+  });
+
+  test("is the main job when it failed on its own and the jobs it started succeeded", () => {
+    expect(
+      outcomeJobExecutionId(failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, SUCCESS))),
+    ).toBe("fn-main");
+  });
+
+  test("is the main job of a run that succeeded", () => {
+    const run = {
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: [job("fn-main", 0, SUCCESS), job("fn-child", 1, FAILED)],
+    } as unknown as WorkflowExecution;
+
+    expect(outcomeJobExecutionId(run)).toBe("fn-main");
+  });
+
+  describe("for a run that started other jobs", () => {
+    const named = (
+      executionId: string,
+      depth: number,
+      status: WorkflowJobExecution_Status,
+      name: string,
+    ) => ({
+      ...job(executionId, depth, status),
+      kind: { case: "jobFunction", value: { name } },
+    });
+    const logsOf = (logs: Record<string, string>) =>
+      mockOperatorClient({
+        getFunctionExecution: async (request) => {
+          const log = logs[request.executionId ?? ""];
+          return {
+            execution: {
+              logEntries: log ? [{ message: log }] : [],
+              result: request.executionId === "fn-main" ? '"main"' : '"child"',
+            },
+          };
+        },
+      });
+    const succeeded = {
+      status: WorkflowExecution_Status.SUCCESS,
+      jobExecutions: [
+        named("fn-main", 0, SUCCESS, "run-main"),
+        named("fn-child", 1, SUCCESS, "run-child"),
+      ],
+    } as unknown as WorkflowExecution;
+
+    test("reports the logs of every job, each line marked with its job", async () => {
+      const client = logsOf({ "fn-main": "main line 1\nmain line 2", "fn-child": "child line" });
+
+      const outcome = await readOutcome({
+        client: client,
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+        jobLabel: (name) => name.replace("run-", ""),
+      });
+
+      expect(outcome.logs).toBe("[main] main line 1\n[main] main line 2\n[child] child line");
+      expect(outcome.result).toBe('"main"');
+    });
+
+    test("reports the logs of the parent too when a child failed, and the error of the child", async () => {
+      const failed = {
+        status: WorkflowExecution_Status.FAILED,
+        jobExecutions: [
+          named("fn-main", 0, FAILED, "run-main"),
+          named("fn-child", 1, FAILED, "run-child"),
+        ],
+      } as unknown as WorkflowExecution;
+      const client = mockOperatorClient({
+        getFunctionExecution: async (request) => ({
+          execution:
+            request.executionId === "fn-child"
+              ? { logEntries: [{ message: "child log" }], result: "", error: { message: "boom" } }
+              : { logEntries: [{ message: "parent log" }], result: "" },
+        }),
+      });
+
+      const outcome = await readOutcome({
+        client: client,
+        workspaceId: "ws",
+        execution: failed,
+        pollInterval: 1,
+      });
+
+      expect(outcome.logs).toBe("[run-main] parent log\n[run-child] child log");
+      expect(outcome).toMatchObject({ success: false, error: "boom" });
+    });
+
+    test("still reports the outcome when the log of another job cannot be read", async () => {
+      const client = mockOperatorClient({
+        getFunctionExecution: async (request) => {
+          if (request.executionId === "fn-child") throw new Error("lookup failed");
+          return { execution: { logEntries: [{ message: "main line" }], result: '"main"' } };
+        },
+      });
+
+      const outcome = await readOutcome({
+        client: client,
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+        jobLabel: (name) => name.replace("run-", ""),
+      });
+
+      expect(outcome).toEqual({
+        success: true,
+        logs: "[main] main line",
+        result: '"main"',
+        jobFunctionName: "run-main",
+      });
+    });
+
+    test("reads the logs of the jobs it started at the same time", async () => {
+      let inFlight = 0;
+      let peak = 0;
+      const client = mockOperatorClient({
+        getFunctionExecution: async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          inFlight -= 1;
+          return { execution: { logEntries: [{ message: "x" }], result: '"r"' } };
+        },
+      });
+      const manyJobs = {
+        status: WorkflowExecution_Status.SUCCESS,
+        jobExecutions: [
+          named("fn-main", 0, SUCCESS, "run-main"),
+          named("fn-a", 1, SUCCESS, "run-a"),
+          named("fn-b", 1, SUCCESS, "run-b"),
+          named("fn-c", 1, SUCCESS, "run-c"),
+        ],
+      } as unknown as WorkflowExecution;
+
+      await readOutcome({
+        client: client,
+        workspaceId: "ws",
+        execution: manyJobs,
+        pollInterval: 1,
+      });
+
+      expect(peak).toBe(3);
+    });
+
+    test("names the job function the outcome was read from", async () => {
+      const outcome = await readOutcome({
+        client: logsOf({}),
+        workspaceId: "ws",
+        execution: succeeded,
+        pollInterval: 1,
+      });
+
+      expect(outcome.jobFunctionName).toBe("run-main");
+    });
+  });
+
+  describe("for a run that was canceled while its main job waited for a job it started", () => {
+    const { CANCELED } = WorkflowJobExecution_Status;
+    const canceledRun = (...rows: ReturnType<typeof job>[]) =>
+      ({
+        status: WorkflowExecution_Status.CANCELED,
+        jobExecutions: rows,
+      }) as unknown as WorkflowExecution;
+    const callRecord = '{"arg":{},"arg_hash":"abc","call_index":0,"job_name":"child"}';
+
+    test("is the job that was canceled, not the main job that only holds the record of its call", () => {
+      expect(
+        outcomeJobExecutionId(
+          canceledRun(job("fn-main", 0, SUCCESS), job("fn-child", 1, CANCELED)),
+        ),
+      ).toBe("fn-child");
+    });
+
+    test("reports a cancellation, not the record of the suspended call, as the error", async () => {
+      const client = mockOperatorClient({
+        getFunctionExecution: async () => ({
+          execution: { logEntries: [], result: callRecord },
+        }),
+      });
+
+      const outcome = await readOutcome({
+        client: client,
+        workspaceId: "ws",
+        execution: canceledRun(job("fn-main", 0, CANCELED)),
+        pollInterval: 1,
+      });
+
+      expect(outcome).toMatchObject({ success: false, error: "Script execution was canceled" });
+    });
+  });
+
+  test("gives the error of the job that failed, not the main job's bookkeeping, when read", async () => {
+    const client = mockOperatorClient({
+      getFunctionExecution: async (request) => ({
+        execution:
+          request.executionId === "fn-child"
+            ? { logEntries: [], result: "", error: { message: "boom-from-child" } }
+            : { logEntries: [], result: '{"call_index":0,"job_name":"child"}' },
+      }),
+    });
+
+    const outcome = await readOutcome({
+      client: client,
+      workspaceId: "ws",
+      execution: failedRun(job("fn-main", 0, FAILED), job("fn-child", 1, FAILED)),
+      pollInterval: 1,
+    });
+
+    expect(outcome).toMatchObject({ success: false, error: "boom-from-child" });
+  });
+});
+
+describe("the main job of a run that is going", () => {
+  const row = (executionId: string, depth: number, status: WorkflowJobExecution_Status) => ({
+    executionId,
+    status,
+    kind: { case: "jobFunction", value: { name: "job" } },
+    position: { depth, parentWorkflowJobExecutionId: depth === 0 ? "" : "job-main" },
+  });
+  const running = (...rows: ReturnType<typeof row>[]) =>
+    ({
+      status: WorkflowExecution_Status.RUNNING,
+      jobExecutions: rows,
+    }) as unknown as WorkflowExecution;
+  const { RUNNING, SUSPEND, WAITING } = WorkflowJobExecution_Status;
+
+  test("has no execution id while it is suspended waiting for a job it started, which holds only a record of the call", () => {
+    expect(
+      liveMainJobExecutionId(running(row("fn-first", 0, SUSPEND), row("fn-child", 1, RUNNING))),
+    ).toBe(undefined);
+  });
+
+  test("has no execution id while it waits at a wait point", () => {
+    expect(liveMainJobExecutionId(running(row("fn-first", 0, WAITING)))).toBe(undefined);
+  });
+
+  test("is the execution it was run again as, once the job it waited for has finished", () => {
+    expect(
+      liveMainJobExecutionId(running(row("fn-again", 0, RUNNING), row("fn-child", 1, RUNNING))),
+    ).toBe("fn-again");
   });
 });

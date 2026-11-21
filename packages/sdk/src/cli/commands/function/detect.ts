@@ -56,6 +56,10 @@ interface DetectFunctionOptions {
   filePath: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
   jobName?: string;
+  /** Flag the asking command selects a job with, named in the hint (default: `--name`) */
+  jobFlag?: string;
+  /** Start from the main job of the workflow the file exports as default when no job name is given */
+  useWorkflowMainJob?: boolean;
 }
 
 /**
@@ -66,7 +70,7 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName } = options;
+  const { filePath, jobName, jobFlag = "--name", useWorkflowMainJob = false } = options;
 
   const module = await importUserModule(filePath);
 
@@ -104,7 +108,10 @@ export async function detectFunctionType(
   }
 
   // 3. Check workflow jobs (scan all named exports)
-  const workflowJobResult = detectWorkflowJob(module, jobName);
+  const mainJobName =
+    jobName === undefined && useWorkflowMainJob ? workflowMainJobName(module.default) : undefined;
+  if (mainJobName !== undefined) assertMainJobExported(module, mainJobName, jobFlag);
+  const workflowJobResult = detectWorkflowJob(module, jobName ?? mainJobName, jobFlag);
   if (workflowJobResult) {
     return workflowJobResult;
   }
@@ -129,17 +136,57 @@ export async function detectFunctionType(
 }
 
 /**
+ * Read the name of the main job of a workflow definition.
+ * @param workflow - The default export of a module
+ * @returns Name of its main job, or undefined when it is not a workflow
+ */
+function workflowMainJobName(workflow: unknown): string | undefined {
+  if (typeof workflow !== "object" || workflow === null || !("mainJob" in workflow)) {
+    return undefined;
+  }
+  const mainJob = WorkflowJobSchema.safeParse(workflow.mainJob);
+  return mainJob.success ? mainJob.data.name : undefined;
+}
+
+/**
+ * Refuse a workflow whose main job the file does not export, because it is defined in another
+ * file and a run takes its jobs from the file that defines them.
+ * @param module - The imported module
+ * @param mainJobName - Name of the main job of the workflow the module exports as default
+ * @param jobFlag - Flag the asking command selects a job with, named in the hint
+ */
+function assertMainJobExported(
+  module: Record<string, unknown>,
+  mainJobName: string,
+  jobFlag: string,
+): void {
+  const exported = Object.entries(module).some(
+    ([exportName, exportValue]) =>
+      exportName !== "default" &&
+      WorkflowJobSchema.safeParse(exportValue).data?.name === mainJobName,
+  );
+  if (exported) return;
+  throw CLIError({
+    code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED",
+    message: `The main job "${mainJobName}" of the workflow this file exports is defined in another file.`,
+    suggestion: `Run the file that defines the job, or select a job this file defines with ${jobFlag}.`,
+  });
+}
+
+/**
  * Scan all named exports for workflow jobs.
  * If jobName is specified, find the job whose `.name` matches.
  * If not specified and exactly one job exists, use it.
  * If multiple jobs exist, throw an error with the list.
  * @param module - The imported module
  * @param jobName - Workflow job name to select
+ * @param jobFlag - Flag the asking command selects a job with, named in the hint
  * @returns Detected function or null if no workflow jobs found
  */
 function detectWorkflowJob(
   module: Record<string, unknown>,
-  jobName?: string,
+  jobName: string | undefined,
+  jobFlag: string,
 ): DetectedFunction | null {
   const jobs: Array<{ name: string; exportName: string }> = [];
 
@@ -183,7 +230,7 @@ function detectWorkflowJob(
     code: "WORKFLOW_JOB_AMBIGUOUS",
     message: "Multiple workflow jobs found.",
     details: `Available jobs:\n${available}`,
-    suggestion: "Specify one with --name.",
+    suggestion: `Specify one with ${jobFlag}.`,
   });
 }
 

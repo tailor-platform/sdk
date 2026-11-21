@@ -33,6 +33,7 @@ import {
   argumentToSend,
   executeFunction,
   executionRecord,
+  type ArgCommandName,
   type FunctionArg,
   type FunctionRunTarget,
   parseArgOption,
@@ -141,6 +142,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       arg: args.arg,
       argFile: args["arg-file"],
       watch: args.watch,
+      command: "function run",
     });
 
     // 2. Load config (required)
@@ -279,6 +281,8 @@ interface ArgOptions {
   argFile: string | undefined;
   /** Whether `--watch` is set, which reads the argument file on every run instead */
   watch: boolean;
+  /** Command the options belong to, named in the conflict error */
+  command: ArgCommandName;
 }
 
 interface ResolvedArgOptions {
@@ -293,24 +297,27 @@ interface ResolvedArgOptions {
  * @param options - Raw option values
  * @returns The parsed argument and the argument file's absolute path
  */
-function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
+export function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
   if (options.arg !== undefined && options.argFile !== undefined) {
     throw CLIError({
-      code: "FUNCTION_RUN_OPTIONS_CONFLICT",
+      code:
+        options.command === "function run"
+          ? "FUNCTION_RUN_OPTIONS_CONFLICT"
+          : "WORKFLOW_RUN_OPTIONS_CONFLICT",
       message: "Options --arg and --arg-file are mutually exclusive.",
       suggestion: "Pass the argument with only one of them.",
-      command: "function run",
+      command: options.command,
     });
   }
   if (options.arg !== undefined) {
-    return { arg: parseArgOption(options.arg), argFile: undefined };
+    return { arg: parseArgOption(options.arg, options.command), argFile: undefined };
   }
   if (options.argFile === undefined) {
     return { arg: undefined, argFile: undefined };
   }
   const argFile = path.resolve(options.argFile);
   if (!options.watch) {
-    return { arg: readFunctionArgFile(argFile), argFile };
+    return { arg: readFunctionArgFile(argFile, options.command), argFile };
   }
   if (!fs.existsSync(argFile)) {
     throw argFileNotFoundError(argFile);
@@ -323,7 +330,7 @@ function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
  * @param authConfig - Auth configuration from tailor.config.ts
  * @returns Resolved auth namespace
  */
-function resolveAuthNamespace(
+export function resolveAuthNamespace(
   authConfig: { name: string; external?: boolean } | undefined,
 ): string {
   if (authConfig?.name) {
@@ -351,7 +358,9 @@ type ResolveMachineUserNameOptions = {
  * @param options - Resolution options
  * @returns Resolved machine user name
  */
-async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
+export async function resolveMachineUserName(
+  options: ResolveMachineUserNameOptions,
+): Promise<string> {
   const { cliMachineUser, cliMachineUserSource, profile, authConfig } = options;
 
   const resolved = await loadMachineUserName({
@@ -395,7 +404,7 @@ interface ResolveMachineUserOptions {
  * @param options - Options for resolving machine user
  * @returns Resolved machine user with id, attributes, and attributeList
  */
-async function resolveMachineUser(
+export async function resolveMachineUser(
   options: ResolveMachineUserOptions,
 ): Promise<ResolvedMachineUser> {
   const { client, workspaceId, authNamespace, machineUserName, authConfig } = options;
