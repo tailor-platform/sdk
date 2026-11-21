@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  applicationsListing,
   configAuthNamespaces,
   deployApplicationOf,
   workspaceDeployApplications,
@@ -150,5 +151,28 @@ describe("workspaceDeployApplications", () => {
         settings: {},
       },
     ] satisfies DeployApplication[]);
+  });
+});
+
+describe("applicationsListing", () => {
+  test("names the applications whose subgraphs list a service, in config order", () => {
+    const app = (name: string, subgraphs: DeployApplication["subgraphs"]): DeployApplication => ({
+      name,
+      subgraphs,
+      authNamespace: undefined,
+      settings: {},
+    });
+    const applications = [
+      app("shop", [
+        { Type: "tailordb", Name: "main" },
+        { Type: "pipeline", Name: "main" },
+      ]),
+      app("admin", [{ Type: "tailordb", Name: "main" }]),
+      app("landing", [{ Type: "pipeline", Name: "main" }]),
+    ];
+
+    expect(applicationsListing(applications, "tailordb", "main")).toEqual(["shop", "admin"]);
+    expect(applicationsListing(applications, "pipeline", "main")).toEqual(["shop", "landing"]);
+    expect(applicationsListing(applications, "idp", "main")).toEqual([]);
   });
 });

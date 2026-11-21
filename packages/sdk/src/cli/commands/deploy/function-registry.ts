@@ -4,6 +4,7 @@ import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
+import { applicationsListing } from "./deploy-application";
 import {
   buildMetaRequest,
   type DeployOwner,
@@ -17,6 +18,7 @@ import {
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ConfigServices } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
+import type { DeployApplication } from "./deploy-application";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -201,6 +203,7 @@ export function collectFunctionEntries(
         scriptContent: content,
         contentHash: computeContentHash(content),
         description: `Resolver: ${pipeline.namespace}/${resolver.name}`,
+        pipelineNamespace: pipeline.namespace,
       });
     }
   }
@@ -290,6 +293,7 @@ type ExistingFunction = {
  * @param previousExisting - A prior call's fetched existing registry entries, reused instead of
  *   re-listing them from the platform (the remote function registry cannot have changed between
  *   a deploy's first plan and its conditional rebuild's replan; only `entries`, the desired side, does)
+ * @param applications - Applications of a workspace config, whose listings label resolver functions
  * @returns Planned changes
  */
 export async function planFunctionRegistry(
@@ -298,6 +302,7 @@ export async function planFunctionRegistry(
   owner: DeployOwner,
   entries: FunctionEntry[],
   previousExisting?: WithLabel<ExistingFunction>,
+  applications?: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
     FunctionUpload,
@@ -337,6 +342,10 @@ export async function planFunctionRegistry(
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "function_registry", entry.name),
       owner,
+      ...(entry.pipelineNamespace !== undefined &&
+        applications && {
+          onApps: applicationsListing(applications, "pipeline", entry.pipelineNamespace),
+        }),
     });
 
     if (existing) {

@@ -15,7 +15,7 @@ import {
   recomposeApplication,
 } from "./application";
 import { deployApplicationOf } from "./deploy-application";
-import { applicationOwner, withMetadataWriteBatch } from "./label";
+import { applicationOwner, buildMetaRequest, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
@@ -501,6 +501,28 @@ describe("planApplication", () => {
     expect(result.creates[0]!.name).toBe(appName);
     expect(result.updates).toHaveLength(0);
     expect(result.unchanged).toHaveLength(0);
+  });
+
+  test("labels each application of a workspace config with its own name", async () => {
+    await planApplication({
+      ...createContext(createMockClient([])),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:application:shop$/),
+        onApps: ["shop"],
+      }),
+    );
   });
 
   test("plans every application of the config with its own subgraphs, Auth, and settings", async () => {

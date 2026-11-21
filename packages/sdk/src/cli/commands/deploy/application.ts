@@ -390,7 +390,11 @@ export async function planApplication(
       const { cors, allowedIpAddresses, disableIntrospection, metadata } = app.settings;
       const [authIdpConfigName, metaRequest, existingLabels, resolvedCors] = await Promise.all([
         app.authNamespace ? authIdpConfigNameOf(context, app.authNamespace) : undefined,
-        buildMetaRequest({ trn: resourceTrn(workspaceId, "application", app.name), owner }),
+        buildMetaRequest({
+          trn: resourceTrn(workspaceId, "application", app.name),
+          owner,
+          onApps: [app.name],
+        }),
         // `previous.existingLabels` can legitimately hold `undefined` (no metadata
         // found on the first fetch), so branch on `has` -- `??` would treat that
         // cached `undefined` as a cache miss and re-fetch needlessly.

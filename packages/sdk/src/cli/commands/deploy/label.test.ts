@@ -254,6 +254,33 @@ describe("buildMetaRequest", () => {
     });
   });
 
+  test("labels a workspace resource with each application that lists it, dropping the others", async () => {
+    const client = createClient({
+      "sdk-managed": "workspace",
+      "sdk-on-app-gone": "",
+      "sdk-on-app-shop": "",
+      team: "billing",
+    });
+
+    await writeMetadataLabels(
+      client,
+      await buildMetaRequest({
+        trn: "trn:x",
+        owner: { kind: "workspace" },
+        onApps: ["shop", "admin"],
+      }),
+    );
+
+    const written = client.setMetadata.mock.calls[0]?.[0].labels;
+    expect(written).toMatchObject({
+      "sdk-managed": "workspace",
+      "sdk-on-app-shop": "",
+      "sdk-on-app-admin": "",
+      team: "billing",
+    });
+    expect(written).not.toHaveProperty("sdk-on-app-gone");
+  });
+
   test("drops the workspace labels of a resource an application takes back", async () => {
     const client = createClient({
       "sdk-managed": "workspace",

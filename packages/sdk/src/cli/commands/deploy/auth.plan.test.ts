@@ -546,6 +546,35 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
+  test("labels a workspace Auth service with the applications that use it", async () => {
+    await planAuth({
+      ...createContext(createMockClient()),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        {
+          name: "admin",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:auth:auth-a$/),
+        onApps: ["shop", "admin"],
+      }),
+    );
+  });
+
   test("refreshes the labels of an unchanged auth service whose SDK labels differ", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],

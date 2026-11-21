@@ -31,6 +31,7 @@ import {
 } from "#/cli/shared/publish-events";
 import { createChangeSet } from "../change-set";
 import { defineRequestComparison, isRequestUnchanged } from "../compare";
+import { applicationsListing } from "../deploy-application";
 import { diffKeyed, labeledResourceChecks } from "../keyed-diff";
 import {
   addDependencyRecords,
@@ -47,6 +48,7 @@ import { tailordbTypeComparison } from "./compare";
 import { assertPendingMigrationsRunnable } from "./migration";
 import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { logMigrationPlanNotices, validateAndDetectMigrations } from "./migration-validation";
+import type { DeployApplication } from "../deploy-application";
 import type { PlanContext } from "../types";
 
 export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
@@ -199,7 +201,7 @@ export async function planTailorDB(context: PlanContext) {
     unmanaged,
     takeovers,
     resourceOwners,
-  } = await planServices(client, workspaceId, context.owner, tailordbs);
+  } = await planServices(client, workspaceId, context.owner, context.applications, tailordbs);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const [typeChangeSet, gqlPermissionChangeSet] = await Promise.all([
     planTypes(
@@ -290,6 +292,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
@@ -318,6 +321,7 @@ async function planServices(
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
         owner,
+        onApps: applicationsListing(applications, "tailordb", tailordb.namespace),
       }),
     });
   }
