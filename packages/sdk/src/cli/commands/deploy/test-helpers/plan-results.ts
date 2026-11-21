@@ -15,7 +15,7 @@ function emptyFunctionChanges() {
 }
 
 function emptyOwnership() {
-  return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
+  return { conflicts: [], unmanaged: [], takeovers: [], resourceOwners: new Set<string>() };
 }
 
 type TailorDBPlanResultContext = PlanResults["tailorDB"]["context"];
@@ -31,6 +31,7 @@ export function tailorDBPlanResultContext(
   return {
     workspaceId: "ws",
     application: {} as TailorDBPlanResultContext["application"],
+    owner: { kind: "application", name: "my-app", id: undefined },
     tailorDBInputs: [],
     executorUsedTables: new Set<string>(),
     config: {} as TailorDBPlanResultContext["config"],
@@ -133,8 +134,7 @@ export function emptyPlanResults(): PlanResults {
       jobFunctionDeletes: [],
       jobFunctionPublishEvents: new Map<string, boolean>(),
       ...emptyOwnership(),
-      appName: "my-app",
-      appId: undefined,
+      owner: { kind: "application", name: "my-app", id: undefined },
       existingJobFunctions: new Map(),
       existingWorkflows: {},
     },

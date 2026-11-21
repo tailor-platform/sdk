@@ -128,6 +128,7 @@ beforeEach(() => {
     externalTailorDBNamespaces: [],
     resolverServices: [],
     idpServices: [],
+    authServices: [],
     staticWebsiteServices: [{ name: "web" }],
     aiGatewayServices: [],
     secrets: [],
@@ -555,9 +556,12 @@ test("includes AI Gateway URLs and public OAuth clients without client secrets i
   ] as BuiltDeploymentTarget["config"]["aiGateways"];
   mocks.target.application = {
     ...mocks.target.application,
-    authService: {
-      config: { name: "auth" },
-    } as BuiltDeploymentTarget["application"]["authService"],
+    authServices: [
+      {
+        config: { name: "auth" },
+        connections: {},
+      } as BuiltDeploymentTarget["application"]["authServices"][number],
+    ],
   };
   await deploy({ yes: true, noValidate: true });
   expect(logger.out).toHaveBeenLastCalledWith(

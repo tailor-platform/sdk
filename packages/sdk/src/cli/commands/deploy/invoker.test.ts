@@ -92,6 +92,7 @@ describe("listInvokerMachineUsers", () => {
 
   function applicationWithAuth(authNamespace: string | undefined): Readonly<Application> {
     return {
+      authServices: [],
       config: authNamespace ? { auth: { name: authNamespace, external: true } } : {},
     } as unknown as Readonly<Application>;
   }

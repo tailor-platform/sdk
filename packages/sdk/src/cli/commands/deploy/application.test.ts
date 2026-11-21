@@ -14,13 +14,14 @@ import {
   planApplication,
   recomposeApplication,
 } from "./application";
-import { withMetadataWriteBatch } from "./label";
+import { applicationOwner, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
 } from "./test-helpers/label-count-rejection";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployOwner } from "./label";
 import type { PlanContext } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -34,19 +35,20 @@ vi.mock("./label", async (importOriginal) => {
     ...original,
     buildMetaRequest: vi
       .fn()
-      .mockImplementation(
-        async ({ trn, appName, appId }: { trn: string; appName: string; appId?: string }) => ({
+      .mockImplementation(async ({ trn, owner }: { trn: string; owner: DeployOwner }) => {
+        const { name, id } = owner.kind === "application" ? owner : { name: "", id: undefined };
+        return {
           trn,
           labels: {
-            "sdk-name": appName,
+            "sdk-name": name,
             "sdk-version": "v1-0-0",
-            ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
+            ...(id ? { "sdk-app-id": `app-${id}` } : {}),
           },
-          // Mirrors the real buildMetaRequest: a config with no id asks for the
+          // Like the real buildMetaRequest, a config with no id asks for the
           // stale sdk-app-id to be dropped.
-          remove: appId ? undefined : ["sdk-app-id"],
-        }),
-      ),
+          remove: id ? undefined : ["sdk-app-id"],
+        };
+      }),
   };
 });
 
@@ -85,14 +87,16 @@ function createMockApplication(
       metadata: overrides.metadata,
     },
     staticWebsiteServices: overrides.staticWebsiteServices ?? [],
-    authService: {
-      config: {
-        name: "auth-a",
-        idProvider: {
-          name: "idp-a",
+    authServices: [
+      {
+        config: {
+          name: "auth-a",
+          idProvider: {
+            name: "idp-a",
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -148,6 +152,7 @@ function createContext(client: OperatorClient, application = createMockApplicati
     client,
     workspaceId,
     application,
+    owner: applicationOwner(application),
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -384,7 +389,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },
@@ -406,7 +411,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },
@@ -545,6 +550,24 @@ describe("planApplication", () => {
       expect(result.creates[0]!.name).toBe(appName);
       expect(result.deletes).toHaveLength(1);
       expect(result.deletes[0]!.name).toBe(oldName);
+    });
+
+    test("does not delete the other applications a workspace config manages", async () => {
+      const client = createMockClient([
+        {
+          name: "backoffice",
+          subgraphs: matchingSubgraphs,
+          extraLabels: { "sdk-managed": "workspace" },
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        owner: { kind: "workspace" },
+      });
+
+      expect(result.deletes).toEqual([]);
     });
 
     test("ignores apps with the same id when name still matches", async () => {

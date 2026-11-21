@@ -4,6 +4,7 @@ import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
+import type { DeployOwner } from "./label";
 import type { SecretsStateScope } from "./secrets-state";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthConnectionSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -56,9 +57,12 @@ vi.mock("./label", async (importOriginal) => {
     ...actual,
     buildMetaRequest: vi
       .fn()
-      .mockImplementation(async (params: { trn: string; appName: string; appId?: string }) => ({
-        trn: params.trn,
-        labels: { "sdk-name": params.appName, "sdk-version": "v1-0-0" },
+      .mockImplementation(async ({ trn, owner }: { trn: string; owner: DeployOwner }) => ({
+        trn,
+        labels: {
+          "sdk-name": owner.kind === "application" ? owner.name : "",
+          "sdk-version": "v1-0-0",
+        },
       })),
   };
 });
@@ -66,6 +70,10 @@ vi.mock("./label", async (importOriginal) => {
 const workspaceId = "ws-1";
 const appName = "my-app";
 const configPath = "/proj/app/tailor.config.ts";
+
+function ownerOfScope(scope: SecretsStateScope): DeployOwner {
+  return { kind: "application", name: scope.applicationName, id: scope.applicationId };
+}
 
 function connectionStateScope(
   overrides: Partial<Pick<SecretsStateScope, "workspaceId" | "applicationId">> = {},
@@ -172,6 +180,7 @@ describe("planAuthConnections", () => {
     const { changeSet, resourceOwners } = await planAuthConnections(
       client,
       connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
       emptyAuths,
     );
 
@@ -184,7 +193,12 @@ describe("planAuthConnections", () => {
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
 
-    await planAuthConnections(client, connectionStateScope(), emptyAuths);
+    await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      emptyAuths,
+    );
 
     const trns = client.getMetadata.mock.calls.map(([req]) => req.trn);
     expect(trns).toContain(`trn:v1:workspace:${workspaceId}:auth_connection:owned-connection`);
@@ -204,6 +218,7 @@ describe("planAuthConnections", () => {
     const result = await planAuthConnections(
       client,
       connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
       authsWith(["adopted-connection"]),
     );
     const { changeSet, unmanaged } = result;
@@ -243,6 +258,7 @@ describe("planAuthConnections", () => {
     const { changeSet, conflicts } = await planAuthConnections(
       client,
       connectionStateScope({ applicationId: "id-2" }),
+      ownerOfScope(connectionStateScope({ applicationId: "id-2" })),
       authsWith(["owned-connection"]),
     );
 
@@ -263,6 +279,7 @@ describe("planAuthConnections", () => {
     const { changeSet, unmanaged } = await planAuthConnections(
       client,
       connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
       authsWith(["owned-connection"]),
     );
 
@@ -283,6 +300,7 @@ describe("planAuthConnections", () => {
     const { changeSet } = await planAuthConnections(
       client,
       connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
       authsWith(["owned-connection"]),
     );
 
@@ -307,9 +325,12 @@ describe("planAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const { changeSet } = await planAuthConnections(client, connectionStateScope(), [
-      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
-    ]);
+    const { changeSet } = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      [{ name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService],
+    );
 
     expect(changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
     const [update] = changeSet.updates;
@@ -330,11 +351,13 @@ describe("planAuthConnections", () => {
     const resultA = await planAuthConnections(
       client,
       connectionStateScope({ workspaceId: "ws-a", applicationId: "shared-app-id" }),
+      ownerOfScope(connectionStateScope({ workspaceId: "ws-a", applicationId: "shared-app-id" })),
       authsWith(["shared-connection"]),
     );
     const resultB = await planAuthConnections(
       client,
       connectionStateScope({ workspaceId: "ws-b", applicationId: "shared-app-id" }),
+      ownerOfScope(connectionStateScope({ workspaceId: "ws-b", applicationId: "shared-app-id" })),
       authsWith(["shared-connection"]),
     );
 
@@ -367,6 +390,7 @@ describe("applyAuthConnections", () => {
     const result = await planAuthConnections(
       client,
       connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
       authsWith(["new-conn"]),
     );
     expect(result.changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
@@ -382,7 +406,12 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({
       connections: [{ name: "owned-connection", ownerLabel: appName }],
     });
-    const result = await planAuthConnections(client, connectionStateScope(), emptyAuths);
+    const result = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      emptyAuths,
+    );
     expect(result.changeSet.deletes.map((d) => d.name)).toEqual(["owned-connection"]);
 
     await applyAuthConnections(client, result, "delete-resources");
@@ -397,7 +426,12 @@ describe("applyAuthConnections", () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName, sdkVersion: "v0-9-0" }],
     });
-    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
+    const result = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      authsWith(["conn"]),
+    );
     expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
 
     await applyAuthConnections(client, result, "create-update");
@@ -422,9 +456,12 @@ describe("applyAuthConnections", () => {
       providerUrl: "https://changed.example.com",
     };
 
-    const result = await planAuthConnections(client, connectionStateScope(), [
-      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
-    ]);
+    const result = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      [{ name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService],
+    );
     expect(result.changeSet.updates.map((u) => u.name)).toEqual(["conn"]);
     const [update] = result.changeSet.updates;
     expect(update?.request?.updateMask?.paths).not.toContain("oauth2.client_secret");
@@ -446,7 +483,12 @@ describe("applyAuthConnections", () => {
       connection: { status: AuthConnection_Status.UNAUTHORIZED },
     });
 
-    const result = await planAuthConnections(client, connectionStateScope(), authsWith(["conn"]));
+    const result = await planAuthConnections(
+      client,
+      connectionStateScope(),
+      ownerOfScope(connectionStateScope()),
+      authsWith(["conn"]),
+    );
     await applyAuthConnections(client, result, "create-update");
 
     expect(mockLoggerWarn).toHaveBeenCalledWith(

@@ -35,9 +35,14 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
     const policy = defineWorkflowExecutionPolicy("tenant-api", { key: "tenant-api*" });
     await expect(
       // Validation runs before the client is touched, so an empty stub suffices.
-      planWorkflowJobFunctionExecutionPolicy(mockOperatorClient({}), "ws-id", "app", undefined, {
-        tenantApi: policy,
-      }),
+      planWorkflowJobFunctionExecutionPolicy(
+        mockOperatorClient({}),
+        "ws-id",
+        { kind: "application", name: "app", id: undefined },
+        {
+          tenantApi: policy,
+        },
+      ),
     ).rejects.toThrow(/key must not end with '\*'/);
   });
 
@@ -47,9 +52,14 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
     // genuinely lacks the internal prefix.
     const policy = { name: "tenant-api", matchType: "prefix", keyFor: () => "" } as never;
     await expect(
-      planWorkflowJobFunctionExecutionPolicy(mockOperatorClient({}), "ws-id", "app", undefined, {
-        tenantApi: policy,
-      }),
+      planWorkflowJobFunctionExecutionPolicy(
+        mockOperatorClient({}),
+        "ws-id",
+        { kind: "application", name: "app", id: undefined },
+        {
+          tenantApi: policy,
+        },
+      ),
     ).rejects.toThrow(/must be created via defineWorkflowExecutionPolicy/);
   });
 });
@@ -66,8 +76,7 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
   }) {
     const { labels } = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "workflow_job_function_execution_policy", "premium"),
-      appName,
-      appId: options.appId,
+      owner: { kind: "application", name: appName, id: options.appId },
     });
     const client = mockOperatorClient({
       listWorkflowJobFunctionExecutionPolicies: {
@@ -91,11 +100,16 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
       },
     });
 
-    return planWorkflowJobFunctionExecutionPolicy(client, workspaceId, appName, options.appId, {
-      premium: defineWorkflowExecutionPolicy("premium", {
-        concurrencyPolicy: { maxConcurrentExecutions: 3 },
-      }),
-    });
+    return planWorkflowJobFunctionExecutionPolicy(
+      client,
+      workspaceId,
+      { kind: "application", name: appName, id: options.appId },
+      {
+        premium: defineWorkflowExecutionPolicy("premium", {
+          concurrencyPolicy: { maxConcurrentExecutions: 3 },
+        }),
+      },
+    );
   }
 
   test.each([

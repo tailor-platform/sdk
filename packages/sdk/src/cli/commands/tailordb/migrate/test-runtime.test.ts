@@ -515,7 +515,10 @@ describe("migration test runtime", () => {
       client,
       loaded: {
         config: { path: "/project/tailor.config.ts" },
-        application: { tailorDBServices: services, authService: { config: { name: "auth-ns" } } },
+        application: {
+          tailorDBServices: services,
+          authServices: [{ config: { name: "auth-ns" } }],
+        },
       } as unknown as LoadedApplicationNamespaces,
       options: { data: "seed" },
       seeds: [],

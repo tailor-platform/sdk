@@ -14,6 +14,7 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
   buildMetaRequest,
+  type DeployOwner,
   resourceTrn,
   withExtraLabels,
   writeMetadataLabelsDirect,
@@ -33,10 +34,9 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 
 const CHUNK_SIZE = 64 * 1024;
 
-/** Owning application recorded in the labels of every temporary resource. */
+/** Owner recorded in the labels of every temporary resource. */
 interface TemporaryResourceOwner {
-  appName: string;
-  appId: string | undefined;
+  owner: DeployOwner;
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
@@ -61,7 +61,7 @@ export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
 export async function uploadTemporaryFunction(
   params: UploadTemporaryFunctionParams,
 ): Promise<void> {
-  const { client, workspaceId, name, code, description, appName, appId, mode = "create" } = params;
+  const { client, workspaceId, name, code, description, owner, mode = "create" } = params;
   const content = `${params.prelude ?? ""}${code}`;
   const buffer = Buffer.from(content, "utf-8");
   const info = {
@@ -97,8 +97,7 @@ export async function uploadTemporaryFunction(
     client,
     await buildMetaRequest({
       trn: resourceTrn(workspaceId, "function_registry", name),
-      appName,
-      appId,
+      owner,
     }),
   );
 }
@@ -244,7 +243,7 @@ export async function createTemporaryWorkflow(
   params: CreateTemporaryWorkflowParams,
   created: CreatedTemporaryWorkflow,
 ): Promise<string> {
-  const { client, workspaceId, name, appName, appId, subject } = params;
+  const { client, workspaceId, name, owner, subject } = params;
   const versions: Record<string, bigint> = {};
   for (const jobFunctionName of params.jobFunctionNames) {
     const { jobFunction } = await client.createWorkflowJobFunction({
@@ -257,8 +256,7 @@ export async function createTemporaryWorkflow(
       client,
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
-        appName,
-        appId,
+        owner,
       }),
     );
     const version = jobFunction?.version;
@@ -284,7 +282,7 @@ export async function createTemporaryWorkflow(
   await writeMetadataLabelsDirect(
     client,
     withExtraLabels(
-      await buildMetaRequest({ trn: resourceTrn(workspaceId, "workflow", name), appName, appId }),
+      await buildMetaRequest({ trn: resourceTrn(workspaceId, "workflow", name), owner }),
       params.workflowLabels ?? {},
     ),
   );

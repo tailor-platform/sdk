@@ -214,7 +214,7 @@ interface BuildValidationReportsOptions {
 interface PendingMigrationChecks {
   client: OperatorClient;
   workspaceId: string;
-  application: Pick<Application, "authService" | "env">;
+  application: Pick<Application, "authServices" | "env">;
   config: LoadedConfig;
   namespaces: readonly NamespaceWithMigrations[];
   remoteResults: readonly RemoteSchemaVerificationResult[];

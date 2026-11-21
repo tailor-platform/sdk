@@ -103,11 +103,11 @@ const aiGatewayComparison = defineRequestComparison({
  * @returns Planned changes
  */
 export async function planAIGateway(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, owner, forRemoval } = context;
   const changeSet = createChangeSet<CreateAIGateway, UpdateAIGateway, DeleteAIGateway>(
     "AIGateways",
   );
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const ownership = createOwnershipTracker(owner);
 
   const existingGateways = await fetchExistingResourcesWithLabels({
     client,
@@ -130,8 +130,7 @@ export async function planAIGateway(context: PlanContext) {
     const name = config.name;
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "aigateway", name),
-      appName: application.name,
-      appId: application.id,
+      owner,
     });
     const resolvedCors = await resolveStaticWebsiteUrls(
       client,
@@ -159,10 +158,7 @@ export async function planAIGateway(context: PlanContext) {
     desired,
     existing: Object.entries(existingGateways),
     keyOf: (gateway) => gateway.name,
-    ...labeledResourceChecks(ownership, (gateway: DesiredAIGateway) => ({
-      resourceType: "aigateway",
-      resourceName: gateway.name,
-    })),
+    ...labeledResourceChecks(ownership, "aigateway"),
     isConfigUnchanged: (gateway, existing) =>
       isRequestUnchanged(aiGatewayComparison, gateway.comparableRequest, existing.resource),
     create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),

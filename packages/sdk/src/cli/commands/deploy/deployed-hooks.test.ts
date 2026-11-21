@@ -36,7 +36,7 @@ function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
       name,
       subgraphs: [{}],
       staticWebsiteServices: [{ name: `${name}-web` }],
-      authService: { config: { name: "auth" } },
+      authServices: [{ config: { name: "auth" } }],
     },
     plugins,
   } as unknown as BuiltDeploymentTarget;
@@ -233,7 +233,7 @@ describe("deployed hooks", () => {
     const client = clientMock();
     const hook = vi.fn();
     const external = target([plugin(hook)]);
-    Object.assign(external.application, { authService: undefined });
+    Object.assign(external.application, { authServices: [] });
     Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
     await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
     expect(client.listAuthOAuth2Clients).toHaveBeenCalledWith(
