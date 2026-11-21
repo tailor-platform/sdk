@@ -2,6 +2,8 @@
 // (yet) provide natively. Loaded by oxlint as a JS plugin (alpha). See
 // packages/sdk/.oxlintrc.json `jsPlugins`.
 
+import path from "node:path";
+
 function jsdocBlockBefore(sourceCode, node) {
   const comments = sourceCode.getCommentsBefore(node);
   if (!comments?.length) return null;
@@ -496,6 +498,63 @@ export default {
           FunctionExpression: checkImplementation,
           ReturnStatement: checkReturned,
           YieldExpression: checkReturned,
+        };
+      },
+    },
+
+    "logger-mock-import-original": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require logger mock factories in tests to take importOriginal, so the mock keeps the logger module's other exports.",
+        },
+        messages: {
+          factory:
+            "Take importOriginal in the logger mock factory and spread its result; a factory without it drops the logger module's other exports, which modules this test imports indirectly may read.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const loggerModule = "src/cli/shared/logger";
+        function specifier(node) {
+          const literal = node?.type === "ImportExpression" ? node.source : node;
+          return literal?.type === "Literal" && typeof literal.value === "string"
+            ? literal.value
+            : undefined;
+        }
+        function isLoggerModule(spec) {
+          let resolved;
+          if (spec.startsWith("#/")) resolved = `src/${spec.slice(2)}`;
+          else if (spec.startsWith("."))
+            resolved = path.resolve(path.dirname(context.filename), spec);
+          else return false;
+          const normalized = resolved.replaceAll("\\", "/").replace(/\.[cm]?[jt]s$/, "");
+          return normalized === loggerModule || normalized.endsWith(`/${loggerModule}`);
+        }
+        return {
+          CallExpression(node) {
+            const { callee } = node;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.computed ||
+              callee.object.type !== "Identifier" ||
+              callee.object.name !== "vi" ||
+              (callee.property.name !== "mock" && callee.property.name !== "doMock")
+            ) {
+              return;
+            }
+            const [target, factory] = node.arguments;
+            const spec = specifier(target);
+            if (spec === undefined || !isLoggerModule(spec)) return;
+            if (
+              (factory?.type === "ArrowFunctionExpression" ||
+                factory?.type === "FunctionExpression") &&
+              factory.params.length === 0
+            ) {
+              context.report({ node: factory, messageId: "factory" });
+            }
+          },
         };
       },
     },

@@ -6,7 +6,8 @@ import {
   ScriptRunTimer,
 } from "./migration-timing";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { debug: vi.fn() },
 }));
 

@@ -12,7 +12,8 @@ import {
 import type { logger as loggerModule } from "#/cli/shared/logger";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     log: vi.fn(),
     info: vi.fn(),

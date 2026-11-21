@@ -30,7 +30,8 @@ vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn() },
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
 }));
 
