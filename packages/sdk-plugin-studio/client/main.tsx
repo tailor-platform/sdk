@@ -254,6 +254,7 @@ function StudioHeader() {
         .catch((e: unknown) => setError(String(e)));
     load();
     const events = new EventSource("/api/context/events");
+    events.addEventListener("open", load);
     events.addEventListener("changed", load);
     return () => events.close();
   }, []);
