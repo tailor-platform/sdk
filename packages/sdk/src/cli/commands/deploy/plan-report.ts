@@ -52,6 +52,8 @@ type JsonPlanPayload = {
     type: "unmanaged" | "skippedSecret";
     resourceType: ManagedResourceType;
     name: string;
+    /** Set on an unmanaged resource that a workspace config manages. */
+    managedBy?: "workspace";
   }>;
   conflicts: Array<{
     resourceType: ManagedResourceType;
@@ -249,10 +251,11 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...(forcedBySdkVersion && { forcedBySdkVersion }),
   }));
   const warnings = [
-    ...allUnmanaged.map(({ resourceType, resourceName }) => ({
+    ...allUnmanaged.map(({ resourceType, resourceName, managedBy }) => ({
       type: "unmanaged" as const,
       resourceType,
       name: resourceName,
+      ...(managedBy && { managedBy }),
     })),
     ...results.secretManager.skippedSecrets.map((name) => ({
       type: "skippedSecret" as const,

@@ -48,7 +48,7 @@ describe("createOwnershipTracker", () => {
       expect(ownership.ownsDesired({ "sdk-managed": "workspace" }, resource)).toBe(false);
       expect(ownership.result).toEqual({
         conflicts: [],
-        unmanaged: [recorded, recorded, recorded],
+        unmanaged: [recorded, recorded, { ...recorded, managedBy: "workspace" }],
         takeovers: [],
         resourceOwners: new Set(),
       });
@@ -73,7 +73,7 @@ describe("createOwnershipTracker", () => {
         conflicts: [],
         unmanaged: [recorded],
         takeovers: [
-          { ...recorded, action: "update", currentOwner: "shop" },
+          { ...recorded, action: "update", currentOwner: "shop", currentAppId: "id-1" },
           { ...recorded, action: "update", currentOwner: "legacy" },
         ],
         resourceOwners: new Set(),
@@ -134,7 +134,7 @@ describe("createOwnershipTracker", () => {
       expect(ownership.result).toEqual({
         conflicts: [],
         unmanaged: [],
-        takeovers: [{ ...recorded, action: "delete", currentOwner: "shop" }],
+        takeovers: [{ ...recorded, action: "delete", currentOwner: "shop", currentAppId: "id-1" }],
         resourceOwners: new Set(),
       });
     });

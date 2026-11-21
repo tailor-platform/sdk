@@ -126,6 +126,15 @@ export function sdkAppIdLabelValue(appId: string): string {
 }
 
 /**
+ * Application id an `sdk-app-id` label value records.
+ * @param value - Label value written by {@link sdkAppIdLabelValue}
+ * @returns The id without the label prefix
+ */
+export function appIdOfLabelValue(value: string): string {
+  return value.startsWith(appIdLabelPrefix) ? value.slice(appIdLabelPrefix.length) : value;
+}
+
+/**
  * Check whether existing metadata was produced by the current SDK version.
  * @param existingLabels - Labels currently stored on the remote resource
  * @param desiredLabels - Labels that will be written by the current apply run

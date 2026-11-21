@@ -18,6 +18,8 @@ export interface UnmanagedResource {
   resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
+  /** Set when a workspace config manages the resource. */
+  managedBy?: "workspace";
 }
 
 /** A resource an application deployed, which a workspace config takes over or deletes. */
@@ -26,6 +28,8 @@ export interface WorkspaceTakeover extends UnmanagedResource {
   action: "update" | "delete";
   /** Name of the application that deployed it, when it records one. */
   currentOwner?: string;
+  /** Id of the application config that deployed it, when it records one. */
+  currentAppId?: string;
 }
 
 /** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
@@ -306,18 +310,31 @@ export async function confirmUnmanagedResources(
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  logger.warn("Existing resources not tracked by tailor were found:");
-
-  logger.log(`  ${styles.info("Resources")}:`);
-  for (const r of resources) {
-    logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.info(`"${r.resourceName}"`)}`);
+  const listResources = (listed: readonly UnmanagedResource[]) => {
+    logger.log(`  ${styles.info("Resources")}:`);
+    for (const r of listed) {
+      logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.info(`"${r.resourceName}"`)}`);
+    }
+    logger.newline();
+  };
+  const workspaceManaged = resources.filter((r) => r.managedBy === "workspace");
+  const untracked = resources.filter((r) => r.managedBy !== "workspace");
+  if (workspaceManaged.length > 0) {
+    logger.warn("Resources managed by a workspace config were found:");
+    listResources(workspaceManaged);
+    logger.log(
+      `  Continuing moves them to ${managerOf(appName)}, and the workspace config's next deploy asks to take them back.`,
+    );
   }
-  logger.newline();
-  logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
-  logger.log("  To continue, confirm that tailor should manage them.");
-  logger.log(
-    "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
-  );
+  if (untracked.length > 0) {
+    logger.warn("Existing resources not tracked by tailor were found:");
+    listResources(untracked);
+    logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
+    logger.log("  To continue, confirm that tailor should manage them.");
+    logger.log(
+      "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
+    );
+  }
 
   if (mode === "dry-run") return;
   if (mode === "yes") {
