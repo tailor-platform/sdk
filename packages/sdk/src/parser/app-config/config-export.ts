@@ -21,6 +21,46 @@ type ParseResult =
 
 export type WorkspaceExport = Extract<ParsedConfigExport, { kind: "workspace" }>;
 
+/** A service of a workspace that can override `env` values. */
+export type EnvOverrideService =
+  | { kind: "resolver" | "auth"; name: string }
+  | { kind: "executor" | "workflow" };
+
+type EnvOverrides<Value> = WorkspaceRepresentation<Value>["envOverrides"];
+
+interface ServiceEnvOverride<Value> {
+  service: EnvOverrideService;
+  env: Record<string, Value>;
+}
+
+function listEnvOverrides<Value>(overrides: EnvOverrides<Value>): ServiceEnvOverride<Value>[] {
+  const named = (
+    kind: "resolver" | "auth",
+    records: Record<string, Record<string, Value>>,
+  ): ServiceEnvOverride<Value>[] =>
+    Object.entries(records).map(([name, env]) => ({ service: { kind, name }, env }));
+  const single = (
+    kind: "executor" | "workflow",
+    env: Record<string, Value> | undefined,
+  ): ServiceEnvOverride<Value>[] => (env ? [{ service: { kind }, env }] : []);
+  const { resolver, executor, workflow, auth } = overrides;
+  return [
+    ...named("resolver", resolver),
+    ...single("executor", executor),
+    ...single("workflow", workflow),
+    ...named("auth", auth),
+  ];
+}
+
+function fromServiceEnvOverrides<Value>(entries: ServiceEnvOverride<Value>[]): EnvOverrides<Value> {
+  const overrides: EnvOverrides<Value> = { resolver: {}, auth: {} };
+  for (const { service, env } of entries) {
+    if ("name" in service) overrides[service.kind][service.name] = env;
+    else overrides[service.kind] = env;
+  }
+  return overrides;
+}
+
 /**
  * List the `env` overrides of a workspace with the path of the service that holds each, as the
  * config spells it.
@@ -30,16 +70,12 @@ export type WorkspaceExport = Extract<ParsedConfigExport, { kind: "workspace" }>
 export function envOverrideEntries<Value>(
   parsed: Pick<WorkspaceExport, "definedBy"> & { workspace: WorkspaceRepresentation<Value> },
 ): { servicePath: string[]; env: Record<string, Value> }[] {
-  const { resolver, executor, workflow, auth } = parsed.workspace.envOverrides;
-  return [
-    ...Object.entries(resolver).map(([name, env]) => ({ servicePath: ["resolver", name], env })),
-    ...(executor ? [{ servicePath: ["executor"], env: executor }] : []),
-    ...(workflow ? [{ servicePath: ["workflow"], env: workflow }] : []),
-    ...Object.entries(auth).map(([name, env]) => {
-      const key = singleServiceKey(parsed.definedBy, name);
-      return { servicePath: key === undefined ? ["auth"] : ["auth", key], env };
-    }),
-  ];
+  return listEnvOverrides(parsed.workspace.envOverrides).map(({ service, env }) => {
+    if (!("name" in service)) return { servicePath: [service.kind], env };
+    const key =
+      service.kind === "auth" ? singleServiceKey(parsed.definedBy, service.name) : service.name;
+    return { servicePath: key === undefined ? [service.kind] : [service.kind, key], env };
+  });
 }
 
 /**
@@ -63,23 +99,13 @@ export function singleServiceKey(
  * @returns The overrides with mapped values
  */
 export function mapEnvOverrides<From, To>(
-  overrides: WorkspaceRepresentation<From>["envOverrides"],
-  map: (env: Record<string, From>) => Record<string, To>,
-): WorkspaceRepresentation<To>["envOverrides"] {
-  const mapEach = (records: Record<string, Record<string, From>>) =>
-    Object.fromEntries(Object.entries(records).map(([name, env]) => [name, map(env)]));
-  return {
-    resolver: mapEach(overrides.resolver),
-    ...(overrides.executor ? { executor: map(overrides.executor) } : {}),
-    ...(overrides.workflow ? { workflow: map(overrides.workflow) } : {}),
-    auth: mapEach(overrides.auth),
-  };
+  overrides: EnvOverrides<From>,
+  map: (env: Record<string, From>, service: EnvOverrideService) => Record<string, To>,
+): EnvOverrides<To> {
+  return fromServiceEnvOverrides(
+    listEnvOverrides(overrides).map(({ service, env }) => ({ service, env: map(env, service) })),
+  );
 }
-
-/** A service of a workspace that can override `env` values. */
-export type EnvOverrideService =
-  | { kind: "resolver" | "auth"; name: string }
-  | { kind: "executor" | "workflow" };
 
 /**
  * Map every `env` override of a workspace to new values asynchronously, as {@link mapEnvOverrides} does.
@@ -88,30 +114,17 @@ export type EnvOverrideService =
  * @returns The overrides with mapped values
  */
 export async function mapEnvOverridesAsync<From, To>(
-  overrides: WorkspaceRepresentation<From>["envOverrides"],
+  overrides: EnvOverrides<From>,
   map: (env: Record<string, From>, service: EnvOverrideService) => Promise<Record<string, To>>,
-): Promise<WorkspaceRepresentation<To>["envOverrides"]> {
-  const mapEach = async (
-    kind: "resolver" | "auth",
-    records: Record<string, Record<string, From>>,
-  ): Promise<Record<string, Record<string, To>>> =>
-    Object.fromEntries(
-      await Promise.all(
-        Object.entries(records).map(async ([name, env]) => [name, await map(env, { kind, name })]),
-      ),
-    );
-  const [resolver, executor, workflow, auth] = await Promise.all([
-    mapEach("resolver", overrides.resolver),
-    overrides.executor && map(overrides.executor, { kind: "executor" }),
-    overrides.workflow && map(overrides.workflow, { kind: "workflow" }),
-    mapEach("auth", overrides.auth),
-  ]);
-  return {
-    resolver,
-    ...(executor ? { executor } : {}),
-    ...(workflow ? { workflow } : {}),
-    auth,
-  };
+): Promise<EnvOverrides<To>> {
+  return fromServiceEnvOverrides(
+    await Promise.all(
+      listEnvOverrides(overrides).map(async ({ service, env }) => ({
+        service,
+        env: await map(env, service),
+      })),
+    ),
+  );
 }
 
 function withoutEnv<Entry extends object>(entry: Entry): [Omit<Entry, "env">, EnvOverride?] {
