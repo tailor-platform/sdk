@@ -60,6 +60,21 @@ function categoryLabel(category: NotificationCategory): string {
   return protoEnumLookup(CATEGORY_LABEL, category, "unknown");
 }
 
+// What people read for each category label. ALERT names what the notice is about (the reader's own
+// resources or account), not how urgent it is, so it is shown that way; JSON keeps the API name.
+const CATEGORY_DISPLAY: Record<string, string> = {
+  alert: "your resources",
+};
+
+/**
+ * Human-readable form of a category label, for tables and the detail view.
+ * @param category - Category label as produced by transformNotification
+ * @returns The label to show people
+ */
+export function categoryDisplayLabel(category: string): string {
+  return CATEGORY_DISPLAY[category] ?? category;
+}
+
 function scopeRefLabel(ref: NotificationScopeRef): string | undefined {
   switch (ref.ref.case) {
     case "workspaceId":
