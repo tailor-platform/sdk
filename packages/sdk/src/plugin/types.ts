@@ -93,7 +93,7 @@ export interface TailorDBReadyContext<PluginConfig = unknown> {
   /**
    * The config's Auth service. Reading it throws when the config has several Auth services, and
    * a copy made with `{ ...ctx }` then leaves it out.
-   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;
   /** Every Auth service of the config, keyed by its name */
@@ -120,7 +120,7 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
   /**
    * The config's Auth service. Reading it throws when the config has several Auth services, and
    * a copy made with `{ ...ctx }` then leaves it out.
-   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;
   /** Every Auth service of the config, keyed by its name */
@@ -149,7 +149,7 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   /**
    * The config's Auth service. Reading it throws when the config has several Auth services, and
    * a copy made with `{ ...ctx }` then leaves it out.
-   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
    */
   auth?: GeneratorAuthInput;
   /** Every Auth service of the config, keyed by its name */
