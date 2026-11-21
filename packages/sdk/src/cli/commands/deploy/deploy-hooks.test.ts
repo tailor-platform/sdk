@@ -770,3 +770,26 @@ test("reports every application of a workspace config in JSON", async () => {
     expect.not.objectContaining({ id: expect.anything() }),
   ]);
 });
+
+test("stops a defineApp() config before confirming when it would take over two configs' resources", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  Object.assign(mocks.target.source, {
+    workspace: { path: "/repo/tailor.config.ts", apps: {}, definedBy: "defineApp" },
+  });
+  const takeover = (resourceName: string, currentOwner: string, currentAppId: string) => ({
+    resourceType: "tailordb.service" as const,
+    resourceName,
+    resourceLabel: "TailorDB namespace",
+    action: "delete" as const,
+    currentOwner,
+    currentAppId,
+  });
+  mocks.results.tailorDB.takeovers.push(
+    takeover("shop-db", "shop", "8d6f1e2a-4b3c-4d5e-9f60-7a8b9c0d1e2f"),
+    takeover("admin-db", "admin", "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81"),
+  );
+  await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+  });
+});

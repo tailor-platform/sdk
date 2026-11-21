@@ -1284,6 +1284,12 @@ describe("printPlanResults", () => {
         resourceLabel: "TailorDB namespace",
         resourceName: "legacy",
       },
+      {
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB namespace",
+        resourceName: "shared",
+        managedBy: "workspace",
+      },
     ];
     results.secretManager.skippedSecrets = ["my-vault/DB_PASSWORD"];
 
@@ -1294,6 +1300,12 @@ describe("printPlanResults", () => {
     };
     expect(payload.warnings).toEqual([
       { type: "unmanaged", resourceType: "tailordb.service", name: "legacy" },
+      {
+        type: "unmanaged",
+        resourceType: "tailordb.service",
+        name: "shared",
+        managedBy: "workspace",
+      },
       { type: "skippedSecret", resourceType: "secret.secret", name: "my-vault/DB_PASSWORD" },
     ]);
   });
