@@ -230,8 +230,7 @@ async function buildMigrationContextForScripts(
   return {
     client,
     workspaceId: migrationContext.workspaceId,
-    authNamespace: machineUsers.authNamespace,
-    machineUserByNamespace: machineUsers.byNamespace,
+    invokerByNamespace: machineUsers.byNamespace,
     env,
     configPath: migrationContext.config.path,
     ...(migrationContext.migrationRecoveryArgs

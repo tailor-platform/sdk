@@ -70,7 +70,6 @@ import {
   MIGRATION_LABEL_KEY,
   sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
-import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
@@ -128,9 +127,8 @@ interface MigrationExecutionOptions {
 export interface MigrationContext {
   client: OperatorClient;
   workspaceId: string;
-  authNamespace: string;
-  /** Machine user that runs the scripts of each namespace. */
-  machineUserByNamespace: ReadonlyMap<string, string>;
+  /** Machine user, with its Auth namespace, that runs the scripts of each namespace. */
+  invokerByNamespace: ReadonlyMap<string, ScriptInvoker>;
   env: Record<string, string | number | boolean>;
   /** Config file the deploy loaded. */
   configPath: string;
@@ -1327,15 +1325,13 @@ export async function executeMigrations(
 
   // Execute migrations for each namespace with appropriate machine user
   for (const [namespace, namespaceMigrations] of migrationsByNamespace) {
-    const machineUserName = assertDefined(
-      context.machineUserByNamespace.get(namespace),
-      `machine user for namespace '${namespace}' was not resolved`,
+    const invoker = create(
+      AuthInvokerSchema,
+      assertDefined(
+        context.invokerByNamespace.get(namespace),
+        `machine user for namespace '${namespace}' was not resolved`,
+      ),
     );
-
-    const invoker = create(AuthInvokerSchema, {
-      namespace: context.authNamespace,
-      machineUserName,
-    });
 
     const options: MigrationExecutionOptions = {
       client: context.client,
@@ -1355,7 +1351,9 @@ export async function executeMigrations(
       }),
     };
 
-    logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);
+    logger.info(
+      `Using machine user: ${styles.bold(invoker.machineUserName)} for namespace '${namespace}'`,
+    );
 
     for (const migration of namespaceMigrations) {
       const migrationLabel = `${migration.namespace}/${formatMigrationNumber(migration.number)}`;
@@ -1465,10 +1463,15 @@ interface MigrationRunSource {
   migrationMachineUserOverride?: string;
 }
 
-/** Machine user that runs the migration scripts of each namespace. */
+/** A machine user, with the Auth namespace that defines it. */
+export interface ScriptInvoker {
+  readonly namespace: string;
+  readonly machineUserName: string;
+}
+
+/** Machine user, with its Auth namespace, that runs the migration scripts of each namespace. */
 export interface MigrationMachineUsers {
-  authNamespace: string;
-  byNamespace: ReadonlyMap<string, string>;
+  byNamespace: ReadonlyMap<string, ScriptInvoker>;
 }
 
 /**
@@ -1488,8 +1491,11 @@ export function resolveMigrationMachineUsers(
   );
 }
 
+type NamespaceMachineUser = { namespace: string; machineUser: string };
+
 /**
- * Resolve machine users for namespaces that execute scripts.
+ * Resolve machine users for namespaces that execute scripts. A configured machine user runs as
+ * the Auth service that defines it; without one, the only Auth service's first machine user does.
  * @param source - Auth, config, and override to resolve from
  * @param scriptNamespaces - Namespaces with scripts to run
  * @returns Machine users, or undefined when no script runs
@@ -1500,8 +1506,9 @@ export function resolveScriptMachineUsers(
 ): MigrationMachineUsers | undefined {
   const namespaces = new Set(scriptNamespaces);
   if (namespaces.size === 0) return undefined;
-  const authService = soleAuthService(source.application);
-  if (!authService) {
+  const authServices = source.application.authServices;
+  const [onlyAuth, ...otherAuths] = authServices;
+  if (onlyAuth === undefined) {
     throw CLIError({
       code: "AUTH_CONFIG_REQUIRED",
       message: "Auth configuration is required to execute migration scripts.",
@@ -1509,48 +1516,83 @@ export function resolveScriptMachineUsers(
         "Define auth with machine users in this config; migration scripts run as one of them.",
     });
   }
-  const authMachineUsers = Object.keys(authService.config.machineUsers ?? {});
-  const byNamespace = new Map<string, string>();
+  const machineUsersOf = (auth: (typeof authServices)[number]) =>
+    Object.keys(auth.config.machineUsers ?? {});
+  const byNamespace = new Map<string, ScriptInvoker>();
   const missing: string[] = [];
+  const undefinedMachineUsers: NamespaceMachineUser[] = [];
+  const ambiguous: Array<NamespaceMachineUser & { authNamespaces: string[] }> = [];
   for (const namespace of namespaces) {
     const migrationConfig = (source.config.db?.[namespace] as TailorDBServiceConfig | undefined)
       ?.migration;
-    const machineUser =
-      source.migrationMachineUserOverride ??
-      getMigrationMachineUser(migrationConfig, authMachineUsers);
-    if (machineUser === undefined) {
-      missing.push(namespace);
+    const configured = source.migrationMachineUserOverride ?? migrationConfig?.machineUser;
+    if (configured === undefined) {
+      const machineUser = otherAuths.length === 0 ? machineUsersOf(onlyAuth)[0] : undefined;
+      if (machineUser === undefined) missing.push(namespace);
+      else
+        byNamespace.set(namespace, {
+          namespace: onlyAuth.config.name,
+          machineUserName: machineUser,
+        });
       continue;
     }
-    byNamespace.set(namespace, machineUser);
+    const defining = authServices.filter((auth) => machineUsersOf(auth).includes(configured));
+    const [auth, ...alsoDefining] = defining;
+    if (auth === undefined) undefinedMachineUsers.push({ namespace, machineUser: configured });
+    else if (alsoDefining.length > 0) {
+      ambiguous.push({
+        namespace,
+        machineUser: configured,
+        authNamespaces: defining.map(({ config }) => config.name),
+      });
+    } else byNamespace.set(namespace, { namespace: auth.config.name, machineUserName: configured });
   }
   if (missing.length > 0) {
     throw CLIError({
       code: "MACHINE_USER_REQUIRED",
       message: `No machine user available for migration execution in ${describeNamespaces(missing)}.`,
       suggestion:
-        "Either configure 'migration.machineUser' in db config or define machine users in auth config.",
+        otherAuths.length === 0
+          ? "Either configure 'migration.machineUser' in db config or define machine users in auth config."
+          : "Configure 'migration.machineUser' in db config: the config defines several Auth services.",
       context: { namespaces: missing },
     });
   }
-  const authNamespace = authService.config.name;
-  const undefinedMachineUsers = [...byNamespace]
-    .filter(([, machineUser]) => !authMachineUsers.includes(machineUser))
-    .map(([namespace, machineUser]) => ({ namespace, machineUser }));
   if (undefinedMachineUsers.length > 0) {
+    const authNamespaces = authServices.map(({ config }) => config.name);
+    const described = undefinedMachineUsers
+      .map(({ namespace, machineUser }) => `'${machineUser}' (namespace '${namespace}')`)
+      .join(", ");
     throw CLIError({
       code: "MACHINE_USER_NOT_FOUND",
-      message: `Machine user for migration execution is not defined in auth '${authNamespace}': ${undefinedMachineUsers
-        .map(({ namespace, machineUser }) => `'${machineUser}' (namespace '${namespace}')`)
-        .join(", ")}.`,
+      message:
+        otherAuths.length === 0
+          ? `Machine user for migration execution is not defined in auth '${onlyAuth.config.name}': ${described}.`
+          : `Machine user for migration execution is not defined in any of the Auth services ${authNamespaces.join(", ")}: ${described}.`,
       suggestion: undefinedMachineUserSuggestion(
-        authMachineUsers,
+        authServices.flatMap(machineUsersOf),
         source.migrationMachineUserOverride,
       ),
-      context: { authNamespace, machineUsers: undefinedMachineUsers },
+      context:
+        otherAuths.length === 0
+          ? { authNamespace: onlyAuth.config.name, machineUsers: undefinedMachineUsers }
+          : { authNamespaces, machineUsers: undefinedMachineUsers },
     });
   }
-  return { authNamespace, byNamespace };
+  if (ambiguous.length > 0) {
+    throw CLIError({
+      code: "MACHINE_USER_AMBIGUOUS",
+      message: `Machine user for migration execution is defined in several Auth services: ${ambiguous
+        .map(
+          ({ namespace, machineUser, authNamespaces }) =>
+            `'${machineUser}' (namespace '${namespace}') in ${authNamespaces.join(", ")}`,
+        )
+        .join("; ")}.`,
+      suggestion: "Rename the machine user so that one Auth service defines it.",
+      context: { machineUsers: ambiguous },
+    });
+  }
+  return { byNamespace };
 }
 
 function undefinedMachineUserSuggestion(
