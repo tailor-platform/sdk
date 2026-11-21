@@ -88,7 +88,9 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const outputDir = path.resolve(path.dirname(ctx.configPath), ctx.pluginConfig.distPath);
 
       // Process IdP user early so we can add reverse FK to the user profile type
-      const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
+      // oxlint-disable-next-line typescript/no-deprecated -- Seeds the IdP users of a single Auth service until it handles several.
+      const auth = ctx.auth;
+      const idpUser = auth ? (processIdpUser(auth) ?? null) : null;
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {

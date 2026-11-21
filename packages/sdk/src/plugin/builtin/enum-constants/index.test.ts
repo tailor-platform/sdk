@@ -47,6 +47,7 @@ describe("EnumConstantsPlugin", () => {
             pluginAttachments: new Map(),
           },
         ],
+        auths: {},
         baseDir: "/test",
         configPath: "/test/tailor.config.ts",
         pluginConfig: { distPath: testDistPath },

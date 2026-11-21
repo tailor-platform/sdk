@@ -23,6 +23,7 @@ describe("seedPlugin", () => {
           pluginAttachments: new Map(),
         },
       ],
+      auths: {},
       baseDir: "/proj/.tailor/generated/seed",
       configPath,
       pluginConfig: { distPath: "./seed" },

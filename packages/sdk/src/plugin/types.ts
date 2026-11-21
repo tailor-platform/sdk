@@ -90,8 +90,14 @@ export interface ResolverNamespaceData {
 export interface TailorDBReadyContext<PluginConfig = unknown> {
   /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */
@@ -111,8 +117,14 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */
@@ -134,8 +146,14 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   resolvers: ResolverNamespaceData[];
   /** All executors, keyed by executor name */
   executors: Record<string, Executor>;
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since NEXT_RELEASE — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */

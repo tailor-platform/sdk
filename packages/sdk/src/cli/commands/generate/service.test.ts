@@ -3,10 +3,13 @@ import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
-import { defineApplication } from "#/cli/services/application";
+import { defineApplication, defineWorkspaceServices } from "#/cli/services/application";
 import { errorToJson, serializeError } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
+import { defineWorkspace } from "#/configure/config/workspace";
+import { defineAuth } from "#/configure/services/auth/index";
 import { PluginManager } from "#/plugin/manager";
 import { createGenerationManager } from "./service";
 import type { Application } from "#/cli/services/application";
@@ -116,11 +119,11 @@ describe("GenerationManager", () => {
     test("initializes without legacy generator API", () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({
-        application,
+        configServices: application,
         config: mockConfig,
       });
 
-      expect(manager.application).toBe(application);
+      expect(manager.configServices).toBe(application);
       expect(manager.baseDir).toContain("generated");
       expect(manager.services).toEqual({ tailordb: {}, resolver: {}, executor: {} });
       expect("generators" in manager).toBe(false);
@@ -131,7 +134,7 @@ describe("GenerationManager", () => {
     test("creates base directory", () => {
       const application = defineApplication({ config: mockConfig });
       createGenerationManager({
-        application,
+        configServices: application,
         config: mockConfig,
       });
 
@@ -145,7 +148,7 @@ describe("GenerationManager", () => {
     test("executes complete generation process", async () => {
       const application = defineApplication({ config: mockConfig });
       const manager = createGenerationManager({
-        application,
+        configServices: application,
         config: mockConfig,
       });
 
@@ -168,7 +171,7 @@ describe("GenerationManager", () => {
       ]);
       const pluginManager = new PluginManager([plugin]);
       const manager = createGenerationManager({
-        application,
+        configServices: application,
         config: mockConfig,
         pluginManager,
       });
@@ -199,7 +202,7 @@ describe("GenerationManager", () => {
       const finishSibling = Promise.withResolvers<void>();
       const config = { ...mockConfig, db: {}, resolver: {} };
       const manager = createGenerationManager({
-        application: defineApplication({ config }),
+        configServices: defineApplication({ config }),
         config,
         pluginManager: new PluginManager([
           {
@@ -263,7 +266,7 @@ describe("GenerationManager", () => {
           { id: "third-plugin", description: "Third", [hookName]: stringHook },
         ];
         const manager = createGenerationManager({
-          application: defineApplication({ config }),
+          configServices: defineApplication({ config }),
           config,
           pluginManager: new PluginManager(plugins),
         });
@@ -314,19 +317,89 @@ describe("GenerationManager", () => {
       },
     );
 
+    test.each(["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const)(
+      "passes %s every Auth service as auths, and the only one as auth",
+      async (hookName) => {
+        const received: unknown[] = [];
+        const hook = vi.fn(async (ctx: { auth?: unknown; auths: Record<string, unknown> }) => {
+          received.push({ auth: ctx.auth, auths: ctx.auths });
+          return { files: [] };
+        });
+        const auth = defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} });
+        for (const config of [
+          { ...mockConfig, db: {}, resolver: {}, auth },
+          { ...mockConfig, db: {}, resolver: {} },
+        ]) {
+          await createGenerationManager({
+            configServices: defineApplication({ config }),
+            config,
+            pluginManager: new PluginManager([{ id: "p", description: "P", [hookName]: hook }]),
+          }).generate();
+        }
+
+        const corpAuth = expect.objectContaining({ name: "corp-auth" });
+        expect(received).toEqual([
+          { auth: corpAuth, auths: { "corp-auth": corpAuth } },
+          { auth: undefined, auths: {} },
+        ]);
+      },
+    );
+
+    test.each(["onTailorDBReady", "onResolverReady", "onExecutorReady"] as const)(
+      "fails %s that reads auth when the workspace has several Auth services",
+      async (hookName) => {
+        const workspace = loadedWorkspace(
+          defineWorkspace({
+            auth: {
+              "corp-auth": defineAuth("corp-auth", { machineUserAttributes: {}, machineUsers: {} }),
+              "partner-auth": defineAuth("partner-auth", {
+                machineUserAttributes: {},
+                machineUsers: {},
+              }),
+            },
+            apps: {},
+          }),
+        );
+        const hook = vi.fn(async (ctx: { auth?: unknown }) => {
+          void ctx.auth;
+          return { files: [] };
+        });
+
+        const failure = createGenerationManager({
+          configServices: defineWorkspaceServices({ workspace }),
+          config: workspace,
+          pluginManager: new PluginManager([{ id: "p", description: "P", [hookName]: hook }]),
+        }).generate();
+
+        await expect(failure).rejects.toMatchObject({
+          code: "PLUGIN_GENERATION_FAILED",
+          context: {
+            failures: [
+              {
+                plugin: "p",
+                error: expect.objectContaining({ code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS" }),
+              },
+            ],
+          },
+        });
+      },
+    );
+
     test("rejects duplicate TailorDB table names between namespaces", async () => {
       const duplicateApp = applicationWithTailorDBServices(mockConfig, [
         loadedTailorDBService("main", ["User"]),
         loadedTailorDBService("analytics", ["User"]),
       ]);
       const duplicateManager = createGenerationManager({
-        application: duplicateApp,
+        configServices: duplicateApp,
         config: mockConfig,
       });
 
-      await expect(duplicateManager.generate()).rejects.toThrow(
-        /Duplicate TailorDB type name "User"/,
-      );
+      await expect(duplicateManager.generate()).rejects.toMatchObject({
+        message: expect.stringMatching(/Duplicate TailorDB type name "User"/),
+        suggestion:
+          "Give each TailorDB type a name that is unique across all TailorDB namespaces in the application.",
+      });
       expect(vi.mocked(logger.error).mock.calls).toEqual([
         ["Error validating TailorDB table names"],
       ]);
@@ -340,7 +413,10 @@ describe("GenerationManager", () => {
           loadTypes: vi.fn().mockRejectedValue(loadFailure),
         },
       ]);
-      const manager = createGenerationManager({ application, config: mockConfig });
+      const manager = createGenerationManager({
+        configServices: application,
+        config: mockConfig,
+      });
 
       await expect(manager.generate()).rejects.toBe(loadFailure);
       expect(vi.mocked(logger.error).mock.calls).toEqual([
@@ -363,7 +439,7 @@ describe("GenerationManager", () => {
           },
         ],
       };
-      const manager = createGenerationManager({ application, config });
+      const manager = createGenerationManager({ configServices: application, config });
 
       await expect(manager.generate()).rejects.toBe(loadFailure);
       expect(vi.mocked(logger.error).mock.calls).toEqual([
@@ -378,7 +454,7 @@ describe("GenerationManager", () => {
       });
       const config = { ...mockConfig, db: {}, resolver: {} };
       const manager = createGenerationManager({
-        application: defineApplication({ config }),
+        configServices: defineApplication({ config }),
         config,
         pluginManager: new PluginManager([
           {

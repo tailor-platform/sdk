@@ -4,7 +4,7 @@ import { isContentMapperEnabled } from "#/cli/shared/content-mapper-config";
 import { idpConfigList } from "#/cli/shared/idp-config";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
-import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
+import type { LoadedWorkspaceConfig, ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
 import type { AppConfig } from "#/configure/config/types";
 
 interface AttributeTypeInfo {
@@ -253,15 +253,29 @@ export {};
 }
 
 function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
+  return {
+    ...collectServiceNames(
+      idpConfigList(config.idp).map((idp) => idp.name),
+      config,
+    ),
+    ...collectAuthAttributes(config.auth),
+  };
+}
+
+function uniqueNames(names: readonly string[]): string[] | undefined {
+  return names.length ? [...new Set(names)] : undefined;
+}
+
+function collectServiceNames(
+  idpNameList: readonly string[],
+  config: Pick<AppConfig, "aiGateways" | "secrets">,
+): Pick<ExtractedAttributes, "idpNames" | "aiGatewayNames" | "secretVaultNames"> {
   // De-duplicate IdP names so duplicates in config don't emit duplicate
   // `IdpNameRegistry` keys (which would be invalid TypeScript).
-  const idpList = idpConfigList(config.idp);
-  const idpNames = idpList.length ? [...new Set(idpList.map((idp) => idp.name))] : undefined;
+  const idpNames = uniqueNames(idpNameList);
 
   // De-duplicate AI Gateway names for the same reason.
-  const aiGatewayNames = config.aiGateways?.length
-    ? [...new Set(config.aiGateways.map((gateway) => gateway.name))]
-    : undefined;
+  const aiGatewayNames = uniqueNames((config.aiGateways ?? []).map((gateway) => gateway.name));
 
   // Extract Secret Manager vault -> secret *name* mapping. Only `Object.keys()` of
   // each vault, never its values — a value is the configured secret itself.
@@ -274,14 +288,20 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       )
     : undefined;
 
-  const auth = config.auth;
+  return { idpNames, aiGatewayNames, secretVaultNames };
+}
 
-  // An application has exactly one auth namespace: its own `auth`, local or external.
+type AuthAttributes = Pick<
+  ExtractedAttributes,
+  "attributes" | "attributeList" | "machineUserNames" | "connectionNames" | "authNamespaceNames"
+>;
+
+function collectAuthAttributes(auth: AppConfig["auth"]): AuthAttributes {
   const authNamespaceNames =
     auth && typeof auth === "object" && typeof auth.name === "string" ? [auth.name] : undefined;
 
   if (!auth || typeof auth !== "object") {
-    return { idpNames, aiGatewayNames, authNamespaceNames, secretVaultNames };
+    return { authNamespaceNames };
   }
 
   // Extract machine user names from auth.machineUsers (available regardless of userProfile vs. machineUserAttributes)
@@ -352,11 +372,8 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       attributes,
       attributeList,
       machineUserNames,
-      idpNames,
       connectionNames,
-      aiGatewayNames,
       authNamespaceNames,
-      secretVaultNames,
     };
   }
 
@@ -370,11 +387,8 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     if (!machineUserAttributes) {
       return {
         machineUserNames,
-        idpNames,
         connectionNames,
-        aiGatewayNames,
         authNamespaceNames,
-        secretVaultNames,
       };
     }
 
@@ -386,21 +400,15 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     return {
       attributes,
       machineUserNames,
-      idpNames,
       connectionNames,
-      aiGatewayNames,
       authNamespaceNames,
-      secretVaultNames,
     };
   }
 
   return {
     machineUserNames,
-    idpNames,
     connectionNames,
-    aiGatewayNames,
     authNamespaceNames,
-    secretVaultNames,
   };
 }
 
@@ -435,6 +443,84 @@ export function generateTypeDefinitionFromConfig(
     authNamespaceNames,
     secretVaultNames,
     { appName: config.name, defaultDateRepresentation: config.defaultDateRepresentation },
+  );
+}
+
+/** Key under which a workspace config records its `defaultDateRepresentation`. */
+const WORKSPACE_DATE_REPRESENTATION_KEY = "workspace";
+
+// Nothing tells which Auth service a principal signed in through, so its attributes may be any one's.
+function mergeAttributes(
+  perAuth: ReadonlyArray<AttributesConfig | undefined>,
+): AttributesConfig | undefined {
+  if (perAuth.length <= 1) return perAuth[0];
+  const keys = [...new Set(perAuth.flatMap((attributes) => Object.keys(attributes ?? {})))];
+  if (keys.length === 0) return undefined;
+  return Object.fromEntries(
+    keys.map((key) => {
+      const infos = perAuth.map((attributes) => attributes?.[key]);
+      const types = [...new Set(infos.flatMap((info) => (info ? [info.type] : [])))];
+      const optional = infos.some((info) => info === undefined || info.optional === true);
+      return [key, { type: types.join(" | "), optional }];
+    }),
+  );
+}
+
+function mergeAttributeLists(
+  perAuth: ReadonlyArray<AttributeListConfig | undefined>,
+): AttributeListConfig | undefined {
+  const [first, ...rest] = perAuth;
+  return first && rest.every((list) => list?.length === first.length) ? first : undefined;
+}
+
+/**
+ * Extract the names and attributes of a workspace config for user-defined typing.
+ * @param workspace - Workspace loaded from a `defineWorkspace()` or `defineApp()` config
+ * @returns Extracted names and attributes of every service the workspace declares
+ */
+export function extractAttributesFromWorkspace(
+  workspace: LoadedWorkspaceConfig,
+): ExtractedAttributes {
+  const auths = Object.values(workspace.auth).map((auth) => collectAuthAttributes(auth));
+  return {
+    ...collectServiceNames(
+      Object.values(workspace.idp).map((idp) => idp.name),
+      workspace,
+    ),
+    attributes: mergeAttributes(auths.map(({ attributes }) => attributes)),
+    attributeList: mergeAttributeLists(auths.map(({ attributeList }) => attributeList)),
+    machineUserNames: uniqueNames(auths.flatMap(({ machineUserNames }) => machineUserNames ?? [])),
+    connectionNames: uniqueNames(auths.flatMap(({ connectionNames }) => connectionNames ?? [])),
+    authNamespaceNames: uniqueNames(
+      auths.flatMap(({ authNamespaceNames }) => authNamespaceNames ?? []),
+    ),
+  };
+}
+
+/**
+ * Generate the contents of the user-defined type definition file for a workspace config.
+ * @param workspace - Workspace loaded from a `defineWorkspace()` or `defineApp()` config
+ * @param extracted - Names and attributes already extracted from `workspace`; extracted here when omitted
+ * @returns Generated type definition source
+ */
+export function generateTypeDefinitionFromWorkspace(
+  workspace: LoadedWorkspaceConfig,
+  extracted: ExtractedAttributes = extractAttributesFromWorkspace(workspace),
+): string {
+  return generateTypeDefinition(
+    extracted.attributes,
+    extracted.attributeList,
+    workspace.env,
+    extracted.machineUserNames,
+    extracted.idpNames,
+    extracted.connectionNames,
+    extracted.aiGatewayNames,
+    extracted.authNamespaceNames,
+    extracted.secretVaultNames,
+    {
+      appName: WORKSPACE_DATE_REPRESENTATION_KEY,
+      defaultDateRepresentation: workspace.defaultDateRepresentation,
+    },
   );
 }
 
@@ -475,6 +561,51 @@ interface GenerateUserTypesOptions {
  */
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
+  await writeUserTypes(configPath, () => {
+    const extracted = extractAttributesFromConfig(config);
+    return {
+      extracted,
+      env: config.env,
+      content: generateTypeDefinitionFromConfig(config, extracted),
+    };
+  });
+}
+
+/**
+ * Options for generating the user type definitions of a workspace config
+ */
+interface GenerateWorkspaceUserTypesOptions {
+  /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
+  workspace: LoadedWorkspaceConfig;
+}
+
+/**
+ * Generate user type definitions from a workspace config and write them to disk, as
+ * {@link generateUserTypes} does for an app config.
+ * @param options - Generation options
+ * @returns Promise that resolves when types are generated
+ */
+export async function generateWorkspaceUserTypes(
+  options: GenerateWorkspaceUserTypesOptions,
+): Promise<void> {
+  const { workspace } = options;
+  await writeUserTypes(workspace.path, () => {
+    const extracted = extractAttributesFromWorkspace(workspace);
+    return {
+      extracted,
+      env: workspace.env,
+      content: generateTypeDefinitionFromWorkspace(workspace, extracted),
+    };
+  });
+}
+
+interface UserTypes {
+  extracted: ExtractedAttributes;
+  env: Record<string, string | number | boolean> | undefined;
+  content: string;
+}
+
+async function writeUserTypes(configPath: string, build: () => UserTypes): Promise<void> {
   try {
     if (!process.env.TAILOR_DTS_PATH && isContentMapperEnabled(configPath)) {
       const existing = resolveTypeDefinitionPath(configPath);
@@ -485,7 +616,7 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       }
       return;
     }
-    const extracted = extractAttributesFromConfig(config);
+    const { extracted, env, content: typeDefContent } = build();
     const {
       attributes,
       attributeList,
@@ -526,12 +657,10 @@ export async function generateUserTypes(options: GenerateUserTypesOptions): Prom
       logger.debug(`Extracted SecretVaultNames: ${JSON.stringify(secretVaultNames)}`);
     }
 
-    const env = config.env;
     if (env) {
       logger.debug(`Extracted Env: ${JSON.stringify(env)}`);
     }
 
-    const typeDefContent = generateTypeDefinitionFromConfig(config, extracted);
     const outputPath = resolveTypeDefinitionPath(configPath);
 
     // Write to file

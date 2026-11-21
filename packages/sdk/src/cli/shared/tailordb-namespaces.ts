@@ -1,8 +1,13 @@
-import { defineApplication, type Application } from "#/cli/services/application";
+import {
+  defineApplication,
+  defineWorkspaceServices,
+  type Application,
+} from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
-import { loadConfig, type LoadedConfig } from "./config-loader";
+import { loadConfig, type LoadedConfig, type LoadedWorkspaceConfig } from "./config-loader";
 import { CLIError } from "./errors";
 import { generateUserTypes } from "./type-generator";
+import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
 /**
@@ -109,8 +114,34 @@ export async function loadConfigNamespaces(
     });
   }
 
-  const namespaces: TailorDBNamespaceData[] = [];
+  return { config, plugins, application, namespaces: await loadNamespaceData(services) };
+}
 
+/**
+ * Load every TailorDB namespace a workspace config declares, including those no application
+ * lists, without writing any generated file.
+ * @param workspace - Loaded workspace config.
+ * @param plugins - Plugins exported by the config.
+ * @param options - Loading options.
+ * @returns The loaded TailorDB namespace data, in config order.
+ */
+export async function loadWorkspaceNamespaces(
+  workspace: LoadedWorkspaceConfig,
+  plugins: Plugin[],
+  options: LoadConfigNamespacesOptions = {},
+): Promise<TailorDBNamespaceData[]> {
+  const { tailorDBServices } = defineWorkspaceServices({
+    workspace,
+    pluginManager: plugins.length > 0 ? new PluginManager(plugins) : undefined,
+    precompileTailorDBScripts: options.precompileScripts,
+  });
+  return loadNamespaceData(tailorDBServices);
+}
+
+async function loadNamespaceData(
+  services: ReadonlyArray<TailorDBService>,
+): Promise<TailorDBNamespaceData[]> {
+  const namespaces: TailorDBNamespaceData[] = [];
   for (const db of services) {
     await db.loadTypes();
     await db.processNamespacePlugins();
@@ -121,8 +152,7 @@ export async function loadConfigNamespaces(
       pluginAttachments: db.pluginAttachments,
     });
   }
-
-  return { config, plugins, application, namespaces };
+  return namespaces;
 }
 
 /**
