@@ -22,6 +22,7 @@ import {
   syntaxInvalidError,
 } from "./validation-errors";
 import { flattenZodIssues, type FlatIssue } from "./zod-issues";
+import type { AssertUniqueLocalTailorDBTypeNamesArgs } from "#/cli/services/tailordb/type-name-validation";
 import type { AppConfig, EnvEntry, EnvValue } from "#/configure/config/types";
 import type { WorkspaceRepresentation } from "#/parser/app-config/types";
 import type { Plugin } from "#/plugin/types";
@@ -52,6 +53,17 @@ export function isLoadedWorkspaceConfig(
   config: LoadedConfig | LoadedWorkspaceConfig,
 ): config is LoadedWorkspaceConfig {
   return "apps" in config;
+}
+
+/**
+ * Decide where the TailorDB type names of a config must be unique.
+ * @param config - Loaded config of either kind
+ * @returns `"workspace"` for a workspace config, `"application"` otherwise
+ */
+export function tailorDBTypeNameScopeOf(
+  config: LoadedConfig | LoadedWorkspaceConfig,
+): NonNullable<AssertUniqueLocalTailorDBTypeNamesArgs["scope"]> {
+  return isLoadedWorkspaceConfig(config) ? "workspace" : "application";
 }
 
 /** A loaded config file, told apart by the function that defined its default export. */

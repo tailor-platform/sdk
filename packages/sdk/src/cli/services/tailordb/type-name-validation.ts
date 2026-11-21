@@ -1,9 +1,4 @@
 import { fetchAll, isNotFoundError } from "#/cli/shared/client";
-import {
-  isLoadedWorkspaceConfig,
-  type LoadedConfig,
-  type LoadedWorkspaceConfig,
-} from "#/cli/shared/config-loader";
 import { assertUniqueDefinitionNames } from "#/cli/shared/validation-errors";
 import { isPluginGeneratedTable } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
@@ -60,11 +55,9 @@ interface AssertUniqueTailorDBTypeNamesArgs {
   uniqueAcross?: string;
 }
 
-type TailorDBTypeNameScope = "application" | "workspace";
-
 export interface AssertUniqueLocalTailorDBTypeNamesArgs extends CollectLocalTailorDBTypeNameSourcesArgs {
   /** Whether the services are an application's or a whole workspace's. Defaults to `"application"`. */
-  scope?: TailorDBTypeNameScope;
+  scope?: "application" | "workspace";
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
@@ -227,17 +220,6 @@ function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs):
       };
     }),
   });
-}
-
-/**
- * Decide where the TailorDB type names of a config must be unique.
- * @param config - Loaded config of either kind
- * @returns `"workspace"` for a workspace config, `"application"` otherwise
- */
-export function tailorDBTypeNameScopeOf(
-  config: LoadedConfig | LoadedWorkspaceConfig,
-): TailorDBTypeNameScope {
-  return isLoadedWorkspaceConfig(config) ? "workspace" : "application";
 }
 
 /**

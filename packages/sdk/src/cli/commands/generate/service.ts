@@ -8,14 +8,12 @@ import {
   type ConfigServices,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
-import {
-  assertUniqueLocalTailorDBTypeNames,
-  tailorDBTypeNameScopeOf,
-} from "#/cli/services/tailordb/type-name-validation";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
 import {
   isLoadedWorkspaceConfig,
   loadConfigFile,
+  tailorDBTypeNameScopeOf,
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
