@@ -17,6 +17,7 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       omitFields: [],
       foreignKeys: [],
       indexes: [],
+      rowType: "{\n  id?: string;\n}",
       pluginSource: {
         exportName: "AuditLog",
         pluginId: "audit-plugin",
@@ -45,6 +46,7 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       omitFields: [],
       foreignKeys: [],
       indexes: [],
+      rowType: "{\n  id?: string;\n}",
       pluginSource: {
         exportName: "AuditLog",
         pluginId: "audit-plugin",
@@ -59,7 +61,9 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       configImportPath: "../../../tailor.config.ts",
     });
 
-    expect(source).toContain("createStandardSchema(schemaType, hook, AuditLog)");
+    expect(source).toContain(
+      "createStandardSchema<SeedRow>(schemaType as never, hook as never, AuditLog)",
+    );
   });
 
   test("builds the seed schema from a table-attached plugin's generated table", () => {
@@ -71,6 +75,7 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
       omitFields: [],
       foreignKeys: [],
       indexes: [],
+      rowType: "{\n  id?: string;\n}",
       pluginSource: {
         exportName: "UserChangeset",
         pluginId: "changeset-plugin",
@@ -89,7 +94,9 @@ describe("generateLinesDbSchemaFileWithPluginAPI", () => {
     expect(source).toContain(
       'getGeneratedTable(configPath, "changeset-plugin", user, "changeset")',
     );
-    expect(source).toContain("createStandardSchema(schemaType, hook, UserChangeset)");
+    expect(source).toContain(
+      "createStandardSchema<SeedRow>(schemaType as never, hook as never, UserChangeset)",
+    );
   });
 });
 
@@ -114,21 +121,16 @@ describe("the row type of a plugin-generated table's seed schema", () => {
     rowType: "{\n  id?: string;\n  action: string;\n}",
   };
 
-  test.each([
-    ["a namespace plugin", {}],
+  test.each<[string, Partial<LinesDbMetadata>, string | undefined]>([
+    ["a namespace plugin", {}, undefined],
     [
       "a table-attached plugin",
-      {
-        pluginSource: { ...pluginSource, originalExportName: "user" },
-        originalImportPath: "../../tailordb/user",
-      },
+      { pluginSource: { ...pluginSource, originalExportName: "user" } },
+      "../../tailordb/user",
     ],
-  ])("is declared for a table %s generates", (_name, overrides) => {
-    const { originalImportPath, ...metadataOverrides } = overrides as {
-      originalImportPath?: string;
-    } & Partial<LinesDbMetadata>;
+  ])("is declared for a table %s generates", (_name, overrides, originalImportPath) => {
     const source = generateLinesDbSchemaFileWithPluginAPI(
-      { ...metadata, ...metadataOverrides },
+      { ...metadata, ...overrides },
       { configImportPath: "../../../tailor.config.ts", originalImportPath },
     );
 
@@ -136,16 +138,6 @@ describe("the row type of a plugin-generated table's seed schema", () => {
     expect(source).toContain(
       "createStandardSchema<SeedRow>(schemaType as never, hook as never, AuditLog)",
     );
-  });
-
-  test("is not declared when the fields of the table are not known", () => {
-    const source = generateLinesDbSchemaFileWithPluginAPI(
-      { ...metadata, rowType: undefined },
-      { configImportPath: "../../../tailor.config.ts" },
-    );
-
-    expect(source).not.toContain("SeedRow");
-    expect(source).toContain("createStandardSchema(schemaType, hook, AuditLog)");
   });
 
   test("is built from the fields of the table by processLinesDb", () => {
@@ -156,16 +148,7 @@ describe("the row type of a plugin-generated table's seed schema", () => {
         at: { config: { type: "datetime", required: true } },
       },
     } as unknown as TailorDBType;
-    const source = {
-      exportName: "AuditLog",
-      pluginId: "audit-plugin",
-      pluginImportPath: "@example/audit-plugin",
-      originalFilePath: "",
-      originalExportName: "",
-      generatedTableKind: "auditLog",
-    };
-
-    const result = processLinesDb(type, source);
+    const result = processLinesDb(type, pluginSource);
 
     expect(result.rowType).toContain("action: string;");
     expect(result.rowType).toContain("at: string | Date;");
@@ -268,11 +251,15 @@ describe("the import of defineSchema in a generated schema file for", () => {
       configImportPath: "../../tailor.config.ts",
     }),
     "a table a namespace plugin generates": generateLinesDbSchemaFileWithPluginAPI(
-      { ...metadata, pluginSource },
+      { ...metadata, rowType: "{}", pluginSource },
       { configImportPath: "../../tailor.config.ts" },
     ),
     "a table a table-attached plugin generates": generateLinesDbSchemaFileWithPluginAPI(
-      { ...metadata, pluginSource: { ...pluginSource, originalExportName: "user" } },
+      {
+        ...metadata,
+        rowType: "{}",
+        pluginSource: { ...pluginSource, originalExportName: "user" },
+      },
       { configImportPath: "../../tailor.config.ts", originalImportPath: "../../tailordb/user" },
     ),
   };

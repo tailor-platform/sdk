@@ -32,9 +32,9 @@ describe("generateSeedRowType", () => {
     expect(rowType).toContain("code?: string | null;");
   });
 
-  test("always declares an optional id", () => {
+  test("lets the id be absent or null", () => {
     const rowType = generateSeedRowType({
-      fields: {},
+      fields: { id: { type: "uuid", required: true } },
       optionalFields: ["id"],
       omitFields: [],
     });
@@ -60,7 +60,7 @@ describe("generateSeedRowType", () => {
     ["time", "string"],
     ["integer", "number"],
     ["float", "number"],
-    ["bool", "boolean"],
+    ["boolean", "boolean"],
     ["datetime", "string | Date"],
   ])("maps a %s field to %s", (type, expected) => {
     const rowType = generateSeedRowType({
@@ -152,12 +152,13 @@ describe("generateSeedRowType", () => {
   test("writes the row type seed-row-type.test-d.ts holds against the type of a table in TypeScript source", () => {
     const rowType = generateSeedRowType({
       fields: {
+        id: { type: "uuid", required: true },
         name: { type: "string", required: true },
         note: { type: "string" },
         tags: { type: "string", required: true, array: true },
         count: { type: "integer", required: true },
         ratio: { type: "float" },
-        ok: { type: "bool", required: true },
+        ok: { type: "boolean", required: true },
         at: { type: "datetime", required: true },
         day: { type: "date" },
         clock: { type: "time", required: true },
