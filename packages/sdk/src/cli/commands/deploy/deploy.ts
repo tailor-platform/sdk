@@ -566,6 +566,7 @@ async function planDeploymentTarget(
       owner,
       forRemoval: false,
       config,
+      envOverrides: target.envOverrides,
       noSchemaCheck,
       migrationSkipSteps,
       migrationRecoveryArgs,
