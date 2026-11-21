@@ -224,6 +224,8 @@ async function buildDeploymentTarget(
         }),
       );
       const { services } = result;
+      const applications = workspaceDeployApplications(workspace.apps);
+      assertHttpAdaptersHaveOneApplication(services, applications);
       return {
         plugins,
         source: { kind: "workspace", workspace },
@@ -231,7 +233,7 @@ async function buildDeploymentTarget(
         application: services,
         envOverrides: services.envOverrides,
         owner: { kind: "workspace" },
-        applications: workspaceDeployApplications(workspace.apps),
+        applications,
         ...bundlesOf(result),
       };
     }
@@ -261,6 +263,27 @@ async function buildDeploymentTarget(
   } finally {
     cacheManager.finalize();
   }
+}
+
+/**
+ * Stop a workspace config whose HTTP adapters have no single application to run on.
+ * @param services - The workspace's services
+ * @param applications - The applications the workspace deploys
+ */
+export function assertHttpAdaptersHaveOneApplication(
+  services: Pick<ConfigServices, "httpAdapterService">,
+  applications: ReadonlyArray<DeployApplication>,
+): void {
+  if ((services.httpAdapterService?.adapters.length ?? 0) === 0 || applications.length <= 1) {
+    return;
+  }
+  const names = applications.map(({ name }) => name);
+  throw CLIError({
+    code: "HTTP_ADAPTER_MULTIPLE_APPLICATIONS",
+    message: `HTTP adapters run on the application of a workspace config, but its apps lists ${names.length}: ${names.join(", ")}.`,
+    suggestion: "Keep one application in apps, or remove httpAdapter from the workspace config.",
+    context: { applications: names },
+  });
 }
 
 type TargetBundles = Pick<
