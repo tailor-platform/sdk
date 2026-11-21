@@ -28,7 +28,7 @@ import {
   isExecutionActive,
   isStartRefused,
   POLL_DEADLINE_EXCEEDED,
-  listTemporaryWorkflowExecutions,
+  listAllTemporaryWorkflowExecutions,
   pollUntilTerminal,
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
@@ -576,7 +576,7 @@ export async function reclaimWorkflowRuns(
   for (const [runId, run] of [...runs].toSorted(([a], [b]) => a.localeCompare(b))) {
     const name = workflowRunResourceName(runId);
     // The workflow may have lost its label while the functions kept theirs, so ask by name.
-    const executions = await listTemporaryWorkflowExecutions(client, workspaceId, name);
+    const executions = await listAllTemporaryWorkflowExecutions(client, workspaceId, name);
     if (executions.some(isExecutionActive)) {
       keep(name);
       continue;
@@ -639,7 +639,11 @@ export async function reclaimWorkflowRuns(
       continue;
     }
     if (resource.kind === "workflow") {
-      const executions = await listTemporaryWorkflowExecutions(client, workspaceId, resource.name);
+      const executions = await listAllTemporaryWorkflowExecutions(
+        client,
+        workspaceId,
+        resource.name,
+      );
       if (executions.some(isExecutionActive)) {
         keep(resource.name);
         continue;

@@ -179,6 +179,24 @@ export const aJob = createWorkflowJob({
     expect(bundled.jobs.map((j) => j.jobName)).toEqual(["b-job"]);
   });
 
+  test("keeps the declaring entry when the job is exported under another name than its variable", async () => {
+    using tmp = tempDir("workflow-run-jobs-");
+    const { target } = setup(tmp.dir, {
+      "b.ts": `import { createWorkflowJob } from "@tailor-platform/sdk";
+const local = createWorkflowJob({ name: "b-job", body: () => "b" });
+export { local as bJob };
+`,
+      "x.ts": `import { bJob } from "./b";
+export { bJob };
+`,
+    });
+    (target as { filePath: string }).filePath = path.join(tmp.dir, "b.ts");
+    (target.config as { workflow?: unknown }).workflow = { files: ["x.ts"] };
+
+    const bundled = await bundleWorkflowRunJobs({ target, runId: "r1", jobName: "b-job" });
+    expect(bundled.jobs.map((j) => j.jobName)).toEqual(["b-job"]);
+  });
+
   test("reads the file it was given, not another one its name matches as a pattern", async () => {
     using tmp = tempDir("workflow-run-jobs-");
     const { target } = setup(tmp.dir, {

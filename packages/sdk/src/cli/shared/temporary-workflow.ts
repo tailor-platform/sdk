@@ -21,7 +21,7 @@ import {
   writeMetadataLabelsDirect,
 } from "#/cli/commands/deploy/label";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
-import { getOrNull, isNotFoundError } from "#/cli/shared/client";
+import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
@@ -226,6 +226,32 @@ export async function listTemporaryWorkflowExecutions(
     }),
   );
   return response?.executions ?? [];
+}
+
+/**
+ * List every execution of a temporary workflow, following the pages, newest first.
+ * @param client - Operator client
+ * @param workspaceId - Workspace ID
+ * @param name - Shared resource name
+ * @returns The executions, or none when the workflow does not exist
+ */
+export async function listAllTemporaryWorkflowExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  name: string,
+): Promise<WorkflowExecution[]> {
+  return fetchPaged(async (pageToken, pageSize) => {
+    const response = await getOrNull(() =>
+      client.listWorkflowExecutions({
+        workspaceId,
+        workflowName: name,
+        pageToken,
+        pageSize,
+        pageDirection: PageDirection.DESC,
+      }),
+    );
+    return [response?.executions ?? [], response?.nextPageToken ?? ""];
+  });
 }
 
 /**

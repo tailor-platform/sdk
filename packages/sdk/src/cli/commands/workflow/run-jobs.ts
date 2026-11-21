@@ -50,16 +50,14 @@ function realPath(filePath: string): string {
 async function declaresJob(job: CollectedJob): Promise<boolean> {
   const source = await fs.promises.readFile(job.sourceFile, "utf-8");
   const { program } = parseSync(job.sourceFile, source);
-  return findAllJobs(program, source).some(
-    (found) => found.name === job.name && found.exportName === job.exportName,
-  );
+  return findAllJobs(program, source).some((found) => found.name === job.name);
 }
 
 /**
  * Drop a job that another entry of the list holds as the very same definition, as a file does
  * when it re-exports a job of another file. The entry whose file declares the job stays, so the
- * bundler finds the declaration where it looks for it; when no file declares it under its export
- * name, the later entry stays.
+ * bundler finds the declaration where it looks for it; when no file declares it, the later entry
+ * stays.
  * @param jobs - Jobs of the file and of the application's workflow files
  * @returns The jobs without the repeated definitions
  */

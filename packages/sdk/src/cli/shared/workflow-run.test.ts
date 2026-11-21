@@ -941,6 +941,33 @@ describe("reclaimWorkflowRuns", () => {
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
   });
 
+  test("keeps a run whose active execution is beyond the first page of executions", async () => {
+    const client = createSweepClient([
+      { name: `tmp-run-${runId}`, labels: run(runId), executions: [] },
+    ]);
+    client.listWorkflowExecutions.mockImplementation(async ({ pageToken }) =>
+      pageToken
+        ? {
+            executions: [{ id: "old", status: WorkflowExecution_Status.RUNNING }],
+            nextPageToken: "",
+          }
+        : {
+            executions: [
+              {
+                id: "new",
+                status: WorkflowExecution_Status.SUCCESS,
+                finishedAt: timestampFromDate(now),
+              },
+            ],
+            nextPageToken: "page-2",
+          },
+    );
+
+    await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+  });
+
   test("keeps a run created moments ago that has not started yet", async () => {
     const client = createSweepClient([
       { name: `tmp-run-${runId}`, labels: run(runId), executions: [] },
