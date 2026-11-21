@@ -590,7 +590,6 @@ describe("planExecutor", () => {
         subgraphs: [],
         authServices: [],
         env: {},
-        authServices: [],
         executorService: { loadExecutors },
       } as unknown as Application;
 
