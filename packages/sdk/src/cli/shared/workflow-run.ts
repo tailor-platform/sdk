@@ -512,14 +512,14 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
     })),
   ].filter((item) => isWorkflowRunResourceName(item.name));
 
-  const resources: RunResource[] = [];
-  for (const item of listed) {
-    const response = await getOrNull(() =>
-      client.getMetadata({ trn: resourceTrn(workspaceId, METADATA_KIND[item.kind], item.name) }),
-    );
-    resources.push({ ...item, labels: response?.metadata?.labels ?? {} });
-  }
-  return resources;
+  return Promise.all(
+    listed.map(async (item): Promise<RunResource> => {
+      const response = await getOrNull(() =>
+        client.getMetadata({ trn: resourceTrn(workspaceId, METADATA_KIND[item.kind], item.name) }),
+      );
+      return { ...item, labels: response?.metadata?.labels ?? {} };
+    }),
+  );
 }
 
 function belongsToRun(resource: RunResource, runId: string): boolean {

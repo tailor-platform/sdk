@@ -8,6 +8,7 @@ import {
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
+import { createConcurrencyProbe } from "./test-helpers/concurrency-probe";
 import { mockOperatorClient } from "./test-helpers/operator-client";
 import {
   assertPollInterval,
@@ -1138,6 +1139,25 @@ describe("reclaimWorkflowRuns", () => {
 
     expect(removed).toEqual([`tmp-run-${other}`]);
     expect(keptUnlabeled).toEqual([{ kind: "workflow", name: `tmp-run-${runId}` }]);
+  });
+
+  test("reads the metadata of the listed resources at the same time, not one after another", async () => {
+    const probe = createConcurrencyProbe();
+    const client = createSweepClient(
+      ["a", "b", "c"].map((id) => ({
+        name: `tmp-run-${createRunId(now, `${id.repeat(6)}`)}`,
+        labels: {},
+        executions: [],
+      })),
+    );
+    client.getMetadata.mockImplementation(async () => {
+      await probe.run();
+      return { metadata: { labels: {} } };
+    });
+
+    await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
   test("does not read the labels of resources whose name is not in the namespace of a run's", async () => {
