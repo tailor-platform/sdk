@@ -733,7 +733,7 @@ function collectConfirmations(
     conflicts: collectOwnerConflicts(results).filter(isNew),
     unmanaged: collectUnmanagedResources(results).filter(isNew),
     takeovers: collectTakeovers(results).filter(isNew),
-    importantDeletions: collectImportantResourceDeletions(results).filter(isNew),
+    importantDeletions: collectImportantResourceDeletions(results, deployment.owner).filter(isNew),
   };
 }
 
