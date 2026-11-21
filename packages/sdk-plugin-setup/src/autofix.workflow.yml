@@ -580,7 +580,7 @@ jobs:
       - id: tailor-claude
         continue-on-error: true
         timeout-minutes: 20
-        uses: anthropics/claude-code-action@e5812cd75691ca7bbfc57c0ecf4441db3a1ab7dd # v1.0.281
+        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
         env:
           ANTHROPIC_MODEL: ${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}
         with:
@@ -705,7 +705,7 @@ jobs:
     steps:
       # __APP_TOKEN_START__
       - id: tailor-app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           client-id: ${{ vars.TAILOR_AUTOFIX_APP_CLIENT_ID }}
           private-key: ${{ secrets.TAILOR_AUTOFIX_APP_PRIVATE_KEY }}

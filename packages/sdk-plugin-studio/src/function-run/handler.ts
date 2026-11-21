@@ -1,5 +1,4 @@
 import { normalizeArg } from "./arg";
-import { injectToken } from "./page";
 import type { UiHandler } from "../shell-handler";
 import type { createSyncedFiles } from "./files";
 import type { createRunSession } from "./session";
@@ -22,7 +21,6 @@ export type FunctionRunPaths = FilePaths & { absolute?: FilePaths };
 
 export type FunctionRunHandler = UiHandler & { close: () => void };
 
-const TOKEN_HEADER = "x-tailor-studio-token";
 const encoder = new TextEncoder();
 
 function badRequest(message: string): Response {
@@ -105,7 +103,7 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
     });
   }
 
-  const handler: UiHandler = async (request, { token }) => {
+  const handler: UiHandler = async (request) => {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
 
@@ -113,7 +111,7 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
       if (method !== "GET" && method !== "HEAD") return methodNotAllowed("GET, HEAD");
       let page: string;
       try {
-        page = injectToken(await options.loadPage(), token);
+        page = await options.loadPage();
       } catch (error) {
         return new Response(`${error instanceof Error ? error.message : String(error)}\n`, {
           status: 500,
@@ -126,9 +124,6 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
 
     if (pathname === "/events") {
       if (method !== "GET") return methodNotAllowed("GET");
-      if (request.headers.get(TOKEN_HEADER) !== token) {
-        return new Response("Forbidden: missing or invalid token\n", { status: 403 });
-      }
       return events(request.signal);
     }
 

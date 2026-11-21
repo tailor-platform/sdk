@@ -72,11 +72,13 @@ describe("start", () => {
 
     session.start();
 
-    expect(startRun).toHaveBeenCalledWith({
-      file: "/p/function.ts",
-      argFile: "/tmp/arg.json",
-      workspaceArgs: ["-p", "test", "-w", "ws-1"],
-    });
+    expect(startRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: "/p/function.ts",
+        argFile: "/tmp/arg.json",
+        workspaceArgs: ["--profile=test", "--workspace-id=ws-1"],
+      }),
+    );
   });
 
   test("announces a reset and that it is watching", () => {
@@ -269,8 +271,8 @@ describe("when the process ends by itself", () => {
 });
 
 describe("checkSelection", () => {
-  test("stops the watch when the selected workspace changes, and says which one it ran on", () => {
-    const { session, run, select } = setup();
+  test("restarts the watch on the newly selected workspace and notes the change", () => {
+    const { session, run, select, startRun } = setup();
     session.start();
 
     select({ profile: "dev", workspaceId: "ws-2" });
@@ -278,12 +280,40 @@ describe("checkSelection", () => {
 
     expect([
       run.stop.mock.calls.length,
+      startRun.mock.calls.map(([input]) => input.workspaceArgs),
+      session.snapshot().status,
+      session.snapshot().entries.map((entry) => entry.message),
+    ]).toEqual([
+      1,
+      [
+        ["--profile=test", "--workspace-id=ws-1"],
+        ["--profile=dev", "--workspace-id=ws-2"],
+      ],
+      "watching",
+      [
+        {
+          type: "note",
+          text: "The selected workspace changed (test to dev); the watch was restarted on dev.",
+        },
+      ],
+    ]);
+  });
+
+  test("stops the watch and says why when the selection is cleared", () => {
+    const { session, select, startRun } = setup();
+    session.start();
+
+    select({});
+    session.checkSelection();
+
+    expect([
+      startRun.mock.calls.length,
       session.snapshot().status,
       session.snapshot().reason,
     ]).toEqual([
       1,
       "stopped",
-      "The selected workspace changed (ws-1 to ws-2), so the watch was stopped. Press Run to run on ws-2.",
+      "The selected workspace changed (test to no workspace), so the watch was stopped. Select a workspace in the bar at the top of the page.",
     ]);
   });
 
@@ -294,6 +324,21 @@ describe("checkSelection", () => {
     session.checkSelection();
 
     expect([run.stop.mock.calls.length, session.snapshot().status]).toEqual([0, "watching"]);
+  });
+});
+
+describe("environment of the watch", () => {
+  test("leaves out the inherited credentials while a profile is selected", () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", "startup-user-token");
+    try {
+      const { session, startRun } = setup();
+
+      session.start();
+
+      expect(startRun.mock.calls[0]![0].env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

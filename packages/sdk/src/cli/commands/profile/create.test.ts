@@ -7,7 +7,7 @@ import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { createCommand } from "./create";
+import { createCommand, createProfile } from "./create";
 import type * as ClientModule from "#/cli/shared/client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
@@ -180,5 +180,56 @@ describe("profile create while another process updates the config", () => {
     expect(result).toMatchObject({ success: false, error: { code: "PROFILE_EXISTS" } });
     expect((await readPlatformConfig()).profiles.myprofile).toEqual(otherProfile);
     expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("keeps a profile another process created while the workspaces were listed", async () => {
+    using _logger = silenceLogger("out", "success");
+    clientMocks.initOperatorClient.mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
+    const otherProfile = { user: "platform-user-sub", workspace_id: otherUUID };
+    clientMocks.fetchAll.mockImplementation(async () => {
+      const config = await readPlatformConfig();
+      config.profiles.other = otherProfile;
+      writePlatformConfig(config);
+      return [{ id: validUUID }];
+    });
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "valid-access-token",
+          refresh_token: "refresh",
+          token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+      },
+      profiles: {},
+      current_user: "platform-user-sub",
+    });
+
+    await runCommand(createCommand, [
+      "myprofile",
+      "--user",
+      "platform-user-sub",
+      "--workspace-id",
+      validUUID,
+    ]);
+
+    const { profiles } = await readPlatformConfig();
+    expect([profiles.other, profiles.myprofile?.workspace_id]).toEqual([otherProfile, validUUID]);
+  });
+
+  test("rejects a console URL that is not a URL before it reads or writes anything", async () => {
+    clientMocks.initOperatorClient.mockClear();
+    await expect(
+      createProfile({
+        name: "myprofile",
+        user: "platform-user-sub",
+        workspaceId: validUUID,
+        consoleUrl: "not-a-url",
+      }),
+    ).rejects.toThrow('console URL "not-a-url" is not a URL');
+    expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
+    expect((await readPlatformConfig()).profiles.myprofile).toBeUndefined();
   });
 });

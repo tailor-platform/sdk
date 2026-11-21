@@ -11,7 +11,6 @@ type TabInfo =
 type PlatformInfo = { platformUrl?: string; oauth2ClientId?: string; consoleUrl?: string };
 
 type ContextInfo = {
-  token: string;
   platform?: PlatformInfo;
   profiles: { name: string; workspaceId: string }[];
   selected: { profile?: string; workspaceId?: string };
@@ -54,11 +53,9 @@ function PlatformDetails({ platform }: { platform: PlatformInfo }) {
 }
 
 function NewProfileDialog({
-  token,
   platform,
   onCreated,
 }: {
-  token: string;
   platform?: PlatformInfo;
   onCreated: (info: ContextInfo) => void;
 }) {
@@ -71,6 +68,7 @@ function NewProfileDialog({
   const [permission, setPermission] = useState<"write" | "read">("write");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const latestUser = useRef("");
 
   const open = () => {
     setError(undefined);
@@ -82,6 +80,7 @@ function NewProfileDialog({
   };
 
   const chooseUser = (value: string) => {
+    latestUser.current = value;
     setUser(value);
     setWorkspaceId("");
     setWorkspaces(undefined);
@@ -92,8 +91,14 @@ function NewProfileDialog({
         (response) =>
           response.json() as Promise<{ id: string; name: string }[] | { error: string }>,
       )
-      .then((body) => ("error" in body ? setError(body.error) : setWorkspaces(body)))
-      .catch((e: unknown) => setError(String(e)));
+      .then((body) => {
+        if (latestUser.current !== value) return;
+        if ("error" in body) setError(body.error);
+        else setWorkspaces(body);
+      })
+      .catch((e: unknown) => {
+        if (latestUser.current === value) setError(String(e));
+      });
   };
 
   const create = async () => {
@@ -102,7 +107,7 @@ function NewProfileDialog({
     try {
       const response = await fetch("/api/profiles", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-tailor-studio-token": token },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, user, workspaceId, permission }),
       });
       const body = (await response.json()) as ContextInfo | { error: string };
@@ -146,6 +151,7 @@ function NewProfileDialog({
       </button>
       <dialog
         ref={ref}
+        aria-labelledby="new-profile-title"
         style={{
           position: "fixed",
           inset: 0,
@@ -169,7 +175,7 @@ function NewProfileDialog({
           }}
           style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "0.75rem" }}
         >
-          <strong>New profile</strong>
+          <strong id="new-profile-title">New profile</strong>
           {platform ? <PlatformDetails platform={platform} /> : null}
           <label style={field}>
             Name
@@ -235,17 +241,29 @@ function StudioHeader() {
   const [error, setError] = useState<string>();
 
   useEffect(() => {
-    void fetch("/api/context")
-      .then((response) => response.json() as Promise<ContextInfo | { error: string }>)
-      .then((body) => ("error" in body ? setError(body.error) : setInfo(body)))
-      .catch((e: unknown) => setError(String(e)));
+    const load = () =>
+      void fetch("/api/context")
+        .then((response) => response.json() as Promise<ContextInfo | { error: string }>)
+        .then((body) => {
+          if ("error" in body) setError(body.error);
+          else {
+            setError(undefined);
+            setInfo(body);
+          }
+        })
+        .catch((e: unknown) => setError(String(e)));
+    load();
+    const events = new EventSource("/api/context/events");
+    events.addEventListener("open", load);
+    events.addEventListener("changed", load);
+    return () => events.close();
   }, []);
 
   const select = async (profile: string) => {
     if (!info) return;
     const response = await fetch("/api/context", {
       method: "PUT",
-      headers: { "content-type": "application/json", "x-tailor-studio-token": info.token },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ profile: profile === "" ? null : profile }),
     });
     const body = (await response.json()) as ContextInfo | { error: string };
@@ -308,9 +326,7 @@ function StudioHeader() {
           </option>
         ))}
       </select>
-      {info ? (
-        <NewProfileDialog token={info.token} platform={info.platform} onCreated={setInfo} />
-      ) : null}
+      {info ? <NewProfileDialog platform={info.platform} onCreated={setInfo} /> : null}
       {selected?.workspaceId ? (
         <span style={{ opacity: 0.85 }}>
           workspace: <code>{selected.workspaceId}</code>

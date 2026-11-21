@@ -47,7 +47,10 @@ the break.
 ## The codemod ships with the deprecation, not after it
 
 - Add the registry entry in the same change as the `@deprecated` tag. A migration that cannot be
-  automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`.
+  automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`. The
+  change also carries a changeset that releases `@tailor-platform/sdk-codemod`: `tailor upgrade` runs
+  the latest published one, so an entry it has not published is not offered (see
+  [docs/changeset.md](changeset.md#when-no-changeset-is-needed)).
 - The entry's `since` / `until` are a version **range**, a different axis from the tag's `since`, which
   is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` bounds
   the caller's current version and `until` is the boundary they must cross to be offered the migration.
@@ -100,8 +103,10 @@ the break.
   `prereleaseUntil`. Until the release resolves it, `tailor upgrade` does not offer the codemod. It
   resolves to the `@tailor-platform/sdk` version on the release PR, so the same change must carry an
   `@tailor-platform/sdk` changeset — without one the release PR fails rather than resolve it to an
-  already-published version. A codemod for a change that already shipped takes that release's concrete
-  version.
+  already-published version. Without the `@tailor-platform/sdk-codemod` changeset as well, the release
+  resolves the boundary in source but does not publish the codemod, and callers who upgrade across the
+  boundary before the next `@tailor-platform/sdk-codemod` release are never offered the migration. A
+  codemod for a change that already shipped takes that release's concrete version.
 - Run `pnpm codemod:docs:update` so the generated migration doc matches the registry.
 - Never rewrite user code onto a name that is itself deprecated. When deprecating a name, search the
   registry for codemods whose output produces it and retarget them.

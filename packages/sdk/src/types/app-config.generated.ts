@@ -68,3 +68,160 @@ export type AppConfigParsed = {
   secrets?: unknown;
 };
 export type AppConfigParsedInput = AppConfigParsed;
+
+export type AppDefinitionParsed = {
+  name: string;
+  env?:
+    | {
+        [x: string]:
+          | string
+          | number
+          | boolean
+          | {
+              value: string | number;
+              allowSecretReason: string;
+            };
+      }
+    | undefined;
+  cors?: string[] | undefined;
+  allowedIpAddresses?: string[] | undefined;
+  disableIntrospection?: boolean | undefined;
+  buildOptions?:
+    | {
+        inlineSourcemap?: boolean | undefined;
+        inlineSourcemapDependencySources?: boolean | string[] | undefined;
+        inlineSourcemapProjectSources?:
+          | {
+              include?: string[] | undefined;
+              exclude?: string[] | undefined;
+            }
+          | undefined;
+        logLevel?: string | undefined;
+        allowedRuntimeGlobals?:
+          | {
+              [x: string]: true | string[];
+            }
+          | undefined;
+        treeshake?:
+          | {
+              moduleSideEffects?: boolean | undefined;
+              annotations?: boolean | undefined;
+              unknownGlobalSideEffects?: boolean | undefined;
+              propertyReadSideEffects?: boolean | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
+  defaultDateRepresentation?: "date" | "temporal" | undefined;
+  maintenanceMode?: "deploy" | "migration" | false | undefined;
+  metadata?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
+  idp?: unknown;
+  auth?: unknown;
+  executor?: unknown;
+  workflow?: unknown;
+  httpAdapter?: unknown;
+  staticWebsites?: unknown;
+  aiGateways?: unknown;
+  secrets?: unknown;
+  db?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+};
+export type AppDefinitionParsedInput = AppDefinitionParsed;
+
+export type WorkspaceConfigParsed = {
+  env?:
+    | {
+        [x: string]:
+          | string
+          | number
+          | boolean
+          | {
+              value: string | number;
+              allowSecretReason: string;
+            };
+      }
+    | undefined;
+  buildOptions?:
+    | {
+        inlineSourcemap?: boolean | undefined;
+        inlineSourcemapDependencySources?: boolean | string[] | undefined;
+        inlineSourcemapProjectSources?:
+          | {
+              include?: string[] | undefined;
+              exclude?: string[] | undefined;
+            }
+          | undefined;
+        logLevel?: string | undefined;
+        allowedRuntimeGlobals?:
+          | {
+              [x: string]: true | string[];
+            }
+          | undefined;
+        treeshake?:
+          | {
+              moduleSideEffects?: boolean | undefined;
+              annotations?: boolean | undefined;
+              unknownGlobalSideEffects?: boolean | undefined;
+              propertyReadSideEffects?: boolean | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
+  defaultDateRepresentation?: "date" | "temporal" | undefined;
+  maintenanceMode?: "deploy" | "migration" | false | undefined;
+  executor?: unknown;
+  workflow?: unknown;
+  httpAdapter?: unknown;
+  staticWebsites?: unknown;
+  aiGateways?: unknown;
+  secrets?: unknown;
+  db?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  resolver?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  auth?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  idp?:
+    | {
+        [x: string]: unknown;
+      }
+    | undefined;
+  apps: {
+    [x: string]: {
+      cors?: string[] | undefined;
+      allowedIpAddresses?: string[] | undefined;
+      disableIntrospection?: boolean | undefined;
+      metadata?:
+        | {
+            [x: string]: string;
+          }
+        | undefined;
+      db?: string[] | undefined;
+      resolver?: string[] | undefined;
+      auth?: string | undefined;
+      idp?: string[] | undefined;
+    };
+  };
+};
+export type WorkspaceConfigParsedInput = WorkspaceConfigParsed;

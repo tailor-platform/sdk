@@ -1,15 +1,25 @@
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { Code, ConnectError, createContextValues } from "@connectrpc/connect";
+import { alreadyExistsExpected, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { idpClientVaultName } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  labelRefreshOf,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeLabelRefreshes,
+  writeMetadataLabels,
+} from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import {
   hashValue,
   loadSecretsState,
   saveSecretsState,
+  secretsStateScope,
   serializeUpdateTime,
   withSecretsStateLock,
 } from "./secrets-state";
@@ -25,11 +35,13 @@ import type {
 type CreateVault = {
   name: string;
   workspaceId: string;
+  metaRequest: MetadataLabelWrite;
 };
 
 type ExistingVault = {
   name: string;
   workspaceId: string;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteVault = {
@@ -43,6 +55,7 @@ type CreateSecret = {
   workspaceId: string;
   vaultName: string;
   value: string;
+  createOnly: boolean;
 };
 
 type UpdateSecret = {
@@ -88,6 +101,28 @@ export function secretCreateRequest(
     secretmanagerSecretName: create.secretName,
     secretmanagerSecretValue: create.value,
   };
+}
+
+/**
+ * Create a planned secret. A create-only secret that already exists keeps its value.
+ * @param client - Operator client instance
+ * @param create - Planned secret create
+ * @returns The create response, or undefined when a create-only secret already existed
+ */
+async function createSecret(client: OperatorClient, create: CreateSecret) {
+  if (!create.createOnly) {
+    return await client.createSecretManagerSecret(secretCreateRequest(create));
+  }
+  try {
+    return await client.createSecretManagerSecret(secretCreateRequest(create), {
+      contextValues: createContextValues().set(alreadyExistsExpected, true),
+    });
+  } catch (error) {
+    if (error instanceof ConnectError && error.code === Code.AlreadyExists) {
+      return undefined;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -141,7 +176,7 @@ function validateDeclaredVaultNames(
  * @returns Planned changes for vaults and secrets
  */
 export async function planSecretManager(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
+  const { client, workspaceId, application, owner, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
   const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
   validateDeclaredVaultNames(secretVaults, idpClientVaultNames);
@@ -152,7 +187,7 @@ export async function planSecretManager(context: PlanContext) {
   const secretChangeSet = createChangeSet<CreateSecret, UpdateSecret, DeleteSecret>(
     "Secret Manager secrets",
   );
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const ownership = createOwnershipTracker(owner);
 
   // Fetch all existing vaults with metadata to track managed resources
   const existingVaults = await fetchExistingResourcesWithLabels({
@@ -169,11 +204,7 @@ export async function planSecretManager(context: PlanContext) {
     getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
 
-  const stateScope = {
-    workspaceId,
-    applicationId: application.id,
-    applicationName: application.name,
-  };
+  const stateScope = secretsStateScope(context);
   const state = loadSecretsState(stateScope);
   const skippedSecrets: string[] = [];
 
@@ -181,24 +212,26 @@ export async function planSecretManager(context: PlanContext) {
     secretVaults.map(async (vault) => {
       const vaultName = vault.vaultName;
       const existing = existingVaults[vaultName];
+      const metaRequest = await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "vault", vaultName),
+        owner,
+      });
 
       if (existing) {
-        const metaRequest = await buildMetaRequest({
-          trn: resourceTrn(workspaceId, "vault", vaultName),
-          appName: application.name,
-          appId: application.id,
-        });
         const owned = ownership.ownsDesired(existing.allLabels, {
           resourceType: "secret.vault",
-          resourceLabel: "Secret Manager vault",
           resourceName: vaultName,
         });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-          vaultChangeSet.unchanged.push({ name: vaultName });
+          vaultChangeSet.unchanged.push({
+            name: vaultName,
+            ...labelRefreshOf(existing.allLabels, metaRequest),
+          });
         } else {
           vaultChangeSet.updates.push({
             name: vaultName,
             workspaceId,
+            metaRequest,
             ...(owned && { forcedBySdkVersion: true }),
           });
         }
@@ -207,6 +240,7 @@ export async function planSecretManager(context: PlanContext) {
         vaultChangeSet.creates.push({
           name: vaultName,
           workspaceId,
+          metaRequest,
         });
       }
 
@@ -240,6 +274,8 @@ export async function planSecretManager(context: PlanContext) {
         logger.registerSecret(secret.value);
 
         if (existingSet.has(secret.name)) {
+          existingSet.delete(secret.name);
+          if (secret.createOnly) continue;
           const stored = state.vaults[vaultName]?.[secret.name];
           const remoteUpdateTime = existingSecretTimes.get(secret.name);
           // Skip only when the stored hash matches and the remote updateTime
@@ -259,7 +295,6 @@ export async function planSecretManager(context: PlanContext) {
               ...(unchanged && { forcedBySdkVersion: true }),
             });
           }
-          existingSet.delete(secret.name);
         } else {
           secretChangeSet.creates.push({
             name: `${vaultName}/${secret.name}`,
@@ -267,6 +302,7 @@ export async function planSecretManager(context: PlanContext) {
             workspaceId,
             vaultName,
             value: secret.value,
+            createOnly: secret.createOnly,
           });
         }
       }
@@ -286,7 +322,9 @@ export async function planSecretManager(context: PlanContext) {
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
-    if (ownership.ownsRemaining(entry.allLabels)) {
+    if (
+      ownership.ownsRemaining(entry.allLabels, { resourceType: "secret.vault", resourceName: name })
+    ) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
         const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
@@ -327,7 +365,7 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application used for ownership metadata and hash state persistence
+ * @param application - Application whose secret hashes are persisted
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
@@ -343,30 +381,15 @@ export async function applySecretManager(
     await Promise.all(
       vaultChangeSet.creates.map(async (create) => {
         await client.createSecretManagerVault(vaultCreateRequest(create));
-        if (application) {
-          const metaRequest = await buildMetaRequest({
-            trn: resourceTrn(create.workspaceId, "vault", create.name),
-            appName: application.name,
-            appId: application.id,
-          });
-          await writeMetadataLabels(client, metaRequest);
-        }
+        await writeMetadataLabels(client, create.metaRequest);
       }),
     );
 
     // Update metadata for existing vaults
-    if (application) {
-      await Promise.all(
-        vaultChangeSet.updates.map(async (update) => {
-          const metaRequest = await buildMetaRequest({
-            trn: resourceTrn(update.workspaceId, "vault", update.name),
-            appName: application.name,
-            appId: application.id,
-          });
-          await writeMetadataLabels(client, metaRequest);
-        }),
-      );
-    }
+    await Promise.all([
+      ...vaultChangeSet.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
+      ...writeLabelRefreshes(client, vaultChangeSet.unchanged),
+    ]);
 
     const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
     if (secretHashUpdates.length > 0) {
@@ -374,11 +397,16 @@ export async function applySecretManager(
         // Evidence must come from this deploy's own mutation responses; pairing
         // the hash with a re-listed timestamp could adopt another writer's.
         const appliedUpdateTimes = new Map<string, string | undefined>();
+        const keptSecrets = new Set<string>();
 
         // Create new secrets
         await Promise.all(
           secretChangeSet.creates.map(async (create) => {
-            const response = await client.createSecretManagerSecret(secretCreateRequest(create));
+            const response = await createSecret(client, create);
+            if (response === undefined) {
+              keptSecrets.add(create.name);
+              return;
+            }
             appliedUpdateTimes.set(create.name, serializeUpdateTime(response.secret?.updateTime));
           }),
         );
@@ -394,6 +422,7 @@ export async function applySecretManager(
         if (application) {
           const state = loadSecretsState(stateScope);
           for (const secret of secretHashUpdates) {
+            if (keptSecrets.has(secret.name)) continue;
             if (!Object.hasOwn(state.vaults, secret.vaultName)) {
               state.vaults[secret.vaultName] = {};
             }

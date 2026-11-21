@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
   arg,
@@ -64,20 +63,19 @@ export const uiCommand = defineAppCommand({
       file: args["function-file"],
       watch: args["function-watch"],
       getSelection: () => workspace.selection(),
+      onSelectionChange: (listener) => workspace.subscribe(listener),
       pageFile: path.join(clientDir, "function-run.html"),
     });
     const tabs = [
       ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
       functionRun.tab,
     ];
-    const token = randomBytes(32).toString("hex");
     const server = await startServer({
       port: args.port,
       createHandler: (port) =>
         createShellHandler({
           tabs,
           port,
-          token,
           workspace,
           accounts: createAccounts(platform),
           ...(platform === undefined ? {} : { platform }),

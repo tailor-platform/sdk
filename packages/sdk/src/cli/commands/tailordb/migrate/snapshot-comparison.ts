@@ -11,13 +11,12 @@ import {
   type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
-import { supportsInPlaceFieldTypeChange } from "./field-type-change";
+import { collectBreakingFieldChanges } from "./field-change-rules";
 import { areOwnFieldConfigsDifferent, collectNestedMemberChanges } from "./nested-members";
 import {
   assertValidFieldRenames,
   assertValidNestedMemberRenames,
   assertValidTypeRenames,
-  isBreakingForeignKeyRetarget,
   type FieldRenameSpec,
   type NestedMemberRenameSpec,
   type TypeRenameSpec,
@@ -62,145 +61,6 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 }
 
 /**
- * Whether a field that had no foreign key gains one.
- * @param {SnapshotFieldConfig} before - Field configuration before the change
- * @param {SnapshotFieldConfig} after - Field configuration after the change
- * @returns {boolean} True if the change adds a foreign key
- */
-export function addsForeignKey(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
-  return !before.foreignKeyType && Boolean(after.foreignKeyType);
-}
-
-/**
- * Collect breaking changes for a field change
- * @param {string} tableName - Name of the table containing the field
- * @param {string} fieldName - Name of the field being changed
- * @param {SnapshotFieldConfig | undefined} oldField - Old field configuration
- * @param {SnapshotFieldConfig | undefined} newField - New field configuration
- * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed table renames (old name → new name)
- * @param nestedMember - Whether the field is a member of a nested object
- * @returns {BreakingChangeInfo[]} Breaking change information
- */
-function getBreakingFieldChanges(
-  tableName: string,
-  fieldName: string,
-  oldField: SnapshotFieldConfig | undefined,
-  newField: SnapshotFieldConfig | undefined,
-  typeRenameTargets?: ReadonlyMap<string, string>,
-  nestedMember = false,
-): BreakingChangeInfo[] {
-  const breakingChanges: BreakingChangeInfo[] = [];
-
-  // Field added as required - breaking (existing records don't have this value)
-  if (!oldField && newField && newField.required) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: "Required field added",
-    });
-  }
-
-  // Compatible scalar type changes use a phased in-place migration. Other
-  // pairs still require expand-contract migration support.
-  if (oldField && newField && oldField.type !== newField.type) {
-    const supported = !nestedMember && supportsInPlaceFieldTypeChange(oldField, newField);
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: `Field type changed from ${oldField.type} to ${newField.type}`,
-      ...(!supported && { unsupported: true, showThreeStepHint: true }),
-    });
-  }
-
-  // Optional to required - breaking
-  if (oldField && newField && !oldField.required && newField.required) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: "Field changed from optional to required",
-    });
-  }
-
-  // Array property changed - never applied in place; a single value becoming
-  // an array can go through expand-contract, the reverse needs the 3-step migration
-  if (oldField && newField && (oldField.array ?? false) !== (newField.array ?? false)) {
-    const [fromType, toType] = oldField.array
-      ? ["array", "single value"]
-      : ["single value", "array"];
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: `Field changed from ${fromType} to ${toType}`,
-      unsupported: true,
-      showThreeStepHint: true,
-    });
-  }
-
-  // Foreign key relationship changed - breaking (existing references may become
-  // invalid), unless it retargets a confirmed table rename: record ids are
-  // preserved by the rename copy, so the stored references stay valid.
-  if (oldField && newField && isBreakingForeignKeyRetarget(oldField, newField, typeRenameTargets)) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: `Foreign key target type changed from ${oldField.foreignKeyType} to ${newField.foreignKeyType}`,
-      ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
-    });
-  }
-
-  // Foreign key added to a top-level field - breaking (existing values may point at missing records)
-  if (!nestedMember && oldField && newField && addsForeignKey(oldField, newField)) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: `Foreign key to ${newField.foreignKeyType} added to field`,
-    });
-  }
-
-  // Unique constraint added - breaking (existing duplicate values would violate constraint)
-  if (oldField && newField && !(oldField.unique ?? false) && (newField.unique ?? false)) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: "Unique constraint added to field",
-    });
-  }
-
-  // Decimal scale changed - breaking (rows stored under the old scale must be
-  // re-saved so their stored precision matches the new schema)
-  if (
-    oldField?.type === "decimal" &&
-    newField?.type === "decimal" &&
-    oldField.scale !== newField.scale
-  ) {
-    breakingChanges.push({
-      tableName,
-      fieldName,
-      reason: `Decimal scale changed from ${oldField.scale} to ${newField.scale}`,
-      ...(nestedMember && { unsupported: true, showThreeStepHint: true }),
-    });
-  }
-
-  // Enum values removed - breaking (existing records may have removed values)
-  if (oldField && newField && oldField.type === "enum" && newField.type === "enum") {
-    const oldAllowed = oldField.allowedValues ?? [];
-    const newAllowed = newField.allowedValues ?? [];
-    const oldValues = oldAllowed.map((v) => v.value);
-    const newValuesSet = new Set(newAllowed.map((v) => v.value));
-    const removedValues = oldValues.filter((v) => !newValuesSet.has(v));
-    if (removedValues.length > 0) {
-      breakingChanges.push({
-        tableName,
-        fieldName,
-        reason: `Enum values removed: ${removedValues.join(", ")}`,
-      });
-    }
-  }
-
-  return breakingChanges;
-}
-
-/**
  * Collect breaking changes inside a modified nested field.
  * @param change - Field change containing nested members
  * @param typeRenameTargets - Confirmed table renames
@@ -221,13 +81,14 @@ export function collectBreakingNestedMemberChanges(
       )
     )
       return [];
-    return getBreakingFieldChanges(
-      change.tableName,
-      [change.fieldName, ...member.path].join("."),
-      member.kind === "modified" ? member.before : undefined,
-      member.after,
-      typeRenameTargets,
-      true,
+    return collectBreakingFieldChanges(
+      { tableName: change.tableName, fieldName: [change.fieldName, ...member.path].join(".") },
+      {
+        before: member.kind === "modified" ? member.before : undefined,
+        after: member.after,
+        nestedMember: true,
+        typeRenameTargets,
+      },
     );
   });
 }
@@ -259,13 +120,17 @@ function addChange(
     ctx.breakingChanges.push(...collectBreakingNestedMemberChanges(change, ctx.typeRenameTargets));
   }
 
-  const breakingChanges = getBreakingFieldChanges(
-    change.tableName,
-    change.fieldName,
-    oldField,
-    newField,
-    ctx.typeRenameTargets,
-  );
+  const breakingChanges = newField
+    ? collectBreakingFieldChanges(
+        { tableName: change.tableName, fieldName: change.fieldName },
+        {
+          before: oldField,
+          after: newField,
+          nestedMember: false,
+          typeRenameTargets: ctx.typeRenameTargets,
+        },
+      )
+    : [];
   if (breakingChanges.length > 0) {
     ctx.breakingChanges.push(...breakingChanges);
     return;

@@ -559,11 +559,11 @@ export default createExecutor({
 
 ### IdP User Event Payload
 
-`namespaceName` names the IdP namespace, and `userId` the affected user.
+`namespaceName` names the IdP service, and `userId` the affected user.
 
 ### Auth Access Token Event Payload
 
-`namespaceName` names the Auth namespace, and `userId` the user the token belongs to.
+`namespaceName` names the Auth service, and `userId` the user the token belongs to.
 
 ### Workflow Execution Event Payloads
 

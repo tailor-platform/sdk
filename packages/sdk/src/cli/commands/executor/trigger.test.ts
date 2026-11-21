@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import {
   ExecutorJobStatus,
@@ -10,8 +9,13 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { triggerCommand, triggerExecutor } from "./trigger";
-import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import type { OperatorClient } from "#/cli/shared/client";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -32,38 +36,41 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
+function createClient() {
+  return mockOperatorClient({
+    triggerExecutor: {
+      jobId: "job-1",
+    },
+  });
+}
+
 describe("triggerExecutor", () => {
-  let triggerExecutorMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
 
-    triggerExecutorMock = vi.fn().mockResolvedValue({
-      jobId: "job-1",
-    });
-
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      triggerExecutor: triggerExecutorMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     await runTest();
   });
 
-  function mockIncomingWebhookClient(
-    overrides: {
-      [K in keyof Awaited<ReturnType<typeof initOperatorClient>>]?: ReturnType<typeof vi.fn>;
-    } = {},
+  function mockIncomingWebhookClient<K extends keyof OperatorClient = never>(
+    overrides?: OperatorClientMocks<K>,
   ) {
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
-          targetType: ExecutorTargetType.WEBHOOK,
+    client = withOperatorClientMocks(
+      withOperatorClientMocks(client, {
+        getExecutorExecutor: {
+          executor: {
+            triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
+            targetType: ExecutorTargetType.WEBHOOK,
+          },
         },
       }),
-      triggerExecutor: triggerExecutorMock,
-      ...overrides,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+      overrides,
+    );
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
   }
 
   test("triggers a webhook executor by definition and forwards the payload", async () => {
@@ -76,7 +83,7 @@ describe("triggerExecutor", () => {
     });
 
     expect(result).toEqual({ jobId: "job-1" });
-    expect(triggerExecutorMock).toHaveBeenCalledWith({
+    expect(client.triggerExecutor).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
       payload: { message: "hello" },
@@ -93,7 +100,7 @@ describe("triggerExecutor", () => {
     ]);
 
     expect(result.success).toBe(true);
-    expect(triggerExecutorMock).toHaveBeenCalledWith({
+    expect(client.triggerExecutor).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
       payload: { email: "a@example.com" },
@@ -131,7 +138,7 @@ describe("triggerExecutor", () => {
     ]);
 
     expect(result.success).toBe(true);
-    expect(triggerExecutorMock).toHaveBeenCalledWith({
+    expect(client.triggerExecutor).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
       payload: undefined,
@@ -152,7 +159,7 @@ describe("triggerExecutor", () => {
     ]);
 
     expect(result.success).toBe(true);
-    expect(triggerExecutorMock).toHaveBeenCalledWith({
+    expect(client.triggerExecutor).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
       payload: { email: "a@example.com" },
@@ -169,7 +176,7 @@ describe("triggerExecutor", () => {
       headers: { "x-request-id": "req-1", accept: ["application/json", "text/html"] },
     });
 
-    expect(triggerExecutorMock).toHaveBeenCalledWith({
+    expect(client.triggerExecutor).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       executorName: "my-executor",
       payload: undefined,
@@ -188,7 +195,7 @@ describe("triggerExecutor", () => {
         payload: { message: "hello" },
       }),
     ).rejects.toThrow(/The 'payload' option is only available for 'incomingWebhook' trigger type/);
-    expect(triggerExecutorMock).not.toHaveBeenCalled();
+    expect(client.triggerExecutor).not.toHaveBeenCalled();
   });
 
   test("rejects headers for an executor whose trigger is not an incoming webhook", async () => {
@@ -202,7 +209,7 @@ describe("triggerExecutor", () => {
         headers: { "x-request-id": "req-1" },
       }),
     ).rejects.toThrow(/The 'headers' option is only available for 'incomingWebhook' trigger type/);
-    expect(triggerExecutorMock).not.toHaveBeenCalled();
+    expect(client.triggerExecutor).not.toHaveBeenCalled();
   });
 
   test("trigger command wait with jsonMode emits only parseable JSON to stdout", async () => {
@@ -211,17 +218,17 @@ describe("triggerExecutor", () => {
     using _json = jsonMode();
 
     mockIncomingWebhookClient({
-      getExecutorJob: vi.fn().mockResolvedValue({
+      getExecutorJob: {
         job: {
           id: "job-1",
           executorName: "my-executor",
           status: ExecutorJobStatus.SUCCESS,
-        } as ExecutorJob,
-      }),
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
+        },
+      },
+      listExecutorJobAttempts: {
         attempts: [],
         nextPageToken: "",
-      }),
+      },
     });
 
     await runCommand(triggerCommand, [

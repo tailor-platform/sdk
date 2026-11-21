@@ -49,6 +49,7 @@ import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
+  type DeployOwner,
   eventSourceKey,
   type MetadataLabelWrite,
   resourceTrn,
@@ -244,6 +245,7 @@ export async function planIdP(context: PlanContext) {
     client,
     workspaceId,
     application,
+    owner,
     forRemoval,
     forceApplyAll = false,
     idpUserTriggerTargets,
@@ -256,12 +258,12 @@ export async function planIdP(context: PlanContext) {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
   } = await planServices(
     client,
     workspaceId,
-    application.name,
-    application.id,
+    owner,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
@@ -283,6 +285,7 @@ export async function planIdP(context: PlanContext) {
     },
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
   };
 }
@@ -356,8 +359,7 @@ const idpServiceComparison = defineRequestComparison({
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
@@ -373,7 +375,7 @@ async function planServices(
     never,
     UnchangedService
   >("IdP services");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -393,12 +395,9 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const metaRequest = addDependencyRecords(
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "idp", namespaceName),
-        appName,
-        appId,
-      }),
+      await buildMetaRequest({ trn: resourceTrn(workspaceId, "idp", namespaceName), owner }),
       {
+        owner,
         key: eventSourceKey.idp(namespaceName),
         dependentApps: records.dependentApps,
         runAppIds: records.runAppIds,
@@ -484,11 +483,7 @@ async function planServices(
     desired,
     existing: Object.entries(existingServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "idp.service",
-      resourceLabel: "IdP service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "idp.service"),
     isConfigUnchanged: (service, existing) =>
       isRequestUnchanged(idpServiceComparison, service.comparableRequest, existing.resource),
     create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),

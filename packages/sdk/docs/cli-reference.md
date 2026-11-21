@@ -240,8 +240,23 @@ read them:
 - `MIGRATION_SYNC_HISTORY_MISMATCH`: the namespace records a different migration history ID, or one
   that cannot be read, and `sync` was run without `--force`.
 - `MIGRATION_SYNC_CANCELLED`: the `sync` confirmation was declined.
-- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was given neither or both of `--rollback` and
-  `--complete`.
+- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was not given exactly one of `--rollback`,
+  `--complete`, and `--maintenance`.
+- `MIGRATION_MAINTENANCE_MODE_RECORDED`: `rebaseline` found a record of tables a deploy left in
+  maintenance mode; remove it with `resolve --maintenance` first, or with `deploy` (or `sync` when
+  the deploy stops on `MIGRATION_REMOTE_DRIFT`) when it names a checkpoint other than the current one.
+- `MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD`: `resolve --maintenance` found no record of tables left
+  in maintenance mode at the namespace's current checkpoint.
+- `MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS`: `resolve --maintenance` found a migration in
+  progress; settle it with `--rollback` or `--complete`.
+- `MIGRATION_RESOLVE_MAINTENANCE_DRIFT`: with `--maintenance`, a table differs from the checkpoint
+  in more than maintenance mode; the command prints the difference.
+- `MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING`: with `--maintenance`, a table that the committed
+  migration removes is not deleted yet; a deploy deletes it.
+- `MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED`: with `--maintenance`, a deploy was interrupted before
+  it recorded the next migration; settle it with `--rollback`.
+- `MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED`: with `--maintenance`, the tables could not be compared
+  with the checkpoint, for example because the local migration files do not reach it.
 - `MIGRATION_RESOLVE_NO_IN_PROGRESS`: `resolve` found nothing to settle: no migration is in
   progress in the namespace, and with `--rollback`, no interrupted deploy left the pre-migration
   schema of a migration either.
@@ -366,12 +381,12 @@ printed with the line an editor shows, so both agree.
 
 The following options are available for most commands:
 
-| Option           | Short | Description                            |
-| ---------------- | ----- | -------------------------------------- |
-| `--workspace-id` | `-w`  | Workspace ID (for deployment commands) |
-| `--profile`      | `-p`  | Workspace profile                      |
-| `--config`       | `-c`  | Path to Tailor config file             |
-| `--yes`          | `-y`  | Skip confirmation prompts              |
+| Option           | Short | Description                                                                                               |
+| ---------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| `--workspace-id` | `-w`  | Workspace ID (for deployment commands)                                                                    |
+| `--profile`      | `-p`  | Workspace profile                                                                                         |
+| `--config`       | `-c`  | Path to Tailor config file (default: the nearest `tailor.config.ts` in the current or a parent directory) |
+| `--yes`          | `-y`  | Skip confirmation prompts                                                                                 |
 
 ### Environment File Loading
 
@@ -493,6 +508,10 @@ transparent here), Bun, and Yarn Classic. The exception is **Yarn Plug'n'Play**,
 `nodeLinker: node-modules` setting.
 
 Run `tailor plugin list` to see which plugins are discovered and where they resolve from.
+
+While a plugin runs, `tailor` exits when the plugin does. Ctrl+C reaches the plugin directly, so
+`tailor` does not pass SIGINT on to it; to stop a plugin through the `tailor` process, send `tailor`
+a SIGTERM, which it passes on to the plugin.
 
 ### Context passed to plugins
 

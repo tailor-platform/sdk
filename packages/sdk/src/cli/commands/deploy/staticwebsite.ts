@@ -20,9 +20,12 @@ import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  isOwnedByApp,
+  isOwnedBy,
+  labelRefreshOf,
+  ownsOrTakesOver,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -53,6 +56,7 @@ export async function applyStaticWebsite(
         await client.updateStaticWebsite(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
     // Custom domains. Adds may complete a transfer; adoptions only write labels.
     await Promise.all([
@@ -68,6 +72,7 @@ export async function applyStaticWebsite(
       ...customDomainChangeSet.updates.map((adopt) =>
         writeMetadataLabels(client, adopt.metaRequest),
       ),
+      ...writeLabelRefreshes(client, customDomainChangeSet.unchanged),
     ]);
     await Promise.all(
       customDomainChangeSet.deletes.map((del) => client.removeCustomDomain(del.request)),
@@ -254,7 +259,7 @@ export function expectedLocalStaticWebsiteNames(context: PlanContext): ReadonlyS
  * @returns Planned changes
  */
 export async function planStaticWebsite(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, owner, forRemoval } = context;
   const changeSet = createChangeSet<CreateStaticWebsite, UpdateStaticWebsite, DeleteStaticWebsite>(
     "StaticWebsites",
   );
@@ -269,7 +274,7 @@ export async function planStaticWebsite(context: PlanContext) {
     CancelCustomDomainTransferEntry
   >("CustomDomainTransfers");
   const customDomainNotes: CustomDomainNote[] = [];
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const ownership = createOwnershipTracker(owner);
 
   const existingWebsites = await fetchExistingResourcesWithLabels({
     client,
@@ -291,8 +296,7 @@ export async function planStaticWebsite(context: PlanContext) {
     const name = config.name;
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "staticwebsite", name),
-      appName: application.name,
-      appId: application.id,
+      owner,
     });
     desired.push({
       name,
@@ -312,11 +316,7 @@ export async function planStaticWebsite(context: PlanContext) {
     desired,
     existing: Object.entries(existingWebsites),
     keyOf: (website) => website.name,
-    ...labeledResourceChecks(ownership, (website: DesiredStaticWebsite) => ({
-      resourceType: "staticwebsite",
-      resourceLabel: "StaticWebsite",
-      resourceName: website.name,
-    })),
+    ...labeledResourceChecks(ownership, "staticwebsite"),
     isConfigUnchanged: (website, existing) =>
       isRequestUnchanged(staticWebsiteComparison, website.request, {
         staticwebsite: existing.resource,
@@ -327,12 +327,18 @@ export async function planStaticWebsite(context: PlanContext) {
     delete: (name) => ({ name, request: { workspaceId, name } }),
   });
 
-  // New websites and existing ones this app owns get their custom domains planned
+  const removesDomain = (labels: Record<string, string> | undefined, domain: string) =>
+    owner.kind === "workspace"
+      ? ownership.ownsRemaining(labels, {
+          resourceType: "staticwebsite.custom_domain",
+          resourceName: domain,
+        })
+      : isOwnedBy(labels, owner);
   const ownedWebsiteNames = new Set(
     staticWebsiteServices
       .filter(({ name }) => {
         const existing = existingWebsites[name];
-        return !existing || isOwnedByApp(existing.allLabels, application.name, application.id);
+        return !existing || ownsOrTakesOver(existing.allLabels, owner);
       })
       .map(({ name }) => name),
   );
@@ -439,11 +445,6 @@ export async function planStaticWebsite(context: PlanContext) {
       desiredDomainsByWebsite.get(name) ?? new Map<string, DesiredCustomDomain>();
     const existingDomains = existingDomainsByWebsite.get(name) ?? [];
     const existingByDomain = new Map(existingDomains.map((d) => [d.domain, d]));
-    const sdkOwnedDomains = new Set(
-      existingDomains
-        .filter((d) => isOwnedByApp(d.allLabels, application.name, application.id))
-        .map((d) => d.domain),
-    );
 
     // Presence: create what is missing, adopt what we do not own yet.
     for (const [domain, entry] of desiredEntries) {
@@ -472,8 +473,7 @@ export async function planStaticWebsite(context: PlanContext) {
         }
         const metaRequest = await buildMetaRequest({
           trn: customDomainTrn(workspaceId, name, domain),
-          appName: application.name,
-          appId: application.id,
+          owner,
         });
         customDomainChangeSet.creates.push({
           name: domain,
@@ -485,19 +485,21 @@ export async function planStaticWebsite(context: PlanContext) {
 
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "staticwebsite.custom_domain",
-        resourceLabel: "StaticWebsite custom domain",
         resourceName: domain,
       });
+      const metaRequest = await buildMetaRequest({
+        trn: customDomainTrn(workspaceId, name, domain),
+        owner,
+      });
       if (owned) {
-        customDomainChangeSet.unchanged.push({ name: domain });
+        customDomainChangeSet.unchanged.push({
+          name: domain,
+          ...labelRefreshOf(existing.allLabels, metaRequest),
+        });
       } else {
         customDomainChangeSet.updates.push({
           name: domain,
-          metaRequest: await buildMetaRequest({
-            trn: customDomainTrn(workspaceId, name, domain),
-            appName: application.name,
-            appId: application.id,
-          }),
+          metaRequest,
           details: ["takes SDK ownership; the domain itself is unchanged"],
         });
       }
@@ -507,8 +509,8 @@ export async function planStaticWebsite(context: PlanContext) {
     // specified. Cancels below are emitted only for domains that *are* desired, so
     // a removal and a cancel can never name the same domain.
     if (desiredDomainsByWebsite.has(name)) {
-      for (const domain of sdkOwnedDomains) {
-        if (!desiredEntries.has(domain)) {
+      for (const { domain, allLabels } of existingDomains) {
+        if (!desiredEntries.has(domain) && removesDomain(allLabels, domain)) {
           customDomainChangeSet.deletes.push({
             name: domain,
             request: { workspaceId, domain },

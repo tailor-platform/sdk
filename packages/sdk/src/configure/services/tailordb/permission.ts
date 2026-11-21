@@ -92,17 +92,8 @@ type StringEqualityCondition<
   | readonly [UserStringOperand<User>, EqualityOperator, string]
   | readonly [string, EqualityOperator, UserStringOperand<User>]
   | (Level extends "record"
-      ?
-          | readonly [
-              RecordOperand<Type, Update>,
-              EqualityOperator,
-              string | UserStringOperand<User>,
-            ]
-          | readonly [
-              string | UserStringOperand<User>,
-              EqualityOperator,
-              RecordOperand<Type, Update>,
-            ]
+      ? | readonly [RecordOperand<Type, Update>, EqualityOperator, string | UserStringOperand<User>]
+        | readonly [string | UserStringOperand<User>, EqualityOperator, RecordOperand<Type, Update>]
       : never);
 
 type BooleanEqualityCondition<
@@ -115,17 +106,16 @@ type BooleanEqualityCondition<
   | readonly [UserBooleanOperand<User>, EqualityOperator, boolean]
   | readonly [boolean, EqualityOperator, UserBooleanOperand<User>]
   | (Level extends "record"
-      ?
-          | readonly [
-              RecordOperand<Type, Update>,
-              EqualityOperator,
-              boolean | UserBooleanOperand<User>,
-            ]
-          | readonly [
-              boolean | UserBooleanOperand<User>,
-              EqualityOperator,
-              RecordOperand<Type, Update>,
-            ]
+      ? | readonly [
+            RecordOperand<Type, Update>,
+            EqualityOperator,
+            boolean | UserBooleanOperand<User>,
+          ]
+        | readonly [
+            boolean | UserBooleanOperand<User>,
+            EqualityOperator,
+            RecordOperand<Type, Update>,
+          ]
       : never);
 
 type EqualityCondition<
@@ -147,17 +137,12 @@ type StringContainsCondition<
   | readonly [UserStringOperand<User>, ContainsOperator, string[]]
   | readonly [string, ContainsOperator, UserStringArrayOperand<User>]
   | (Level extends "record"
-      ?
-          | readonly [
-              RecordOperand<Type, Update>,
-              ContainsOperator,
-              string[] | UserStringArrayOperand<User>,
-            ]
-          | readonly [
-              string | UserStringOperand<User>,
-              ContainsOperator,
-              RecordOperand<Type, Update>,
-            ]
+      ? | readonly [
+            RecordOperand<Type, Update>,
+            ContainsOperator,
+            string[] | UserStringArrayOperand<User>,
+          ]
+        | readonly [string | UserStringOperand<User>, ContainsOperator, RecordOperand<Type, Update>]
       : never);
 
 type BooleanContainsCondition<
@@ -171,17 +156,16 @@ type BooleanContainsCondition<
   | readonly [UserBooleanOperand<User>, ContainsOperator, boolean[]]
   | readonly [boolean, ContainsOperator, UserBooleanArrayOperand<User>]
   | (Level extends "record"
-      ?
-          | readonly [
-              RecordOperand<Type, Update>,
-              ContainsOperator,
-              boolean[] | UserBooleanArrayOperand<User>,
-            ]
-          | readonly [
-              boolean | UserBooleanOperand<User>,
-              ContainsOperator,
-              RecordOperand<Type, Update>,
-            ]
+      ? | readonly [
+            RecordOperand<Type, Update>,
+            ContainsOperator,
+            boolean[] | UserBooleanArrayOperand<User>,
+          ]
+        | readonly [
+            boolean | UserBooleanOperand<User>,
+            ContainsOperator,
+            RecordOperand<Type, Update>,
+          ]
       : never);
 
 type ContainsCondition<
@@ -205,17 +189,16 @@ type HasAnyCondition<
       string[] | UserStringArrayOperand<User>,
     ]
   | (Level extends "record"
-      ?
-          | readonly [
-              RecordOperand<Type, Update>,
-              HasAnyOperator,
-              string[] | UserStringArrayOperand<User>,
-            ]
-          | readonly [
-              string[] | UserStringArrayOperand<User>,
-              HasAnyOperator,
-              RecordOperand<Type, Update>,
-            ]
+      ? | readonly [
+            RecordOperand<Type, Update>,
+            HasAnyOperator,
+            string[] | UserStringArrayOperand<User>,
+          ]
+        | readonly [
+            string[] | UserStringArrayOperand<User>,
+            HasAnyOperator,
+            RecordOperand<Type, Update>,
+          ]
       : never);
 
 /**

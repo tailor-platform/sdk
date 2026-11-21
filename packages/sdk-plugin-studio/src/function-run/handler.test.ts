@@ -7,9 +7,12 @@ import { createFunctionRunHandler } from "./handler";
 import { createRunSession } from "./session";
 import type { RunEvent, RunHandle, RunInput } from "./run-types";
 
-const token = "tok-123";
 const root = "http://127.0.0.1:7777";
-const context = { basePath: "/plugins/function-run/", token, getSelection: () => ({}) };
+const context = {
+  basePath: "/plugins/function-run/",
+  getSelection: () => ({}),
+  onSelectionChange: () => () => {},
+};
 const pageTemplate = "<html><head><title>Function run</title></head></html>";
 
 let base: string;
@@ -95,10 +98,7 @@ const send = (
   });
 
 const events = (abort?: AbortController) =>
-  new Request(`${root}/events`, {
-    headers: { "x-tailor-studio-token": token },
-    signal: abort?.signal,
-  });
+  new Request(`${root}/events`, { signal: abort?.signal });
 
 async function readFrames(
   response: Response,
@@ -124,7 +124,7 @@ const eventNames = (frames: string[]) => frames.map((frame) => frame.split("\n")
 const dataOf = (frame: string) => JSON.parse(frame.split("\n")[1]!.slice(6));
 
 describe("GET /", () => {
-  test("serves the page with the token the shell hands over", async () => {
+  test("serves the page", async () => {
     const { handler } = await setup();
 
     const response = await handler(new Request(`${root}/`), context);
@@ -133,11 +133,7 @@ describe("GET /", () => {
       response.headers.get("content-type"),
       response.headers.get("cache-control"),
       await response.text(),
-    ]).toEqual([
-      "text/html; charset=utf-8",
-      "no-store",
-      '<html><head><meta name="tailor-studio-token" content="tok-123"><title>Function run</title></head></html>',
-    ]);
+    ]).toEqual(["text/html; charset=utf-8", "no-store", pageTemplate]);
   });
 
   test("answers HEAD without a body", async () => {
@@ -174,14 +170,6 @@ describe("GET /", () => {
 });
 
 describe("GET /events", () => {
-  test("is refused without the token", async () => {
-    const { handler } = await setup();
-
-    const response = await handler(new Request(`${root}/events`), context);
-
-    expect(response.status).toBe(403);
-  });
-
   test("starts with the state: where the files are, what they hold and whether it is watching", async () => {
     const { handler } = await setup();
 
@@ -337,7 +325,7 @@ describe("POST /start and /stop", () => {
 
     expect([response.status, startRun.mock.calls[0]![0].workspaceArgs]).toEqual([
       204,
-      ["-p", "test", "-w", "ws-1"],
+      ["--profile=test", "--workspace-id=ws-1"],
     ]);
   });
 

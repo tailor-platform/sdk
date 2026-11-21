@@ -1,5 +1,5 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   defineWorkflowExecutionPolicies,
   defineWorkflowExecutionPolicy,
@@ -9,7 +9,6 @@ import {
   planWorkflowJobFunctionExecutionPolicy,
   toPlatformExecutionPolicyKey,
 } from "./workflow-execution-policy";
-import type { OperatorClient } from "#/cli/shared/client";
 
 describe("toPlatformExecutionPolicyKey", () => {
   test("returns key unchanged for an exact-match policy", () => {
@@ -36,9 +35,14 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
     const policy = defineWorkflowExecutionPolicy("tenant-api", { key: "tenant-api*" });
     await expect(
       // Validation runs before the client is touched, so an empty stub suffices.
-      planWorkflowJobFunctionExecutionPolicy({} as never, "ws-id", "app", undefined, {
-        tenantApi: policy,
-      }),
+      planWorkflowJobFunctionExecutionPolicy(
+        mockOperatorClient({}),
+        "ws-id",
+        { kind: "application", name: "app", id: undefined },
+        {
+          tenantApi: policy,
+        },
+      ),
     ).rejects.toThrow(/key must not end with '\*'/);
   });
 
@@ -48,9 +52,14 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
     // genuinely lacks the internal prefix.
     const policy = { name: "tenant-api", matchType: "prefix", keyFor: () => "" } as never;
     await expect(
-      planWorkflowJobFunctionExecutionPolicy({} as never, "ws-id", "app", undefined, {
-        tenantApi: policy,
-      }),
+      planWorkflowJobFunctionExecutionPolicy(
+        mockOperatorClient({}),
+        "ws-id",
+        { kind: "application", name: "app", id: undefined },
+        {
+          tenantApi: policy,
+        },
+      ),
     ).rejects.toThrow(/must be created via defineWorkflowExecutionPolicy/);
   });
 });
@@ -63,13 +72,14 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
     remoteMaxConcurrentExecutions: number;
     owner?: string;
     staleSdkVersion?: boolean;
+    appId?: string;
   }) {
     const { labels } = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "workflow_job_function_execution_policy", "premium"),
-      appName,
+      owner: { kind: "application", name: appName, id: options.appId },
     });
-    const client = {
-      listWorkflowJobFunctionExecutionPolicies: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      listWorkflowJobFunctionExecutionPolicies: {
         policies: [
           {
             name: "premium",
@@ -78,8 +88,8 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
           },
         ],
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockResolvedValue({
+      },
+      getMetadata: {
         metadata: {
           labels: {
             ...labels,
@@ -87,14 +97,19 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
             ...(options.staleSdkVersion && { [sdkVersionLabelKey]: "v0-0-0" }),
           },
         },
-      }),
-    } as unknown as OperatorClient;
-
-    return planWorkflowJobFunctionExecutionPolicy(client, workspaceId, appName, undefined, {
-      premium: defineWorkflowExecutionPolicy("premium", {
-        concurrencyPolicy: { maxConcurrentExecutions: 3 },
-      }),
+      },
     });
+
+    return planWorkflowJobFunctionExecutionPolicy(
+      client,
+      workspaceId,
+      { kind: "application", name: appName, id: options.appId },
+      {
+        premium: defineWorkflowExecutionPolicy("premium", {
+          concurrencyPolicy: { maxConcurrentExecutions: 3 },
+        }),
+      },
+    );
   }
 
   test.each([
@@ -106,6 +121,24 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
 
     expect(result.changeSet.updates).toHaveLength(1);
     expect(result.changeSet.updates[0]?.forcedBySdkVersion).toBe(forced ? true : undefined);
+  });
+
+  test("refreshes the labels of an unchanged policy whose other SDK labels differ", async () => {
+    const result = await planPremium({
+      remoteMaxConcurrentExecutions: 3,
+      owner: "old-name",
+      appId: "app-1",
+    });
+
+    expect(result.changeSet.updates).toEqual([]);
+    expect(result.changeSet.unchanged).toEqual([
+      {
+        name: "premium",
+        labelRefresh: expect.objectContaining({
+          labels: expect.objectContaining({ "sdk-name": appName }),
+        }),
+      },
+    ]);
   });
 
   test("reports a policy owned by another app with its resource type and label", async () => {

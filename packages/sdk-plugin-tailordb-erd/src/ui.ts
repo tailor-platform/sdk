@@ -9,7 +9,6 @@ const CLI_ENTRY = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
 
 interface UiHandlerContext {
   basePath: string;
-  token: string;
 }
 
 type UiHandler = (request: Request, context: UiHandlerContext) => Promise<Response>;

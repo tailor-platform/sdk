@@ -6,7 +6,9 @@ import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import {
   buildMetaRequest,
-  hasMatchingSdkVersion,
+  type DeployOwner,
+  labelRefreshOf,
+  ownsOrTakesOver,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
@@ -27,14 +29,9 @@ export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
 const CHUNK_SIZE = 64 * 1024; // 64KB
 
-type CreateFunction = {
+type FunctionUpload = {
   name: string;
-  entry: FunctionEntry;
-  metaRequest: MetadataLabelWrite;
-};
-
-type UpdateFunction = {
-  name: string;
+  workspaceId: string;
   entry: FunctionEntry;
   metaRequest: MetadataLabelWrite;
 };
@@ -44,7 +41,7 @@ type DeleteFunction = {
   workspaceId: string;
 };
 
-type FunctionRegistryChangeSet = ChangeSet<CreateFunction, UpdateFunction, DeleteFunction>;
+type FunctionRegistryChangeSet = ChangeSet<FunctionUpload, FunctionUpload, DeleteFunction>;
 
 /**
  * Compute SHA-256 content hash for a script string.
@@ -248,9 +245,9 @@ export function collectFunctionEntries(
   }
 
   // Auth hooks
-  for (const app of application.applications) {
-    if (app.authService?.config.hooks?.beforeLogin) {
-      const authName = app.authService.config.name;
+  for (const authService of application.applications.flatMap((app) => app.authServices)) {
+    if (authService.config.hooks?.beforeLogin) {
+      const authName = authService.config.name;
       const funcName = authHookFunctionName(authName, "before-login");
       const content = bundledScripts.authHooks.get(funcName);
       if (!content) {
@@ -292,8 +289,7 @@ type ExistingFunction = {
  * Plan function registry changes based on current and desired state.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param appName - Application name
- * @param appId - Stable application id (when managed by SDK)
+ * @param owner - Owner of the resources the deploy manages
  * @param entries - Desired function entries
  * @param previousExisting - A prior call's fetched existing registry entries, reused instead of
  *   re-listing them from the platform (the remote function registry cannot have changed between
@@ -303,18 +299,16 @@ type ExistingFunction = {
 export async function planFunctionRegistry(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   entries: FunctionEntry[],
   previousExisting?: WithLabel<ExistingFunction>,
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
-    CreateFunction,
-    UpdateFunction,
+    FunctionUpload,
+    FunctionUpload,
     DeleteFunction
   >("Function registry");
-  const metadataUpdates: Array<{ name: string; metaRequest: MetadataLabelWrite }> = [];
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedMap =
     previousExisting ??
@@ -346,28 +340,29 @@ export async function planFunctionRegistry(
     const existing = existingMap[entry.name];
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "function_registry", entry.name),
-      appName,
-      appId,
+      owner,
     });
 
     if (existing) {
       const owned = ownership.ownsDesired(existing.allLabels, {
         resourceType: "function_registry",
-        resourceLabel: "Function registry",
         resourceName: entry.name,
       });
 
-      const configUnchanged = owned && existing.resource.contentHash === entry.contentHash;
-      if (configUnchanged) {
+      if (
+        existing.resource.contentHash === entry.contentHash &&
+        ownsOrTakesOver(existing.allLabels, owner)
+      ) {
         changeSet.unchanged.push({
           name: entry.name,
+          ...(owned
+            ? labelRefreshOf(existing.allLabels, metaRequest)
+            : { labelRefresh: metaRequest }),
         });
-        if (!hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-          metadataUpdates.push({ name: entry.name, metaRequest });
-        }
       } else {
         changeSet.updates.push({
           name: entry.name,
+          workspaceId,
           entry,
           metaRequest,
         });
@@ -376,6 +371,7 @@ export async function planFunctionRegistry(
     } else {
       changeSet.creates.push({
         name: entry.name,
+        workspaceId,
         entry,
         metaRequest,
       });
@@ -385,7 +381,12 @@ export async function planFunctionRegistry(
   // Remaining entries in existingMap are candidates for deletion
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
-    if (ownership.ownsRemaining(existing.allLabels)) {
+    if (
+      ownership.ownsRemaining(existing.allLabels, {
+        resourceType: "function_registry",
+        resourceName: name,
+      })
+    ) {
       changeSet.deletes.push({
         name,
         workspaceId,
@@ -401,45 +402,59 @@ export async function planFunctionRegistry(
   } = splitFunctionRegistryChanges(changeSet);
   return {
     changeSet,
-    metadataUpdates,
     workflowJobChanges,
     resolverFunctionChanges,
     executorFunctionChanges,
     authHookFunctionChanges,
     ...ownership.result,
+    // The takeover of the resolver namespace, executor, workflow, or Auth
+    // service a function belongs to covers it.
+    takeovers: [],
     existingMap: fetchedMap,
+  };
+}
+
+/**
+ * Build the message that opens a function's upload stream, ahead of its content chunks.
+ * @param upload - Planned function create or update
+ * @returns The stream's info message
+ */
+export function functionUploadInfoMessage(upload: FunctionUpload) {
+  const { workspaceId, entry } = upload;
+  return {
+    payload: {
+      case: "info" as const,
+      value: {
+        workspaceId,
+        name: entry.name,
+        description: entry.description,
+        sizeBytes: BigInt(Buffer.byteLength(entry.scriptContent, "utf-8")),
+        contentHash: entry.contentHash,
+      },
+    },
   };
 }
 
 /**
  * Upload a function script to the function registry using client streaming.
  * @param client - Operator client instance
- * @param workspaceId - Workspace ID
- * @param entry - Function entry to upload
+ * @param upload - Planned function create or update
  * @param isCreate - Whether this is a create (true) or update (false)
  */
 async function uploadFunctionScript(
   client: OperatorClient,
-  workspaceId: string,
-  entry: FunctionEntry,
+  upload: FunctionUpload,
   isCreate: boolean,
 ) {
-  const buffer = Buffer.from(entry.scriptContent, "utf-8");
-
-  const info = {
-    workspaceId,
-    name: entry.name,
-    description: entry.description,
-    sizeBytes: BigInt(buffer.length),
-    contentHash: entry.contentHash,
-  };
+  const buffer = Buffer.from(upload.entry.scriptContent, "utf-8");
+  const info = functionUploadInfoMessage(upload);
 
   if (isCreate) {
     /** @yields {MessageInitShape<typeof CreateFunctionRegistryRequestSchema>} Create request messages (info header followed by content chunks) */
     async function* createStream(): AsyncIterable<
       MessageInitShape<typeof CreateFunctionRegistryRequestSchema>
     > {
-      yield { payload: { case: "info" as const, value: info } };
+      yield info;
       for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
         yield {
           payload: {
@@ -455,7 +470,7 @@ async function uploadFunctionScript(
     async function* updateStream(): AsyncIterable<
       MessageInitShape<typeof UpdateFunctionRegistryRequestSchema>
     > {
-      yield { payload: { case: "info" as const, value: info } };
+      yield info;
       for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
         yield {
           payload: {
@@ -472,13 +487,11 @@ async function uploadFunctionScript(
 /**
  * Apply function registry changes for the given phase.
  * @param client - Operator client instance
- * @param workspaceId - Workspace ID
  * @param result - Planned function registry changes
  * @param phase - Apply phase
  */
 export async function applyFunctionRegistry(
   client: OperatorClient,
-  workspaceId: string,
   result: Awaited<ReturnType<typeof planFunctionRegistry>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
@@ -491,18 +504,18 @@ export async function applyFunctionRegistry(
     await Promise.all([
       ...changeSet.creates.map((create) =>
         limitFunction(async () => {
-          await uploadFunctionScript(client, workspaceId, create.entry, true);
+          await uploadFunctionScript(client, create, true);
           await writeMetadataLabels(client, create.metaRequest);
         }),
       ),
       ...changeSet.updates.map((update) =>
         limitFunction(async () => {
-          await uploadFunctionScript(client, workspaceId, update.entry, false);
+          await uploadFunctionScript(client, update, false);
           await writeMetadataLabels(client, update.metaRequest);
         }),
       ),
-      ...result.metadataUpdates.map((update) =>
-        limitFunction(() => writeMetadataLabels(client, update.metaRequest)),
+      ...changeSet.unchanged.flatMap(({ labelRefresh }) =>
+        labelRefresh ? [limitFunction(() => writeMetadataLabels(client, labelRefresh))] : [],
       ),
     ]);
   } else {

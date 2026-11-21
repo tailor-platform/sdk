@@ -2,7 +2,10 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { updateMigrationLabel } from "#/cli/commands/deploy/tailordb/migration";
+import {
+  clearMaintenanceModeRecord,
+  updateMigrationLabel,
+} from "#/cli/commands/deploy/tailordb/migration";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -218,6 +221,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
     workspaceId: options.workspaceId,
+    clientOptions: { createsPlannedResources: true },
   });
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
@@ -337,6 +341,10 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     );
   }
 
+  const removesMaintenanceRecord = currentState.maintenanceModeCheckpoint !== null;
+  if (removesMaintenanceRecord) {
+    await clearMaintenanceModeRecord(client, workspaceId, target.namespace);
+  }
   const labelChanged = await updateMigrationLabel(
     client,
     workspaceId,
@@ -358,7 +366,7 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
     );
   }
   return {
-    changed: totalOps > 0 || labelChanged,
+    changed: totalOps > 0 || labelChanged || removesMaintenanceRecord,
     workspaceId,
     namespace: target.namespace,
     previousMigrationNumber: current,

@@ -37,6 +37,7 @@ import {
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -81,6 +82,7 @@ export async function applyExecutor(
         await client.updateExecutorExecutor(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
   } else {
     // Delete in reverse order of dependencies
@@ -147,9 +149,9 @@ export async function planExecutor(
   context: PlanContext,
   previousExisting?: PreviousExistingExecutors,
 ) {
-  const { client, workspaceId, application, forRemoval } = context;
+  const { client, workspaceId, application, owner, forRemoval } = context;
   const changeSet = createChangeSet<CreateExecutor, UpdateExecutor, DeleteExecutor>("Executors");
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedExecutors =
     previousExisting?.existingExecutors ??
@@ -203,8 +205,7 @@ export async function planExecutor(
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "executor", executor.name),
-        appName: application.name,
-        appId: application.id,
+        owner,
       }),
     });
   }
@@ -213,11 +214,7 @@ export async function planExecutor(
     desired,
     existing: Object.entries(fetchedExecutors),
     keyOf: (executor) => executor.name,
-    ...labeledResourceChecks(ownership, (executor: DesiredExecutor) => ({
-      resourceType: "executor",
-      resourceLabel: "Executor",
-      resourceName: executor.name,
-    })),
+    ...labeledResourceChecks(ownership, "executor"),
     isConfigUnchanged: (executor) => {
       const detail = existingExecutorDetails.get(executor.name);
       return (

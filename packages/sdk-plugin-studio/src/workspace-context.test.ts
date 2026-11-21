@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createWorkspaceContext, selectionArgs } from "./workspace-context";
+import { createWorkspaceContext, selectionArgs, selectionEnv } from "./workspace-context";
 
 const PROFILES = [
   { name: "test", workspaceId: "7390c4cc-914f-4791-89ee-f4a4ab4699fc" },
@@ -60,6 +60,34 @@ describe("createWorkspaceContext", () => {
   });
 });
 
+describe("subscribe", () => {
+  test("calls the listener after a profile is selected and after it is cleared", async () => {
+    const ctx = await context();
+    let calls = 0;
+    ctx.subscribe(() => calls++);
+    await ctx.select("test");
+    await ctx.select(null);
+    expect(calls).toBe(2);
+  });
+
+  test("stops calling a listener once it unsubscribed", async () => {
+    const ctx = await context();
+    let calls = 0;
+    const unsubscribe = ctx.subscribe(() => calls++);
+    unsubscribe();
+    await ctx.select("test");
+    expect(calls).toBe(0);
+  });
+
+  test("does not call the listener when selecting an unknown profile fails", async () => {
+    const ctx = await context();
+    let calls = 0;
+    ctx.subscribe(() => calls++);
+    await expect(ctx.select("nope")).rejects.toThrow("not found");
+    expect(calls).toBe(0);
+  });
+});
+
 describe("remembering the selection", () => {
   function remembering(saved: string | undefined, initialProfile?: string) {
     const writes: (string | null)[] = [];
@@ -108,14 +136,47 @@ describe("remembering the selection", () => {
 
 describe("selectionArgs", () => {
   test("passes the profile and its workspace ID, so an environment workspace ID cannot override the profile", () => {
-    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual(["-p", "test", "-w", "w"]);
+    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual([
+      "--profile=test",
+      "--workspace-id=w",
+    ]);
   });
 
   test("passes only the workspace ID when no profile is selected", () => {
-    expect(selectionArgs({ workspaceId: "w" })).toEqual(["-w", "w"]);
+    expect(selectionArgs({ workspaceId: "w" })).toEqual(["--workspace-id=w"]);
+  });
+
+  test("binds a profile name that starts with a hyphen to its option", () => {
+    expect(selectionArgs({ profile: "-x" })).toEqual(["--profile=-x"]);
   });
 
   test("is empty when nothing is selected", () => {
     expect(selectionArgs({})).toEqual([]);
+  });
+});
+
+describe("selectionEnv", () => {
+  const env = { TAILOR_PLATFORM_TOKEN: "startup-user-token", PATH: "/bin" };
+
+  test("leaves out the inherited token while a profile is selected", () => {
+    expect(selectionEnv({ profile: "test", workspaceId: "w" }, env)).toEqual({ PATH: "/bin" });
+  });
+
+  test("leaves out the platform the startup profile injected, so a profile without its own falls back to the default", () => {
+    const injected = {
+      TAILOR_PLATFORM_URL: "https://custom.example.com",
+      TAILOR_PLATFORM_OAUTH2_CLIENT_ID: "custom-client",
+      PATH: "/bin",
+    };
+    expect(selectionEnv({ profile: "test" }, injected)).toEqual({ PATH: "/bin" });
+  });
+
+  test("keeps the token when no profile is selected, so a token-only setup still works", () => {
+    expect(selectionEnv({}, env)).toEqual(env);
+  });
+
+  test("does not change the environment it was given", () => {
+    selectionEnv({ profile: "test" }, env);
+    expect(env.TAILOR_PLATFORM_TOKEN).toBe("startup-user-token");
   });
 });

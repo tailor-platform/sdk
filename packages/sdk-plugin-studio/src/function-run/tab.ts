@@ -17,7 +17,6 @@ import type { Tab } from "../shell-handler";
 import type { WorkspaceSelection } from "../workspace-context";
 
 const FILE_POLL_MS = 300;
-const SELECTION_POLL_MS = 500;
 
 export interface FunctionRunTabOptions {
   projectDir: string;
@@ -26,6 +25,7 @@ export interface FunctionRunTabOptions {
   /** Start watching as soon as the server is up. */
   watch: boolean;
   getSelection: () => WorkspaceSelection;
+  onSelectionChange: (listener: () => void) => () => void;
   pageFile: string;
 }
 
@@ -97,7 +97,7 @@ export async function createFunctionRunTab(
 
   files.start();
   result.start();
-  session.startPolling(SELECTION_POLL_MS);
+  const stopWatchingSelection = session.watchSelection(options.onSelectionChange);
   if (options.watch) {
     const started = session.start();
     if (!started.ok) session.fail(started.reason);
@@ -107,6 +107,7 @@ export async function createFunctionRunTab(
     tab: { id: "function-run", title: "Function run", state: "mounted", handler },
     paths,
     close: () => {
+      stopWatchingSelection();
       result.close();
       handler.close();
       fs.rmSync(runDir, { recursive: true, force: true });

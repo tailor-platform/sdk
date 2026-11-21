@@ -4,9 +4,10 @@ import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
 
 export interface UiHandlerContext {
   basePath: string;
-  token: string;
   /** The profile / workspace chosen in the shell, read again on every call. */
   getSelection: () => WorkspaceSelection;
+  /** Call `listener` whenever the selection changes; returns the function that stops it. */
+  onSelectionChange: (listener: () => void) => () => void;
 }
 
 export type UiHandler = (
@@ -41,7 +42,6 @@ export interface PlatformInfo {
 export interface ShellHandlerOptions {
   tabs: readonly Tab[];
   port: number;
-  token: string;
   workspace: WorkspaceContext;
   accounts: Accounts;
   /** Platform settings taken from the environment; absent for the default platform. */
@@ -56,7 +56,7 @@ function withFramingProtection(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("x-frame-options", "SAMEORIGIN");
   const csp = headers.get("content-security-policy");
-  headers.set("content-security-policy", csp ? `${csp}; ${FRAME_ANCESTORS}` : FRAME_ANCESTORS);
+  headers.set("content-security-policy", csp ? `${csp}, ${FRAME_ANCESTORS}` : FRAME_ANCESTORS);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -76,14 +76,13 @@ function describeTab(tab: Tab) {
 /**
  * Build the request handler of the shell: it guards every request, serves the
  * tab list, and forwards `/plugins/<id>/*` to the plugin's handler.
- * @param options - Tabs, listening port and per-run token
+ * @param options - Tabs and listening port
  * @returns A Web-standard fetch handler
  */
 export function createShellHandler(options: ShellHandlerOptions) {
   const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
 
   const contextBody = async () => ({
-    token: options.token,
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(await options.workspace.describe()),
   });
@@ -108,6 +107,39 @@ export function createShellHandler(options: ShellHandlerOptions) {
     }
   };
 
+  const handleContextEvents = (request: Request): Response => {
+    const encoder = new TextEncoder();
+    let stop = () => {};
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const send = (text: string) => {
+          try {
+            controller.enqueue(encoder.encode(text));
+          } catch {
+            stop();
+          }
+        };
+        const unsubscribe = options.workspace.subscribe(() => send("event: changed\ndata: {}\n\n"));
+        stop = () => {
+          unsubscribe();
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
+        request.signal.addEventListener("abort", stop, { once: true });
+        send(": connected\n\n");
+      },
+      cancel() {
+        stop();
+      },
+    });
+    return new Response(body, {
+      headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
+    });
+  };
+
   const failure = (error: unknown) =>
     Response.json(
       { error: error instanceof Error ? error.message : String(error) },
@@ -129,10 +161,20 @@ export function createShellHandler(options: ShellHandlerOptions) {
       return new Response("Method Not Allowed\n", { status: 405, headers: { allow: "POST" } });
     }
     try {
-      const body = (await request.json()) as Partial<NewProfile>;
+      const body = (await request.json()) as Record<string, unknown>;
       const { name, user, workspaceId, permission } = body;
-      if (!name || !user || !workspaceId) {
+      if (
+        typeof name !== "string" ||
+        typeof user !== "string" ||
+        typeof workspaceId !== "string" ||
+        !name ||
+        !user ||
+        !workspaceId
+      ) {
         throw new Error("name, user and workspaceId are required");
+      }
+      if (permission !== undefined && permission !== "write" && permission !== "read") {
+        throw new Error('permission must be "write" or "read"');
       }
       await options.accounts.createProfile({
         name,
@@ -154,6 +196,7 @@ export function createShellHandler(options: ShellHandlerOptions) {
     const url = new URL(request.url);
     if (url.pathname === "/api/tabs") return Response.json(options.tabs.map(describeTab));
 
+    if (url.pathname === "/api/context/events") return handleContextEvents(request);
     if (url.pathname === "/api/context") return handleContext(request);
 
     if (url.pathname === "/api/accounts") {
@@ -173,7 +216,10 @@ export function createShellHandler(options: ShellHandlerOptions) {
     const tab = byId.get(id!);
     if (tab?.state !== "mounted") return new Response("Not Found\n", { status: 404 });
     if (rest === undefined) {
-      return new Response(null, { status: 308, headers: { location: `/plugins/${id}/` } });
+      return new Response(null, {
+        status: 308,
+        headers: { location: `/plugins/${id}/${url.search}` },
+      });
     }
 
     const forwardedUrl = new URL(url.origin);
@@ -183,8 +229,8 @@ export function createShellHandler(options: ShellHandlerOptions) {
     try {
       return await tab.handler(forwarded, {
         basePath: `/plugins/${id}/`,
-        token: options.token,
         getSelection: () => options.workspace.selection(),
+        onSelectionChange: (listener) => options.workspace.subscribe(listener),
       });
     } catch (error) {
       options.onError?.(error, id!);

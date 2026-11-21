@@ -7,11 +7,11 @@ import config, { auth } from "./example-config";
 export default config;
 export { auth };
 export const plugins = definePlugins(
-  kyselyTypePlugin({ distPath: "./tests/fixtures/expected/db.ts" }),
-  enumConstantsPlugin({ distPath: "./tests/fixtures/expected/enums.ts" }),
-  fileUtilsPlugin({ distPath: "./tests/fixtures/expected/files.ts" }),
+  kyselyTypePlugin({ distPath: "./fixtures/expected/db.ts" }),
+  enumConstantsPlugin({ distPath: "./fixtures/expected/enums.ts" }),
+  fileUtilsPlugin({ distPath: "./fixtures/expected/files.ts" }),
   seedPlugin({
-    distPath: "./tests/fixtures/expected/seed",
+    distPath: "./fixtures/expected/seed",
     machineUserName: "manager-machine-user",
   }),
 );

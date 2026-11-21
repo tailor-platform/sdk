@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -9,6 +8,7 @@ import {
   type SchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
@@ -19,7 +19,6 @@ import {
   loadScriptSchemaSnapshot,
   verifyScriptSchemaSnapshot,
 } from "./script-scaffold";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importActual) => {
@@ -211,7 +210,7 @@ describe("loadScriptSchemaSnapshot", () => {
 });
 
 describe("verifyScriptSchemaSnapshot", () => {
-  const client = {} as OperatorClient;
+  const client = mockOperatorClient({});
 
   beforeEach(() => {
     vi.mocked(fetchRemoteSchemaSnapshot).mockReset();
@@ -222,12 +221,13 @@ describe("verifyScriptSchemaSnapshot", () => {
     config: { db?: unknown } = {},
     snapshot: SchemaSnapshot = makeSnapshot(),
     source: "local" | "remote" = "remote",
+    configArgValue?: string,
   ) {
     return {
       client,
       workspaceId: "ws-1",
       config: { path: "/proj/tailor.config.ts", ...config } as LoadedConfig,
-      configArgValue: "tailor.config.ts",
+      configArgValue,
       scriptArgValue: "scripts/fix.ts",
       sidecar: {
         snapshotPath: `/proj/scripts/${SCRIPT_SNAPSHOT_FILE_NAME}`,
@@ -294,6 +294,28 @@ describe("verifyScriptSchemaSnapshot", () => {
       suggestion: expect.stringMatching(/--allow-schema-drift/),
     });
   });
+
+  test.each([
+    { configArgValue: undefined, configHints: [] },
+    {
+      configArgValue: "apps/shop/tailor.config.ts",
+      configHints: ["--config=apps/shop/tailor.config.ts"],
+    },
+  ])(
+    "names --config in the drift suggestion only when it was given ($configArgValue)",
+    async ({ configArgValue, configHints }) => {
+      const drifted = makeSnapshot();
+      drifted.tables.Product!.fields.price = { type: "float", required: false };
+      vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(drifted));
+
+      const error = await verifyScriptSchemaSnapshot(
+        makeOptions({}, makeSnapshot(), "remote", configArgValue),
+      ).catch((error: unknown) => error);
+
+      const { suggestion } = error as { suggestion: string };
+      expect([...new Set(suggestion.match(/--config=[^\s`]+/g))]).toEqual(configHints);
+    },
+  );
 
   test("accepts a local snapshot when the deployed schema carries the same generated contract", async () => {
     const remoteDerived = makeSnapshot();
@@ -406,7 +428,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       verifyScriptSchemaSnapshot(makeOptions({ db: { tailordb: {} } }, remoteDerived)),
     ).resolves.toBeUndefined();
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(client, "ws-1", "tailordb");
@@ -423,7 +445,7 @@ describe("verifyScriptSchemaSnapshot", () => {
       /no longer matches the local table definitions/,
     );
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
-      configPath: "tailor.config.ts",
+      configPath: undefined,
       namespaces: ["tailordb"],
     });
     expect(fetchRemoteSchemaSnapshot).not.toHaveBeenCalled();

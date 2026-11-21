@@ -83,3 +83,24 @@ export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> 
   ["TemporalInstant", { select: "Temporal.Instant", write: "Temporal.Instant | string" }],
   ["TemporalTime", { select: "Temporal.PlainTime", write: "Temporal.PlainTime | string" }],
 ]);
+
+/** The settings of a TailorDB field that let the platform fill it on create. */
+interface FilledOnCreateFieldConfig {
+  hooks?: { create?: unknown };
+  default?: unknown;
+  optionalOnCreate?: boolean;
+}
+
+/**
+ * Whether the platform fills a field when a record is created without it, so
+ * generated insert types can leave the field out.
+ * @param field - Field configuration
+ * @returns `true` for a field with a create hook or a default, or one the platform reports as optional on create
+ */
+export function isFilledOnCreate(field: FilledOnCreateFieldConfig): boolean {
+  return (
+    field.hooks?.create !== undefined ||
+    field.default !== undefined ||
+    field.optionalOnCreate === true
+  );
+}

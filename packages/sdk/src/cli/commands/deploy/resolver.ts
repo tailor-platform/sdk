@@ -40,11 +40,13 @@ import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
+  type DeployOwner,
   eventSourceKey,
   type MetadataLabelWrite,
   resolverTrn,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -110,6 +112,7 @@ export async function applyPipeline(
         await client.updatePipelineService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.service.unchanged),
     ]);
 
     // Resolvers. An unchanged resolver still gets its labels written, because its
@@ -175,16 +178,10 @@ export async function planPipeline(
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    application.id,
-    pipelines,
-    previous?.existingServices,
-  );
+  } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const hasStringInvoker = pipelines.some((pipeline) =>
     Object.values(pipeline.resolvers).some((resolver) => typeof resolver.invoker === "string"),
@@ -209,8 +206,7 @@ export async function planPipeline(
     knownMachineUsers,
     forceApplyAll,
     {
-      appName: application.name,
-      appId: application.id,
+      owner: context.owner,
       dependentApps: context.dependentApps,
       runAppIds: context.runAppIds,
     },
@@ -224,6 +220,7 @@ export async function planPipeline(
     },
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
     existingServices,
     existingResolvers: existingResolversByNamespace,
@@ -263,15 +260,14 @@ const pipelineServiceComparison = defineRequestComparison({
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   previousExisting?: ExistingPipelineServices,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(
     "Pipeline services",
   );
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedServices =
     previousExisting ??
@@ -295,8 +291,7 @@ async function planServices(
       request: { workspaceId, namespaceName: pipeline.namespace },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
-        appName,
-        appId,
+        owner,
       }),
     });
   }
@@ -306,11 +301,7 @@ async function planServices(
     desired,
     existing: Object.entries(fetchedServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "pipeline.service",
-      resourceLabel: "Pipeline service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "pipeline.service"),
     isConfigUnchanged: (service, existing) =>
       isRequestUnchanged(pipelineServiceComparison, service.request, existing.resource),
     create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
@@ -362,8 +353,7 @@ const pipelineResolverComparison = defineRequestComparison({
 
 /** What planResolvers needs to record dependencies on each resolver. */
 type ResolverRecordInputs = {
-  appName?: string;
-  appId?: string;
+  owner: DeployOwner;
   dependentApps?: DependentAppsByResource;
   runAppIds?: ReadonlySet<string>;
 };
@@ -379,7 +369,7 @@ async function planResolvers(
   authNamespace: string | undefined,
   knownMachineUsers: ReadonlySet<string> | undefined,
   forceApplyAll = false,
-  records: ResolverRecordInputs = {},
+  records: ResolverRecordInputs,
   previousExisting?: PreviousPipelineResolvers,
 ) {
   const changeSet = createChangeSet<
@@ -389,7 +379,7 @@ async function planResolvers(
     never,
     UnchangedResolver
   >("Pipeline resolvers");
-  const { appName, appId, dependentApps, runAppIds } = records;
+  const { owner, dependentApps, runAppIds } = records;
 
   /**
    * Build one resolver's metadata write, carrying the dependency records that
@@ -403,7 +393,8 @@ async function planResolvers(
     resolver: { name: string; publishEvents?: boolean },
   ) => {
     const trn = resolverTrn(workspaceId, namespace, resolver.name);
-    return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
+    return addDependencyRecords(await buildMetaRequest({ trn, owner }), {
+      owner,
       key: eventSourceKey.resolver(namespace, resolver.name),
       dependentApps,
       runAppIds,

@@ -1,11 +1,13 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { domainListCommand } from "./list";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { CustomDomainSchema } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
@@ -16,10 +18,10 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-function mockCustomDomains(customDomains: unknown[]) {
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    listCustomDomains: vi.fn().mockResolvedValue({ customDomains }),
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+function mockCustomDomains(customDomains: MessageInitShape<typeof CustomDomainSchema>[]) {
+  vi.mocked(initOperatorClient).mockResolvedValue(
+    mockOperatorClient({ listCustomDomains: { customDomains } }),
+  );
 }
 
 describe("staticwebsite domain list", () => {

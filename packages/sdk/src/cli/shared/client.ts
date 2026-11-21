@@ -6,6 +6,7 @@ import {
   Code,
   ConnectError,
   createClient,
+  createContextKey,
   type Interceptor,
   type StreamResponse,
   type Transport,
@@ -171,12 +172,22 @@ export function findAccessTokenSource(accessToken: string): AccessTokenSource | 
 }
 
 /** Options for {@link initOperatorClient}. */
-interface OperatorClientOptions {
+export interface OperatorClientOptions {
   /**
    * Renew a browser-login token while the client runs (default true). Pass false for a
    * best-effort call that may be abandoned mid-flight, which must never rotate the stored login.
    */
   renewToken?: boolean;
+  /**
+   * Set only when the client creates resources that a plan found missing and does not read what
+   * those creates return (default false). It changes how some creates, such as those of TailorDB
+   * types and secret manager vaults, handle a resource that already exists. When the client
+   * retries the create automatically after a transient error and the retry finds the resource,
+   * the create returns an empty result instead of failing. When no earlier attempt could have
+   * created the resource, the create saves a crash report and prints where it was saved before it
+   * fails, unless crash reports are turned off.
+   */
+  createsPlannedResources?: boolean;
 }
 
 /**
@@ -209,7 +220,7 @@ export async function initOperatorClient(
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
     await bearerTokenInterceptor(tokenSource),
-    retryInterceptor(),
+    retryInterceptor(options),
     errorHandlingInterceptor(),
     createTracingInterceptor(),
     // Innermost: gates the actual network attempt so each retry re-acquires a
@@ -546,17 +557,19 @@ async function currentAccessToken(source: AccessTokenSource): Promise<string> {
  * side-effect-free or idempotent.
  * A request that never reached the server (see `isUnsentRequest`) is retried for
  * every unary method.
- * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
- * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
- * success, since it means a prior attempt already committed the resource
- * server-side. An `AlreadyExists` from such a Create that no prior attempt could
- * have committed still surfaces, but is routed to crash/error reporting first (the
- * top-level handler skips `ConnectError`), so the otherwise-silent compound-create
- * race is trackable.
+ * When `createsPlannedResources` is set, a post-retry `AlreadyExists` from an
+ * allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as success,
+ * since it means a prior attempt already committed the resource server-side, and
+ * an `AlreadyExists` from such a Create that no prior attempt could have committed
+ * is routed to crash/error reporting before it surfaces, unless the call sets
+ * `alreadyExistsExpected`.
  * @internal
+ * @param options - Client options that control `AlreadyExists` handling
  * @returns Retry interceptor
  */
-export function retryInterceptor(): Interceptor {
+export function retryInterceptor(
+  options: Pick<OperatorClientOptions, "createsPlannedResources"> = {},
+): Interceptor {
   return (next) => async (req) => {
     if (req.stream) {
       return await next(req);
@@ -572,14 +585,10 @@ export function retryInterceptor(): Interceptor {
       try {
         return await next(req);
       } catch (error) {
-        // A retry that comes back AlreadyExists is treated as success: a prior
-        // attempt (one whose retriable error sent us here) already created
-        // the resource server-side, but its response was lost as
-        // Unavailable/ResourceExhausted under load. The identical retry then
-        // races against that committed write and fails with `already_exists`.
-        // Restricted to RETRY_SAFE_CREATE_METHODS (deploy creates whose response
-        // body is unused) and to retries after an attempt that may have committed.
-        if (isRetrySafeCreateAlreadyExists(error, req.method.name)) {
+        if (
+          options.createsPlannedResources &&
+          isRetrySafeCreateAlreadyExists(error, req.method.name)
+        ) {
           if (priorAttemptMayHaveCommitted) {
             logger.debug(
               `retry: ${req.method.name} returned AlreadyExists on attempt ${i + 1}; ` +
@@ -587,13 +596,11 @@ export function retryInterceptor(): Interceptor {
             );
             return synthesizeEmptyUnaryResponse(req);
           }
-          // No prior attempt of ours could have committed it, so the resource was
-          // committed out-of-band (a concurrent or non-idempotent compound create
-          // under load — #1350). The top-level handler skips ConnectError, so
-          // route it to error tracking here before letting it surface as the
-          // deploy error.
-          const { reportCrash } = await import("#/cli/crashreport/index");
-          await reportCrash(error, "handledError");
+          // The top-level handler skips ConnectError, so report it before it surfaces.
+          if (!req.contextValues.get(alreadyExistsExpected)) {
+            const { reportCrash } = await import("#/cli/crashreport/index");
+            await reportCrash(error, "handledError");
+          }
         }
         const unsentRequest = isUnsentRequest(error);
         if (unsentRequest || isRetriable(error, req.method)) {
@@ -647,7 +654,8 @@ function retryErrorCodeName(error: unknown): string {
 }
 
 /**
- * Create RPCs for which a post-retry `AlreadyExists` may be treated as success.
+ * Create RPCs for which a post-retry `AlreadyExists` may be treated as success on a
+ * client with `createsPlannedResources`.
  *
  * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
  * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
@@ -702,6 +710,16 @@ export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Per-call context value marking a retry-safe Create whose caller handles
+ * `AlreadyExists` as an expected outcome, so `retryInterceptor` surfaces it
+ * without routing it to error tracking.
+ * @internal
+ */
+export const alreadyExistsExpected = createContextKey(false, {
+  description: "AlreadyExists is an expected outcome of this Create",
+});
+
+/**
  * Whether an error is an `AlreadyExists` from a retry-safe Create RPC.
  *
  * Only `AlreadyExists` stands in for "my prior write already landed"; for other
@@ -722,8 +740,8 @@ function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boo
  * Build a default (empty) unary response for the request's output message.
  *
  * Used when a retried Create is determined to have already succeeded on a prior
- * attempt: callers in the deploy pipeline ignore Create response bodies, so an
- * empty message faithfully represents the already-applied state.
+ * attempt: callers on a `createsPlannedResources` client ignore Create response
+ * bodies, so an empty message faithfully represents the already-applied state.
  * @param req - Unary request whose output schema is used
  * @returns A synthesized unary response with an empty output message
  */

@@ -1,9 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { getFunctionRegistry } from "./get";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -15,23 +15,25 @@ vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
+function createClient() {
+  return mockOperatorClient({ getFunctionRegistry: {} });
+}
+
 describe("getFunctionRegistry", () => {
-  let getFunctionRegistryMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    getFunctionRegistryMock = vi.fn();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getFunctionRegistry: getFunctionRegistryMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     await runTest();
   });
 
   test("returns transformed FunctionRegistryInfo on success", async () => {
     const createdAt = new Date("2026-01-01T00:00:00Z");
     const updatedAt = new Date("2026-02-01T00:00:00Z");
-    getFunctionRegistryMock.mockResolvedValue({
+    client.getFunctionRegistry.mockResolvedValue({
       function: {
         name: "my-fn",
         description: "desc",
@@ -52,14 +54,14 @@ describe("getFunctionRegistry", () => {
       createdAt,
       updatedAt,
     });
-    expect(getFunctionRegistryMock).toHaveBeenCalledWith({
+    expect(client.getFunctionRegistry).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       name: "my-fn",
     });
   });
 
   test("throws friendly message when ConnectError NotFound is raised", async () => {
-    getFunctionRegistryMock.mockRejectedValue(new ConnectError("gone", Code.NotFound));
+    client.getFunctionRegistry.mockRejectedValue(new ConnectError("gone", Code.NotFound));
 
     await expect(getFunctionRegistry({ name: "missing" })).rejects.toThrow(
       'Function registry "missing" not found.',
@@ -67,7 +69,7 @@ describe("getFunctionRegistry", () => {
   });
 
   test("throws not-found when response.function is missing", async () => {
-    getFunctionRegistryMock.mockResolvedValue({ function: undefined });
+    client.getFunctionRegistry.mockResolvedValue({ function: undefined });
 
     await expect(getFunctionRegistry({ name: "ghost" })).rejects.toThrow(
       'Function registry "ghost" not found.',

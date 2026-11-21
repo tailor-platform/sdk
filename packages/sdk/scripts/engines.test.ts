@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { subset, validRange } from "semver";
+import { minVersion, subset, validRange } from "semver";
 import { expect, test } from "vitest";
 
 type Manifest = {
@@ -90,3 +90,43 @@ test.each(packagesWithNodeEngines)(
     ).toEqual([]);
   },
 );
+
+const workflowsDir = path.resolve(packagesDir, "../.github/workflows");
+
+const engineMajors = [
+  ...new Set(
+    packagesWithNodeEngines.flatMap(({ name, range }) =>
+      range.split("||").map((part) => {
+        const lowest = minVersion(part);
+        if (lowest === null) throw new Error(`${name} engines.node has an empty range: ${part}`);
+        return lowest.major;
+      }),
+    ),
+  ),
+].toSorted((a, b) => a - b);
+
+test("CI tests every Node major that engines.node names", () => {
+  const testWorkflow = readFileSync(path.join(workflowsDir, "test.yml"), "utf8");
+  const matrixList = /^\s+node: \[([\d, ]*)\]$/m.exec(testWorkflow)?.[1];
+  if (matrixList === undefined) {
+    throw new Error("test.yml has no `node: [<majors>]` line; update this test to read it");
+  }
+  const matrixMajors = matrixList.split(",").map((major) => Number(major.trim()));
+  expect(matrixMajors, "Add the major to the test job's `node` matrix in test.yml").toEqual(
+    expect.arrayContaining(engineMajors),
+  );
+
+  const smokeWorkflow = readFileSync(path.join(workflowsDir, "pkg-pr-new.yml"), "utf8");
+  const smokeMajors = Array.from(
+    smokeWorkflow.matchAll(/- runtime: node\n\s+pm: \S+\n\s+node: (\d+)/g),
+    (match) => Number(match[1]),
+  );
+  expect(
+    smokeMajors,
+    "Every `runtime: node` row in pkg-pr-new.yml must list `pm` and then `node`",
+  ).toHaveLength(smokeWorkflow.match(/- runtime: node$/gm)?.length ?? 0);
+  expect(
+    smokeMajors,
+    "Give the major an init-smoke row with `runtime: node` in pkg-pr-new.yml",
+  ).toEqual(expect.arrayContaining(engineMajors));
+});

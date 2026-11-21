@@ -2,7 +2,12 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  readPlatformConfig,
+  withPlatformConfigLock,
+  writePlatformConfig,
+} from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import type { ProfileInfo } from "./types";
@@ -28,12 +33,34 @@ export interface CreateProfileOptions {
   consoleUrl?: string;
 }
 
+function assertOptionsValid(options: CreateProfileOptions) {
+  const invalid = [
+    ...(options.permission !== undefined && !["write", "read"].includes(options.permission)
+      ? [`permission "${options.permission}" is not "write" or "read"`]
+      : []),
+    ...(options.platformUrl && !URL.canParse(options.platformUrl)
+      ? [`platform URL "${options.platformUrl}" is not a URL`]
+      : []),
+    ...(options.consoleUrl && !URL.canParse(options.consoleUrl)
+      ? [`console URL "${options.consoleUrl}" is not a URL`]
+      : []),
+  ];
+  if (invalid.length > 0) {
+    throw CLIError({
+      code: "PROFILE_OPTIONS_INVALID",
+      message: invalid.join("\n"),
+      command: "profile create",
+    });
+  }
+}
+
 /**
  * Create a profile after checking that the user can sign in and sees the workspace.
  * @param options - Profile to create
  * @returns The created profile
  */
 export async function createProfile(options: CreateProfileOptions): Promise<ProfileInfo> {
+  assertOptionsValid(options);
   const permission = options.permission ?? "write";
   if (options.machineUserOverride === "deny" && !options.machineUser) {
     throw CLIError({
@@ -77,17 +104,21 @@ export async function createProfile(options: CreateProfileOptions): Promise<Prof
     });
   }
 
-  config.profiles[options.name] = {
-    user: resolvedUser,
-    workspace_id: options.workspaceId,
-    ...(permission === "read" ? { readonly: true } : {}),
-    ...(options.machineUser ? { machine_user: options.machineUser } : {}),
-    ...(options.machineUserOverride === "deny" ? { machine_user_override: "deny" as const } : {}),
-    ...(options.platformUrl ? { platform_url: options.platformUrl } : {}),
-    ...(options.oauth2ClientId ? { oauth2_client_id: options.oauth2ClientId } : {}),
-    ...(options.consoleUrl ? { console_url: options.consoleUrl } : {}),
-  };
-  writePlatformConfig(config);
+  await withPlatformConfigLock(async () => {
+    const latest = await readPlatformConfig();
+    assertProfileAvailable(latest, options.name);
+    latest.profiles[options.name] = {
+      user: resolvedUser,
+      workspace_id: options.workspaceId,
+      ...(permission === "read" ? { readonly: true } : {}),
+      ...(options.machineUser ? { machine_user: options.machineUser } : {}),
+      ...(options.machineUserOverride === "deny" ? { machine_user_override: "deny" as const } : {}),
+      ...(options.platformUrl ? { platform_url: options.platformUrl } : {}),
+      ...(options.oauth2ClientId ? { oauth2_client_id: options.oauth2ClientId } : {}),
+      ...(options.consoleUrl ? { console_url: options.consoleUrl } : {}),
+    };
+    writePlatformConfig(latest);
+  });
 
   return {
     name: options.name,

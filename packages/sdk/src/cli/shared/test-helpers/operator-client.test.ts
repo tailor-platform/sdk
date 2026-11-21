@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { mockOperatorClient } from "./operator-client";
+import { mockOperatorClient, withOperatorClientMocks } from "./operator-client";
 
 describe("mockOperatorClient", () => {
   test("resolves a method given as a response to that response", async () => {
@@ -41,5 +41,17 @@ describe("mockOperatorClient", () => {
     for await (const chunk of client.downloadFunctionRegistryScript({})) chunks.push(chunk);
 
     expect(chunks).toEqual([{}]);
+  });
+});
+
+describe("withOperatorClientMocks", () => {
+  test("mocks the methods on a copy and leaves the client unchanged", async () => {
+    const client = mockOperatorClient({ getTenantConfig: { tenantProviderConfig: {} } });
+
+    const copy = withOperatorClientMocks(client, { getTenantConfig: {}, setMetadata: {} });
+
+    await expect(copy.getTenantConfig({})).resolves.toEqual({});
+    await expect(client.getTenantConfig({})).resolves.toEqual({ tenantProviderConfig: {} });
+    expect(client).not.toHaveProperty("setMetadata");
   });
 });

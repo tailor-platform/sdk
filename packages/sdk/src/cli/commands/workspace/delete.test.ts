@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { describe, expect, test, vi } from "vitest";
@@ -8,6 +7,7 @@ import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deleteCommand } from "./delete";
 
 vi.mock("#/cli/shared/client", () => ({
@@ -43,25 +43,23 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
 const workspaceId = "12345678-1234-4abc-8def-123456789012";
 
 function stubClient() {
-  const client = {
-    getWorkspace: vi.fn().mockResolvedValue({
+  const client = mockOperatorClient({
+    getWorkspace: {
       workspace: {
         id: workspaceId,
         name: "sample-space",
         organizationId: "organization-1",
         folderId: "folder-1",
       },
-    }),
-    getOrganizationFolder: vi.fn().mockResolvedValue({
+    },
+    getOrganizationFolder: {
       folder: {
         name: "dev",
       },
-    }),
-    deleteWorkspace: vi.fn().mockResolvedValue({}),
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-  );
+    },
+    deleteWorkspace: {},
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 

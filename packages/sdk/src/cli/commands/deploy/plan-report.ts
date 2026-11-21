@@ -5,6 +5,7 @@ import { formatAuthHookChangeEntries } from "./auth";
 import {
   formatPlanSummary,
   summarizeChangeSets,
+  type ChangeSet,
   type HasName,
   type PlanSummary,
 } from "./change-set";
@@ -18,11 +19,17 @@ import {
   type GroupedDisplayEntry,
   type NamespaceAction,
 } from "./grouped-display";
-import { collectOwnerConflicts, collectUnmanagedResources } from "./managed-resources";
+import {
+  collectOwnerConflicts,
+  collectTakeovers,
+  collectUnmanagedResources,
+  countLabelRefreshes,
+  MANAGED_RESOURCES,
+} from "./managed-resources";
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
-import type { MissingDependentApp } from "./confirm";
+import type { MissingDependentApp, WorkspaceTakeover } from "./confirm";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
@@ -56,6 +63,13 @@ type JsonPlanPayload = {
     name: string;
     currentOwner: string;
   }>;
+  /** Resources an application config deployed that a workspace config takes over or deletes. */
+  takeovers?: Array<{
+    resourceType: ManagedResourceType;
+    name: string;
+    action: WorkspaceTakeover["action"];
+    currentOwner?: string;
+  }>;
   /** Custom domains that produced no change, with the reason. */
   notes: Array<{
     type: CustomDomainNoteKind;
@@ -85,7 +99,52 @@ type PlanReport = {
   lines: string[];
 };
 
+type PlainChangeSet = {
+  changeSet: Pick<
+    ChangeSet<HasName, HasName, HasName, HasName>,
+    "creates" | "updates" | "deletes" | "replaces" | "lines"
+  >;
+  label: string;
+};
+
+/**
+ * List the change sets the plan reports without grouping them by service.
+ * @param results - Planned results across all services
+ * @returns Change sets the text plan lists before and after the grouped sections
+ */
+function plainChangeSetsOf(results: PlanResults): {
+  beforeGroups: PlainChangeSet[];
+  afterGroups: PlainChangeSet[];
+} {
+  return {
+    beforeGroups: [
+      { changeSet: results.staticWebsite.changeSet, label: "staticWebsite" },
+      { changeSet: results.staticWebsite.customDomainChangeSet, label: "customDomain" },
+      {
+        changeSet: results.staticWebsite.customDomainTransferChangeSet,
+        label: "customDomainTransfer",
+      },
+      { changeSet: results.aiGateway.changeSet, label: "aiGateway" },
+      { changeSet: results.app, label: "application" },
+    ],
+    afterGroups: [
+      { changeSet: results.secretManager.vaultChangeSet, label: "vault" },
+      { changeSet: results.secretManager.secretChangeSet, label: "secret" },
+    ],
+  };
+}
+
 function buildPlanReport(results: PlanResults): PlanReport {
+  const plainChangeSets = plainChangeSetsOf(results);
+  const namespacedEntries = (
+    resourceType: Exclude<ManagedResourceType, "workflow_job_function">,
+    label: string,
+  ) => {
+    const resource = MANAGED_RESOURCES[resourceType];
+    return formatChangeSetEntries(resource.changeSetOf(results), [label], (item) =>
+      resource.namespace?.of(item),
+    );
+  };
   const executorEntries = formatExecutorChangeEntries(
     results.executor.changeSet,
     buildPlannedExecutorsByName(results.executor.changeSet),
@@ -129,44 +188,17 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...checkpointRepairEntries,
   ];
   const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
-  const namespaceOf = (item: HasName) => {
-    if (
-      "request" in item &&
-      item.request &&
-      typeof item.request === "object" &&
-      "namespaceName" in item.request
-    ) {
-      return item.request.namespaceName as string;
-    }
-    if ("namespaceName" in item) {
-      return item.namespaceName as string;
-    }
-    return undefined;
-  };
-  const authNamespaceOf = (item: HasName) =>
-    "request" in item &&
-    item.request &&
-    typeof item.request === "object" &&
-    "authNamespace" in item.request
-      ? (item.request.authNamespace as string)
-      : undefined;
-  const idpEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.idp.changeSet.client, ["client"], namespaceOf),
-  ];
+  const idpEntries: GroupedDisplayEntry[] = [...namespacedEntries("idp.client", "client")];
   const authEntries: GroupedDisplayEntry[] = [
-    ...formatChangeSetEntries(results.auth.changeSet.idpConfig, ["idpConfig"], namespaceOf),
-    ...formatChangeSetEntries(
-      results.auth.changeSet.userProfileConfig,
-      ["userProfileConfig"],
-      namespaceOf,
-    ),
-    ...formatChangeSetEntries(results.auth.changeSet.tenantConfig, ["tenantConfig"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.machineUser, ["machineUser"], authNamespaceOf),
+    ...namespacedEntries("auth.idp_config", "idpConfig"),
+    ...namespacedEntries("auth.user_profile_config", "userProfileConfig"),
+    ...namespacedEntries("auth.tenant_config", "tenantConfig"),
+    ...namespacedEntries("auth.machine_user", "machineUser"),
     ...authHookEntries,
-    ...formatChangeSetEntries(results.auth.changeSet.oauth2Client, ["oauth2Client"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.scim, ["scimConfig"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.scimResource, ["scimResource"], namespaceOf),
-    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"], namespaceOf),
+    ...namespacedEntries("auth.oauth2_client", "oauth2Client"),
+    ...namespacedEntries("auth.scim", "scimConfig"),
+    ...namespacedEntries("auth.scim_resource", "scimResource"),
+    ...formatChangeSetEntries(results.auth.changeSet.connection, ["connection"]),
   ];
 
   const { otherChanges: otherFunctionRegistryChanges } = splitFunctionRegistryChanges(
@@ -195,6 +227,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   const allUnmanaged = collectUnmanagedResources(results);
   const allConflicts = collectOwnerConflicts(results);
+  const allTakeovers = collectTakeovers(results);
 
   const serviceEntries = (serviceActions: ReadonlyArray<NamespaceAction>, label: string) =>
     serviceActions.map((serviceAction) => ({
@@ -209,15 +242,9 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...serviceEntries(idpServiceActions, "idp"),
     ...serviceEntries(authServiceActions, "auth"),
     ...formatChangeSetEntries(otherFunctionRegistryChanges),
-    ...formatChangeSetEntries(results.staticWebsite.changeSet, ["staticWebsite"]),
-    ...formatChangeSetEntries(results.staticWebsite.customDomainChangeSet, ["customDomain"]),
-    ...formatChangeSetEntries(results.staticWebsite.customDomainTransferChangeSet, [
-      "customDomainTransfer",
-    ]),
-    ...formatChangeSetEntries(results.aiGateway.changeSet, ["aiGateway"]),
-    ...formatChangeSetEntries(results.app, ["application"]),
-    ...formatChangeSetEntries(results.secretManager.vaultChangeSet, ["vault"]),
-    ...formatChangeSetEntries(results.secretManager.secretChangeSet, ["secret"]),
+    ...[...plainChangeSets.beforeGroups, ...plainChangeSets.afterGroups].flatMap(
+      ({ changeSet, label }) => formatChangeSetEntries(changeSet, [label]),
+    ),
   ];
   const changes = allEntries.map(({ action, name, labels, namespace, forcedBySdkVersion }) => ({
     action,
@@ -249,19 +276,14 @@ function buildPlanReport(results: PlanResults): PlanReport {
       results.functionRegistry.changeSet.title,
       formatChangeSetEntries(otherFunctionRegistryChanges),
     ),
-    ...results.staticWebsite.changeSet.lines(),
-    ...results.staticWebsite.customDomainChangeSet.lines(),
-    ...results.staticWebsite.customDomainTransferChangeSet.lines(),
-    ...results.aiGateway.changeSet.lines(),
-    ...results.app.lines(),
+    ...plainChangeSets.beforeGroups.flatMap(({ changeSet }) => changeSet.lines()),
     ...buildGroupedDisplayLines("TailorDB", tailorDBEntries, tailorDBServiceActions),
     ...buildGroupedDisplayLines("Resolver", pipelineEntries, pipelineServiceActions),
     ...buildGroupedDisplayLines("Executor", executorEntries),
     ...buildGroupedDisplayLines("Workflow", workflowEntries),
     ...buildGroupedDisplayLines("IdP", idpEntries, idpServiceActions),
     ...buildGroupedDisplayLines("Auth", authEntries, authServiceActions),
-    ...results.secretManager.vaultChangeSet.lines(),
-    ...results.secretManager.secretChangeSet.lines(),
+    ...plainChangeSets.afterGroups.flatMap(({ changeSet }) => changeSet.lines()),
   ];
 
   if (allUnmanaged.length > 0) {
@@ -286,6 +308,21 @@ function buildPlanReport(results: PlanResults): PlanReport {
     }
   }
 
+  if (allTakeovers.length > 0) {
+    allLines.push(
+      styles.bold("Taken over from application configs (will require confirmation on apply):"),
+    );
+    for (const { resourceLabel, resourceName, action, currentOwner } of allTakeovers) {
+      const outcome =
+        action === "delete"
+          ? `deleted${currentOwner ? ` (deployed by "${currentOwner}")` : ""}`
+          : `taken over${currentOwner ? ` from "${currentOwner}"` : ""}`;
+      allLines.push(
+        `  ${styles.warning("!")} ${styles.bold(resourceLabel)} "${resourceName}" — ${outcome}`,
+      );
+    }
+  }
+
   if (allConflicts.length > 0) {
     allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
     for (const { resourceLabel, resourceName, currentOwner } of allConflicts) {
@@ -306,7 +343,21 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   return {
     summary,
-    json: { summary, changes, warnings, conflicts, notes },
+    json: {
+      summary,
+      changes,
+      warnings,
+      conflicts,
+      ...(allTakeovers.length > 0 && {
+        takeovers: allTakeovers.map(({ resourceType, resourceName, action, currentOwner }) => ({
+          resourceType,
+          name: resourceName,
+          action,
+          ...(currentOwner && { currentOwner }),
+        })),
+      }),
+      notes,
+    },
     lines: allLines,
   };
 }
@@ -355,7 +406,7 @@ export function summarizePlanResults(
     delete: 0,
     replace: 0,
     forcedBySdkVersion: 0,
-    labelRefreshes: results.functionRegistry.metadataUpdates.length,
+    labelRefreshes: countLabelRefreshes(results),
   };
 
   // Count grouped display entries and service-level actions (shown as namespace headers)
@@ -366,17 +417,11 @@ export function summarizePlanResults(
     }
   }
 
-  // Count non-grouped changesets (staticWebsite, app, secretManager, functionRegistry other)
   const { otherChanges } = splitFunctionRegistryChanges(results.functionRegistry.changeSet);
+  const { beforeGroups, afterGroups } = plainChangeSetsOf(results);
   const nonGrouped = summarizeChangeSets([
     otherChanges,
-    results.staticWebsite.changeSet,
-    results.staticWebsite.customDomainChangeSet,
-    results.staticWebsite.customDomainTransferChangeSet,
-    results.aiGateway.changeSet,
-    results.app,
-    results.secretManager.vaultChangeSet,
-    results.secretManager.secretChangeSet,
+    ...[...beforeGroups, ...afterGroups].map(({ changeSet }) => changeSet),
   ]);
 
   return sumPlanSummaries([summary, nonGrouped]);
@@ -429,6 +474,9 @@ export function printDeploymentPlans(
         ),
       ],
       conflicts: reports.flatMap((report) => report.json.conflicts),
+      ...(reports.some((report) => report.json.takeovers) && {
+        takeovers: reports.flatMap((report) => report.json.takeovers ?? []),
+      }),
       notes: reports.flatMap((report) => report.json.notes),
       ...(opts.pendingDeployedHooks?.length
         ? { pendingDeployedHooks: opts.pendingDeployedHooks }

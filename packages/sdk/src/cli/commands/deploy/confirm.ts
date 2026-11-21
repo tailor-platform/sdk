@@ -20,6 +20,14 @@ export interface UnmanagedResource {
   resourceName: string;
 }
 
+/** A resource an application deployed, which a workspace config takes over or deletes. */
+export interface WorkspaceTakeover extends UnmanagedResource {
+  /** `update` for a resource the config has, `delete` for one it no longer has. */
+  action: "update" | "delete";
+  /** Name of the application that deployed it, when it records one. */
+  currentOwner?: string;
+}
+
 /** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
 export type ConfirmMode = "prompt" | "yes" | "dry-run";
 
@@ -208,6 +216,82 @@ async function confirmNameMismatch(
   }
 }
 
+/** A resource a workspace config takes over or deletes, with what deleting it deletes too. */
+export interface TakeoverConfirmation extends WorkspaceTakeover {
+  /** Whether deleting the resource itself needs confirmation, as for any important deletion. */
+  losesData?: boolean;
+  /** Deletions inside the deleted resource that need confirmation on their own. */
+  nestedDeletions?: ReadonlyArray<ImportantResourceDeletion>;
+}
+
+/**
+ * Confirm moving resources that applications deployed under the workspace config's management:
+ * taking over the ones the config has and deleting the ones it no longer has.
+ * @param takeovers - Resources to take over or delete, with what each delete deletes too
+ * @param mode - Whether to prompt, auto-confirm, or only report
+ * @returns Promise that resolves when confirmation completes
+ */
+export async function confirmWorkspaceTakeover(
+  takeovers: ReadonlyArray<TakeoverConfirmation>,
+  mode: ConfirmMode,
+): Promise<void> {
+  if (takeovers.length === 0) return;
+
+  const describe = (takeover: WorkspaceTakeover) =>
+    `    • ${styles.bold(takeover.resourceLabel)} ${styles.info(`"${takeover.resourceName}"`)}${
+      takeover.currentOwner ? styles.dim(` (application "${takeover.currentOwner}")`) : ""
+    }`;
+  const updates = takeovers.filter((takeover) => takeover.action === "update");
+  const deletes = takeovers.filter((takeover) => takeover.action === "delete");
+
+  logger.warn("Resources deployed by an application config were found:");
+  if (updates.length > 0) {
+    logger.log(`  ${styles.info("Taken over by this workspace config")}:`);
+    for (const takeover of updates) logger.log(describe(takeover));
+  }
+  if (deletes.length > 0) {
+    logger.log(`  ${styles.error("Deleted, since this workspace config does not have them")}:`);
+    for (const takeover of deletes) {
+      logger.log(describe(takeover));
+      for (const nested of takeover.nestedDeletions ?? []) {
+        logger.log(
+          `        - ${styles.bold(nested.resourceLabel)} ${styles.error(`"${nested.resourceName}"`)}`,
+        );
+      }
+    }
+  }
+  if (deletes.some((takeover) => takeover.losesData || takeover.nestedDeletions?.length)) {
+    logger.newline();
+    logger.log(styles.warning(DATA_LOSS_WARNING));
+  }
+
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
+    logger.success(
+      deletes.length > 0
+        ? "Taking over these resources and deleting the ones listed as deleted (--yes flag specified)..."
+        : "Moving these resources under this workspace config (--yes flag specified)...",
+      { mode: "plain" },
+    );
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message:
+      deletes.length > 0
+        ? "Take over these resources and delete the ones listed as deleted?"
+        : "Move these resources under this workspace config's management?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: "Apply cancelled: the workspace config did not take over these resources.",
+      suggestion: "Run the deploy again and confirm, or pass --yes.",
+    });
+  }
+}
+
 /**
  * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
@@ -259,9 +343,14 @@ export async function confirmUnmanagedResources(
 }
 
 export interface ImportantResourceDeletion {
+  resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
+  /** The service namespace the resource is in, when it is in one. */
+  parent?: { resourceType: ManagedResourceType; resourceName: string };
 }
+
+const DATA_LOSS_WARNING = "  Deleting these resources will permanently remove all associated data.";
 
 /**
  * Confirm deletion of important resources.
@@ -282,9 +371,7 @@ export async function confirmImportantResourceDeletion(
     logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.error(`"${r.resourceName}"`)}`);
   }
   logger.newline();
-  logger.log(
-    styles.warning("  Deleting these resources will permanently remove all associated data."),
-  );
+  logger.log(styles.warning(DATA_LOSS_WARNING));
 
   if (mode === "dry-run") return;
   if (mode === "yes") {

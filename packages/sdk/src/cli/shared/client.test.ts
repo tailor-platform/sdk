@@ -1,12 +1,19 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError, type Transport, type UnaryRequest } from "@connectrpc/connect";
+import {
+  Code,
+  ConnectError,
+  createContextValues,
+  type ContextValues,
+  type Transport,
+  type UnaryRequest,
+} from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
+  alreadyExistsExpected,
   closeConnectionPool,
   concurrencyLimitInterceptor,
   createPooledStreamTransport,
@@ -38,11 +45,15 @@ import {
   staticWebsiteNameFromPlaceholder,
   type AccessTokenSource,
   type OperatorClient,
+  type OperatorClientOptions,
 } from "./client";
 import { errorToJson } from "./error-json";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
+import { mockOperatorClient } from "./test-helpers/operator-client";
 import { listSourceFiles } from "./test-helpers/source-files";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { GetStaticWebsiteResponseSchema } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -617,8 +628,13 @@ describe("initOperatorClient", () => {
   });
 });
 
-describe("access token renewal in the operator client", () => {
+describe("requests through the operator client", () => {
   type Next = (req: UnaryRequest) => Promise<unknown>;
+  type CallOptions = {
+    stream?: boolean;
+    method?: (typeof OperatorService.method)[keyof typeof OperatorService.method];
+    clientOptions?: OperatorClientOptions;
+  };
 
   aroundEach(async (runTest) => {
     sent = [];
@@ -626,13 +642,8 @@ describe("access token renewal in the operator client", () => {
     vi.clearAllMocks();
   });
 
-  async function callThroughClient(
-    token: string,
-    server: Next,
-    stream = false,
-    options?: { renewToken?: boolean },
-  ) {
-    await initOperatorClient(token, undefined, options);
+  async function callThroughClient(token: string, server: Next, options: CallOptions = {}) {
+    await initOperatorClient(token, undefined, options.clientOptions);
     const connectNode = await import("@connectrpc/connect-node");
     const interceptors = vi.mocked(connectNode.createConnectTransport).mock.calls.at(-1)?.[0]
       .interceptors as Array<(next: Next) => Next>;
@@ -644,11 +655,12 @@ describe("access token renewal in the operator client", () => {
       },
     );
     return await call({
-      stream,
+      stream: options.stream ?? false,
       service: OperatorService,
-      method: OperatorService.method.getWorkflowExecution,
+      method: options.method ?? OperatorService.method.getWorkflowExecution,
       header: new Headers(),
       message: {},
+      contextValues: createContextValues(),
     } as unknown as UnaryRequest);
   }
 
@@ -716,7 +728,7 @@ describe("access token renewal in the operator client", () => {
     const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
 
     await expect(
-      callThroughClient("issued-6", server, false, { renewToken: false }),
+      callThroughClient("issued-6", server, { clientOptions: { renewToken: false } }),
     ).rejects.toMatchObject({ code: Code.Unauthenticated });
     expect(sent).toEqual(["Bearer issued-6"]);
     expect(source.current).not.toHaveBeenCalled();
@@ -728,7 +740,9 @@ describe("access token renewal in the operator client", () => {
     registerAccessTokenSource("issued-5", source);
     const server = vi.fn<Next>().mockRejectedValue(unauthenticated());
 
-    await expect(callThroughClient("issued-5", server, true)).rejects.toThrow("invalid token");
+    await expect(callThroughClient("issued-5", server, { stream: true })).rejects.toThrow(
+      "invalid token",
+    );
     expect(source.replaceRejected).not.toHaveBeenCalled();
   });
 
@@ -758,6 +772,31 @@ describe("access token renewal in the operator client", () => {
     await expect(callThroughClient("plain-token", server)).rejects.toThrow("invalid token");
     expect(sent).toEqual(["Bearer plain-token"]);
   });
+
+  test.each([
+    { case: "unreported by default", clientOptions: undefined, reports: 0 },
+    {
+      case: "reported when enabled",
+      clientOptions: { createsPlannedResources: true },
+      reports: 1,
+    },
+  ])(
+    "surfaces a first-attempt AlreadyExists from a retry-safe create, $case",
+    async ({ clientOptions, reports }) => {
+      const server = vi
+        .fn<Next>()
+        .mockRejectedValue(new ConnectError("already exists", Code.AlreadyExists));
+
+      await expect(
+        callThroughClient("plain-token", server, {
+          method: OperatorService.method.createSecretManagerVault,
+          clientOptions,
+        }),
+      ).rejects.toMatchObject({ code: Code.AlreadyExists });
+      expect(server).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(reports);
+    },
+  );
 });
 
 describe("getConsoleBaseUrl", () => {
@@ -984,10 +1023,12 @@ describe("retryInterceptor", () => {
    * Build a minimal unary request bound to a real OperatorService method so the
    * interceptor can read `method.name`/`method.output`/`method.idempotency`.
    * @param method - OperatorService method descriptor to bind the request to
+   * @param contextValues - Per-call context values the request carries
    * @returns A minimal unary request usable by the interceptor under test
    */
   function makeUnaryReq(
     method: (typeof OperatorService.method)[keyof typeof OperatorService.method],
+    contextValues: ContextValues = createContextValues(),
   ) {
     return {
       stream: false,
@@ -995,6 +1036,7 @@ describe("retryInterceptor", () => {
       method,
       header: new Headers(),
       message: {},
+      contextValues,
     } as unknown as UnaryRequest;
   }
 
@@ -1021,6 +1063,7 @@ describe("retryInterceptor", () => {
   }
 
   const okResponse = { stream: false, message: {} };
+  const plannedRetry = retryInterceptor({ createsPlannedResources: true });
 
   test("retries on Unavailable then succeeds", async () => {
     const next = vi
@@ -1316,7 +1359,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(next).toHaveBeenCalledTimes(2);
@@ -1325,15 +1368,17 @@ describe("retryInterceptor", () => {
     expect((res as { message: unknown }).message).toBeTruthy();
   });
 
-  test("does not swallow a first-attempt AlreadyExists (genuine conflict)", async () => {
+  test("surfaces a post-retry AlreadyExists from a client that does not create planned resources", async () => {
     const next = vi
       .fn()
-      .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     await expect(
       settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
-    ).rejects.toThrow("already exists");
-    expect(next).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow("duplicated key not allowed");
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
   });
 
   test("does not treat AlreadyExists as success for non-Create methods", async () => {
@@ -1343,7 +1388,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+      settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
@@ -1357,20 +1402,22 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("already exists", Code.AlreadyExists));
 
     await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
+      settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.createIdPClient))),
     ).rejects.toThrow("already exists");
     expect(next).toHaveBeenCalledTimes(2);
   });
 
-  test("routes a first-attempt AlreadyExists from a retry-safe create to error tracking, then surfaces it", async () => {
+  test("surfaces a first-attempt AlreadyExists the call expects without error tracking", async () => {
     const next = vi
       .fn()
-      .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
+      .mockRejectedValueOnce(new ConnectError("secret already exists", Code.AlreadyExists));
+    const req = makeUnaryReq(
+      OperatorService.method.createSecretManagerSecret,
+      createContextValues().set(alreadyExistsExpected, true),
+    );
 
-    await expect(
-      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
-    ).rejects.toThrow("duplicated key not allowed");
-    expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
+    await expect(settle(plannedRetry(next)(req))).rejects.toThrow("secret already exists");
+    expect(vi.mocked(reportCrash)).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalledTimes(1);
   });
 
@@ -1386,7 +1433,7 @@ describe("retryInterceptor", () => {
         .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
       await expect(
-        settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
+        settle(plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType))),
       ).rejects.toThrow("duplicated key not allowed");
       expect(vi.mocked(reportCrash)).toHaveBeenCalledTimes(1);
       expect(next).toHaveBeenCalledTimes(2);
@@ -1401,7 +1448,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(res.stream).toBe(false);
@@ -1416,7 +1463,7 @@ describe("retryInterceptor", () => {
       .mockRejectedValueOnce(new ConnectError("duplicated key not allowed", Code.AlreadyExists));
 
     const res = await settle(
-      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
+      plannedRetry(next)(makeUnaryReq(OperatorService.method.createTailorDBType)),
     );
 
     expect(res.stream).toBe(false);
@@ -1864,11 +1911,9 @@ describe("staticWebsiteNameFromPlaceholder", () => {
 
 describe("resolveStaticWebsiteUrls", () => {
   function makeClient(
-    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+    impl: (name: string) => Promise<MessageInitShape<typeof GetStaticWebsiteResponseSchema>>,
   ): OperatorClient {
-    return {
-      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({ getStaticWebsite: (request) => impl(request.name ?? "") });
   }
 
   test("resolves :url patterns to fetched URLs", async () => {
@@ -2006,10 +2051,9 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("looks up a site once even when multiple values reference it", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
 
     const resolved = await resolveStaticWebsiteUrls(
       client,
@@ -2019,14 +2063,13 @@ describe("resolveStaticWebsiteUrls", () => {
     );
 
     expect(resolved).toEqual(["https://site.example.com", "https://site.example.com/callback"]);
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 
   test("reuses a lookup from a shared siteLookupCache instead of calling getStaticWebsite again", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
     const siteLookupCache: NonNullable<
       Parameters<typeof resolveStaticWebsiteUrls>[4]
     >["siteLookupCache"] = new Map();
@@ -2043,17 +2086,15 @@ describe("resolveStaticWebsiteUrls", () => {
     );
 
     expect(resolved).toEqual(["https://site.example.com/callback"]);
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 
 describe("resolveStaticWebsiteUrlsInEnv", () => {
   function makeClient(
-    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+    impl: (name: string) => Promise<MessageInitShape<typeof GetStaticWebsiteResponseSchema>>,
   ): OperatorClient {
-    return {
-      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({ getStaticWebsite: (request) => impl(request.name ?? "") });
   }
 
   test("resolves :url values and leaves every other value untouched", async () => {
@@ -2077,14 +2118,13 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
   });
 
   test("returns the record as-is without a lookup when no value is a placeholder", async () => {
-    const getStaticWebsite = vi.fn();
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({ getStaticWebsite: {} });
     const env = { API_URL: "https://literal.example.com", RETRIES: 3 };
 
     const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", env);
 
     expect(resolved).toBe(env);
-    expect(getStaticWebsite).not.toHaveBeenCalled();
+    expect(client.getStaticWebsite).not.toHaveBeenCalled();
   });
 
   test("keeps the placeholder instead of dropping the key when the site is missing", async () => {
@@ -2162,10 +2202,9 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
   });
 
   test("looks up a site once even when multiple env keys reference it", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
 
     const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
       SITE_URL: "my-site:url",
@@ -2176,7 +2215,7 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
       SITE_URL: "https://site.example.com",
       CALLBACK_URL: "https://site.example.com/callback",
     });
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 

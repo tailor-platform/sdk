@@ -1,12 +1,18 @@
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
-import { applyApplication, recomposeApplication, type planApplication } from "./application";
+import {
+  applicationLabelLimitError,
+  applyApplication,
+  recomposeApplication,
+  type ApplicationLabelRejection,
+  type planApplication,
+} from "./application";
 import { applyAuth, type planAuth } from "./auth";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
-import { withMetadataWriteBatch } from "./label";
+import { type DeployOwner, withMetadataWriteBatch } from "./label";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -32,6 +38,8 @@ export interface TailorDBMaintenance extends MaintenanceReport {
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
+  /** Owner of the resources the deployment manages. */
+  readonly owner: DeployOwner;
   /**
    * Whether every resource is force-reapplied because an owned resource's
    * `sdk-version` label mismatches the running SDK. Computed once per deploy
@@ -58,7 +66,7 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application" | "forceApplyAll">;
+export type PlanResults = Omit<PlannedDeployment, "application" | "owner" | "forceApplyAll">;
 
 /**
  * Resource kinds whose plan cannot change between a deploy's first plan and
@@ -77,7 +85,12 @@ export type ReusablePlanKind =
   | "auth";
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
-  const { application: _application, forceApplyAll: _forceApplyAll, ...results } = deployment;
+  const {
+    application: _application,
+    owner: _owner,
+    forceApplyAll: _forceApplyAll,
+    ...results
+  } = deployment;
   return results;
 }
 
@@ -196,27 +209,32 @@ async function releaseMaintenanceModes(
   return maintenance;
 }
 
+/** What {@link applyRemainingResources} returns after applying the remaining resources. */
+export type RemainingApplyResult = {
+  /** Maintenance windows of the applications whose TailorDB migrations ran, in deploy order. */
+  maintenance: TailorDBMaintenance[];
+  /** Applications whose labels the platform rejected for their count. */
+  labelRejections: ApplicationLabelRejection[];
+};
+
 /**
  * Apply every resource kind not covered by {@link applyPrerequisiteResources}.
  * @param client - Operator client instance
- * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
- * @returns Maintenance windows of the applications whose TailorDB migrations ran, in deploy order
+ * @returns Maintenance windows and rejected application labels
  */
 export async function applyRemainingResources(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<TailorDBMaintenance[]> {
+): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
+  const labelRejections: ApplicationLabelRejection[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
-    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(
-      client,
-      workspaceId,
-      deployments,
+    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
       held,
-    );
+      labelRejections,
+    });
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
     throw error;
@@ -225,24 +243,32 @@ export async function applyRemainingResources(
   const order = new Map(
     deployments.map((deployment, index) => [deployment.application.name, index]),
   );
-  return [...maintenance, ...released].toSorted(
-    (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
-  );
+  return {
+    maintenance: [...maintenance, ...released].toSorted(
+      (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
+    ),
+    labelRejections,
+  };
 }
+
+type RemainingApplyOutcomes = {
+  held: HeldMaintenanceMode[];
+  labelRejections: ApplicationLabelRejection[];
+};
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
-  held: HeldMaintenanceMode[],
+  outcomes: RemainingApplyOutcomes,
 ): Promise<TailorDBMaintenance[]> {
+  const { held, labelRejections } = outcomes;
   const step = makeStep(deployments);
   const maintenance: TailorDBMaintenance[] = [];
 
   await withMetadataWriteBatch(client, async (applyClient) => {
     await withSpan("apply.createUpdateServices", async () => {
       await step("apply.functionRegistry.createUpdate", (d) =>
-        applyFunctionRegistry(applyClient, workspaceId, d.functionRegistry, "create-update"),
+        applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
       );
       await step("apply.tailorDB.createUpdate", async (d) => {
         const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
@@ -269,9 +295,9 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
     });
 
     await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment(deployments, (d) =>
-        applyApplication(applyClient, d.app, "create-update"),
-      );
+      await forEachDeployment(deployments, async (d) => {
+        labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+      });
     });
 
     await withSpan("apply.createUpdateDependentServices", async () => {
@@ -325,7 +351,7 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
 
   await withSpan("apply.cleanup", async () => {
     await forEachDeployment(deployments, (d) =>
-      applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
+      applyFunctionRegistry(client, d.functionRegistry, "delete"),
     );
   });
   return maintenance;
@@ -338,15 +364,14 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
  * separately instead, so it can rebuild between the last two when a static
  * website was just created.
  * @param client - Operator client instance
- * @param workspaceId - Target workspace ID
  * @param deployments - Planned deployments to apply
  */
 export async function applyDeploymentPlans(
   client: OperatorClient,
-  workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
   await preflightAllTailorDB(client, deployments);
   await applyPrerequisiteResources(client, deployments);
-  await applyRemainingResources(client, workspaceId, deployments);
+  const { labelRejections } = await applyRemainingResources(client, deployments);
+  if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
 }

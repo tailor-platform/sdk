@@ -1,6 +1,8 @@
 import {
+  isWorkspaceManaged,
   resourceTrn,
   sdkAppIdLabelKey,
+  sdkManagedLabelKey,
   sdkNameLabelKey,
   sdkVersionLabelKey,
   writeMetadataLabels,
@@ -33,22 +35,26 @@ export async function checkVaultManaged(
   const trn = resourceTrn(workspaceId, "vault", vaultName);
   const notManaged = { isManaged: false, trn, existingLabels: {} };
 
-  let owner: string | undefined;
   let allLabels: Record<string, string>;
   try {
     const { metadata } = await client.getMetadata({ trn });
     allLabels = metadata?.labels ?? {};
-    owner = allLabels[sdkNameLabelKey];
   } catch {
     // If metadata fetch fails (e.g., vault doesn't exist yet), proceed silently.
     // The actual operation will surface the appropriate error.
     return notManaged;
   }
 
-  if (!owner) return notManaged;
+  const owner = allLabels[sdkNameLabelKey];
+  const manager = owner
+    ? `defineSecretManager() in tailor.config.ts (owner: "${owner}")`
+    : isWorkspaceManaged(allLabels)
+      ? "the workspace config"
+      : undefined;
+  if (!manager) return notManaged;
 
   logger.warn(
-    `Vault "${vaultName}" is managed by defineSecretManager() in tailor.config.ts (owner: "${owner}"). ` +
+    `Vault "${vaultName}" is managed by ${manager}. ` +
       `Changes made via CLI may conflict with the config on the next apply.`,
   );
 
@@ -62,9 +68,10 @@ export async function checkVaultManaged(
  * `checkVaultManaged` saw: anything written since then is kept, and only the
  * ownership labels are removed.
  *
- * That includes the app id, which decides ownership on its own: leaving it
- * behind would keep the vault SDK-owned, and the next deploy of a config that
- * no longer declares it would delete the vault and every secret in it.
+ * That includes the app id and the workspace mark, each of which decides
+ * ownership on its own: leaving one behind would keep the vault SDK-owned, and
+ * the next deploy of a config that no longer declares it would delete the vault
+ * and every secret in it.
  * @param params - Client and TRN from the checkVaultManaged result
  * @param params.client - Operator client used to update vault metadata
  * @param params.trn - TRN of the vault resource
@@ -76,7 +83,7 @@ export async function releaseVaultOwnership(params: {
   const { client, trn } = params;
   await writeMetadataLabels(client, {
     trn,
-    remove: [sdkNameLabelKey, sdkVersionLabelKey, sdkAppIdLabelKey],
+    remove: [sdkNameLabelKey, sdkVersionLabelKey, sdkAppIdLabelKey, sdkManagedLabelKey],
   });
   logger.info(
     "Config ownership has been removed from this vault. " +

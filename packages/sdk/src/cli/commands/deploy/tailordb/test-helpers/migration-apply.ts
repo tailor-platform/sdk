@@ -10,6 +10,7 @@ import {
 import {
   mockOperatorClient,
   type OperatorClientMocks,
+  withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { tailorDBPlanResultContext } from "../../test-helpers/plan-results";
 import { detectPendingMigrations, type updateMigrationLabel } from "../migration";
@@ -65,7 +66,7 @@ export function createMockClient<K extends keyof OperatorClient = never>(
     deleteWorkflowJobFunction: {},
     deleteFunctionRegistry: {},
   });
-  return Object.assign(client, overrides && mockOperatorClient(overrides));
+  return withOperatorClientMocks(client, overrides);
 }
 
 type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
@@ -154,7 +155,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     createMockClient: <K extends keyof OperatorClient = never>(
       overrides?: OperatorClientMocks<K>,
     ) =>
-      Object.assign(
+      withOperatorClientMocks(
         createMockClient({
           getMetadata: async () => ({
             metadata: {
@@ -183,7 +184,7 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
             return {};
           },
         }),
-        overrides && mockOperatorClient(overrides),
+        overrides,
       ),
   };
 }
@@ -315,7 +316,7 @@ export function createPlanResult(options: PlanResultOptions = {}): TailorDBPlanR
       workspaceId: WORKSPACE_ID,
       application: {
         name: APP_NAME,
-        authService: { config: { name: "auth", machineUsers: { migrator: {} } } },
+        authServices: [{ config: { name: "auth", machineUsers: { migrator: {} } } }],
         ...options.application,
       } as Application,
       tailorDBInputs: options.local

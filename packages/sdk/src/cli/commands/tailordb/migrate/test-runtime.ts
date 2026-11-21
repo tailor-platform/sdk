@@ -27,6 +27,7 @@ import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
 import { type RecoveryContext } from "#/cli/shared/args";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
@@ -730,7 +731,7 @@ export async function deleteExistingUserProfileConfig(
   state: RuntimeState,
   targetWorkspaceId: string,
 ): Promise<void> {
-  const auth = state.loaded.application.authService;
+  const auth = soleAuthService(state.loaded.application);
   if (!auth) return;
   const namespaceName = auth.config.name;
   const existing = await getOrNull(() =>

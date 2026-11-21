@@ -46,7 +46,7 @@ import {
   findTemporaryWorkflowId,
 } from "#/cli/shared/temporary-workflow";
 import { formatWaitError } from "#/cli/shared/wait-error";
-import { resourceTrn } from "../label";
+import { type DeployOwner, resourceTrn } from "../label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type {
   CreatedTemporaryWorkflow,
@@ -88,8 +88,8 @@ export interface LongRunningMigrationOptions {
   namespace: string;
   migrationNumber: number;
   invoker: AuthInvoker;
-  appName: string;
-  appId: string | undefined;
+  /** Owner whose labels the migration's temporary resources carry. */
+  owner: DeployOwner;
   /** Whether the migrating namespace is in maintenance mode. */
   maintenanceMode: boolean;
   /** Called once no other execution of the migration is active, before a new one is created. */
@@ -151,8 +151,7 @@ export function formatMigrationExecutionsHint(
  * @param workspaceId - Workspace ID
  * @param name - Function registry name
  * @param code - Bundled script content
- * @param appName - Owning application name for the resource's labels
- * @param appId - Owning application id, when known
+ * @param owner - Owner whose labels the resource carries
  * @param mode - Whether the function is new or replaces an existing one's content
  */
 async function uploadMigrationFunction(
@@ -160,8 +159,7 @@ async function uploadMigrationFunction(
   workspaceId: string,
   name: string,
   code: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   mode: "create" | "update" = "create",
 ): Promise<void> {
   await uploadTemporaryFunction({
@@ -169,8 +167,7 @@ async function uploadMigrationFunction(
     workspaceId,
     name,
     code,
-    appName,
-    appId,
+    owner,
     mode,
     description: "Temporary function for a TailorDB migration",
     prelude: `globalThis.console.log(${JSON.stringify(MIGRATION_SCRIPT_STARTED_LOG)});\n`,
@@ -218,8 +215,8 @@ interface CreateMigrationWorkflowParams {
   name: string;
   /** Job functions to create on the uploaded function, the main one included. */
   jobFunctionNames: readonly string[];
-  appName: string;
-  appId: string | undefined;
+  /** Owner whose labels the migration's temporary resources carry. */
+  owner: DeployOwner;
   /** Extra labels for the workflow. */
   workflowLabels?: Record<string, string>;
 }
@@ -272,8 +269,7 @@ export function migrationWorkflowResourceName(namespace: string, migrationNumber
 export async function executeMigrationAsWorkflow(
   options: MainMigrationWorkflowOptions,
 ): Promise<LongRunningMigrationResult> {
-  const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId } =
-    options;
+  const { client, workspaceId, code, namespace, migrationNumber, invoker, owner } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const migrationLabel = `${namespace}/${formatMigrationNumber(migrationNumber)}`;
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
@@ -295,9 +291,9 @@ export async function executeMigrationAsWorkflow(
   let workflowId: string;
   let executionIdsBeforeStart: ReadonlySet<string>;
   try {
-    await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
+    await uploadMigrationFunction(client, workspaceId, name, code, owner);
     workflowId = await createMigrationWorkflow(
-      { client, workspaceId, name, jobFunctionNames: [name], appName, appId },
+      { client, workspaceId, name, jobFunctionNames: [name], owner },
       created,
     );
     executionIdsBeforeStart = new Set(
@@ -1210,8 +1206,7 @@ async function waitForSteps(
 export async function executeMigrationStepsAsWorkflow(
   options: MigrationStepsWorkflowOptions,
 ): Promise<MigrationStepsWorkflowResult> {
-  const { client, workspaceId, code, namespace, migrationNumber, invoker, appName, appId, order } =
-    options;
+  const { client, workspaceId, code, namespace, migrationNumber, invoker, owner, order } = options;
   const name = migrationWorkflowResourceName(namespace, migrationNumber);
   const runnerName = migrationStepRunnerName(name);
   const jobFunctionNames = [runnerName, name];
@@ -1245,7 +1240,7 @@ export async function executeMigrationStepsAsWorkflow(
       };
     }
     if (execution?.status === WorkflowExecution_Status.FAILED && planUnchanged) {
-      await uploadMigrationFunction(client, workspaceId, name, code, appName, appId, "update");
+      await uploadMigrationFunction(client, workspaceId, name, code, owner, "update");
       await client.resumeWorkflowExecution({ workspaceId, executionId: execution.id });
       notify(
         "info",
@@ -1284,15 +1279,14 @@ export async function executeMigrationStepsAsWorkflow(
   const created: CreatedTemporaryWorkflow = {};
   let workflowId: string;
   try {
-    await uploadMigrationFunction(client, workspaceId, name, code, appName, appId);
+    await uploadMigrationFunction(client, workspaceId, name, code, owner);
     workflowId = await createMigrationWorkflow(
       {
         client,
         workspaceId,
         name,
         jobFunctionNames,
-        appName,
-        appId,
+        owner,
         workflowLabels: { [MIGRATION_PLAN_LABEL_KEY]: plan },
       },
       created,

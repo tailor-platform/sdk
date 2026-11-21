@@ -89,7 +89,7 @@ async function loadDeployedTarget(
 ): Promise<LoadedTarget> {
   const name = target.application.name;
   const namespace = getApplicationAuthNamespace({
-    authService: target.application.authService,
+    authServices: target.application.authServices,
     config: target.config,
   });
   const [response, sites, gateways, oauth2Clients] = await Promise.all([

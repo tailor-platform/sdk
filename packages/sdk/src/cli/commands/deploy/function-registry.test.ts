@@ -1,8 +1,8 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -14,11 +14,14 @@ import {
   splitFunctionRegistryChanges,
   workflowJobFunctionName,
 } from "./function-registry";
-import { sdkNameLabelKey } from "./label";
+import { buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { BundledScripts, FunctionEntry } from "./function-registry";
+import type { DeployOwner } from "./label";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { FunctionRegistrySchema } from "@tailor-platform/tailor-proto/function_registry_pb";
 
 // Mock label.ts
 vi.mock("./label", async (importOriginal) => {
@@ -70,6 +73,7 @@ describe("naming functions", () => {
 describe("planFunctionRegistry", () => {
   const workspaceId = "test-workspace";
   const appName = "test-app";
+  const appOwner: DeployOwner = { kind: "application", name: appName, id: undefined };
 
   function createEntry(name: string, content = "// script"): FunctionEntry {
     return {
@@ -86,34 +90,34 @@ describe("planFunctionRegistry", () => {
       contentHash: string;
       label?: string;
       sdkVersion?: string;
+      appId?: string;
     }>,
   ): OperatorClient {
-    return {
-      listFunctionRegistries: vi.fn().mockResolvedValue({
-        functions: existingFunctions.map((f) => ({
+    return mockOperatorClient({
+      listFunctionRegistries: {
+        functions: existingFunctions.map((f): MessageInitShape<typeof FunctionRegistrySchema> => ({
           name: f.name,
           contentHash: f.contentHash,
         })),
         nextPageToken: "",
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      },
+      getMetadata: (request) => {
+        const trn = request.trn ?? "";
         // TRN format: trn:v1:workspace:{workspaceId}:function_registry:{name}
         // Name may contain colons (e.g., "resolver/ns/getUser"), so extract after the prefix
         const prefix = `trn:v1:workspace:${workspaceId}:function_registry:`;
         const name = trn.startsWith(prefix) ? trn.slice(prefix.length) : trn.split(":").pop();
         const func = existingFunctions.find((f) => f.name === name);
-        return {
-          metadata: {
-            labels: func?.label
-              ? {
-                  [sdkNameLabelKey]: func.label,
-                  "sdk-version": func.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
+        const labels: Record<string, string> = func?.label
+          ? {
+              [sdkNameLabelKey]: func.label,
+              "sdk-version": func.sdkVersion ?? "v1-0-0",
+              ...(func.appId ? { "sdk-app-id": `app-${func.appId}` } : {}),
+            }
+          : {};
+        return { metadata: { labels } };
+      },
+    });
   }
 
   describe("pagination", () => {
@@ -121,7 +125,7 @@ describe("planFunctionRegistry", () => {
       const client = createMockClient([]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(client.listFunctionRegistries).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: expect.any(Number) }),
@@ -138,7 +142,7 @@ describe("planFunctionRegistry", () => {
         createEntry("workflow-job/process-order"),
       ];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(result.changeSet.creates.map((c) => c.name).toSorted()).toEqual([
         "executor/user-created",
@@ -157,7 +161,7 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser", "// new script")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0]!.name).toBe("resolver/ns/getUser");
@@ -177,7 +181,7 @@ describe("planFunctionRegistry", () => {
           { name: "resolver/ns/getUser", contentHash: entry.contentHash, ...existingOverrides },
         ]);
 
-        const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+        const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
 
         expect(result.changeSet.updates).toHaveLength(1);
         expect(result.changeSet.updates[0]).not.toHaveProperty("forcedBySdkVersion");
@@ -198,7 +202,7 @@ describe("planFunctionRegistry", () => {
         },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged.map((change) => change.name)).toEqual([
@@ -217,12 +221,60 @@ describe("planFunctionRegistry", () => {
         },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
 
-      expect(result.metadataUpdates.map((update) => update.name)).toEqual(["resolver/ns/getUser"]);
-      expect(result.metadataUpdates[0]!.metaRequest.labels).toMatchObject({
-        "sdk-version": "v1-0-0",
-      });
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({
+            labels: expect.objectContaining({ "sdk-version": "v1-0-0" }),
+          }),
+        },
+      ]);
+    });
+
+    test("labels are refreshed for a function whose other SDK labels differ", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
+      ]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+        },
+      ]);
+    });
+
+    test("for a workspace config, moves the functions an application deployed without listing each one", async () => {
+      const entry = createEntry("resolver/ns/getUser");
+      const client = createMockClient([
+        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "shop", appId: "a" },
+        { name: "resolver/ns/gone", contentHash: "old", label: "shop", appId: "a" },
+      ]);
+
+      const result = await planFunctionRegistry(client, workspaceId, { kind: "workspace" }, [
+        entry,
+      ]);
+
+      expect(result.changeSet.updates).toEqual([]);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "resolver/ns/getUser",
+          labelRefresh: expect.objectContaining({ trn: expect.any(String) }),
+        },
+      ]);
+      expect(result.changeSet.deletes.map(({ name }) => name)).toEqual(["resolver/ns/gone"]);
+      expect(result.takeovers).toEqual([]);
     });
 
     test("labels are left alone when content and sdk version both match", async () => {
@@ -231,9 +283,9 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
 
-      expect(result.metadataUpdates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([{ name: "resolver/ns/getUser" }]);
     });
 
     test("existing function is updated even when content hash matches", async () => {
@@ -242,7 +294,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
@@ -263,7 +315,7 @@ describe("planFunctionRegistry", () => {
       // Only getUser in entries (listUsers removed)
       const entries = [existingEntry];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.unchanged).toHaveLength(1);
@@ -281,7 +333,7 @@ describe("planFunctionRegistry", () => {
         { name: "resolver/ns/unmanaged", contentHash: "hash" }, // No label
       ]);
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, []);
 
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("resolver/ns/mine");
@@ -296,12 +348,12 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(result.unmanaged).toEqual([
         {
           resourceType: "function_registry",
-          resourceLabel: "Function registry",
+          resourceLabel: "Function",
           resourceName: "resolver/ns/getUser",
         },
       ]);
@@ -313,12 +365,12 @@ describe("planFunctionRegistry", () => {
       ]);
       const entries = [createEntry("resolver/ns/getUser")];
 
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, entries);
+      const result = await planFunctionRegistry(client, workspaceId, appOwner, entries);
 
       expect(result.conflicts).toEqual([
         {
           resourceType: "function_registry",
-          resourceLabel: "Function registry",
+          resourceLabel: "Function",
           resourceName: "resolver/ns/getUser",
           currentOwner: "other-app",
         },
@@ -332,7 +384,7 @@ describe("planFunctionRegistry", () => {
       const client = createMockClient([
         { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: appName },
       ]);
-      const first = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+      const first = await planFunctionRegistry(client, workspaceId, appOwner, [entry]);
       expect(client.listFunctionRegistries).toHaveBeenCalledTimes(1);
       expect(first.changeSet.unchanged).toHaveLength(1);
       expect(first.changeSet.updates).toHaveLength(0);
@@ -343,8 +395,7 @@ describe("planFunctionRegistry", () => {
       const second = await planFunctionRegistry(
         client,
         workspaceId,
-        appName,
-        undefined,
+        appOwner,
         [rebuiltEntry],
         first.existingMap,
       );
@@ -403,13 +454,13 @@ describe("splitFunctionRegistryChanges", () => {
 
 describe("applyFunctionRegistry phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      createFunctionRegistry: vi.fn().mockResolvedValue({}),
-      updateFunctionRegistry: vi.fn().mockResolvedValue({}),
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      createFunctionRegistry: {},
+      updateFunctionRegistry: {},
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
   }
 
   function createMockPlanResult() {
@@ -424,6 +475,7 @@ describe("applyFunctionRegistry phase separation", () => {
         creates: [
           {
             name: "resolver/ns/create-test",
+            workspaceId: "test-workspace",
             entry,
             metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
@@ -431,6 +483,7 @@ describe("applyFunctionRegistry phase separation", () => {
         updates: [
           {
             name: "resolver/ns/update-test",
+            workspaceId: "test-workspace",
             entry,
             metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
@@ -446,7 +499,6 @@ describe("applyFunctionRegistry phase separation", () => {
         isEmpty: () => false,
         lines: () => [],
       },
-      metadataUpdates: [],
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
@@ -457,7 +509,7 @@ describe("applyFunctionRegistry phase separation", () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+    await applyFunctionRegistry(client, planResult, "create-update");
 
     // Creates should call createFunctionRegistry + setMetadata
     expect(client.createFunctionRegistry).toHaveBeenCalledTimes(1);
@@ -468,41 +520,22 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
   });
 
-  test("create-update phase writes only labels for metadata updates without uploading", async () => {
+  test("delete phase does not write labels for a label refresh", async () => {
     const client = createMockClientWithSpies();
     const planResult = {
       ...createMockPlanResult(),
-      changeSet: { ...createMockPlanResult().changeSet, creates: [], updates: [] },
-      metadataUpdates: [
-        {
-          name: "resolver/ns/refresh-test",
-          metaRequest: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
-        },
-      ],
+      changeSet: {
+        ...createMockPlanResult().changeSet,
+        unchanged: [
+          {
+            name: "resolver/ns/refresh-test",
+            labelRefresh: { trn: "trn:refresh", labels: { "sdk-version": "v2-0-0" } },
+          },
+        ],
+      },
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
-
-    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
-    expect(client.setMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({
-        trn: "trn:refresh",
-        labels: expect.objectContaining({ "sdk-version": "v2-0-0" }),
-      }),
-    );
-  });
-
-  test("delete phase does not write labels for metadata updates", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = {
-      ...createMockPlanResult(),
-      metadataUpdates: [
-        { name: "resolver/ns/refresh-test", metaRequest: { trn: "trn:refresh", labels: {} } },
-      ],
-    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
-
-    await applyFunctionRegistry(client, "test-workspace", planResult, "delete");
+    await applyFunctionRegistry(client, planResult, "delete");
 
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
@@ -511,7 +544,7 @@ describe("applyFunctionRegistry phase separation", () => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "delete");
+    await applyFunctionRegistry(client, planResult, "delete");
 
     expect(client.deleteFunctionRegistry).toHaveBeenCalledTimes(1);
     expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
@@ -526,38 +559,37 @@ describe("applyFunctionRegistry phase separation", () => {
 
   test("delete phase treats a function that is already gone as deleted", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
-      new ConnectError("not found", Code.NotFound),
-    );
+    client.deleteFunctionRegistry.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     await expect(
-      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
+      applyFunctionRegistry(client, createMockPlanResult(), "delete"),
     ).resolves.toBeUndefined();
   });
 
   test("delete phase still reports other delete failures", async () => {
     const client = createMockClientWithSpies();
-    vi.mocked(client.deleteFunctionRegistry).mockRejectedValue(
+    client.deleteFunctionRegistry.mockRejectedValue(
       new ConnectError("denied", Code.PermissionDenied),
     );
 
-    await expect(
-      applyFunctionRegistry(client, "test-workspace", createMockPlanResult(), "delete"),
-    ).rejects.toThrow("denied");
+    await expect(applyFunctionRegistry(client, createMockPlanResult(), "delete")).rejects.toThrow(
+      "denied",
+    );
   });
 
   test("uploads functions concurrently in the create-update phase", async () => {
     const probe = createConcurrencyProbe();
-    const client = {
-      createFunctionRegistry: vi.fn().mockImplementation(probe.run),
-      updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      createFunctionRegistry: probe.run,
+      updateFunctionRegistry: probe.run,
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
 
     const changeOf = (name: string) => ({
       name,
+      workspaceId: "test-workspace",
       entry: {
         name,
         scriptContent: "// script",
@@ -567,7 +599,6 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
-      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b", "create-c"].map(changeOf),
         updates: ["update-a", "update-b", "update-c"].map(changeOf),
@@ -582,7 +613,7 @@ describe("applyFunctionRegistry phase separation", () => {
       resourceOwners: new Set<string>(),
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+    await applyFunctionRegistry(client, planResult, "create-update");
 
     expect(client.createFunctionRegistry).toHaveBeenCalledTimes(3);
     expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(3);
@@ -593,22 +624,23 @@ describe("applyFunctionRegistry phase separation", () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     let releaseFirstCreate!: () => void;
     let releaseSecondCreate!: () => void;
-    const createFunctionRegistry = vi
-      .fn()
-      .mockImplementationOnce(() => new Promise<void>((resolve) => (releaseFirstCreate = resolve)))
+    const client = mockOperatorClient({
+      createFunctionRegistry: {},
+      updateFunctionRegistry: {},
+      deleteFunctionRegistry: {},
+      setMetadata: {},
+      getMetadata: { metadata: { labels: {} } },
+    });
+    client.createFunctionRegistry
       .mockImplementationOnce(
-        () => new Promise<void>((resolve) => (releaseSecondCreate = resolve)),
+        () => new Promise((resolve) => (releaseFirstCreate = () => resolve({}))),
+      )
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (releaseSecondCreate = () => resolve({}))),
       );
-    const updateFunctionRegistry = vi.fn().mockResolvedValue({});
-    const client = {
-      createFunctionRegistry,
-      updateFunctionRegistry,
-      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-    } as unknown as OperatorClient;
     const changeOf = (name: string) => ({
       name,
+      workspaceId: "test-workspace",
       entry: {
         name,
         scriptContent: "// script",
@@ -618,7 +650,6 @@ describe("applyFunctionRegistry phase separation", () => {
       metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
-      metadataUpdates: [],
       changeSet: {
         creates: ["create-a", "create-b"].map(changeOf),
         updates: ["update-a"].map(changeOf),
@@ -633,17 +664,12 @@ describe("applyFunctionRegistry phase separation", () => {
       resourceOwners: new Set<string>(),
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-    const applyPromise = applyFunctionRegistry(
-      client,
-      "test-workspace",
-      planResult,
-      "create-update",
-    );
+    const applyPromise = applyFunctionRegistry(client, planResult, "create-update");
 
-    await vi.waitFor(() => expect(createFunctionRegistry).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(client.createFunctionRegistry).toHaveBeenCalledTimes(2));
     releaseFirstCreate();
     try {
-      await vi.waitFor(() => expect(updateFunctionRegistry).toHaveBeenCalledTimes(1), {
+      await vi.waitFor(() => expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(1), {
         timeout: 100,
       });
     } finally {
@@ -657,21 +683,22 @@ describe("applyFunctionRegistry phase separation", () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     try {
       const probe = createConcurrencyProbe();
-      const client = {
-        createFunctionRegistry: vi.fn().mockImplementation(probe.run),
-        updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
-        deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-        setMetadata: vi.fn().mockImplementation(probe.run),
+      const client = mockOperatorClient({
+        createFunctionRegistry: probe.run,
+        updateFunctionRegistry: probe.run,
+        deleteFunctionRegistry: {},
+        setMetadata: probe.run,
         // The real client limits every RPC, reads included, so the label
         // re-read has to count towards the cap this asserts.
-        getMetadata: vi.fn().mockImplementation(async () => {
+        getMetadata: async () => {
           await probe.run();
           return { metadata: { labels: {} } };
-        }),
-      } as unknown as OperatorClient;
+        },
+      });
 
       const changeOf = (name: string) => ({
         name,
+        workspaceId: "test-workspace",
         entry: {
           name,
           scriptContent: "// script",
@@ -681,7 +708,6 @@ describe("applyFunctionRegistry phase separation", () => {
         metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
       });
       const planResult = {
-        metadataUpdates: [],
         changeSet: {
           creates: [],
           updates: ["update-a", "update-b", "update-c", "update-d"].map(changeOf),
@@ -696,7 +722,7 @@ describe("applyFunctionRegistry phase separation", () => {
         resourceOwners: new Set<string>(),
       } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
 
-      await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+      await applyFunctionRegistry(client, planResult, "create-update");
 
       expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(4);
       expect(probe.maxInFlight()).toBeLessThanOrEqual(2);
@@ -721,7 +747,7 @@ describe("collectFunctionEntries", () => {
     executorService?: {
       executors: Record<string, { name: string; operation: { kind: string } }>;
     };
-    authService?: { config: { name: string; hooks?: { beforeLogin?: unknown } } };
+    authServices?: Array<{ config: { name: string; hooks?: { beforeLogin?: unknown } } }>;
   }): Application {
     const app = {
       name: "test-app",
@@ -731,7 +757,7 @@ describe("collectFunctionEntries", () => {
       externalTailorDBNamespaces: [],
       resolverServices: overrides?.resolverServices ?? [],
       idpServices: [],
-      authService: overrides?.authService,
+      authServices: overrides?.authServices ?? [],
       executorService: overrides?.executorService,
       workflowService: undefined,
       staticWebsiteServices: [],
@@ -856,9 +882,7 @@ describe("collectFunctionEntries", () => {
     });
 
     const app = createMockApplication({
-      authService: {
-        config: { name: authName, hooks: { beforeLogin: {} } },
-      },
+      authServices: [{ config: { name: authName, hooks: { beforeLogin: {} } } }],
     });
 
     const entries = collectFunctionEntries(app, [], scripts);

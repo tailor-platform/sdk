@@ -15,8 +15,10 @@ import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
+  type DeployOwner,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -62,7 +64,13 @@ function toConcurrencyPolicyInit(
   return { maxConcurrentExecutions: policy.maxConcurrentExecutions };
 }
 
-function createRequest(
+/**
+ * Build the request that creates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The create request
+ */
+export function executionPolicyCreateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof CreateWorkflowJobFunctionExecutionPolicyRequestSchema> {
@@ -74,7 +82,13 @@ function createRequest(
   };
 }
 
-function updateRequest(
+/**
+ * Build the request that updates an execution policy.
+ * @param workspaceId - Workspace the policy belongs to
+ * @param policy - Execution policy from the config
+ * @returns The update request
+ */
+export function executionPolicyUpdateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof UpdateWorkflowJobFunctionExecutionPolicyRequestSchema> {
@@ -157,22 +171,20 @@ function validatePolicy(policy: ExecutionPolicyInstance): void {
  * declarations and current remote state.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param appName - Application name
- * @param appId - Application ID for ownership metadata
+ * @param owner - Owner of the resources the deploy manages
  * @param declared - Policies declared in the config (property name → instance)
  * @returns Planned execution policy changes
  */
 export async function planWorkflowJobFunctionExecutionPolicy(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   declared: Record<string, ExecutionPolicyInstance>,
 ) {
   const changeSet = createChangeSet<CreatePolicy, UpdatePolicy, DeletePolicy, ReplacePolicy>(
     "Workflow execution policies",
   );
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const declaredList = Object.values(declared);
   for (const policy of declaredList) {
@@ -204,7 +216,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     }
     seenNames.add(policy.name);
     const trn = resourceTrn(workspaceId, "workflow_job_function_execution_policy", policy.name);
-    desired.push({ policy, metaRequest: await buildMetaRequest({ trn, appName, appId }) });
+    desired.push({ policy, metaRequest: await buildMetaRequest({ trn, owner }) });
   }
 
   await diffKeyed({
@@ -212,11 +224,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     desired,
     existing: Object.entries(existing),
     keyOf: ({ policy }) => policy.name,
-    ...labeledResourceChecks(ownership, ({ policy }: DesiredPolicy) => ({
-      resourceType: "workflow_job_function_execution_policy",
-      resourceLabel: "Workflow execution policy",
-      resourceName: policy.name,
-    })),
+    ...labeledResourceChecks(ownership, "workflow_job_function_execution_policy"),
     // execution_policy_key is immutable after create; the platform requires
     // a delete-then-create in the same apply pass. Handled as `replaces`
     // (not delete + create) so the create phase does not race the delete.
@@ -227,7 +235,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
     isConfigUnchanged: ({ policy }, found) =>
       isRequestUnchanged(
         executionPolicyComparison,
-        updateRequest(workspaceId, policy),
+        executionPolicyUpdateRequest(workspaceId, policy),
         found.resource,
       ),
     create: ({ policy, metaRequest }) => ({ name: policy.name, workspaceId, policy, metaRequest }),
@@ -263,22 +271,23 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           executionPolicyName: replace.name,
         });
         await client.createWorkflowJobFunctionExecutionPolicy(
-          createRequest(replace.workspaceId, replace.policy),
+          executionPolicyCreateRequest(replace.workspaceId, replace.policy),
         );
         await writeMetadataLabels(client, replace.metaRequest);
       }),
       ...changeSet.creates.map(async (create) => {
         await client.createWorkflowJobFunctionExecutionPolicy(
-          createRequest(create.workspaceId, create.policy),
+          executionPolicyCreateRequest(create.workspaceId, create.policy),
         );
         await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateWorkflowJobFunctionExecutionPolicy(
-          updateRequest(update.workspaceId, update.policy),
+          executionPolicyUpdateRequest(update.workspaceId, update.policy),
         );
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.unchanged),
     ]);
   } else {
     await Promise.all(

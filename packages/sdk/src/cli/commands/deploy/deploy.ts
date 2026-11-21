@@ -18,15 +18,15 @@ import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { withSpan } from "#/cli/telemetry/index";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
-import { planApplication } from "./application";
+import { applicationLabelLimitError, planApplication } from "./application";
 import {
   applyPrerequisiteResources,
   applyRemainingResources,
   deploymentPlanResults,
   preflightAllTailorDB,
   type PlannedDeployment,
+  type RemainingApplyResult,
   type ReusablePlanKind,
-  type TailorDBMaintenance,
 } from "./apply-phases";
 import { planAuth } from "./auth";
 import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-scripts";
@@ -37,8 +37,12 @@ import {
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  confirmWorkspaceTakeover,
   type ConfirmMode,
+  type ImportantResourceDeletion,
   type MissingDependentApp,
+  type TakeoverConfirmation,
+  type WorkspaceTakeover,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
@@ -74,11 +78,21 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import {
+  applicationOwner,
+  buildMetaRequest,
+  type DeployOwner,
+  hasMatchingSdkVersion,
+  isOwnedBy,
+  resourceTrn,
+  sdkNameLabelKey,
+} from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   assertUniqueGlobalResourceNames,
   collectImportantResourceDeletions,
   collectOwnerConflicts,
+  collectTakeovers,
   collectUnmanagedResources,
   dropCrossDeploymentManagedDeletes,
   scheduleRenamedAppDeletes,
@@ -193,6 +207,7 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
  * different SDK version, in which case every resource is re-applied.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
+ * @param owner - Owner of the resources the deploy manages
  * @param application - Application being deployed
  * @param functionEntries - Function registry entries of the application
  * @returns True when an owned resource carries a different sdk-version label
@@ -200,16 +215,18 @@ export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
 export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
+  owner: DeployOwner,
   application: Readonly<Application>,
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
   const desiredLabels = (
     await buildMetaRequest({
       trn: resourceTrn(workspaceId, "application", application.name),
-      appName: application.name,
-      appId: application.id,
+      owner,
     })
   ).labels;
+  const managedByOwner = (labels: Record<string, string>) =>
+    owner.kind === "workspace" ? isOwnedBy(labels, owner) : labels[sdkNameLabelKey] === owner.name;
   const candidateTrns = new Set<string>();
 
   if (application.subgraphs.length > 0) {
@@ -227,9 +244,9 @@ export async function shouldForceApplyAll(
   application.idpServices.forEach((idp) => {
     candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
-  if (application.authService) {
-    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
-  }
+  application.authServices.forEach((authService) => {
+    candidateTrns.add(resourceTrn(workspaceId, "auth", authService.config.name));
+  });
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
     candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
@@ -258,7 +275,8 @@ export async function shouldForceApplyAll(
   const hasMismatch = results.some(
     (result) =>
       result.status === "fulfilled" &&
-      result.value?.labels[sdkNameLabelKey] === application.name &&
+      result.value != null &&
+      managedByOwner(result.value.labels) &&
       !hasMatchingSdkVersion(result.value.labels, desiredLabels),
   );
   if (hasMismatch) {
@@ -413,19 +431,16 @@ export function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, string | undefined> {
   const idpConfigNames = new Map<string, string | undefined>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
+      const label = MANAGED_RESOURCE_LABELS["auth.service"];
       throw CLIError({
         code: "AUTH_NAMESPACE_CONFLICT",
         message:
-          `Auth namespace "${name}" is defined by multiple config files with different IdP configs. ` +
-          `Auth namespace names must be unique across all configs in a single deploy.`,
+          `${label} "${name}" is defined by multiple config files with different IdP configs. ` +
+          `${label} names must be unique across all configs in a single deploy.`,
       });
     }
     idpConfigNames.set(name, idpConfigName);
@@ -437,11 +452,7 @@ export function collectPlannedMachineUsers(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const machineUsers = new Map<string, Set<string>>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const names = machineUsers.get(name) ?? new Set<string>();
     for (const machineUserName of Object.keys(authService.config.machineUsers ?? {})) {
@@ -513,12 +524,13 @@ async function planDeploymentTarget(
     workflowBuildResult?.usedJobNames ?? [],
   );
   const functionEntries = collectFunctionEntries(application, bundledWorkflowJobs, bundledScripts);
+  const owner = applicationOwner(application);
   // Reused as-is on a rebuild's replan -- see `PlannedDeployment.forceApplyAll`'s
   // doc comment for why recomputing it there is unsafe.
   const forceApplyAll = previous
     ? previous.forceApplyAll
     : await withSpan("plan.detectSdkVersionChange", () =>
-        shouldForceApplyAll(client, workspaceId, application, functionEntries),
+        shouldForceApplyAll(client, workspaceId, owner, application, functionEntries),
       );
 
   return withSpan("plan", async () => {
@@ -530,6 +542,7 @@ async function planDeploymentTarget(
       client,
       workspaceId,
       application,
+      owner,
       forRemoval: false,
       config,
       noSchemaCheck,
@@ -552,8 +565,7 @@ async function planDeploymentTarget(
       planFunctionRegistry(
         client,
         workspaceId,
-        application.name,
-        application.id,
+        owner,
         functionEntries,
         previous?.functionRegistry.existingMap,
       ),
@@ -607,8 +619,7 @@ async function planDeploymentTarget(
         planWorkflow(
           client,
           workspaceId,
-          application.name,
-          application.id,
+          owner,
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
@@ -630,8 +641,7 @@ async function planDeploymentTarget(
             planWorkflowJobFunctionExecutionPolicy(
               client,
               workspaceId,
-              application.name,
-              application.id,
+              owner,
               config.workflow?.executionPolicies ?? {},
             ),
           ),
@@ -642,6 +652,7 @@ async function planDeploymentTarget(
 
     return {
       application,
+      owner,
       forceApplyAll,
       functionRegistry,
       tailorDB,
@@ -678,6 +689,10 @@ export async function planDeploymentTargets(
   );
 }
 
+function deletionKey(resource: Pick<ImportantResourceDeletion, "resourceType" | "resourceName">) {
+  return JSON.stringify([resource.resourceType, resource.resourceName]);
+}
+
 function confirmationKey(deployment: PlannedDeployment, item: object): string {
   return JSON.stringify([deployment.application.name, item]);
 }
@@ -692,6 +707,7 @@ function collectConfirmations(
     checkpointRepairs: deployment.tailorDB.context.checkpointRepairs.filter(isNew),
     conflicts: collectOwnerConflicts(results).filter(isNew),
     unmanaged: collectUnmanagedResources(results).filter(isNew),
+    takeovers: collectTakeovers(results).filter(isNew),
     importantDeletions: collectImportantResourceDeletions(results).filter(isNew),
   };
 }
@@ -722,19 +738,54 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     mode,
   );
   await confirmMissingDependentApps(missingDependentApps, mode);
-  for (const { deployment, conflicts, unmanaged } of pending) {
-    await confirmOwnerConflict(
-      conflicts,
-      deployment.application.name,
-      mode,
-      deployment.application.id,
-    );
+  const remainingDeletions: ImportantResourceDeletion[] = [];
+  for (const { deployment, conflicts, unmanaged, takeovers, importantDeletions } of pending) {
+    const split = splitTakeoverDeletions(takeovers, importantDeletions);
+    remainingDeletions.push(...split.remaining);
+    if (deployment.owner.kind === "workspace") {
+      await confirmWorkspaceTakeover(split.takeovers, mode);
+    } else {
+      await confirmOwnerConflict(
+        conflicts,
+        deployment.application.name,
+        mode,
+        deployment.application.id,
+      );
+    }
     await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
   }
-  await confirmImportantResourceDeletion(
-    pending.flatMap((confirmations) => confirmations.importantDeletions),
-    mode,
+  await confirmImportantResourceDeletion(remainingDeletions, mode);
+}
+
+type SplitTakeoverDeletions = {
+  takeovers: TakeoverConfirmation[];
+  remaining: ImportantResourceDeletion[];
+};
+
+function splitTakeoverDeletions(
+  takeovers: ReadonlyArray<WorkspaceTakeover>,
+  importantDeletions: ReadonlyArray<ImportantResourceDeletion>,
+): SplitTakeoverDeletions {
+  const deletedByTakeover = new Set(
+    takeovers.filter(({ action }) => action === "delete").map(deletionKey),
   );
+  const covered = (deletion: ImportantResourceDeletion) =>
+    deletedByTakeover.has(deletionKey(deletion)) ||
+    (deletion.parent !== undefined && deletedByTakeover.has(deletionKey(deletion.parent)));
+  return {
+    takeovers: takeovers.map((takeover) => {
+      if (takeover.action !== "delete") return takeover;
+      const key = deletionKey(takeover);
+      return {
+        ...takeover,
+        losesData: importantDeletions.some((deletion) => deletionKey(deletion) === key),
+        nestedDeletions: importantDeletions.filter(
+          (deletion) => deletion.parent && deletionKey(deletion.parent) === key,
+        ),
+      };
+    }),
+    remaining: importantDeletions.filter((deletion) => !covered(deletion)),
+  };
 }
 
 /**
@@ -830,14 +881,13 @@ export function adjustApplicationForMigrationTest(
     return application;
   }
   const forBaseline = internalContext.migrationTestBaselines !== undefined;
-  const authService =
-    forBaseline && application.authService
-      ? { ...application.authService, userProfile: undefined }
-      : application.authService;
+  const authServices = forBaseline
+    ? application.authServices.map((authService) => ({ ...authService, userProfile: undefined }))
+    : application.authServices;
   const adjusted: Application = {
     ...application,
     executorService: forBaseline ? undefined : application.executorService,
-    authService,
+    authServices,
     staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
       ...website,
       customDomains: undefined,
@@ -979,7 +1029,7 @@ async function deployInternal(
               createMetadataLookupClient({
                 client,
                 workspaceId,
-                applications: planTargets.map(({ application }) => application),
+                owners: planTargets.map(({ application }) => applicationOwner(application)),
               }),
             );
       firstMetadataClient = metadataClient;
@@ -1078,7 +1128,7 @@ async function deployInternal(
     // the time env is read again below.
     await applyPrerequisiteResources(client, deployments);
 
-    let tailordbMaintenance: TailorDBMaintenance[];
+    let applied: RemainingApplyResult;
     if (needsUrlResolution) {
       logger.info(
         "A static website was just created; rebuilding so env resolves to its real URL before the rest of this deploy applies.",
@@ -1102,13 +1152,14 @@ async function deployInternal(
         deployments: rebuilt.deployments,
         confirmedDeployments: deployments,
       });
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, rebuilt.deployments);
+      applied = await applyRemainingResources(client, rebuilt.deployments);
     } else {
-      tailordbMaintenance = await applyRemainingResources(client, workspaceId, deployments);
+      applied = await applyRemainingResources(client, deployments);
     }
+    const { maintenance: tailordbMaintenance, labelRejections } = applied;
 
     const applications =
-      logger.jsonMode && !internalContext?.suppressResultOutput
+      logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
         ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
             (error: unknown) => {
               if (pendingDeployedHooks.length)
@@ -1139,6 +1190,7 @@ async function deployInternal(
           applications,
           profile: options?.profile,
         });
+    if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {

@@ -40,14 +40,18 @@ import {
   handleOptionalToRequiredError,
   isRequiredFieldNullValuesError,
 } from "#/cli/commands/tailordb/migrate/types";
-import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  resolveStaticWebsiteUrlsInEnv,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { isRequestUnchanged } from "../compare";
-import { resourceTrn, writeMetadataLabels } from "../label";
+import { resourceTrn, writeLabelRefreshes, writeMetadataLabels } from "../label";
 import { tailordbTypeComparison } from "./compare";
 import {
   clearMaintenanceModeRecord,
@@ -74,6 +78,7 @@ import {
   captureMigrationRestrictionState,
   deletedResources,
   deletePlannedTables,
+  deleteRemovedTables,
   executeSingleMigrationPostPhase,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
@@ -111,9 +116,15 @@ import {
   validateAndDetectMigrations,
   type ValidateAndDetectResult,
 } from "./migration-validation";
+import {
+  isRecreated,
+  type NamespacedEntry,
+  type planTailorDB,
+  type TailorDBChangeSet,
+  type TailorDBPlanResult,
+} from "./plan";
 import type { MigrationRunKind, PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { ApplyPhase } from "../types";
-import type { planTailorDB, TailorDBChangeSet, TailorDBPlanResult } from "./plan";
 
 function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
   return migrationCommandContext({
@@ -226,8 +237,7 @@ async function buildMigrationContextForScripts(
     ...(migrationContext.migrationRecoveryArgs
       ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
       : {}),
-    appName: migrationContext.application.name,
-    appId: migrationContext.application.id,
+    owner: migrationContext.owner,
     maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
     migrationHistoryIds,
@@ -345,6 +355,26 @@ async function validateTailorDBMigrationState(
       });
     }
   }
+  const unfinishedByNamespace = new Map(
+    [...validation.unfinishedRemovals].map(([namespace, { tableNames }]) => [
+      namespace,
+      new Set(tableNames),
+    ]),
+  );
+  const recreatedWithoutUnfinishedRemoval = result.changeSet.type.deletes.filter(
+    (del) =>
+      result.changeSet.type.creates.some(
+        (create) =>
+          create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+      ) && !unfinishedByNamespace.get(del.request.namespaceName ?? "")?.has(del.name),
+  );
+  if (recreatedWithoutUnfinishedRemoval.length > 0) {
+    throw CLIError({
+      code: "DEPLOY_PLAN_STALE",
+      message: `Tables to delete and create again changed after deployment planning: ${recreatedWithoutUnfinishedRemoval.map((del) => del.name).join(", ")}.`,
+      suggestion: "Run the deployment again to review the deletion.",
+    });
+  }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw CLIError({
       code: "DEPLOY_PLAN_STALE",
@@ -385,6 +415,7 @@ export async function preflightTailorDB(
  * Return a partially applied migration's tables to their Pre-phase shape after
  * its Post-phase stopped partway, so the next deploy finds the schema it resumes from.
  * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
  * @param phaseSettings - How this deploy's migration phases write table settings
@@ -393,6 +424,7 @@ export async function preflightTailorDB(
  */
 async function reapplyPrePhaseAfterPostPhaseFailure(
   client: OperatorClient,
+  workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
@@ -402,6 +434,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   try {
     await executeSingleMigrationPrePhase(
       client,
+      workspaceId,
       changeSet,
       migration,
       phaseSettings,
@@ -1116,7 +1149,10 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
  * than the final schema. Every other planned create and update in a migrating namespace
  * waits until every migration has committed: enforcing the final schema earlier could
- * apply a change whose migration has not run. Deletes are irreversible and stay last.
+ * apply a change whose migration has not run. Tables a pending migration removes or
+ * renames away have no planned create, so the workspace lacks them on a fresh replay;
+ * they are created here from the snapshot too, and the migration that removes them
+ * deletes them again. Planned deletes are irreversible and stay last.
  * @param flow - Migration flow
  * @returns `<namespace>/<table>` of the GraphQL permissions to apply once migrations settle
  */
@@ -1147,11 +1183,6 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       if (!namespaceName || !tableName) continue;
       const priorTable = flow.preMigrationSnapshots.get(namespaceName)?.tables[tableName];
       if (!priorTable) continue;
-      // A type some pending migration removes or renames away is created
-      // only when its re-adding migration runs; materializing it early
-      // would erase the removal boundary (the plan holds no delete entry
-      // for a name its final state keeps).
-      if (pending.deletedTables.get(namespaceName)?.has(tableName)) continue;
       // Recorded so the pre-phase GQL-permission fallback does not create
       // the type a second time.
       processedTables.created.add(namespacedTableKey(namespaceName, tableName));
@@ -1160,6 +1191,9 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
         namespaceName,
         tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
       });
+    }
+    for (const [namespaceName, removedTables] of pending.deletedTables) {
+      await createRemovedBaselineTables(flow, namespaceName, removedTables);
     }
     for (const update of changeSet.type.updates) {
       if (!isOutsideMigrations(flow, update.request.namespaceName)) continue;
@@ -1177,6 +1211,53 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
   return deferredGqlPermissionKeys;
+}
+
+/**
+ * Create the checkpoint's tables that a pending migration removes or renames away and the
+ * workspace lacks, which the plan does not create because the final schema omits them. A
+ * script that runs before the removing migration needs them, and so does every foreign key
+ * that references them.
+ * @param flow - Migration flow
+ * @param namespaceName - Migrating namespace
+ * @param removedTables - Tables some pending migration of the namespace removes or renames away
+ */
+async function createRemovedBaselineTables(
+  flow: MigrationFlow,
+  namespaceName: string,
+  removedTables: ReadonlySet<string>,
+): Promise<void> {
+  const { client, migrationContext, phaseSettings } = flow;
+  const snapshot = flow.preMigrationSnapshots.get(namespaceName);
+  const candidates = [...removedTables].filter(
+    (tableName) =>
+      snapshot?.tables[tableName] !== undefined &&
+      !processedTables.created.has(namespacedTableKey(namespaceName, tableName)),
+  );
+  if (!snapshot || candidates.length === 0) return;
+  const remoteTables = new Set(
+    (
+      await fetchAllTolerant(async (pageToken, maxPageSize) => {
+        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+          workspaceId: migrationContext.workspaceId,
+          namespaceName,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [tailordbTypes, nextPageToken];
+      })
+    ).map((type) => type.name),
+  );
+  for (const tableName of candidates) {
+    const priorTable = snapshot.tables[tableName];
+    if (!priorTable || remoteTables.has(tableName)) continue;
+    processedTables.created.add(namespacedTableKey(namespaceName, tableName));
+    await client.createTailorDBType({
+      workspaceId: migrationContext.workspaceId,
+      namespaceName,
+      tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
+    });
+  }
 }
 
 async function runPendingMigrations(
@@ -1257,6 +1338,7 @@ async function runPreMigrationPhase(
     await withSpan("apply.tailorDB.migration.prePhase", () =>
       executeSingleMigrationPrePhase(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,
@@ -1323,13 +1405,21 @@ async function runPostMigrationPhase(
   flow.timeline?.enter("postMigration");
   try {
     await withSpan("apply.tailorDB.migration.postPhase", () =>
-      executeSingleMigrationPostPhase(client, changeSet, migration, phaseSettings, attemptedTables),
+      executeSingleMigrationPostPhase(
+        client,
+        flow.migrationContext.workspaceId,
+        changeSet,
+        migration,
+        phaseSettings,
+        attemptedTables,
+      ),
     );
   } catch (error) {
     if (!rollsBackOnFailure && (inProgress || runsSteps)) {
       runLog.partial.set(migration.namespace, migration);
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,
@@ -1342,6 +1432,7 @@ async function runPostMigrationPhase(
     if (isRollbackSkippedWithRecord(failure)) {
       await reapplyPrePhaseAfterPostPhaseFailure(
         client,
+        flow.migrationContext.workspaceId,
         changeSet,
         migration,
         phaseSettings,
@@ -1569,7 +1660,13 @@ async function commitMigration(
   if (!capturedSettingsAreEarlierRestrictions) settleRestorationSettings();
 
   try {
-    await deletePlannedTables(client, changeSet, migration.namespace, deletedTables);
+    await deleteRemovedTables(
+      client,
+      changeSet,
+      migrationContext.workspaceId,
+      migration.namespace,
+      deletedTables,
+    );
   } catch (error) {
     const syncHint = formatNamespaceMigrationHint({
       ...deployCommandContext(migrationContext),
@@ -2186,12 +2283,20 @@ async function applyDeferredGqlPermissions(
   deferredKeys: ReadonlySet<string>,
 ): Promise<void> {
   const { client, changeSet } = flow;
+  const isDue = (entry: NamespacedEntry) => {
+    const key = `${entry.request.namespaceName}/${entry.name}`;
+    return (
+      deferredKeys.has(key) ||
+      (processedTables.gqlPermissionsRemovedByCleanup.has(key) &&
+        !processedTables.gqlPermissionsProcessed.has(key))
+    );
+  };
   await Promise.all([
     ...changeSet.gqlPermission.creates
-      .filter((create) => deferredKeys.has(`${create.request.namespaceName}/${create.name}`))
+      .filter(isDue)
       .map((create) => client.createTailorDBGQLPermission(create.request)),
     ...changeSet.gqlPermission.updates
-      .filter((update) => deferredKeys.has(`${update.request.namespaceName}/${update.name}`))
+      .filter(isDue)
       .map((update) => client.updateTailorDBGQLPermission(update.request)),
   ]);
 }
@@ -2219,11 +2324,13 @@ async function applyRemainingDeletions(
   await Promise.all(
     changeSet.gqlPermission.deletes
       .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
+      .filter((del) => !isRecreated(changeSet, del))
       .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
   await awaitAllSettledOrThrow(
     changeSet.type.deletes
       .filter((del) => !isDeleted(deletedResources.types, del))
+      .filter((del) => !isRecreated(changeSet, del))
       .map(async (del) => {
         await client.deleteTailorDBType(del.request);
         onTableDeleted(del);
@@ -2305,5 +2412,6 @@ async function executeServicesCreation(
       await writeMetadataLabels(client, create.metaRequest);
     }),
     ...changeSet.service.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
+    ...writeLabelRefreshes(client, changeSet.service.unchanged),
   ]);
 }

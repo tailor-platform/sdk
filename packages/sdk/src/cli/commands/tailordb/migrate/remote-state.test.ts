@@ -1,6 +1,6 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
@@ -12,12 +12,12 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { MigrationInProgress } from "./types";
 
 function clientWithLabels(labels: Record<string, string> | undefined): OperatorClient {
-  return {
+  return mockOperatorClient({
     getMetadata: async () => {
       if (!labels) throw new ConnectError("not found", Code.NotFound);
       return { metadata: { labels } };
     },
-  } as unknown as OperatorClient;
+  });
 }
 
 describe("fetchRemoteMigrationState", () => {

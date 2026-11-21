@@ -48,7 +48,7 @@ There are two ways to manage secrets: declaratively via `defineSecretManager()` 
 
 ### Declarative Configuration
 
-Define your secrets in `tailor.config.ts` using `defineSecretManager()`. Each key is a vault name, and its value is a record of secret names to their values. These values are deployed to each vault on `tailor deploy`.
+Define your secrets in `tailor.config.ts` using `defineSecretManager()`. Each key is a vault name, and its value is a record of secret names to their values. These values are deployed to each vault on `tailor deploy`, except that a secret declared as `{ create: value }` keeps the value it already has (see [Creating a Secret Only Once](#creating-a-secret-only-once)).
 
 Since secret values should not be committed to source control, use environment variables:
 
@@ -98,6 +98,36 @@ When `ignoreNullishValues: true`:
 - Secrets removed from the config entirely are still deleted (orphan cleanup)
 
 This allows you to set secret values once (e.g., via local `tailor deploy` or the CLI) and then deploy from CI without needing the actual values in CI environment variables.
+
+### Creating a Secret Only Once
+
+Some secrets, such as an encryption key, must be generated once per environment and then keep their value. Declare them as `{ create: value }`:
+
+```typescript
+import { randomBytes } from "node:crypto";
+
+export const secrets = defineSecretManager({
+  "app-keys": {
+    "encryption-key-v1": { create: randomBytes(32).toString("hex") },
+    "api-key": process.env.API_KEY!, // updated when the value changes
+  },
+});
+```
+
+On `tailor deploy`:
+
+- If the secret does not exist, it is created with `value`, and its vault is created too if needed.
+- If the secret already exists, it is left as it is, even when `value` differs from the stored value.
+- If two deploys create the same secret at the same time, the secret keeps the value of the deploy that created it first.
+- A `null` or `undefined` `value` is handled like a plain `null` or `undefined` secret value: an error, or skipped with `ignoreNullishValues: true` (see [Skipping Secrets with Missing Values](#skipping-secrets-with-missing-values)).
+
+Removing the secret or its vault from the config still deletes it on the next deploy, and the old value cannot be recovered, so data encrypted with that key can no longer be decrypted. The SDK does not keep a record that it created the secret: if the secret is deleted, the next deploy creates it again with a new value. Have your application detect a key it cannot use rather than relying on deploy to notice.
+
+To replace the value with a new one, do one of the following:
+
+- Rename the secret, for example from `encryption-key-v1` to `encryption-key-v2`, and deploy.
+- Remove the secret from the config and deploy, then add it back and deploy again.
+- Delete the secret with [`tailor secret delete`](#delete-secrets) and deploy. Because the delete releases the vault's ownership, the deploy asks for confirmation before managing the vault again (`--yes` skips it).
 
 ## Using Secrets
 

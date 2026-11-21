@@ -19,14 +19,20 @@
       "name": "deploy-managed-resources",
       "paths": [
         "packages/sdk/src/cli/commands/deploy/apply-phases.ts",
+        "packages/sdk/src/cli/commands/deploy/apply-phases.test.ts",
         "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts",
         "packages/sdk/src/cli/commands/deploy/test-helpers/plan-results.ts",
         "packages/sdk/src/cli/commands/remove.ts",
         "packages/sdk/src/cli/commands/remove.test.ts",
+        "packages/sdk/src/cli/commands/deploy/deploy.ts",
         "packages/sdk/src/cli/commands/deploy/deploy.test.ts",
         "packages/sdk/src/cli/commands/deploy/plan-report.ts",
         "packages/sdk/src/cli/commands/deploy/validate-plan.ts",
-        "packages/sdk/src/cli/commands/deploy/managed-resources.ts"
+        "packages/sdk/src/cli/commands/deploy/validate-plan.test.ts",
+        "packages/sdk/src/cli/commands/deploy/managed-resources.ts",
+        "packages/sdk/src/cli/commands/deploy/managed-resources.test.ts",
+        "packages/sdk/src/cli/commands/deploy/resources-in-use.ts",
+        "packages/sdk/src/cli/commands/deploy/label-refresh.test.ts"
       ],
       "file": ".agents/rules/deploy-managed-resources.md"
     },

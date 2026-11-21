@@ -1,12 +1,14 @@
 import * as net from "node:net";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { startServer, type RunningServer } from "./server";
 
 const running: RunningServer[] = [];
 const occupied: net.Server[] = [];
+const sockets: net.Socket[] = [];
 
 afterEach(async () => {
   await Promise.all(running.splice(0).map((s) => s.close()));
+  for (const socket of sockets.splice(0)) socket.destroy();
   await Promise.all(occupied.splice(0).map((s) => new Promise((r) => s.close(r))));
 });
 
@@ -61,6 +63,69 @@ describe("startServer", () => {
     expect(res.status).toBe(201);
     expect(res.headers.get("x-seen")).toBe("hello");
     expect(await res.text()).toBe("POST /a/b payload");
+  });
+
+  test("sends each Set-Cookie header the handler returns", async () => {
+    const server = await start(() => () => {
+      const headers = new Headers();
+      headers.append("set-cookie", "a=1");
+      headers.append("set-cookie", "b=2");
+      return new Response("ok", { headers });
+    });
+    const res = await fetch(server.url);
+    expect(res.headers.getSetCookie()).toEqual(["a=1", "b=2"]);
+  });
+
+  test("finishes a HEAD response to a stream, so the next request on the connection is answered", async () => {
+    let cancelled = false;
+    const server = await start(
+      () => (request) =>
+        new URL(request.url).pathname === "/stream"
+          ? new Response(
+              new ReadableStream<Uint8Array>({
+                cancel() {
+                  cancelled = true;
+                },
+              }),
+              { headers: { "content-type": "text/event-stream" } },
+            )
+          : new Response("second"),
+    );
+    const socket = net.connect(server.port, "127.0.0.1");
+    sockets.push(socket);
+    let received = "";
+    socket.on("data", (chunk) => (received += chunk.toString()));
+    const host = `Host: 127.0.0.1:${server.port}`;
+    socket.write(`HEAD /stream HTTP/1.1\r\n${host}\r\n\r\nGET /next HTTP/1.1\r\n${host}\r\n\r\n`);
+    await vi.waitFor(() => expect(received).toContain("second"), { timeout: 2000 });
+    expect(cancelled).toBe(true);
+  });
+
+  test("keeps serving when a HEAD response's stream fails to cancel", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const server = await start(
+        () => (request) =>
+          new URL(request.url).pathname === "/stream"
+            ? new Response(
+                new ReadableStream<Uint8Array>({
+                  cancel() {
+                    throw new Error("cleanup failed");
+                  },
+                }),
+              )
+            : new Response("alive"),
+      );
+      const head = await fetch(`${server.url}stream`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(unhandled).toEqual([]);
+      expect(await (await fetch(`${server.url}next`)).text()).toBe("alive");
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
   });
 
   test("delivers a streamed chunk before the response ends", async () => {

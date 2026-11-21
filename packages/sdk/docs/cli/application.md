@@ -42,9 +42,9 @@ tailor generate [options]
 
 **Options**
 
-| Option              | Alias | Description                | Required | Default              | Env                  |
-| ------------------- | ----- | -------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>` | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| Option              | Alias | Description                                                                                             | Required | Default | Env                  |
+| ------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -60,23 +60,23 @@ tailor deploy [options]
 
 **Options**
 
-| Option                                          | Alias | Description                                                                                                                     | Required | Default              | Env                               |
-| ----------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                    | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                               | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`                             | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together.                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`              |
-| `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                                       | No       | `false`              | -                                 |
-| `--create-workspace`                            | -     | Create a workspace when the account has none                                                                                    | No       | -                    | -                                 |
-| `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                                      | No       | -                    | -                                 |
-| `--workspace-region <WORKSPACE_REGION>`         | -     | Region for a workspace created during deploy                                                                                    | No       | -                    | -                                 |
-| `--organization-id <ORGANIZATION_ID>`           | -     | Organization ID for a workspace created during deploy                                                                           | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
-| `--folder-id <FOLDER_ID>`                       | -     | Folder ID for a workspace created during deploy                                                                                 | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
-| `--dry-run`                                     | `-d`  | Run the command without making any changes                                                                                      | No       | -                    | -                                 |
-| `--no-schema-check`                             | -     | Skip schema diff check against migration snapshots (beta)                                                                       | No       | -                    | -                                 |
-| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Skip steps of a partially applied multi-step migration that already succeeded, as comma-separated namespace/step entries (beta) | No       | -                    | -                                 |
-| `--no-validate`                                 | -     | Skip client-side validation against platform resource constraints                                                               | No       | -                    | -                                 |
-| `--no-cache`                                    | -     | Disable bundle caching for this run                                                                                             | No       | -                    | -                                 |
-| `--clean-cache`                                 | -     | Clean the bundle cache before building                                                                                          | No       | -                    | -                                 |
+| Option                                          | Alias | Description                                                                                                                                                       | Required | Default | Env                               |
+| ----------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>`                 | `-w`  | Workspace ID                                                                                                                                                      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`                           | `-p`  | Workspace profile                                                                                                                                                 | No       | -       | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`                             | `-c`  | Path to SDK config file (default: the nearest tailor.config.ts in the current or a parent directory). Use comma-separated paths to deploy multiple apps together. | No       | -       | `TAILOR_CONFIG_PATH`              |
+| `--yes`                                         | `-y`  | Skip confirmation prompts                                                                                                                                         | No       | `false` | -                                 |
+| `--create-workspace`                            | -     | Create a workspace when the account has none                                                                                                                      | No       | -       | -                                 |
+| `--workspace-name <WORKSPACE_NAME>`             | -     | Name for a workspace created during deploy                                                                                                                        | No       | -       | -                                 |
+| `--workspace-region <WORKSPACE_REGION>`         | -     | Region for a workspace created during deploy                                                                                                                      | No       | -       | -                                 |
+| `--organization-id <ORGANIZATION_ID>`           | -     | Organization ID for a workspace created during deploy                                                                                                             | No       | -       | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`                       | -     | Folder ID for a workspace created during deploy                                                                                                                   | No       | -       | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--dry-run`                                     | `-d`  | Run the command without making any changes                                                                                                                        | No       | -       | -                                 |
+| `--no-schema-check`                             | -     | Skip schema diff check against migration snapshots (beta)                                                                                                         | No       | -       | -                                 |
+| `--migration-skip-steps <MIGRATION_SKIP_STEPS>` | -     | Skip steps of a partially applied multi-step migration that already succeeded, as comma-separated namespace/step entries (beta)                                   | No       | -       | -                                 |
+| `--no-validate`                                 | -     | Skip client-side validation against platform resource constraints                                                                                                 | No       | -       | -                                 |
+| `--no-cache`                                    | -     | Disable bundle caching for this run                                                                                                                               | No       | -       | -                                 |
+| `--clean-cache`                                 | -     | Clean the bundle cache before building                                                                                                                            | No       | -       | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -135,8 +135,8 @@ the authenticated user before reuse, and `deploy` warns when it uses one.
 When the project has no saved selection, `deploy` discovers the account's workspaces:
 
 - One or more workspaces open a selection prompt in an interactive terminal, with an option to
-  create a new workspace. With one workspace in non-interactive or JSON mode, it is selected
-  automatically. With multiple workspaces, pass `--workspace-id` instead.
+  create a new workspace. In non-interactive or JSON mode, pass `--workspace-id` instead, even
+  when only one workspace exists.
 - No workspaces open a guided creation flow in an interactive terminal. The flow asks for a name,
   fetches the available regions from the Platform, and confirms before creating anything. After
   creation, the output shows how to reuse the workspace with `--workspace-id` or
@@ -252,6 +252,12 @@ When some updates are forced by the SDK version, the summary line also shows how
 Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete
 ```
 
+When some resources are left as they are and only the labels the SDK sets on them are rewritten, the summary line also shows how many:
+
+```text
+Plan: 0 to create, 0 to update, 0 to delete, 2 to refresh labels
+```
+
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
 
 ```bash
@@ -313,7 +319,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the function scripts that are left as they are while only their SDK version label is rewritten after an SDK upgrade; they are not included in `update`.
+- `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the resources that are left as they are while only the labels the SDK sets on them are rewritten, such as a function script's SDK version label after an SDK upgrade; they are not included in `update`. TailorDB tables and resolvers are not counted, although deploy rewrites their labels too.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
   - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.
@@ -361,12 +367,12 @@ tailor remove [options]
 
 **Options**
 
-| Option                          | Alias | Description                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--yes`                         | `-y`  | Skip confirmation prompts  | No       | `false`              | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -382,11 +388,11 @@ tailor show [options]
 
 **Options**
 
-| Option                          | Alias | Description                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -402,11 +408,11 @@ tailor open [options]
 
 **Options**
 
-| Option                          | Alias | Description                | Required | Default              | Env                            |
-| ------------------------------- | ----- | -------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -428,13 +434,13 @@ tailor api [options] [command] <endpoint>
 
 **Options**
 
-| Option                          | Alias | Description                                                                       | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                             | No       | `"{}"`               | -                              |
-| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body. | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                             | Required | Default | Env                            |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--body <BODY>`                 | `-b`  | Request body as JSON.                                                                                   | No       | `"{}"`  | -                              |
+| `--field <FIELD>`               | `-f`  | Set a body field as `key=value` (repeatable; dotted keys nest). Overrides --body.                       | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

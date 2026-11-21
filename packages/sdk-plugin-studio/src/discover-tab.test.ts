@@ -63,8 +63,8 @@ describe("discoverTab", () => {
     if (tab.state !== "mounted") throw new Error(`unexpected state ${tab.state}`);
     const res = await tab.handler(new Request("http://x/"), {
       basePath: "/plugins/fake/",
-      token: "t",
       getSelection: () => ({}),
+      onSelectionChange: () => () => {},
     });
     expect(await res.text()).toBe("from plugin");
   });

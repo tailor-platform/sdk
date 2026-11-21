@@ -1,5 +1,21 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.10.3
+
+### Patch Changes
+
+- [#3199](https://github.com/tailor-platform/sdk/pull/3199) [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632) Thanks [@renovate](https://github.com/apps/renovate)! - Update `@politty/zod` to 0.7.5, so a lone `-` after an option that takes a value, such as `--value -`, is read as its value instead of being rejected
+- Updated dependencies [[`8a93054`](https://github.com/tailor-platform/sdk/commit/8a9305455330df2923197ec1e00462f3914bb342), [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b), [`c6072bb`](https://github.com/tailor-platform/sdk/commit/c6072bb0f2e121aaa88cd2701439f40902c9138b), [`97335d4`](https://github.com/tailor-platform/sdk/commit/97335d4911d16a0d5b088871eb20745b1c9e4bf9), [`d4ca31c`](https://github.com/tailor-platform/sdk/commit/d4ca31ca73f0f232c1962e3009ef5b706782b184), [`84e4742`](https://github.com/tailor-platform/sdk/commit/84e47422989f20964b83f9d7a591458dc1e52f82), [`f42f99a`](https://github.com/tailor-platform/sdk/commit/f42f99a5c91d11d2ea3a34a294cd5abf3bcb5db3), [`04ff663`](https://github.com/tailor-platform/sdk/commit/04ff663b6bbae76dafe693b29f3da165cb82f8e9), [`9fd196c`](https://github.com/tailor-platform/sdk/commit/9fd196cdb87140b7b506f877f3f7b0035b3a4389), [`c39c53a`](https://github.com/tailor-platform/sdk/commit/c39c53a30ca1b4c7be721bc767512b27e71b6ef4), [`45fb3f5`](https://github.com/tailor-platform/sdk/commit/45fb3f5e8c3cf899d27d1fed3beca8c202002e5c), [`d352a28`](https://github.com/tailor-platform/sdk/commit/d352a28f722f40a3931284ab168d620407ff4032), [`dfa1b4d`](https://github.com/tailor-platform/sdk/commit/dfa1b4d1160c1d7b752a292fbf1c5aa9e09b2632), [`c4c2e25`](https://github.com/tailor-platform/sdk/commit/c4c2e2559715e2e9a94e3de9d9600439001744e1), [`3965bbe`](https://github.com/tailor-platform/sdk/commit/3965bbe38c7e0028f7556185d7df137052e581b4)]:
+  - @tailor-platform/sdk@2.45.0
+
+## 0.10.2
+
+### Patch Changes
+
+- [#3178](https://github.com/tailor-platform/sdk/pull/3178) [`20ab4f2`](https://github.com/tailor-platform/sdk/commit/20ab4f2c2046312569b56d4b74d5d96a2d78ecc3) Thanks [@dqn](https://github.com/dqn)! - `tailor seed apply` now lists each `_User` row that repeats a `name` at its file and line, for example `seed/data/_User.jsonl:3 (alice): duplicate of seed/data/_User.jsonl:1`, instead of by its position among the loaded rows (`Row 2 (alice): duplicate of row 1`), which did not match the line in the file after a blank line or for a row in a dataset file. The GitHub Actions error annotation now links to the first repeated row.
+- Updated dependencies [[`42245d5`](https://github.com/tailor-platform/sdk/commit/42245d5b975a919f45d226f7e25a5a0bc3d298d8), [`48cc087`](https://github.com/tailor-platform/sdk/commit/48cc08707c9b16d6b3292e6ba5c23226565b50cc), [`59e8786`](https://github.com/tailor-platform/sdk/commit/59e878647eede2bfb4ba1a21ab92bc8b88de749d), [`f57cd39`](https://github.com/tailor-platform/sdk/commit/f57cd3946662eed486b8568015a89ba7f3ca7e03), [`dd55ff2`](https://github.com/tailor-platform/sdk/commit/dd55ff25a9ed76cd48d339c1b0e8d8a054019a0b), [`55286e0`](https://github.com/tailor-platform/sdk/commit/55286e042a802c784299c8f75e655330f1e672c1), [`8137b34`](https://github.com/tailor-platform/sdk/commit/8137b346fc9fa098b62c369923dd7640a9da0cbe), [`6e9e004`](https://github.com/tailor-platform/sdk/commit/6e9e0042136c8e8b27f566420eb6a0b7f5cbf9bc), [`e9b6ca4`](https://github.com/tailor-platform/sdk/commit/e9b6ca47f5424c5a320c7b6d5b901158c86198ea), [`f820cde`](https://github.com/tailor-platform/sdk/commit/f820cde123dc7294138074cee0924e64fc7ddbcc), [`824fc17`](https://github.com/tailor-platform/sdk/commit/824fc1747a9520337a4ce653f060fc8b4472baa8), [`5f41199`](https://github.com/tailor-platform/sdk/commit/5f411997a48c73648f93b41d08eab80cbfeb2430), [`bdb7a6e`](https://github.com/tailor-platform/sdk/commit/bdb7a6e39e8abfd3b74bd3f4e8d79612649cd4fc)]:
+  - @tailor-platform/sdk@2.44.0
+
 ## 0.10.1
 
 ### Patch Changes

@@ -14,7 +14,9 @@ export type SdkBrandKind =
   | "workflow-job"
   | "wait-point"
   | "execution-policy"
-  | "http-adapter";
+  | "http-adapter"
+  | "workspace-config"
+  | "app-config";
 
 /**
  * Adds a non-enumerable SDK brand symbol to the given object (in-place).

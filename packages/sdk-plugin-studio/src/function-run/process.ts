@@ -11,11 +11,16 @@ const SDK_PACKAGE = "@tailor-platform/sdk";
  * Run a command and expose its output lines and exit as events.
  * @param command - Executable to run
  * @param args - Arguments of the command
- * @param options - Working directory
+ * @param options - Working directory and environment
  * @param options.cwd - Directory the command runs in
+ * @param options.env - Environment of the command (default: the process environment)
  * @returns The event stream and a function that stops the process
  */
-export function spawnRun(command: string, args: string[], options: { cwd: string }): RunHandle {
+export function spawnRun(
+  command: string,
+  args: string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv },
+): RunHandle {
   const queue: RunEvent[] = [];
   let wake: (() => void) | undefined;
   let finished = false;
@@ -24,7 +29,11 @@ export function spawnRun(command: string, args: string[], options: { cwd: string
     wake?.();
   };
 
-  const child = spawn(command, args, { cwd: options.cwd, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(command, args, {
+    cwd: options.cwd,
+    env: options.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   const streams = [
     { stream: child.stdout, type: "stdout" as const },
     { stream: child.stderr, type: "stderr" as const },
@@ -76,7 +85,7 @@ export function spawnRun(command: string, args: string[], options: { cwd: string
  * @param input.tailorBin - Path of the tailor CLI entry
  * @param input.file - Function file
  * @param input.argFile - JSON file holding the argument; the watch runs again when it changes
- * @param input.workspaceArgs - Options that select the workspace (`-p` / `-w`)
+ * @param input.workspaceArgs - Options that select the workspace (`--profile` / `--workspace-id`)
  * @returns Arguments for `node`
  */
 export function functionRunArgs(input: {
@@ -121,12 +130,10 @@ export function resolveTailorBin(projectDir: string): string {
  * @returns A function that starts a run for a function file and argument
  */
 export function createFunctionRunStarter(projectDir: string): (input: RunInput) => RunHandle {
-  return ({ file, argFile, workspaceArgs }) =>
+  return ({ file, argFile, workspaceArgs, env }) =>
     spawnRun(
       process.execPath,
       functionRunArgs({ tailorBin: resolveTailorBin(projectDir), file, argFile, workspaceArgs }),
-      {
-        cwd: projectDir,
-      },
+      { cwd: projectDir, env },
     );
 }

@@ -18,6 +18,16 @@ describe("extractVaultStore", () => {
     });
   });
 
+  test("stores the value of a { create } entry", () => {
+    const secrets = {
+      vaults: { aws: { KEY: { create: "k1" }, MISSING: { create: undefined }, PLAIN: "p1" } },
+      options: {},
+    };
+    expect(extractVaultStore(secrets)).toEqual({
+      aws: { KEY: "k1", MISSING: undefined, PLAIN: "p1" },
+    });
+  });
+
   test("treats a plain object as the vault map directly when there is no .vaults field", () => {
     const secrets = { aws: { K: "v" }, gcp: { P: "q" } };
     expect(extractVaultStore(secrets)).toEqual({

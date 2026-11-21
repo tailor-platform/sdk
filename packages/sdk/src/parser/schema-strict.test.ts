@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { AppConfigSchema } from "./app-config/schema";
+import { AppConfigSchema, AppDefinitionSchema, WorkspaceConfigSchema } from "./app-config/schema";
 import { PluginConfigSchema } from "./plugin-config/schema";
 import { AIGatewaySchema } from "./service/aigateway/schema";
 import { AuthConnectionConfigSchema } from "./service/auth-connection/schema";
@@ -36,6 +36,16 @@ const strictSchemaCases: StrictSchemaCase[] = [
     name: "app config",
     schema: AppConfigSchema,
     value: { name: "my-app" },
+  },
+  {
+    name: "defineApp config",
+    schema: AppDefinitionSchema,
+    value: { name: "my-app" },
+  },
+  {
+    name: "workspace config",
+    schema: WorkspaceConfigSchema,
+    value: { apps: {} },
   },
   {
     name: "AI gateway",

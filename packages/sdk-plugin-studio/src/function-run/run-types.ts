@@ -11,4 +11,5 @@ export interface RunInput {
   file: string;
   argFile: string;
   workspaceArgs: string[];
+  env: NodeJS.ProcessEnv;
 }

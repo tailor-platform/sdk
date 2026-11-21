@@ -47,10 +47,17 @@ async function respond(handler: FetchHandler, req: http.IncomingMessage, res: ht
   res.on("close", () => abort.abort());
   try {
     const response = await handler(toRequest(req, abort.signal));
-    res.writeHead(response.status, Object.fromEntries(response.headers));
+    const cookies = response.headers.getSetCookie();
+    res.writeHead(response.status, {
+      ...Object.fromEntries(response.headers),
+      ...(cookies.length > 0 ? { "set-cookie": cookies } : {}),
+    });
     res.flushHeaders();
     if (response.body === null) res.end();
-    else pipeline(Readable.fromWeb(response.body as never), res, () => undefined);
+    else if (req.method === "HEAD") {
+      response.body.cancel().catch(() => undefined);
+      res.end();
+    } else pipeline(Readable.fromWeb(response.body as never), res, () => undefined);
   } catch {
     if (!res.headersSent) res.writeHead(500);
     res.end("Internal Server Error\n");

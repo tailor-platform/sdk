@@ -1,4 +1,4 @@
-import { selectionArgs } from "../workspace-context";
+import { selectionArgs, selectionEnv } from "../workspace-context";
 import { interpret, type StreamMessage } from "./stream";
 import type { WorkspaceSelection } from "../workspace-context";
 import type { RunHandle, RunInput } from "./run-types";
@@ -43,7 +43,7 @@ interface ActiveRun {
 }
 
 function describeWorkspace(selection: WorkspaceSelection): string {
-  return selection.workspaceId ?? selection.profile ?? "no workspace";
+  return selection.profile ?? selection.workspaceId ?? "no workspace";
 }
 
 /**
@@ -62,7 +62,6 @@ export function createRunSession(options: SessionOptions) {
   let reason: string | undefined;
   let workspace: WorkspaceSelection | undefined;
   let active: ActiveRun | undefined;
-  let timer: NodeJS.Timeout | undefined;
 
   const emit = (event: SessionEvent) => {
     for (const listener of listeners) listener(event);
@@ -130,6 +129,7 @@ export function createRunSession(options: SessionOptions) {
           file: options.file,
           argFile: options.runArgFile,
           workspaceArgs,
+          env: selectionEnv(selection),
         });
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
@@ -162,15 +162,23 @@ export function createRunSession(options: SessionOptions) {
       if (run === undefined) return;
       const next = options.getSelection();
       if (selectionArgs(next).join(" ") === run.workspaceArgs.join(" ")) return;
-      const why = `The selected workspace changed (${describeWorkspace(run.workspace)} to ${describeWorkspace(next)}), so the watch was stopped. Press Run to run on ${describeWorkspace(next)}.`;
-      stopRun(why);
+      const change = `The selected workspace changed (${describeWorkspace(run.workspace)} to ${describeWorkspace(next)})`;
+      stopRun(`${change}, so the watch was stopped.`);
+      const restarted = this.start();
+      if (restarted.ok) {
+        record({
+          type: "note",
+          text: `${change}; the watch was restarted on ${describeWorkspace(next)}.`,
+        });
+        return;
+      }
+      const why = `${change}, so the watch was stopped. ${restarted.reason}`;
       record({ type: "note", text: why });
+      setStatus("stopped", why);
     },
 
-    startPolling(ms: number): void {
-      if (timer !== undefined || ms <= 0) return;
-      timer = setInterval(() => this.checkSelection(), ms);
-      timer.unref();
+    watchSelection(subscribe: (listener: () => void) => () => void): () => void {
+      return subscribe(() => this.checkSelection());
     },
 
     snapshot(): SessionSnapshot {
@@ -189,8 +197,6 @@ export function createRunSession(options: SessionOptions) {
     },
 
     close(): void {
-      if (timer !== undefined) clearInterval(timer);
-      timer = undefined;
       stopRun("The server was shut down.");
     },
   };

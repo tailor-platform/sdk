@@ -1,7 +1,7 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   workspaceDetailsWithFolderName,
   workspaceDisplayName,
@@ -9,7 +9,6 @@ import {
   workspaceInfoWithFolderName,
   workspaceNameTransformer,
 } from "./transform";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -23,14 +22,14 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
   } as Workspace;
 }
 
-function client(folderName = "dev"): OperatorClient {
-  return {
-    getOrganizationFolder: vi.fn().mockResolvedValue({
+function client(folderName = "dev") {
+  return mockOperatorClient({
+    getOrganizationFolder: {
       folder: {
         name: folderName,
       },
-    }),
-  } as unknown as OperatorClient;
+    },
+  });
 }
 
 describe("workspace transform", () => {
@@ -69,11 +68,10 @@ describe("workspace transform", () => {
   });
 
   test("omits folderName when the folder lookup is unavailable to the user", async () => {
-    const mockClient = {
-      getOrganizationFolder: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("permission denied", Code.PermissionDenied)),
-    } as unknown as OperatorClient;
+    const mockClient = mockOperatorClient({
+      getOrganizationFolder: () =>
+        Promise.reject(new ConnectError("permission denied", Code.PermissionDenied)),
+    });
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
     const info = await workspaceInfoWithFolderName(mockClient, workspace());
@@ -84,11 +82,10 @@ describe("workspace transform", () => {
   });
 
   test("warns and omits folderName when folder lookup fails unexpectedly", async () => {
-    const mockClient = {
-      getOrganizationFolder: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("service unavailable", Code.Unavailable)),
-    } as unknown as OperatorClient;
+    const mockClient = mockOperatorClient({
+      getOrganizationFolder: () =>
+        Promise.reject(new ConnectError("service unavailable", Code.Unavailable)),
+    });
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
     const info = await workspaceInfoWithFolderName(mockClient, workspace());
@@ -131,15 +128,15 @@ describe("workspace transform", () => {
     vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
     let active = 0;
     let maxActive = 0;
-    const mockClient = {
-      getOrganizationFolder: vi.fn().mockImplementation(async ({ folderId }) => {
+    const mockClient = mockOperatorClient({
+      getOrganizationFolder: async (request) => {
         active++;
         maxActive = Math.max(maxActive, active);
         await new Promise((resolve) => setTimeout(resolve, 10));
         active--;
-        return { folder: { name: folderId } };
-      }),
-    } as unknown as OperatorClient;
+        return { folder: { name: request.folderId } };
+      },
+    });
 
     const pending = workspaceInfosWithFolderNames(
       mockClient,

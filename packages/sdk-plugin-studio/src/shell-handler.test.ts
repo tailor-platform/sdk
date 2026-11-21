@@ -6,7 +6,7 @@ import { createShellHandler, type Accounts, type PlatformInfo, type Tab } from "
 import { createWorkspaceContext } from "./workspace-context";
 
 const PORT = 7777;
-const TOKEN = "t0ken";
+const SAME_ORIGIN = { "sec-fetch-site": "same-origin", origin: `http://127.0.0.1:${PORT}` };
 const HOST = { host: `127.0.0.1:${PORT}` };
 
 function get(handler: (r: Request) => Promise<Response>, pathname: string, init?: RequestInit) {
@@ -20,7 +20,11 @@ function get(handler: (r: Request) => Promise<Response>, pathname: string, init?
 
 type Handler = (
   request: Request,
-  context: { basePath: string; token: string; getSelection: () => object },
+  context: {
+    basePath: string;
+    getSelection: () => object;
+    onSelectionChange: (l: () => void) => () => void;
+  },
 ) => Response | Promise<Response>;
 
 function mounted(id: string, handler: Handler): Tab {
@@ -51,7 +55,6 @@ function shell(tabs: Tab[], ws = workspace(), acc = accounts(), platform?: Platf
   return createShellHandler({
     tabs,
     port: PORT,
-    token: TOKEN,
     workspace: ws,
     accounts: acc,
     ...(platform === undefined ? {} : { platform }),
@@ -61,27 +64,30 @@ function shell(tabs: Tab[], ws = workspace(), acc = accounts(), platform?: Platf
 function post(handler: (r: Request) => Promise<Response>, pathname: string, body: unknown) {
   return get(handler, pathname, {
     method: "POST",
-    headers: { "x-tailor-studio-token": TOKEN, origin: `http://127.0.0.1:${PORT}` },
+    headers: SAME_ORIGIN,
     body: JSON.stringify(body),
   });
 }
 
-function put(handler: (r: Request) => Promise<Response>, body: unknown, token: string | null) {
+function put(
+  handler: (r: Request) => Promise<Response>,
+  body: unknown,
+  headers: Record<string, string> = SAME_ORIGIN,
+) {
   return get(handler, "/api/context", {
     method: "PUT",
-    headers: token === null ? {} : { "x-tailor-studio-token": token },
+    headers,
     body: JSON.stringify(body),
   });
 }
 
 describe("createShellHandler", () => {
   describe("/api/context", () => {
-    test("lists the profiles with the current selection and hands out the token", async () => {
+    test("lists the profiles with the current selection", async () => {
       const ws = workspace("test");
       await ws.restore();
       const res = await get(shell([], ws), "/api/context");
       expect(await res.json()).toEqual({
-        token: TOKEN,
         profiles: PROFILES,
         selected: { profile: "test", workspaceId: PROFILES[0]!.workspaceId },
       });
@@ -106,18 +112,64 @@ describe("createShellHandler", () => {
           return new Response("ok");
         }),
       ]);
-      expect((await put(handler, { profile: "test" }, TOKEN)).status).toBe(200);
+      expect((await put(handler, { profile: "test" })).status).toBe(200);
       await get(handler, "/plugins/erd/");
       expect(seen).toEqual([{ profile: "test", workspaceId: PROFILES[0]!.workspaceId }]);
     });
 
-    test("PUT without the token is 403", async () => {
-      expect((await put(shell([]), { profile: "test" }, null)).status).toBe(403);
+    test("PUT that is not marked same-origin is 403", async () => {
+      expect((await put(shell([]), { profile: "test" }, {})).status).toBe(403);
     });
 
     test("PUT of an unknown profile is 400 with the reason", async () => {
-      const res = await put(shell([]), { profile: "nope" }, TOKEN);
+      const res = await put(shell([]), { profile: "nope" });
       expect([res.status, await res.json()]).toEqual([400, { error: 'Profile "nope" not found' }]);
+    });
+  });
+
+  describe("/api/context/events", () => {
+    async function open(handler: (r: Request) => Promise<Response>) {
+      const abort = new AbortController();
+      const res = await get(handler, "/api/context/events", { signal: abort.signal });
+      const reader = res.body!.getReader();
+      const read = async () => new TextDecoder().decode((await reader.read()).value);
+      return { res, read, abort };
+    }
+
+    test("sends a changed event to every open page when a profile is selected", async () => {
+      const handler = shell([]);
+      const first = await open(handler);
+      const second = await open(handler);
+      expect(first.res.headers.get("content-type")).toBe("text/event-stream");
+      await first.read();
+      await second.read();
+      await put(handler, { profile: "test" });
+      expect([await first.read(), await second.read()]).toEqual([
+        "event: changed\ndata: {}\n\n",
+        "event: changed\ndata: {}\n\n",
+      ]);
+      first.abort.abort();
+      second.abort.abort();
+    });
+
+    test("stops listening when the page disconnects", async () => {
+      const inner = workspace();
+      let active = 0;
+      const ws = {
+        ...inner,
+        subscribe: (listener: () => void) => {
+          active++;
+          const unsubscribe = inner.subscribe(listener);
+          return () => {
+            active--;
+            return unsubscribe();
+          };
+        },
+      };
+      const { abort } = await open(shell([], ws));
+      expect(active).toBe(1);
+      abort.abort();
+      expect(active).toBe(0);
     });
   });
 
@@ -188,7 +240,22 @@ describe("createShellHandler", () => {
       expect(res.status).toBe(400);
     });
 
-    test("answers 403 without the token", async () => {
+    test("rejects a non-string name and an unknown permission before creating anything", async () => {
+      const createProfile = vi.fn(async () => {});
+      const handler = shell([], workspace(), accounts({ createProfile }));
+      const numericName = await post(handler, "/api/profiles", { ...input, name: 7 });
+      const unknownPermission = await post(handler, "/api/profiles", {
+        ...input,
+        permission: "admin",
+      });
+      expect([
+        numericName.status,
+        unknownPermission.status,
+        createProfile.mock.calls.length,
+      ]).toEqual([400, 400, 0]);
+    });
+
+    test("answers 403 when the request is not marked same-origin", async () => {
       const res = await get(shell([]), "/api/profiles", { method: "POST", body: "{}" });
       expect(res.status).toBe(403);
     });
@@ -200,23 +267,40 @@ describe("createShellHandler", () => {
     expect(res.headers.get("location")).toBe("/plugins/erd/");
   });
 
-  test("passes the plugin the path below its prefix, the base path and the token", async () => {
+  test("keeps the query string when it redirects to the trailing slash", async () => {
+    const res = await get(shell([mounted("erd", () => new Response("ok"))]), "/plugins/erd?x=1");
+    expect(res.headers.get("location")).toBe("/plugins/erd/?x=1");
+  });
+
+  test("passes the plugin the path below its prefix, and the base path", async () => {
     const plugin = vi.fn(
-      (_r: Request, _c: { basePath: string; token: string; getSelection: () => object }) =>
-        new Response("ok"),
+      (
+        _r: Request,
+        _c: {
+          basePath: string;
+          getSelection: () => object;
+          onSelectionChange: (l: () => void) => () => void;
+        },
+      ) => new Response("ok"),
     );
     await get(shell([mounted("erd", plugin)]), "/plugins/erd/assets/app.js?x=1");
     const [request, context] = plugin.mock.calls[0]!;
     expect(new URL(request.url).pathname + new URL(request.url).search).toBe("/assets/app.js?x=1");
-    expect(context).toMatchObject({ basePath: "/plugins/erd/", token: TOKEN });
+    expect(context).toMatchObject({ basePath: "/plugins/erd/" });
   });
 
   test.each(["//evil.example/x", "/\\evil.example/x", "//evil.example:1/x"])(
     "keeps the forwarded URL on the shell's origin when the path below the prefix is %j",
     async (rest) => {
       const plugin = vi.fn(
-        (_r: Request, _c: { basePath: string; token: string; getSelection: () => object }) =>
-          new Response("ok"),
+        (
+          _r: Request,
+          _c: {
+            basePath: string;
+            getSelection: () => object;
+            onSelectionChange: (l: () => void) => () => void;
+          },
+        ) => new Response("ok"),
       );
       await get(shell([mounted("erd", plugin)]), `/plugins/erd${rest}?q=1`);
       const forwarded = new URL(plugin.mock.calls[0]![0].url);
@@ -287,7 +371,6 @@ describe("createShellHandler", () => {
     const handler = createShellHandler({
       tabs: [],
       port: PORT,
-      token: TOKEN,
       workspace: workspace(),
       accounts: accounts(),
       clientDir,
@@ -306,7 +389,6 @@ describe("createShellHandler", () => {
         }),
       ],
       port: PORT,
-      token: TOKEN,
       workspace: workspace(),
       accounts: accounts(),
       onError,
@@ -334,7 +416,7 @@ describe("createShellHandler", () => {
       expect(framing(rejected)).toEqual(protectedHeaders);
     });
 
-    test("keeps the plugin's own Content-Security-Policy directives", async () => {
+    test("keeps the plugin's own Content-Security-Policy as a separate policy, so its own frame-ancestors cannot widen ours", async () => {
       const res = await get(
         shell([
           mounted(
@@ -346,7 +428,7 @@ describe("createShellHandler", () => {
         "/plugins/erd/",
       );
       expect(res.headers.get("content-security-policy")).toBe(
-        "default-src 'none'; frame-ancestors 'self'",
+        "default-src 'none', frame-ancestors 'self'",
       );
     });
   });

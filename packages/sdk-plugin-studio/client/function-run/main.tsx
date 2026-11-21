@@ -24,7 +24,6 @@ import "./style.css";
 type EntryBody = { type: "run"; record: RunRecord } | { type: "failure" | "note"; text: string };
 type Entry = EntryBody & { id: number };
 
-const token = document.querySelector<HTMLMetaElement>('meta[name="tailor-studio-token"]')?.content;
 const themeCss = `${scopeTheme(light, ":root:not(.dark)")}${scopeTheme(dark, ".dark")}`;
 
 function useDarkTheme(): boolean {
@@ -193,13 +192,11 @@ interface ServerState extends Paths {
 
 type Status = "idle" | "watching" | "stopped";
 
-const authHeaders = { "x-tailor-studio-token": token ?? "" };
-
 async function readEvents(
   signal: AbortSignal,
   onEvent: (event: string, data: unknown) => void,
 ): Promise<void> {
-  const response = await fetch("events", { headers: authHeaders, signal });
+  const response = await fetch("events", { signal });
   if (!response.ok || !response.body) throw new Error(`events: ${response.status}`);
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
@@ -293,7 +290,7 @@ function PathWithCopy({
 function put(change: { code: string } | { arg: string }): void {
   void fetch("file", {
     method: "PUT",
-    headers: { "content-type": "application/json", ...authHeaders },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify(change),
   });
 }
@@ -404,7 +401,7 @@ function App() {
   }, [arg, argValid, loaded]);
 
   async function start() {
-    const response = await fetch("start", { method: "POST", headers: authHeaders });
+    const response = await fetch("start", { method: "POST" });
     if (!response.ok) {
       const text = (await response.text()).trim() || "Request failed";
       setEntries((current) => [{ type: "failure", text, id: --localId.current }, ...current]);
@@ -412,7 +409,7 @@ function App() {
   }
 
   function stop() {
-    void fetch("stop", { method: "POST", headers: authHeaders });
+    void fetch("stop", { method: "POST" });
   }
 
   const watching = status === "watching";

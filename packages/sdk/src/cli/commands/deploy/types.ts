@@ -2,7 +2,7 @@ import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/s
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { DependentAppsByResource } from "./label";
+import type { DeployOwner, DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
@@ -19,6 +19,8 @@ export interface PlanContext {
   client: OperatorClient;
   workspaceId: string;
   application: Readonly<Application>;
+  /** Owner of the resources the deploy manages, which decides their labels and ownership. */
+  owner: DeployOwner;
   forRemoval: boolean;
   config: LoadedConfig;
   noSchemaCheck?: boolean;
