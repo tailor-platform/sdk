@@ -299,6 +299,9 @@ export function generateLinesDbSchemaFileWithPluginAPI(
   if (!pluginSource) {
     throw new Error(`pluginSource is required for plugin-generated table "${tableName}"`);
   }
+  if (!rowType) {
+    throw new Error(`rowType is required for plugin-generated table "${tableName}"`);
+  }
 
   const { configImportPath, originalImportPath } = params;
 
@@ -310,10 +313,8 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     `;
 
   const schemaOptionsCode = generateSchemaOptions(foreignKeys, indexes);
-  const rowTypeCode = rowType ? `type SeedRow = ${rowType};\n` : "";
-  const standardSchemaCode = rowType
-    ? `createStandardSchema<SeedRow>(schemaType as never, hook as never, ${exportName})`
-    : `createStandardSchema(schemaType, hook, ${exportName})`;
+  const rowTypeCode = `type SeedRow = ${rowType};\n`;
+  const standardSchemaCode = `createStandardSchema<SeedRow>(schemaType as never, hook as never, ${exportName})`;
 
   // Table-attached plugin (e.g., changeset): import the original table and use getGeneratedTable(configPath, pluginId, table, kind)
   if (pluginSource.originalExportName && originalImportPath && pluginSource.generatedTableKind) {

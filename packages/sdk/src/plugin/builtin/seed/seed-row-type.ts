@@ -22,7 +22,6 @@ function scalarType(type: string): string {
     case "integer":
     case "float":
       return "number";
-    case "bool":
     case "boolean":
       return "boolean";
     case "datetime":
@@ -78,7 +77,6 @@ function members(
  */
 export function generateSeedRowType(params: SeedRowTypeParams): string {
   const { fields, optionalFields, omitFields } = params;
-  const withId = "id" in fields ? fields : { id: { type: "uuid", required: true }, ...fields };
-  const lines = members(withId, optionalFields, omitFields);
+  const lines = members(fields, optionalFields, omitFields);
   return `{\n${lines.map((line) => `  ${line}`).join("\n")}\n}`;
 }
