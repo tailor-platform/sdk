@@ -690,3 +690,55 @@ test("--json dry-run lists a missing dependent application in warnings without a
     }),
   );
 });
+
+function useWorkspaceTarget() {
+  const subgraphs = [{ Type: "tailordb", Name: "main" }];
+  mocks.target = {
+    ...mocks.target,
+    source: { kind: "workspace", workspace: { path: "/repo/tailor.config.ts", apps: {} } },
+    owner: { kind: "workspace" },
+    applications: [
+      { name: "shop", subgraphs, authNamespace: undefined, settings: {} },
+      { name: "admin", subgraphs, authNamespace: undefined, settings: {} },
+    ],
+  } as unknown as BuiltDeploymentTarget;
+}
+
+test("stops a workspace config whose plugins have onDeployed hooks before planning", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  register(vi.fn());
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOYED_HOOKS_UNSUPPORTED",
+    context: { pluginIds: ["hook"] },
+  });
+  expect(mocks.planTailorDB).not.toHaveBeenCalled();
+});
+
+test("deploys a workspace config without looking up applications it depends on", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  await deploy({ yes: true, noValidate: true });
+  expect(mocks.apply).toHaveBeenCalledOnce();
+  expect(mocks.fetchMissingDependentApps).not.toHaveBeenCalled();
+});
+
+test("reports every application of a workspace config in JSON", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  await deploy({ yes: true, noValidate: true });
+  const result = vi.mocked(logger.out).mock.lastCall?.[0] as { applications: object[] };
+  expect(result.applications).toEqual([
+    expect.objectContaining({
+      name: "shop",
+      url: "https://app",
+      configPath: "/repo/tailor.config.ts",
+    }),
+    expect.objectContaining({ name: "admin", url: "https://app" }),
+  ]);
+  expect(result.applications).toEqual([
+    expect.not.objectContaining({ id: expect.anything() }),
+    expect.not.objectContaining({ id: expect.anything() }),
+  ]);
+});

@@ -829,6 +829,31 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
   });
 
+  test("names the workspace config as the owner of an executor that it deploys", async () => {
+    const results = deletingAdmin();
+    results.executor.existingExecutors.notify = {
+      resource: create(ExecutorExecutorSchema, { name: "notify", targetConfig: FUNCTION_TARGET }),
+      allLabels: { "sdk-managed": "workspace" },
+    };
+
+    await expect(check([deployment({ name: "core" }, results)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        message: `${ADMIN} cannot be deleted: executor "notify" of the workspace config still uses it.`,
+        suggestion: expect.not.stringContaining("outside the SDK"),
+        context: {
+          uses: [
+            { ...ADMIN_USE, workspace: true, usedBy: { resourceType: "executor", name: "notify" } },
+          ],
+        },
+      }),
+    );
+    await expect(check([deployment({ name: "core" }, results)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        suggestion: expect.stringContaining("remove its reference to the resource there"),
+      }),
+    );
+  });
+
   test("rejects an executor and an AI gateway of the run whose planned versions use deleted resources", async () => {
     const portal = emptyPlanResults();
     portal.executor.changeSet.creates.push({
