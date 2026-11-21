@@ -192,11 +192,13 @@ describe("frontendPlugin", () => {
   });
   test("builds a site of a config with several applications when nothing reads application", async () => {
     const build = vi.fn<(context: FrontendBuildContext) => Promise<void>>();
-    const env = vi.fn(({ staticWebsites }: { staticWebsites: object }) => ({
-      SITES: Object.keys(staticWebsites).join(","),
-    }));
+    const env = vi.fn((context: { staticWebsites: object }) => {
+      const { staticWebsites } = { ...context };
+      return { SITES: Object.keys(staticWebsites).join(",") };
+    });
     const { ctx, publish, run } = setup([{ site: "web", distDir: "dist", env, build }]);
     Object.defineProperty(ctx, "application", {
+      enumerable: false,
       get(): never {
         throw new Error('"application" cannot be read because the config has 2 applications');
       },

@@ -54,7 +54,7 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
-import type { DeployApplication } from "./deploy-application";
+import type { ListingApplication } from "./deploy-application";
 
 type ExistingPipelineServices = WithLabel<
   Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
@@ -268,7 +268,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications: ReadonlyArray<ListingApplication>,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   previousExisting?: ExistingPipelineServices,
 ) {

@@ -103,7 +103,7 @@ import type {
   SCIMResource,
   TenantProvider as TenantProviderConfig,
 } from "#/types/auth.generated";
-import type { DeployApplication } from "./deploy-application";
+import type { ListingApplication } from "./deploy-application";
 
 type AuthApplyPhase =
   | Exclude<ApplyPhase, "delete">
@@ -484,7 +484,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications: ReadonlyArray<ListingApplication>,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {

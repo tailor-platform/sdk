@@ -19,7 +19,7 @@ import {
   onAppLabelledResourceOf,
   withMetadataWriteBatch,
 } from "./label";
-import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -165,9 +165,9 @@ export async function preflightAllTailorDB(
 export async function applyPrerequisiteResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<{ droppedOnAppLabels: DroppedOnAppLabels[] }> {
+): Promise<{ droppedOnAppLabels: OnAppLabelsDropped[] }> {
   const step = makeStep(deployments);
-  const droppedOnAppLabels: DroppedOnAppLabels[] = [];
+  const droppedOnAppLabels: OnAppLabelsDropped[] = [];
   await withMetadataWriteBatch(
     client,
     async (applyClient) => {
@@ -192,13 +192,19 @@ export async function applyPrerequisiteResources(
   return { droppedOnAppLabels };
 }
 
-function recordDroppedOnAppLabels(dropped: DroppedOnAppLabels[]) {
-  return (entry: DroppedOnAppLabels) => {
-    dropped.push(entry);
-    if (entry.applications.length === 0) return;
-    const { resourceType, name } = onAppLabelledResourceOf(entry.trn);
+/** A resource the Platform had no room on for the `sdk-on-app-*` labels of these applications. */
+export type OnAppLabelsDropped = {
+  resourceType: ManagedResourceType;
+  name: string;
+  applications: string[];
+};
+
+function recordDroppedOnAppLabels(dropped: OnAppLabelsDropped[]) {
+  return ({ trn, applications }: DroppedOnAppLabels) => {
+    const { resourceType, name } = onAppLabelledResourceOf(trn);
+    dropped.push({ resourceType, name, applications });
     logger.warn(
-      `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" holds as many labels as the Platform allows, so its sdk-on-app labels leave out: ${entry.applications.join(", ")}.`,
+      `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" has no room for more labels, so it is not labelled for these applications: ${applications.join(", ")}. Remove labels that tailor does not set from it to make room.`,
     );
   };
 }
@@ -256,7 +262,7 @@ export type RemainingApplyResult = {
   /** Applications whose labels the platform rejected for their count. */
   labelRejections: ApplicationLabelRejection[];
   /** `sdk-on-app-*` labels left off resources the Platform had no room on. */
-  droppedOnAppLabels: DroppedOnAppLabels[];
+  droppedOnAppLabels: OnAppLabelsDropped[];
 };
 
 /**
@@ -271,7 +277,7 @@ export async function applyRemainingResources(
 ): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
   const labelRejections: ApplicationLabelRejection[] = [];
-  const droppedOnAppLabels: DroppedOnAppLabels[] = [];
+  const droppedOnAppLabels: OnAppLabelsDropped[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
     maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
@@ -307,7 +313,7 @@ function maintenanceOf(
 type RemainingApplyOutcomes = {
   held: HeldMaintenanceMode[];
   labelRejections: ApplicationLabelRejection[];
-  droppedOnAppLabels: DroppedOnAppLabels[];
+  droppedOnAppLabels: OnAppLabelsDropped[];
 };
 
 async function applyRemainingResourcesHoldingMaintenanceMode(

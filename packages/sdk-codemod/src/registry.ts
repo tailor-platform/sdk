@@ -2180,6 +2180,7 @@ export const allCodemods: CodemodPackage[] = [
     suspiciousPatterns: [
       "onDeployed",
       "DeployedContext",
+      "frontendPlugin",
       "FrontendEnvContext",
       "FrontendBuildContext",
     ],
@@ -2194,7 +2195,7 @@ export const allCodemods: CodemodPackage[] = [
         after: [
           "async onDeployed(ctx) {",
           '  await ctx.staticWebsites["web"]?.publish(dir);',
-          '  const app = ctx.applications.find(({ name }) => name === "my-app");',
+          "  const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);",
           "  return { outputs: { url: app?.url } };",
           "}",
         ].join("\n"),
@@ -2207,8 +2208,9 @@ export const allCodemods: CodemodPackage[] = [
       "`FrontendBuildContext`) is deprecated as well. For each flagged file that reads",
       "`application` from such a context, including through destructuring: read a static website of the registering",
       "config, including one to `publish` to, from `staticWebsites` keyed by its name; read",
-      "an application's `url`, `domain`, `id`, `auth`, or `aiGateways` from the `applications`",
-      "entry with that application's `name`. Leave files that only define these hooks",
+      "an application's `url`, `domain`, `id`, `auth`, or `aiGateways` from its `applications`",
+      "entry: the registering config's own applications are those whose `configPath` equals",
+      "the context's `configPath`, or pick one by `name`. Leave files that only define these hooks",
       "without reading `application` unchanged.",
     ].join("\n"),
   },

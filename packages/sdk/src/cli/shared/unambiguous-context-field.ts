@@ -14,6 +14,12 @@ export interface UnambiguousContextFieldOptions<Key extends string, Value> {
   required?: boolean;
 }
 
+/** Options of a field that throws on read when it has no candidate. */
+export type RequiredUnambiguousContextFieldOptions<
+  Key extends string,
+  Value,
+> = UnambiguousContextFieldOptions<Key, Value> & { required: true };
+
 function throwingField(error: () => never): PropertyDescriptor {
   return { enumerable: false, configurable: true, get: error };
 }
@@ -29,7 +35,7 @@ function throwingField(error: () => never): PropertyDescriptor {
  */
 export function defineUnambiguousContextField<Target extends object, Key extends string, Value>(
   target: Target,
-  options: UnambiguousContextFieldOptions<Key, Value> & { required: true },
+  options: RequiredUnambiguousContextFieldOptions<Key, Value>,
 ): Target & { [K in Key]: Value };
 export function defineUnambiguousContextField<Target extends object, Key extends string, Value>(
   target: Target,
@@ -43,7 +49,7 @@ export function defineUnambiguousContextField<Target extends object, Key extends
   const names = Object.keys(candidates);
   const replacements = typeof replacement === "string" ? [replacement] : replacement;
   const suggestion = `Change the code that reads "${key}" to read ${replacements.map((field) => `"${field}"`).join(" or ")}.`;
-  const context = { field: key, replacement, candidates: names };
+  const context = { field: key, replacement: replacements, candidates: names };
   if (names.length === 0 && required) {
     return Object.defineProperty(
       target,

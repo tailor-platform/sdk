@@ -420,11 +420,11 @@ describe("applyDeploymentPlans", () => {
     const { droppedOnAppLabels } = await applyRemainingResources(client, [deployment("supplier")]);
 
     expect(droppedOnAppLabels).toEqual([
-      { trn: trn("a"), applications: ["shop"] },
-      { trn: trn("c"), applications: ["z"] },
+      { resourceType: "tailordb.service", name: "a", applications: ["shop"] },
+      { resourceType: "tailordb.service", name: "c", applications: ["z"] },
     ]);
     expect(logger.warn).toHaveBeenCalledWith(
-      'TailorDB namespace "a" holds as many labels as the Platform allows, so its sdk-on-app labels leave out: shop.',
+      'TailorDB namespace "a" has no room for more labels, so it is not labelled for these applications: shop. Remove labels that tailor does not set from it to make room.',
     );
   });
 

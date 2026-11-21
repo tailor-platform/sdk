@@ -48,7 +48,7 @@ import { tailordbTypeComparison } from "./compare";
 import { assertPendingMigrationsRunnable } from "./migration";
 import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
 import { logMigrationPlanNotices, validateAndDetectMigrations } from "./migration-validation";
-import type { DeployApplication } from "../deploy-application";
+import type { ListingApplication } from "../deploy-application";
 import type { PlanContext } from "../types";
 
 export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
@@ -292,7 +292,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications: ReadonlyArray<ListingApplication>,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>(

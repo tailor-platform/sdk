@@ -18,7 +18,7 @@ import {
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ConfigServices } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
-import type { DeployApplication } from "./deploy-application";
+import type { ListingApplication } from "./deploy-application";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -293,7 +293,7 @@ type ExistingFunction = {
  * @param previousExisting - A prior call's fetched existing registry entries, reused instead of
  *   re-listing them from the platform (the remote function registry cannot have changed between
  *   a deploy's first plan and its conditional rebuild's replan; only `entries`, the desired side, does)
- * @param applications - Applications of a workspace config, whose listings label resolver functions
+ * @param applications - Applications of the config, whose listings label resolver functions for a workspace owner
  * @returns Planned changes
  */
 export async function planFunctionRegistry(
@@ -302,7 +302,7 @@ export async function planFunctionRegistry(
   owner: DeployOwner,
   entries: FunctionEntry[],
   previousExisting?: WithLabel<ExistingFunction>,
-  applications?: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications?: ReadonlyArray<ListingApplication>,
 ) {
   const changeSet: FunctionRegistryChangeSet = createChangeSet<
     FunctionUpload,

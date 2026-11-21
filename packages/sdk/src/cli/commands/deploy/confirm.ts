@@ -325,6 +325,7 @@ export async function confirmUnmanagedResources(
     logger.log(
       `  Continuing moves them to ${managerOf(appName)}, and the workspace config's next deploy asks to take them back.`,
     );
+    logger.log("  To stop moving them back and forth, deploy them from one config only.");
   }
   if (untracked.length > 0) {
     logger.warn("Existing resources not tracked by tailor were found:");
@@ -352,7 +353,7 @@ export async function confirmUnmanagedResources(
     throw CLIError({
       code: "DEPLOY_CANCELLED",
       message: ml`
-      Apply cancelled. Resources remain unmanaged.
+      Apply cancelled. Resources were left as they are.
       To override, run again and confirm, or use --yes flag.
     `,
     });

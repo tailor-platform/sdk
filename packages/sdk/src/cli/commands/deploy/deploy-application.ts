@@ -51,6 +51,9 @@ export function workspaceDeployApplications(
   });
 }
 
+/** What it takes to tell which applications list a service. */
+export type ListingApplication = Pick<DeployApplication, "name" | "subgraphs">;
+
 /**
  * Names of the applications whose subgraphs list a service.
  * @param applications - Applications of the config
@@ -59,7 +62,7 @@ export function workspaceDeployApplications(
  * @returns The application names, in config order
  */
 export function applicationsListing(
-  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications: ReadonlyArray<ListingApplication>,
   type: "tailordb" | "pipeline" | "auth" | "idp",
   name: string,
 ): string[] {
