@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { configAuthNamespace, deployApplicationOf } from "./deploy-application";
+import {
+  configAuthNamespace,
+  deployApplicationOf,
+  workspaceDeployApplications,
+} from "./deploy-application";
 import type { Application } from "#/cli/services/application";
 import type { DeployApplication } from "./deploy-application";
 
@@ -99,5 +103,42 @@ describe("configAuthNamespace", () => {
     expect(
       configAuthNamespace({ application: { authServices: [] }, applications: [app(undefined)] }),
     ).toBeUndefined();
+  });
+});
+
+describe("workspaceDeployApplications", () => {
+  test("describes every application of a workspace config with the services it lists", () => {
+    expect(
+      workspaceDeployApplications({
+        shop: {
+          db: ["customer-db", "order-db"],
+          resolver: ["shop-api"],
+          idp: "shop-idp",
+          auth: "shop-auth",
+          cors: ["https://shop.example.com"],
+          disableIntrospection: true,
+        },
+        admin: { db: ["order-db"], resolver: [] },
+      }),
+    ).toEqual([
+      {
+        name: "shop",
+        subgraphs: [
+          { Type: "tailordb", Name: "customer-db" },
+          { Type: "tailordb", Name: "order-db" },
+          { Type: "pipeline", Name: "shop-api" },
+          { Type: "idp", Name: "shop-idp" },
+          { Type: "auth", Name: "shop-auth" },
+        ],
+        authNamespace: "shop-auth",
+        settings: { cors: ["https://shop.example.com"], disableIntrospection: true },
+      },
+      {
+        name: "admin",
+        subgraphs: [{ Type: "tailordb", Name: "order-db" }],
+        authNamespace: undefined,
+        settings: {},
+      },
+    ] satisfies DeployApplication[]);
   });
 });

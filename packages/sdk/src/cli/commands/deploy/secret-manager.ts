@@ -24,7 +24,7 @@ import {
   withSecretsStateLock,
 } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateSecretManagerSecretRequestSchema,
@@ -141,7 +141,7 @@ export function secretUpdateRequest(
   };
 }
 
-function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
+function collectIdPClientVaultNames(idpServices: ConfigServices["idpServices"]) {
   return new Set(
     idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
   );
@@ -365,14 +365,14 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application whose secret hashes are persisted
+ * @param application - Services whose secret hashes are persisted
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planSecretManager>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
-  application?: Readonly<Application>,
+  application?: Readonly<ConfigServices>,
 ) {
   const { vaultChangeSet, secretChangeSet, stateScope } = result;
 

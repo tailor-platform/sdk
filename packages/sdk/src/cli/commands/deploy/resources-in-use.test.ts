@@ -24,6 +24,7 @@ import {
 import { describe, expect, test } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner } from "./label";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
 import { emptyPlanResults } from "./test-helpers/plan-results";
@@ -72,6 +73,7 @@ function deployment(application: ApplicationShape, results: PlanResults) {
     ...application,
   } as unknown as Application;
   return {
+    owner: applicationOwner(full),
     application: full,
     applications: [deployApplicationOf(full)],
     ...results,

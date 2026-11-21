@@ -1,0 +1,60 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { describe, expect, test } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
+import { loadDeployConfigs } from "./deployment-target";
+
+const WORKSPACE_CONFIG = brandedDefault(
+  "workspace-config",
+  `{ db: { main: { files: [] } }, apps: { shop: { db: ["main"] } } }`,
+);
+
+function writeConfig(dir: string, name: string, source: string): string {
+  const file = path.join(dir, name, "tailor.config.ts");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, source);
+  return file;
+}
+
+describe("loadDeployConfigs", () => {
+  test("loads a workspace config without resolving an application id", async () => {
+    using dir = tempDir("deploy-workspace-config-");
+    using _logger = silenceLogger("warn", "log");
+    fs.mkdirSync(path.join(dir.dir, ".git"));
+    fs.mkdirSync(path.join(dir.dir, ".github"));
+    const lock = JSON.stringify({ version: 2, targets: [], appIds: {} });
+    fs.writeFileSync(path.join(dir.dir, ".github", "tailor.lock"), lock);
+    const configPath = writeConfig(dir.dir, "ws", WORKSPACE_CONFIG);
+
+    const [loaded] = await loadDeployConfigs({
+      configPaths: [configPath],
+      dryRun: false,
+      buildOnly: false,
+    });
+
+    expect(loaded).toMatchObject({ kind: "workspace", workspace: { path: configPath } });
+    expect(fs.readFileSync(configPath, "utf-8")).toBe(WORKSPACE_CONFIG);
+    expect(fs.readFileSync(path.join(dir.dir, ".github", "tailor.lock"), "utf-8")).toBe(lock);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("rejects a workspace config deployed together with other configs", async () => {
+    using dir = tempDir("deploy-workspace-config-");
+    const workspacePath = writeConfig(dir.dir, "ws", WORKSPACE_CONFIG);
+    const appPath = writeConfig(
+      dir.dir,
+      "app",
+      `export default { id: "8d6f1e2a-4b3c-4d5e-9f60-7a8b9c0d1e2f", name: "other" };`,
+    );
+
+    await expect(
+      loadDeployConfigs({ configPaths: [appPath, workspacePath], dryRun: true, buildOnly: false }),
+    ).rejects.toMatchObject({
+      code: "DEPLOY_WORKSPACE_CONFIG_WITH_OTHERS",
+      context: { configPath: workspacePath },
+    });
+  });
+});

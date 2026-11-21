@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
   loadDeployConfigs: async () => [
-    { config: mocks.target.config, plugins: [...mocks.target.plugins] },
+    { kind: "config", config: mocks.target.config as never, plugins: [...mocks.target.plugins] },
   ],
   buildDeploymentTargets: async () => [mocks.target],
 }));
@@ -135,8 +135,14 @@ beforeEach(() => {
     env: {},
   };
   mocks.target = {
+    source: {
+      kind: "config",
+      config: { path: "/repo/tailor.config.ts", name: "app" },
+      application: { ...application, name: "app" },
+    },
     config: { path: "/repo/tailor.config.ts", name: "app" },
     application,
+    envOverrides: { resolver: {}, auth: {} },
     owner: { kind: "application", name: "app", id: undefined },
     applications: [{ name: "app", subgraphs: [], authNamespace: undefined, settings: {} }],
     plugins: [],
@@ -552,11 +558,9 @@ test("includes a static website in JSON when the config has no application", asy
 test("includes AI Gateway URLs and public OAuth clients without client secrets in JSON", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
-  mocks.target.config.aiGateways = [
-    { name: "ai" },
-  ] as BuiltDeploymentTarget["config"]["aiGateways"];
   mocks.target.application = {
     ...mocks.target.application,
+    aiGatewayServices: [{ name: "ai" }],
     authServices: [
       {
         config: { name: "auth" },
@@ -564,6 +568,7 @@ test("includes AI Gateway URLs and public OAuth clients without client secrets i
       } as BuiltDeploymentTarget["application"]["authServices"][number],
     ],
   };
+  mocks.target.applications = [{ name: "app", subgraphs: [], authNamespace: "auth", settings: {} }];
   await deploy({ yes: true, noValidate: true });
   expect(logger.out).toHaveBeenLastCalledWith(
     expect.objectContaining({

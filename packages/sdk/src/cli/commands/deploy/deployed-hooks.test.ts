@@ -29,15 +29,22 @@ vi.mock("../staticwebsite/deploy", () => ({
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 
 function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
+  const configPath = `/repo/${name}/tailor.config.ts`;
+  const application = {
+    staticWebsiteServices: [{ name: `${name}-web` }],
+    aiGatewayServices: [{ name: "ai" }],
+    authServices: [{ config: { name: "auth" } }],
+  };
   return {
-    config: { path: `/repo/${name}/tailor.config.ts`, aiGateways: [{ name: "ai" }] },
-    application: {
-      id: `${name}-id`,
-      name,
-      subgraphs: [{}],
-      staticWebsiteServices: [{ name: `${name}-web` }],
-      authServices: [{ config: { name: "auth" } }],
+    source: {
+      kind: "config",
+      config: { path: configPath, name },
+      application: { ...application, id: `${name}-id`, name },
     },
+    config: { path: configPath },
+    application,
+    owner: { kind: "application", name, id: `${name}-id` },
+    applications: [{ name, subgraphs: [{}], authNamespace: "auth", settings: {} }],
     plugins,
   } as unknown as BuiltDeploymentTarget;
 }
@@ -236,7 +243,9 @@ describe("deployed hooks", () => {
     const hook = vi.fn();
     const external = target([plugin(hook)]);
     Object.assign(external.application, { authServices: [] });
-    Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
+    Object.assign(external, {
+      applications: [{ name: "app", subgraphs: [{}], authNamespace: "shared-auth", settings: {} }],
+    });
     await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
     expect(client.listAuthOAuth2Clients).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "shared-auth" }),

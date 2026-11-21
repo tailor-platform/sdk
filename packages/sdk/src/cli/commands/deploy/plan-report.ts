@@ -38,7 +38,8 @@ type PrintPlanOptions = {
 
 /** Deploy hook that a dry run would run after applying resources. */
 interface PendingDeployedHook {
-  application: string;
+  /** The application a `defineConfig()` config deploys; omitted for a workspace config. */
+  application?: string;
   pluginId: string;
 }
 

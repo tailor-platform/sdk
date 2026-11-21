@@ -1,7 +1,6 @@
 import * as nodeFs from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -9,10 +8,10 @@ import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite, staticWebsiteDeployTimeoutError } from "../staticwebsite/deploy";
+import { sourceApplicationName, type BuiltDeploymentTarget } from "./deployment-target";
 import { execPluginCommand } from "./plugin-exec";
 import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
-import type { BuiltDeploymentTarget } from "./deployment-target";
 
 interface LoadDeployedApplicationsParams {
   client: OperatorClient;
@@ -28,10 +27,6 @@ interface DeployedHookOutput {
   application: string;
   pluginId: string;
   outputs: Record<string, JsonValue>;
-}
-
-interface LoadedTarget {
-  application: DeployedApplication;
 }
 
 async function loadSiteUrl(
@@ -86,16 +81,8 @@ async function loadDeployedTarget(
   workspaceId: string,
   target: BuiltDeploymentTarget,
   loadOAuth2Clients: LoadOAuth2Clients,
-): Promise<LoadedTarget> {
-  const name = target.application.name;
-  const namespace = getApplicationAuthNamespace({
-    authServices: target.application.authServices,
-    config: target.config,
-  });
-  const [response, sites, gateways, oauth2Clients] = await Promise.all([
-    target.application.subgraphs.length
-      ? client.getApplication({ workspaceId, applicationName: name })
-      : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
+): Promise<DeployedApplication[]> {
+  const [sites, gateways] = await Promise.all([
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => ({
         name: site.name,
@@ -103,7 +90,7 @@ async function loadDeployedTarget(
       })),
     ),
     Promise.all(
-      (target.config.aiGateways ?? []).map(async (gateway) => {
+      target.application.aiGatewayServices.map(async (gateway) => {
         const response = await getOrNull(() =>
           client.getAIGateway({ workspaceId, aigatewayName: gateway.name }),
         );
@@ -114,29 +101,30 @@ async function loadDeployedTarget(
         return { name: gateway.name, url: deployed.url };
       }),
     ),
-    namespace ? loadOAuth2Clients(namespace) : [],
   ]);
-  const application = target.application.subgraphs.length
-    ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
-    : response?.application;
-  return {
-    application: {
-      ...(target.application.id ? { id: target.application.id } : {}),
-      name,
-      configPath: target.config.path,
-      ...(application ? { url: application.url, domain: application.domain } : {}),
-      aiGateways: gateways,
-      staticWebsites: byName(sites),
-      ...(namespace
-        ? {
-            auth: {
-              namespace,
-              oauth2Clients,
-            },
-          }
-        : {}),
-    },
-  };
+  const id = target.owner.kind === "application" ? target.owner.id : undefined;
+  return Promise.all(
+    target.applications.map(async ({ name, subgraphs, authNamespace }) => {
+      const [response, oauth2Clients] = await Promise.all([
+        subgraphs.length
+          ? client.getApplication({ workspaceId, applicationName: name })
+          : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
+        authNamespace ? loadOAuth2Clients(authNamespace) : [],
+      ]);
+      const application = subgraphs.length
+        ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
+        : response?.application;
+      return {
+        ...(id ? { id } : {}),
+        name,
+        configPath: target.config.path,
+        ...(application ? { url: application.url, domain: application.domain } : {}),
+        aiGateways: gateways,
+        staticWebsites: byName(sites),
+        ...(authNamespace ? { auth: { namespace: authNamespace, oauth2Clients } } : {}),
+      };
+    }),
+  );
 }
 
 /**
@@ -152,7 +140,7 @@ export async function loadDeployedApplications(
   const loaded = await Promise.all(
     targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
   );
-  return loaded.map(({ application }) => application);
+  return loaded.flat();
 }
 
 function ignoreMissingPath(error: unknown): undefined {
@@ -240,8 +228,32 @@ interface HookOwner {
   plugin: Plugin;
 }
 
+function hookApplicationName(target: BuiltDeploymentTarget): string {
+  return sourceApplicationName(target.source) ?? "workspace config";
+}
+
 function hookLabel(hook: HookOwner): string {
-  return `${hook.plugin.id} (app: ${hook.target.application.name})`;
+  return `${hook.plugin.id} (app: ${hookApplicationName(hook.target)})`;
+}
+
+/**
+ * Stop a deploy whose workspace config registers plugins with onDeployed hooks, which workspace
+ * configs do not run yet, before anything is planned.
+ * @param targets - Built deployment targets
+ */
+export function assertNoWorkspaceDeployedHooks(targets: readonly BuiltDeploymentTarget[]): void {
+  const pluginIds = targets.flatMap((target) =>
+    target.source.kind === "workspace"
+      ? target.plugins.filter((plugin) => plugin.onDeployed).map((plugin) => plugin.id)
+      : [],
+  );
+  if (pluginIds.length === 0) return;
+  throw CLIError({
+    code: "DEPLOYED_HOOKS_UNSUPPORTED",
+    message: `A workspace config does not run onDeployed hooks yet, but these plugins have one: ${pluginIds.join(", ")}.`,
+    suggestion: "Remove those plugins from the workspace config to deploy it.",
+    context: { pluginIds },
+  });
 }
 
 function copyJsonOutputs(outputs: unknown): Record<string, JsonValue> {
@@ -293,7 +305,7 @@ export async function runDeployedHooks(
     try {
       const result = await withSpan("deploy.onDeployed", async (span) => {
         span.setAttribute("plugin.id", plugin.id);
-        span.setAttribute("app.name", target.application.name);
+        span.setAttribute("app.name", hookApplicationName(target));
         return hook.call(plugin, {
           workspaceId,
           ...(params.profile !== undefined && { profile: params.profile }),
@@ -311,14 +323,14 @@ export async function runDeployedHooks(
       const hookOutputs = result?.outputs;
       if (hookOutputs !== undefined) {
         outputs.push({
-          application: target.application.name,
+          application: hookApplicationName(target),
           pluginId: plugin.id,
           outputs: copyJsonOutputs(hookOutputs),
         });
       }
     } catch (error) {
       throw deployedHookFailure(
-        `the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}"`,
+        `the onDeployed hook of plugin "${plugin.id}" failed for app "${hookApplicationName(target)}"`,
         error,
         hooks.slice(position + 1).map(hookLabel),
       );

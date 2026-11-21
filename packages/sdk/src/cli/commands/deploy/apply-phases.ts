@@ -9,6 +9,7 @@ import {
   type planApplication,
 } from "./application";
 import { applyAuth, type planAuth } from "./auth";
+import { type DeploymentSource, sourceApplicationName } from "./deployment-target";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
@@ -27,18 +28,24 @@ import {
   applyWorkflowJobFunctionExecutionPolicy,
   type planWorkflowJobFunctionExecutionPolicy,
 } from "./workflow-execution-policy";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices, EnvOverrides } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { DeployApplication } from "./deploy-application";
 import type { MaintenanceReport } from "./tailordb/migration-timing";
 
-/** How long one application's TailorDB migrations kept tables in maintenance mode. */
+/** How long one config's TailorDB migrations kept tables in maintenance mode. */
 export interface TailorDBMaintenance extends MaintenanceReport {
-  application: string;
+  /** The application a `defineConfig()` config deploys; omitted for a workspace config. */
+  application?: string;
 }
 
 export type PlannedDeployment = {
-  readonly application: Readonly<Application>;
+  /** The config file the deployment builds. */
+  readonly source: DeploymentSource;
+  /** The services the deployment's config defines. */
+  readonly application: Readonly<ConfigServices>;
+  /** `env` values each service uses in place of the root values with the same keys. */
+  readonly envOverrides: EnvOverrides;
   /** Applications the deployment plans. */
   readonly applications: ReadonlyArray<DeployApplication>;
   /** Owner of the resources the deployment manages. */
@@ -71,7 +78,7 @@ export type PlannedDeployment = {
 
 export type PlanResults = Omit<
   PlannedDeployment,
-  "application" | "applications" | "owner" | "forceApplyAll"
+  "source" | "application" | "envOverrides" | "applications" | "owner" | "forceApplyAll"
 >;
 
 /**
@@ -92,7 +99,9 @@ export type ReusablePlanKind =
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
   const {
+    source: _source,
     application: _application,
+    envOverrides: _envOverrides,
     applications: _applications,
     owner: _owner,
     forceApplyAll: _forceApplyAll,
@@ -192,7 +201,7 @@ async function releaseMaintenanceModes(
   for (const { deployment, release } of held) {
     try {
       const report = await release(client);
-      if (report) maintenance.push({ application: deployment.application.name, ...report });
+      if (report) maintenance.push(maintenanceOf(deployment, report));
     } catch (error) {
       if (!applyFailed && !firstError) {
         firstError = { error };
@@ -248,7 +257,7 @@ export async function applyRemainingResources(
   }
   const released = await releaseMaintenanceModes(client, held, false);
   const order = new Map(
-    deployments.map((deployment, index) => [deployment.application.name, index]),
+    deployments.map((deployment, index) => [sourceApplicationName(deployment.source), index]),
   );
   return {
     maintenance: [...maintenance, ...released].toSorted(
@@ -256,6 +265,14 @@ export async function applyRemainingResources(
     ),
     labelRejections,
   };
+}
+
+function maintenanceOf(
+  deployment: PlannedDeployment,
+  report: MaintenanceReport,
+): TailorDBMaintenance {
+  const application = sourceApplicationName(deployment.source);
+  return application === undefined ? report : { application, ...report };
 }
 
 type RemainingApplyOutcomes = {
@@ -281,7 +298,7 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
         const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
           holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
         });
-        if (report) maintenance.push({ application: d.application.name, ...report });
+        if (report) maintenance.push(maintenanceOf(d, report));
       });
       await step("apply.auth.createUpdateDependents", (d) =>
         applyAuth(applyClient, d.auth, "create-update-dependents"),

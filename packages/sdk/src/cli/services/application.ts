@@ -959,7 +959,8 @@ interface LoadSource extends ServiceSource {
   envOverrides: EnvOverrides;
 }
 
-const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
+/** The `env` overrides of a `defineConfig()` config, which has none. */
+export const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
 
 function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource {
   if (isLoadedWorkspaceConfig(config)) {
