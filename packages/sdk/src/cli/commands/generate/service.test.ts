@@ -395,9 +395,11 @@ describe("GenerationManager", () => {
         config: mockConfig,
       });
 
-      await expect(duplicateManager.generate()).rejects.toThrow(
-        /Duplicate TailorDB type name "User"/,
-      );
+      await expect(duplicateManager.generate()).rejects.toMatchObject({
+        message: expect.stringMatching(/Duplicate TailorDB type name "User"/),
+        suggestion:
+          "Give each TailorDB type a name that is unique across all TailorDB namespaces in the application.",
+      });
       expect(vi.mocked(logger.error).mock.calls).toEqual([
         ["Error validating TailorDB table names"],
       ]);

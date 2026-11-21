@@ -8,7 +8,10 @@ import {
   type ConfigServices,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
-import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import {
+  assertUniqueLocalTailorDBTypeNames,
+  tailorDBTypeNameScopeOf,
+} from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
 import {
   isLoadedWorkspaceConfig,
@@ -337,7 +340,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         try {
           assertUniqueLocalTailorDBTypeNames({
             tailorDBServices: configServices.tailorDBServices,
-            scope: isLoadedWorkspaceConfig(config) ? "workspace" : "application",
+            scope: tailorDBTypeNameScopeOf(config),
           });
         } catch (error) {
           logger.error("Error validating TailorDB table names");
