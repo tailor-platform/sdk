@@ -1056,6 +1056,29 @@ describe("confirmDeploymentPlans", () => {
         });
       },
     },
+    {
+      parent: 'Auth service "old-auth" (application "shop")',
+      children: ['OAuth2 client "web"', 'OAuth2 client "mobile"'],
+      plan: (results: PlanResults) => {
+        results.auth.changeSet.service.deletes.push({
+          name: "old-auth",
+          request: { workspaceId: "ws", namespaceName: "old-auth" },
+        });
+        for (const name of ["web", "mobile"]) {
+          results.auth.changeSet.oauth2Client.deletes.push({
+            name,
+            request: { workspaceId: "ws", namespaceName: "old-auth", name },
+          });
+        }
+        results.auth.takeovers.push({
+          resourceType: "auth.service",
+          resourceLabel: "Auth service",
+          resourceName: "old-auth",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
   ])(
     "asks once about $parent the takeover deletes, listing what goes with it",
     async ({ parent, children, plan }) => {
