@@ -77,7 +77,12 @@ import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
-import { type DeployOwner, resourceTrn, writeMetadataLabelsDirect } from "../label";
+import {
+  type DeployOwner,
+  resourceTrn,
+  writeMetadataLabelsDirect,
+  writeMetadataLabelsDroppingOnAppLabels,
+} from "../label";
 import {
   assertMigrationSkipSteps,
   formatMigrationSkipSteps,
@@ -670,7 +675,7 @@ export async function updateMigrationLabel(
 ): Promise<boolean> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  return writeMetadataLabelsDirect(client, {
+  return writeMetadataLabelsDroppingOnAppLabels(client, {
     trn,
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
@@ -778,7 +783,7 @@ async function writeMigrationInProgress(
   record: MigrationInProgress,
 ): Promise<void> {
   const { executionId } = record;
-  await writeMetadataLabelsDirect(client, {
+  await writeMetadataLabelsDroppingOnAppLabels(client, {
     trn: resourceTrn(workspaceId, "tailordb", namespace),
     labels: {
       [MIGRATION_IN_PROGRESS_LABEL_KEY]: inProgressLabel(record.number, record.kind),

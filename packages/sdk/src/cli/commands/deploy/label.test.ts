@@ -27,8 +27,9 @@ import {
   withExtraLabels,
   withMetadataWriteBatch,
   writeMetadataLabels,
+  writeMetadataLabelsDroppingOnAppLabels,
 } from "./label";
-import { labelCountRejection } from "./test-helpers/label-count-rejection";
+import { bulkLabelCountRejection, labelCountRejection } from "./test-helpers/label-count-rejection";
 import type { DeployOwner, MetadataLabelClient } from "./label";
 
 function appOwner(name: string, id?: string): DeployOwner {
@@ -994,5 +995,103 @@ describe("nested resource TRNs", () => {
   test("keeps a namespace TRN distinct from a type TRN inside it", () => {
     expect(tailorDBTypeTrn(ws, "db", "Order")).not.toBe(resourceTrn(ws, "tailordb", "db"));
     expect(tailorDBTypeTrn(ws, "db", "Order")).toContain(`${resourceTrn(ws, "tailordb", "db")}:`);
+  });
+});
+
+describe("labels the Platform allows no more of", () => {
+  const limit = 4;
+  const onApp = (...apps: string[]) =>
+    Object.fromEntries(apps.map((app) => [`sdk-on-app-${app}`, ""]));
+  function limitedClient(labelsByTrn: Map<string, Record<string, string>>) {
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: {},
+      bulkSetMetadata: { results: [] },
+    });
+    client.getMetadata.mockImplementation(async ({ trn }) => ({
+      metadata: { labels: { ...labelsByTrn.get(trn ?? "") } },
+    }));
+    client.setMetadata.mockImplementation(async ({ trn, labels }) => {
+      if (Object.keys(labels ?? {}).length > limit) throw labelCountRejection();
+      labelsByTrn.set(trn ?? "", { ...labels });
+      return {};
+    });
+    return client;
+  }
+
+  test("writes the rest of a rejected bulk and as many sdk-on-app labels as fit on each rejected resource", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>();
+    const client = limitedClient(labelsByTrn);
+    client.bulkSetMetadata
+      .mockRejectedValueOnce(bulkLabelCountRejection())
+      .mockImplementationOnce(async ({ requests }) => {
+        for (const { trn, labels } of requests ?? []) labelsByTrn.set(trn ?? "", { ...labels });
+        return { results: [] };
+      });
+    const dropped = vi.fn();
+    const write = (trn: string, labels: Record<string, string>) => ({
+      trn,
+      labels: { "sdk-managed": "workspace", ...labels },
+    });
+
+    await withMetadataWriteBatch(
+      client,
+      async (batchClient) => {
+        await writeMetadataLabels(batchClient, write("trn:a", onApp("e", "d", "c", "b", "a")));
+        await writeMetadataLabels(batchClient, write("trn:b", onApp("shop")));
+        await writeMetadataLabels(batchClient, write("trn:c", onApp("x", "y", "z", "w")));
+      },
+      dropped,
+    );
+
+    expect(client.bulkSetMetadata.mock.calls[1]?.[0].requests?.map(({ trn }) => trn)).toEqual([
+      "trn:b",
+    ]);
+    expect(labelsByTrn.get("trn:a")).toEqual({
+      "sdk-managed": "workspace",
+      ...onApp("a", "b", "c"),
+    });
+    expect(labelsByTrn.get("trn:b")).toEqual({ "sdk-managed": "workspace", ...onApp("shop") });
+    expect(labelsByTrn.get("trn:c")).toEqual({
+      "sdk-managed": "workspace",
+      ...onApp("w", "x", "y"),
+    });
+    expect(dropped.mock.calls).toEqual([
+      [{ trn: "trn:a", applications: ["d", "e"] }],
+      [{ trn: "trn:c", applications: ["z"] }],
+    ]);
+  });
+
+  test("keeps a migration label that does not fit by dropping sdk-on-app labels", async () => {
+    const labelsByTrn = new Map([
+      ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+    ]);
+    const client = limitedClient(labelsByTrn);
+
+    await writeMetadataLabelsDroppingOnAppLabels(client, {
+      trn: "trn:db",
+      labels: { "sdk-migration-in-progress": "m0002" },
+    });
+
+    expect(labelsByTrn.get("trn:db")).toEqual({
+      "sdk-managed": "workspace",
+      "sdk-migration-in-progress": "m0002",
+      ...onApp("a", "b"),
+    });
+  });
+
+  test("fails when the other labels alone are more than the Platform allows", async () => {
+    const labelsByTrn = new Map([["trn:db", { a: "1", b: "2", c: "3", d: "4" }]]);
+    const client = limitedClient(labelsByTrn);
+
+    await expect(
+      writeMetadataLabelsDroppingOnAppLabels(client, {
+        trn: "trn:db",
+        labels: { "sdk-managed": "workspace", ...onApp("shop") },
+      }),
+    ).rejects.toMatchObject({
+      code: "METADATA_LABEL_LIMIT_EXCEEDED",
+      context: { trn: "trn:db" },
+    });
   });
 });

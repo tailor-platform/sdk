@@ -13,7 +13,13 @@ import { type DeploymentSource, sourceApplicationName } from "./deployment-targe
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
-import { type DeployOwner, withMetadataWriteBatch } from "./label";
+import {
+  type DeployOwner,
+  type DroppedOnAppLabels,
+  onAppLabelledResourceOf,
+  withMetadataWriteBatch,
+} from "./label";
+import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -154,29 +160,47 @@ export async function preflightAllTailorDB(
  * `deployInternal` when `env` still holds an unresolved placeholder -- runs.
  * @param client - Operator client instance
  * @param deployments - Planned deployments to apply
+ * @returns The `sdk-on-app-*` labels left off resources the Platform had no room on
  */
 export async function applyPrerequisiteResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<void> {
+): Promise<{ droppedOnAppLabels: DroppedOnAppLabels[] }> {
   const step = makeStep(deployments);
-  await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdatePrerequisiteServices", async () => {
-      await step("apply.secretManager.createUpdate", (d) =>
-        applySecretManager(applyClient, d.secretManager, "create-update", d.application),
-      );
-      await step("apply.staticWebsite.createUpdate", (d) =>
-        applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
-      );
-      await step("apply.aiGateway.createUpdate", (d) =>
-        applyAIGateway(applyClient, d.aiGateway, "create-update"),
-      );
-      await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
-      await step("apply.auth.createUpdatePrerequisites", (d) =>
-        applyAuth(applyClient, d.auth, "create-update-prerequisites"),
-      );
-    });
-  });
+  const droppedOnAppLabels: DroppedOnAppLabels[] = [];
+  await withMetadataWriteBatch(
+    client,
+    async (applyClient) => {
+      await withSpan("apply.createUpdatePrerequisiteServices", async () => {
+        await step("apply.secretManager.createUpdate", (d) =>
+          applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+        );
+        await step("apply.staticWebsite.createUpdate", (d) =>
+          applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
+        );
+        await step("apply.aiGateway.createUpdate", (d) =>
+          applyAIGateway(applyClient, d.aiGateway, "create-update"),
+        );
+        await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
+        await step("apply.auth.createUpdatePrerequisites", (d) =>
+          applyAuth(applyClient, d.auth, "create-update-prerequisites"),
+        );
+      });
+    },
+    recordDroppedOnAppLabels(droppedOnAppLabels),
+  );
+  return { droppedOnAppLabels };
+}
+
+function recordDroppedOnAppLabels(dropped: DroppedOnAppLabels[]) {
+  return (entry: DroppedOnAppLabels) => {
+    dropped.push(entry);
+    if (entry.applications.length === 0) return;
+    const { resourceType, name } = onAppLabelledResourceOf(entry.trn);
+    logger.warn(
+      `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" holds as many labels as the Platform allows, so its sdk-on-app labels leave out: ${entry.applications.join(", ")}.`,
+    );
+  };
 }
 
 type HeldMaintenanceMode = {
@@ -231,6 +255,8 @@ export type RemainingApplyResult = {
   maintenance: TailorDBMaintenance[];
   /** Applications whose labels the platform rejected for their count. */
   labelRejections: ApplicationLabelRejection[];
+  /** `sdk-on-app-*` labels left off resources the Platform had no room on. */
+  droppedOnAppLabels: DroppedOnAppLabels[];
 };
 
 /**
@@ -245,11 +271,13 @@ export async function applyRemainingResources(
 ): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
   const labelRejections: ApplicationLabelRejection[] = [];
+  const droppedOnAppLabels: DroppedOnAppLabels[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
     maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
       held,
       labelRejections,
+      droppedOnAppLabels,
     });
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
@@ -264,6 +292,7 @@ export async function applyRemainingResources(
       (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
     ),
     labelRejections,
+    droppedOnAppLabels,
   };
 }
 
@@ -278,6 +307,7 @@ function maintenanceOf(
 type RemainingApplyOutcomes = {
   held: HeldMaintenanceMode[];
   labelRejections: ApplicationLabelRejection[];
+  droppedOnAppLabels: DroppedOnAppLabels[];
 };
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
@@ -285,63 +315,69 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
   deployments: ReadonlyArray<PlannedDeployment>,
   outcomes: RemainingApplyOutcomes,
 ): Promise<TailorDBMaintenance[]> {
-  const { held, labelRejections } = outcomes;
+  const { held, labelRejections, droppedOnAppLabels } = outcomes;
   const step = makeStep(deployments);
   const maintenance: TailorDBMaintenance[] = [];
 
-  await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdateServices", async () => {
-      await step("apply.functionRegistry.createUpdate", (d) =>
-        applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
-      );
-      await step("apply.tailorDB.createUpdate", async (d) => {
-        const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
-          holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+  await withMetadataWriteBatch(
+    client,
+    async (applyClient) => {
+      await withSpan("apply.createUpdateServices", async () => {
+        await step("apply.functionRegistry.createUpdate", (d) =>
+          applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
+        );
+        await step("apply.tailorDB.createUpdate", async (d) => {
+          const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
+            holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+          });
+          if (report) maintenance.push(maintenanceOf(d, report));
         });
-        if (report) maintenance.push(maintenanceOf(d, report));
+        await step("apply.auth.createUpdateDependents", (d) =>
+          applyAuth(applyClient, d.auth, "create-update-dependents"),
+        );
+        await step("apply.pipeline.createUpdate", (d) =>
+          applyPipeline(applyClient, d.pipeline, "create-update"),
+        );
       });
-      await step("apply.auth.createUpdateDependents", (d) =>
-        applyAuth(applyClient, d.auth, "create-update-dependents"),
-      );
-      await step("apply.pipeline.createUpdate", (d) =>
-        applyPipeline(applyClient, d.pipeline, "create-update"),
-      );
-    });
 
-    await withSpan("apply.deleteSubgraphResources", async () => {
-      await forEachDeployment(deployments, (d) =>
-        applyPipeline(applyClient, d.pipeline, "delete-resources"),
-      );
-      await forEachDeployment(deployments, (d) =>
-        applyAuth(applyClient, d.auth, "delete-resources"),
-      );
-      await forEachDeployment(deployments, (d) => applyIdP(applyClient, d.idp, "delete-resources"));
-    });
-
-    await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment(deployments, async (d) => {
-        labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+      await withSpan("apply.deleteSubgraphResources", async () => {
+        await forEachDeployment(deployments, (d) =>
+          applyPipeline(applyClient, d.pipeline, "delete-resources"),
+        );
+        await forEachDeployment(deployments, (d) =>
+          applyAuth(applyClient, d.auth, "delete-resources"),
+        );
+        await forEachDeployment(deployments, (d) =>
+          applyIdP(applyClient, d.idp, "delete-resources"),
+        );
       });
-    });
 
-    await withSpan("apply.createUpdateDependentServices", async () => {
-      await step("apply.executor.createUpdate", (d) =>
-        applyExecutor(applyClient, d.executor, "create-update"),
-      );
-      // Execution policies must exist before workflow job functions that reference
-      // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-      await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
-        applyWorkflowJobFunctionExecutionPolicy(
-          applyClient,
-          d.workflowExecutionPolicy,
-          "create-update",
-        ),
-      );
-      await step("apply.workflow.createUpdate", (d) =>
-        applyWorkflow(applyClient, d.workflow, "create-update"),
-      );
-    });
-  });
+      await withSpan("apply.createUpdateApplication", async () => {
+        await forEachDeployment(deployments, async (d) => {
+          labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+        });
+      });
+
+      await withSpan("apply.createUpdateDependentServices", async () => {
+        await step("apply.executor.createUpdate", (d) =>
+          applyExecutor(applyClient, d.executor, "create-update"),
+        );
+        // Execution policies must exist before workflow job functions that reference
+        // them by key, otherwise the runtime rejects the dispatch as an unknown key.
+        await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
+          applyWorkflowJobFunctionExecutionPolicy(
+            applyClient,
+            d.workflowExecutionPolicy,
+            "create-update",
+          ),
+        );
+        await step("apply.workflow.createUpdate", (d) =>
+          applyWorkflow(applyClient, d.workflow, "create-update"),
+        );
+      });
+    },
+    recordDroppedOnAppLabels(droppedOnAppLabels),
+  );
 
   await withSpan("apply.deleteDependentServices", async () => {
     await forEachDeployment(deployments, (d) => applyWorkflow(client, d.workflow, "delete"));

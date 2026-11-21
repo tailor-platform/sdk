@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import {
   applyDeploymentPlans,
   applyPrerequisiteResources,
@@ -10,7 +12,11 @@ import {
 } from "./apply-phases";
 import { writeMetadataLabels } from "./label";
 import { MaintenanceTimeline } from "./tailordb/migration-timing";
-import { applicationLabelRejection } from "./test-helpers/label-count-rejection";
+import {
+  applicationLabelRejection,
+  bulkLabelCountRejection,
+  labelCountRejection,
+} from "./test-helpers/label-count-rejection";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MaintenanceModeRelease } from "./tailordb";
 
@@ -386,6 +392,40 @@ describe("applyDeploymentPlans", () => {
 
     expect(labelRejections).toEqual([rejection]);
     expect(mocks.calls.at(-1)).toBe("function:supplier-function:delete");
+  });
+
+  test("returns and warns about the sdk-on-app labels the Platform had no room for", async () => {
+    using _logger = silenceLogger("warn");
+    const trn = (name: string) => `trn:v1:workspace:ws:tailordb:${name}`;
+    const onApp = (...apps: string[]) =>
+      Object.fromEntries(apps.map((app) => [`sdk-on-app-${app}`, ""]));
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: async ({ labels }) => {
+        if (Object.keys(labels ?? {}).length > 2) throw labelCountRejection();
+        return {};
+      },
+      bulkSetMetadata: { results: [] },
+    });
+    client.bulkSetMetadata.mockRejectedValueOnce(bulkLabelCountRejection());
+    mocks.applyTailorDB.mockImplementationOnce(async (applyClient) => {
+      await writeMetadataLabels(applyClient, {
+        trn: trn("a"),
+        labels: onApp("shop", "admin", "ops"),
+      });
+      await writeMetadataLabels(applyClient, { trn: trn("b"), labels: onApp("shop") });
+      await writeMetadataLabels(applyClient, { trn: trn("c"), labels: onApp("x", "y", "z") });
+    });
+
+    const { droppedOnAppLabels } = await applyRemainingResources(client, [deployment("supplier")]);
+
+    expect(droppedOnAppLabels).toEqual([
+      { trn: trn("a"), applications: ["shop"] },
+      { trn: trn("c"), applications: ["z"] },
+    ]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'TailorDB namespace "a" holds as many labels as the Platform allows, so its sdk-on-app labels leave out: shop.',
+    );
   });
 
   test("fails the one-shot apply on rejected application labels", async () => {

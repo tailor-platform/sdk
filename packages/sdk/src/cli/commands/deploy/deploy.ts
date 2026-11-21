@@ -95,6 +95,7 @@ import {
   isOwnedBy,
   resourceTrn,
   sdkNameLabelKey,
+  onAppLabelledResourceOf,
 } from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
@@ -1167,7 +1168,7 @@ async function deployInternal(
     // can never reference a static website's URL, so applying them first is
     // safe -- and it means a site this same deploy creates already exists by
     // the time env is read again below.
-    await applyPrerequisiteResources(client, deployments);
+    const prerequisites = await applyPrerequisiteResources(client, deployments);
 
     let applied: RemainingApplyResult;
     if (needsUrlResolution) {
@@ -1198,6 +1199,13 @@ async function deployInternal(
       applied = await applyRemainingResources(client, deployments);
     }
     const { maintenance: tailordbMaintenance, labelRejections } = applied;
+    const warnings = [...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels]
+      .filter(({ applications }) => applications.length > 0)
+      .map(({ trn, applications }) => ({
+        type: "onAppLabelsDropped" as const,
+        ...onAppLabelledResourceOf(trn),
+        applications,
+      }));
 
     const deployed =
       logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
@@ -1242,6 +1250,7 @@ async function deployInternal(
           applications: deployed?.flatMap((entry) => entry.applications),
           ...(tailordbMaintenance.length ? { tailordbMaintenance } : {}),
           ...(deployedHooks.length ? { deployedHooks } : {}),
+          ...(warnings.length ? { warnings } : {}),
         });
       } else {
         logger.success("Successfully applied changes.");

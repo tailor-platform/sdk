@@ -165,7 +165,8 @@ beforeEach(() => {
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyPlanResults();
   mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
-  mocks.apply.mockResolvedValue({ maintenance: [], labelRejections: [] });
+  mocks.apply.mockResolvedValue({ maintenance: [], labelRejections: [], droppedOnAppLabels: [] });
+  mocks.prerequisite.mockResolvedValue({ droppedOnAppLabels: [] });
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
   client.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   client.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
@@ -336,6 +337,7 @@ function referenceWebsiteUrlFromEnv(onPrerequisite?: () => void) {
       application: { ...mocks.target.application, env: { website: "https://web" } },
     };
     onPrerequisite?.();
+    return { droppedOnAppLabels: [] };
   });
 }
 
@@ -445,6 +447,7 @@ function rejectApplicationLabels() {
   mocks.apply.mockResolvedValueOnce({
     maintenance: [],
     labelRejections: [applicationLabelRejection("app")],
+    droppedOnAppLabels: [],
   });
 }
 
@@ -532,7 +535,11 @@ test("includes how long TailorDB migrations kept tables in maintenance mode in J
     },
     migrations: [],
   };
-  mocks.apply.mockResolvedValueOnce({ maintenance: [maintenance], labelRejections: [] });
+  mocks.apply.mockResolvedValueOnce({
+    maintenance: [maintenance],
+    labelRejections: [],
+    droppedOnAppLabels: [],
+  });
 
   await deploy({ yes: true, noValidate: true });
 
@@ -792,4 +799,39 @@ test("stops a defineApp() config before confirming when it would take over two c
   await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOY_OTHER_CONFIG_RESOURCES",
   });
+});
+
+test("reports the sdk-on-app labels the Platform had no room for in the JSON result", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  mocks.prerequisite.mockResolvedValueOnce({
+    droppedOnAppLabels: [{ trn: "trn:v1:workspace:ws:auth:shop-auth", applications: ["ops"] }],
+  });
+  mocks.apply.mockResolvedValueOnce({
+    maintenance: [],
+    labelRejections: [],
+    droppedOnAppLabels: [
+      { trn: "trn:v1:workspace:ws:tailordb:shared-db", applications: ["ops", "web"] },
+    ],
+  });
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      warnings: [
+        {
+          type: "onAppLabelsDropped",
+          resourceType: "auth.service",
+          name: "shop-auth",
+          applications: ["ops"],
+        },
+        {
+          type: "onAppLabelsDropped",
+          resourceType: "tailordb.service",
+          name: "shared-db",
+          applications: ["ops", "web"],
+        },
+      ],
+    }),
+  );
 });
