@@ -29,6 +29,7 @@ export type AuthService = {
  * @param tailorDBServices - The TailorDB services
  * @param externalTailorDBNamespaces - External TailorDB namespaces
  * @param configPath - Path of the config file that declares the auth service
+ * @param configKeyPath - Path of the auth service in the config file
  * @returns A new AuthService instance
  */
 export function createAuthService(
@@ -36,6 +37,7 @@ export function createAuthService(
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
   configPath: string,
+  configKeyPath: readonly (string | number)[] = ["auth"],
 ): AuthService {
   const connections: Record<string, AuthConnectionConfig> = config.connections
     ? { ...config.connections }
@@ -101,7 +103,7 @@ export function createAuthService(
             service: { configKey: "auth", name: config.name },
             issues: [
               {
-                path: ["auth", "userProfile", "type"],
+                path: [...configKeyPath, "userProfile", "type"],
                 message: `Type "${config.userProfile.type.name}" not found in any TailorDB namespace`,
               },
             ],

@@ -41,7 +41,7 @@ function mockLoadResult(result: FakeLoadResult): void {
   loadApplicationNamespaces.mockResolvedValue({
     config: { path: "/proj/tailor.config.ts" },
     plugins: result.plugins ?? [],
-    application: { tailorDBServices: [], ...result.application },
+    application: { tailorDBServices: [], authServices: [], ...result.application },
     namespaces: result.namespaces ?? [],
   } as LoadedApplicationNamespaces);
 }
@@ -70,7 +70,7 @@ function fakeAuthService(config: object, userProfileAfterResolve?: object) {
     resolveNamespaces: async () => {
       userProfile = userProfileAfterResolve;
     },
-  } as unknown as Application["authService"];
+  } as unknown as Application["authServices"][number];
 }
 
 describe("loadSeedContext", () => {
@@ -238,18 +238,20 @@ describe("loadSeedContext", () => {
       application: {
         // userProfile only becomes available after resolveNamespaces() runs,
         // mirroring the real auth service lifecycle.
-        authService: fakeAuthService(
-          {
-            name: "main-auth",
-            machineUsers: {},
-            idProvider: { kind: "BuiltInIdP", namespace: "main-idp" },
-          },
-          {
-            type: { name: "Staff" },
-            namespace: "main-db",
-            usernameField: "email",
-          },
-        ),
+        authServices: [
+          fakeAuthService(
+            {
+              name: "main-auth",
+              machineUsers: {},
+              idProvider: { kind: "BuiltInIdP", namespace: "main-idp" },
+            },
+            {
+              type: { name: "Staff" },
+              namespace: "main-db",
+              usernameField: "email",
+            },
+          ),
+        ],
       },
     });
 
@@ -265,11 +267,13 @@ describe("loadSeedContext", () => {
     mockLoadResult({
       plugins: [seedPluginInstance({ distPath: "./seed" })],
       application: {
-        authService: fakeAuthService({
-          name: "main-auth",
-          machineUsers: {},
-          idProvider: { kind: "OIDC", namespace: "ext-idp" },
-        }),
+        authServices: [
+          fakeAuthService({
+            name: "main-auth",
+            machineUsers: {},
+            idProvider: { kind: "OIDC", namespace: "ext-idp" },
+          }),
+        ],
       },
     });
 

@@ -40,6 +40,7 @@ import {
 } from "./visible-resources";
 import type { PlannedDeployment } from "./apply-phases";
 import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
+import type { DeployOwner } from "./label";
 import type { ManagedResourceType } from "./managed-resource-type";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
@@ -48,15 +49,29 @@ function entry(action: GroupedDisplayEntry["action"], name: string): GroupedDisp
   return { action, symbol: "+", name, labels: [] };
 }
 
-function plannedDeployment(name: string, results: PlanResults): PlannedDeployment {
+function plannedDeployment(
+  name: string,
+  results: PlanResults,
+  owner: DeployOwner = { kind: "application", name, id: undefined },
+): PlannedDeployment {
   return {
     application: { name },
+    owner,
     ...results,
   } as unknown as PlannedDeployment;
 }
 
+const legacyStaticWebsite = (action: "update" | "delete") => ({
+  resourceType: "staticwebsite" as const,
+  resourceLabel: "StaticWebsite",
+  resourceName: "old-site",
+  action,
+  currentOwner: "shop",
+});
+
 describe("shouldForceApplyAll", () => {
-  type App = Parameters<typeof shouldForceApplyAll>[2];
+  type App = Parameters<typeof shouldForceApplyAll>[3];
+  const appOwner: DeployOwner = { kind: "application", name: "test-app", id: "test-app-id" };
 
   function minimalApplication(): App {
     return {
@@ -67,7 +82,7 @@ describe("shouldForceApplyAll", () => {
       aiGatewayServices: [],
       resolverServices: [],
       idpServices: [],
-      authService: undefined,
+      authServices: [],
       executorService: undefined,
       workflowService: undefined,
       tailorDBServices: [],
@@ -84,11 +99,13 @@ describe("shouldForceApplyAll", () => {
       },
     });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-      { name: "fn-b" },
-      { name: "fn-c" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }, { name: "fn-b" }, { name: "fn-c" }],
+    );
 
     expect(result).toBe(false);
     expect(client.getMetadata).toHaveBeenCalledTimes(3);
@@ -102,11 +119,40 @@ describe("shouldForceApplyAll", () => {
       },
     });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
 
     expect(result).toBe(true);
+  });
+
+  test("for the workspace, checks the resources carrying its mark", async () => {
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: { labels: { "sdk-managed": "workspace", "sdk-version": "v0-0-0-other" } },
+      },
+    });
+
+    const workspace = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      { kind: "workspace" },
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
+    const application = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }],
+    );
+
+    expect({ workspace, application }).toEqual({ workspace: true, application: false });
   });
 
   test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
@@ -119,10 +165,13 @@ describe("shouldForceApplyAll", () => {
         metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
       });
 
-    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
-      { name: "fn-a" },
-      { name: "fn-b" },
-    ]);
+    const result = await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      appOwner,
+      minimalApplication(),
+      [{ name: "fn-a" }, { name: "fn-b" }],
+    );
 
     expect(result).toBe(true);
   });
@@ -133,7 +182,9 @@ describe("shouldForceApplyAll", () => {
     });
 
     await expect(
-      shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
+      shouldForceApplyAll(client, "test-workspace", appOwner, minimalApplication(), [
+        { name: "fn-a" },
+      ]),
     ).rejects.toThrow("unavailable");
   });
 });
@@ -856,6 +907,16 @@ describe("confirmDeploymentPlans", () => {
         return { deployments: [plannedDeployment("my-app", results)] };
       },
     },
+    {
+      warning: "Resources deployed by an application config were found:",
+      plan: () => {
+        const results = emptyPlanResults();
+        results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+        return {
+          deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+        };
+      },
+    },
   ];
 
   test.for(
@@ -892,6 +953,155 @@ describe("confirmDeploymentPlans", () => {
 
       expect(confirm).not.toHaveBeenCalled();
       expect(logger.warn).not.toHaveBeenCalledWith(warning);
+    },
+  );
+
+  test("asks once about a resource the takeover deletes that is also an important deletion", async () => {
+    using _logger = silenceLogger("warn", "success", "newline");
+    using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.staticWebsite.changeSet.deletes.push({ name: "old-site" } as never);
+    results.staticWebsite.takeovers.push(legacyStaticWebsite("delete"));
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+      yes: false,
+    });
+
+    expect(confirm).toHaveBeenCalledExactlyOnceWith({
+      message: "Take over these resources and delete the ones listed as deleted?",
+      default: false,
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Resources deployed by an application config were found:",
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith("The following resources will be deleted:");
+    expect(plainRedacted(logSpy.mock.calls.flat().join("\n"))).toContain(
+      "Deleting these resources will permanently remove all associated data.",
+    );
+  });
+
+  test("still asks before deleting a table in a namespace the workspace config takes over", async () => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.tailorDB.changeSet.type.deletes.push({
+      name: "Order",
+      request: { workspaceId: "ws", namespaceName: "main", tailordbTypeName: "Order" },
+    });
+    results.tailorDB.takeovers.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "main",
+      action: "update",
+      currentOwner: "shop",
+    });
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+      yes: false,
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(logger.warn).toHaveBeenCalledWith("The following resources will be deleted:");
+  });
+
+  test.for([
+    {
+      parent: 'Secret Manager vault "old-vault" (application "shop")',
+      children: [
+        'Secret Manager secret "old-vault/DB_PASSWORD"',
+        'Secret Manager secret "old-vault/API_KEY"',
+      ],
+      plan: (results: PlanResults) => {
+        results.secretManager.vaultChangeSet.deletes.push({ name: "old-vault", workspaceId: "ws" });
+        for (const secretName of ["DB_PASSWORD", "API_KEY"]) {
+          results.secretManager.secretChangeSet.deletes.push({
+            name: `old-vault/${secretName}`,
+            secretName,
+            workspaceId: "ws",
+            vaultName: "old-vault",
+          });
+        }
+        results.secretManager.takeovers.push({
+          resourceType: "secret.vault",
+          resourceLabel: "Secret Manager vault",
+          resourceName: "old-vault",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
+    {
+      parent: 'TailorDB namespace "old-db" (application "shop")',
+      children: ['TailorDB table "Order"', 'TailorDB table "Customer"'],
+      plan: (results: PlanResults) => {
+        results.tailorDB.changeSet.service.deletes.push({
+          name: "old-db",
+          request: { workspaceId: "ws", namespaceName: "old-db" },
+        });
+        for (const tailordbTypeName of ["Order", "Customer"]) {
+          results.tailorDB.changeSet.type.deletes.push({
+            name: tailordbTypeName,
+            request: { workspaceId: "ws", namespaceName: "old-db", tailordbTypeName },
+          });
+        }
+        results.tailorDB.takeovers.push({
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB namespace",
+          resourceName: "old-db",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
+    {
+      parent: 'Auth service "old-auth" (application "shop")',
+      children: ['OAuth2 client "web"', 'OAuth2 client "mobile"'],
+      plan: (results: PlanResults) => {
+        results.auth.changeSet.service.deletes.push({
+          name: "old-auth",
+          request: { workspaceId: "ws", namespaceName: "old-auth" },
+        });
+        for (const name of ["web", "mobile"]) {
+          results.auth.changeSet.oauth2Client.deletes.push({
+            name,
+            request: { workspaceId: "ws", namespaceName: "old-auth", name },
+          });
+        }
+        results.auth.takeovers.push({
+          resourceType: "auth.service",
+          resourceLabel: "Auth service",
+          resourceName: "old-auth",
+          action: "delete",
+          currentOwner: "shop",
+        });
+      },
+    },
+  ])(
+    "asks once about $parent the takeover deletes, listing what goes with it",
+    async ({ parent, children, plan }) => {
+      using _logger = silenceLogger("warn", "success", "newline");
+      using logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+      using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+      const results = emptyPlanResults();
+      plan(results);
+
+      await confirmDeploymentPlans({
+        deployments: [plannedDeployment("my-workspace", results, { kind: "workspace" })],
+        yes: false,
+      });
+
+      expect(confirm).toHaveBeenCalledOnce();
+      const lines = plainRedacted(logSpy.mock.calls.flat().join("\n")).split("\n");
+      const parentLine = lines.findIndex((line) => line.includes(parent));
+      expect(lines.slice(parentLine + 1, parentLine + 1 + children.length)).toEqual(
+        children.map((child) => expect.stringContaining(child)),
+      );
+      expect(lines).toContain(
+        "  Deleting these resources will permanently remove all associated data.",
+      );
     },
   );
 
@@ -1012,6 +1222,51 @@ describe("printPlanResults", () => {
     expect(payload.conflicts).toEqual([
       { resourceType: "tailordb.service", name: "tailordb", currentOwner: "other-app" },
     ]);
+  });
+
+  test("lists the resources a workspace config takes over only when there are any", () => {
+    using _json = jsonMode();
+
+    printDeploymentPlans([plannedDeployment("app", emptyPlanResults())], { dryRun: true });
+    const workspace = emptyPlanResults();
+    workspace.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+    workspace.executor.takeovers.push({
+      resourceType: "executor",
+      resourceLabel: "Executor",
+      resourceName: "old-sync",
+      action: "delete",
+    });
+    printDeploymentPlans(
+      [
+        plannedDeployment("workspace", workspace, { kind: "workspace" }),
+        plannedDeployment("app", emptyPlanResults()),
+      ],
+      { dryRun: true },
+    );
+
+    expect(outSpy.mock.calls[0]?.[0]).not.toHaveProperty("takeovers");
+    expect((outSpy.mock.calls[1]?.[0] as { takeovers: unknown }).takeovers).toEqual([
+      { resourceType: "staticwebsite", name: "old-site", action: "update", currentOwner: "shop" },
+      { resourceType: "executor", name: "old-sync", action: "delete" },
+    ]);
+  });
+
+  test("prints the resources a workspace config takes over in the human plan", () => {
+    const results = emptyPlanResults();
+    results.staticWebsite.takeovers.push(legacyStaticWebsite("update"));
+    results.staticWebsite.takeovers.push({
+      ...legacyStaticWebsite("delete"),
+      resourceName: "gone",
+    });
+
+    printPlanResults(results, { dryRun: false });
+
+    const plain = plainRedacted(logSpy.mock.calls.flat().join("\n"));
+    expect(plain).toContain(
+      "Taken over from application configs (will require confirmation on apply):",
+    );
+    expect(plain).toContain('StaticWebsite "old-site" — taken over from "shop"');
+    expect(plain).toContain('StaticWebsite "gone" — deleted (deployed by "shop")');
   });
 
   test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
@@ -1551,14 +1806,16 @@ function fakeTarget(
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
-      authService: bundles.authNamespace
-        ? {
-            config: { name: bundles.authNamespace },
-            connections: Object.fromEntries(
-              (bundles.authConnectionNames ?? []).map((name) => [name, {}]),
-            ),
-          }
-        : undefined,
+      authServices: bundles.authNamespace
+        ? [
+            {
+              config: { name: bundles.authNamespace },
+              connections: Object.fromEntries(
+                (bundles.authConnectionNames ?? []).map((name) => [name, {}]),
+              ),
+            },
+          ]
+        : [],
       idpServices: (bundles.idpNames ?? []).map((name) => ({ name })),
       resolverServices: (bundles.resolverNamespaces ?? []).map((namespace) => ({
         namespace,
@@ -1759,7 +2016,7 @@ describe("adjustApplicationForMigrationTest", () => {
     const application = {
       name: "app",
       executorService: { executors: {} },
-      authService: { config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } },
+      authServices: [{ config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } }],
       staticWebsiteServices: [{ name: "site", customDomains: ["example.com"] }],
       get applications() {
         return [application];
@@ -1782,8 +2039,8 @@ describe("adjustApplicationForMigrationTest", () => {
     });
 
     expect(adjusted.executorService).toBeUndefined();
-    expect(adjusted.authService?.userProfile).toBeUndefined();
-    expect(adjusted.authService?.config.name).toBe("auth-a");
+    expect(adjusted.authServices[0]?.userProfile).toBeUndefined();
+    expect(adjusted.authServices[0]?.config.name).toBe("auth-a");
     expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
     expect(adjusted.applications).toEqual([adjusted]);
   });
@@ -1794,7 +2051,7 @@ describe("adjustApplicationForMigrationTest", () => {
     });
 
     expect(adjusted.executorService).toBeDefined();
-    expect(adjusted.authService?.userProfile).toBeDefined();
+    expect(adjusted.authServices[0]?.userProfile).toBeDefined();
     expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
   });
 });
@@ -2223,12 +2480,14 @@ function fakeAuthTarget(
 ): Parameters<typeof collectExternalAuthIdpConfigNames>[0][number] {
   return {
     application: {
-      authService: {
-        config: {
-          name,
-          idProvider: idpConfigName === undefined ? undefined : { name: idpConfigName },
+      authServices: [
+        {
+          config: {
+            name,
+            idProvider: idpConfigName === undefined ? undefined : { name: idpConfigName },
+          },
         },
-      },
+      ],
     },
   } as unknown as Parameters<typeof collectExternalAuthIdpConfigNames>[0][number];
 }
@@ -2268,9 +2527,11 @@ describe("collectPlannedMachineUsers", () => {
   ): Parameters<typeof collectPlannedMachineUsers>[0][number] {
     return {
       application: {
-        authService: {
-          config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
-        },
+        authServices: [
+          {
+            config: { name, machineUsers: Object.fromEntries(machineUsers.map((m) => [m, {}])) },
+          },
+        ],
       },
     } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
   }
@@ -2288,7 +2549,7 @@ describe("collectPlannedMachineUsers", () => {
   test("ignores configs that only reference an external auth", () => {
     const externalOnly = {
       application: {
-        authService: undefined,
+        authServices: [],
         config: { auth: { name: "core-auth", external: true } },
       },
     } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];

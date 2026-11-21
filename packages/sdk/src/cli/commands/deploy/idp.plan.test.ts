@@ -4,7 +4,7 @@ import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { planIdP } from "./idp";
-import { buildMetaRequest } from "./label";
+import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -189,6 +189,7 @@ function createContext(client: OperatorClient): PlanContext {
     client,
     workspaceId,
     application: createMockApplication(),
+    owner: applicationOwner(createMockApplication()),
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };

@@ -32,7 +32,7 @@ import type { PlanResults, PlannedDeployment } from "./apply-phases";
 type ApplicationShape = {
   name: string;
   subgraphs?: Array<{ Type: string; Name: string }>;
-  authService?: { config: { name: string } };
+  authServices?: Array<{ config: { name: string } }>;
   config?: { auth: { name: string; external: true } };
 };
 
@@ -64,7 +64,7 @@ function check(
 
 function deployment(application: ApplicationShape, results: PlanResults) {
   return {
-    application: { subgraphs: [], ...application },
+    application: { subgraphs: [], authServices: [], ...application },
     ...results,
   } as unknown as PlannedDeployment;
 }

@@ -62,7 +62,7 @@ describe("migration flow: namespaces without pending migrations", () => {
         deletes: [typeDeletion("Legacy", "analytics-ns")],
       },
       gqlPermission: { creates: [gqlPermissionEntry("Event", "analytics-ns")] },
-      application: { authService: undefined },
+      application: { authServices: [] },
     });
   }
 

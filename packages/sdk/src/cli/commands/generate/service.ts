@@ -9,6 +9,7 @@ import {
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
@@ -119,7 +120,8 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const auth = getAuthInput(application);
+    const authService = soleAuthService(application);
+    const auth = authService && getAuthInput(authService);
     const tailordb = buildTailorDBData();
 
     let result: GeneratorResult;
@@ -329,11 +331,12 @@ export function createGenerationManager(params: {
       );
 
       // Resolve Auth namespaces (depends on TailorDB)
-      if (app.authService) {
-        const authService = app.authService;
-        await withSpan("generate.resolveAuthNamespaces", async () =>
-          authService.resolveNamespaces(),
-        );
+      if (app.authServices.length > 0) {
+        await withSpan("generate.resolveAuthNamespaces", async () => {
+          for (const authService of app.authServices) {
+            await authService.resolveNamespaces();
+          }
+        });
       }
 
       // Add blank line after TailorDB tables loaded

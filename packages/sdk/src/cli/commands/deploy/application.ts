@@ -13,6 +13,7 @@ import {
   type HttpAdapter,
   HttpAdapterSchema,
 } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
+import { soleAuthService } from "#/cli/shared/auth-namespace";
 import {
   fetchAllTolerant,
   getOrNull,
@@ -34,7 +35,7 @@ import {
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  isOwnedByApp,
+  isOwnedBy,
   labelCountViolation,
   type MetadataLabelWrite,
   resourceTrn,
@@ -302,8 +303,8 @@ export async function planApplication(
     existingLabels: Record<string, string> | undefined;
   },
 ) {
-  const { client, workspaceId, application, forRemoval } = context;
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const { client, workspaceId, application, owner, forRemoval } = context;
+  const ownership = createOwnershipTracker(owner);
   const changeSet = createChangeSet<
     CreateApplication,
     UpdateApplication,
@@ -328,15 +329,14 @@ export async function planApplication(
       return [applications, nextPageToken];
     }));
 
-  const ownedByConfig = (labels: Record<string, string> | undefined) =>
-    isOwnedByApp(labels, application.name, application.id);
+  const ownedByConfig = (labels: Record<string, string> | undefined) => isOwnedBy(labels, owner);
   const scheduleOwnedAppDeletes = async (
     candidates: ReadonlyArray<ProtoApplication>,
-    owns: (labels: Record<string, string> | undefined) => boolean,
+    owns: (labels: Record<string, string> | undefined, name: string) => boolean,
   ) => {
     const owned = await Promise.all(
       candidates.map(async (app) =>
-        owns(await fetchAppLabels(client, workspaceId, app.name)) ? app.name : null,
+        owns(await fetchAppLabels(client, workspaceId, app.name), app.name) ? app.name : null,
       ),
     );
     for (const name of owned) {
@@ -352,18 +352,21 @@ export async function planApplication(
     }
   };
 
+  const scansRenamedApps = owner.kind === "application" && Boolean(application.id);
   // The platform rejects an application without subgraphs, so a config with
   // none (e.g. only static web hosting) is planned like a removal.
   if (forRemoval || application.subgraphs.length === 0) {
     // A same-named app in a shared workspace may belong to another user, so
     // never delete by name alone. Without an id only the same-name app can be
     // ours; with an id, scan all apps to also clean up renamed-away ones.
-    const candidates = application.id
+    const candidates = scansRenamedApps
       ? existingApplications
       : existingApplications.filter((app) => app.name === application.name);
     // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
-    await scheduleOwnedAppDeletes(candidates, (labels) =>
-      forRemoval ? ownership.ownsRemaining(labels) : ownedByConfig(labels),
+    await scheduleOwnedAppDeletes(candidates, (labels, name) =>
+      forRemoval
+        ? ownership.ownsRemaining(labels, { resourceType: "application", resourceName: name })
+        : ownedByConfig(labels),
     );
     return Object.assign(changeSet, ownership.result, {
       existingApplications,
@@ -373,10 +376,11 @@ export async function planApplication(
 
   let authNamespace: string | undefined;
   let authIdpConfigName: string | undefined;
-  if (application.authService) {
-    authNamespace = application.authService.config.name;
+  const authService = soleAuthService(application);
+  if (authService) {
+    authNamespace = authService.config.name;
 
-    const idProvider = application.authService.config.idProvider;
+    const idProvider = authService.config.idProvider;
     if (idProvider) {
       authIdpConfigName = idProvider.name;
     }
@@ -397,8 +401,7 @@ export async function planApplication(
   }
   const metaRequest = await buildMetaRequest({
     trn: resourceTrn(workspaceId, "application", application.name),
-    appName: application.name,
-    appId: application.id,
+    owner,
   });
   const { metadata } = application.config;
   // `previous.existingLabels` can legitimately be `undefined` (no metadata
@@ -432,7 +435,7 @@ export async function planApplication(
 
   // Detect renames: other apps owned by our id should be deleted before
   // creating/updating the current name (so the old name is freed up).
-  if (application.id) {
+  if (scansRenamedApps) {
     await scheduleOwnedAppDeletes(
       existingApplications.filter((app) => app.name !== application.name),
       ownedByConfig,
@@ -449,16 +452,13 @@ export async function planApplication(
         comparableRequest: { ...request, cors: resolvedCors },
         metaRequest,
         metadata,
-      },
+      } satisfies DesiredApplication,
     ],
     existing: existing
       ? [[existing.name, { resource: existing, allLabels: existingLabels }] as const]
       : [],
     keyOf: (app) => app.name,
-    ...labeledResourceChecks(ownership, (app: DesiredApplication) => ({
-      resourceType: "application",
-      resourceName: app.name,
-    })),
+    ...labeledResourceChecks(ownership, "application"),
     isConfigUnchanged: (app, { resource }) =>
       metadataDetails.length === 0 &&
       isRequestUnchanged(applicationComparison, app.comparableRequest, resource),

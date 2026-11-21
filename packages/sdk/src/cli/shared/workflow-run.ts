@@ -141,8 +141,7 @@ export async function startWorkflowRun(
   const { functions, mainFunctionName } = runFunctions(params);
   const functionNames = functions.map((item) => item.name);
   const owner = {
-    appName: undefined,
-    appId: undefined,
+    owner: undefined,
     labels: workflowRunLabels({ kind, runId }),
   };
   const created: CreatedTemporaryWorkflow = {};

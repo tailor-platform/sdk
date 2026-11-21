@@ -237,8 +237,7 @@ async function buildMigrationContextForScripts(
     ...(migrationContext.migrationRecoveryArgs
       ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
       : {}),
-    appName: migrationContext.application.name,
-    appId: migrationContext.application.id,
+    owner: migrationContext.owner,
     maintenanceMode,
     skipSteps: migrationContext.migrationSkipSteps,
     migrationHistoryIds,

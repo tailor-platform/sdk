@@ -14,6 +14,8 @@ import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
   buildMetaRequest,
+  type DeployOwner,
+  type MetadataLabelWrite,
   resourceTrn,
   withExtraLabels,
   writeMetadataLabelsDirect,
@@ -23,7 +25,6 @@ import { getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
-import type { MetadataLabelWrite } from "#/cli/commands/deploy/label";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -35,27 +36,24 @@ import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_r
 const CHUNK_SIZE = 64 * 1024;
 
 /**
- * Owning application recorded in the labels of every temporary resource. With no
- * `appName` the resources carry only `labels`, so a deploy never claims them.
+ * Owner recorded in the labels of every temporary resource. With no `owner` the resources carry
+ * only `labels`, so a deploy never claims them.
  */
 interface TemporaryResourceOwner {
-  appName: string | undefined;
-  appId: string | undefined;
+  /** With no owner the resources carry only `labels`, so a deploy never claims them. */
+  owner: DeployOwner | undefined;
   /** Labels written to every resource besides the owner's. */
   labels?: Record<string, string>;
 }
 
 async function temporaryLabelWrite(
-  owner: TemporaryResourceOwner,
+  params: TemporaryResourceOwner,
   trn: string,
   extraLabels?: Record<string, string>,
 ): Promise<MetadataLabelWrite> {
-  const metadata = { ...owner.labels, ...extraLabels };
-  if (owner.appName === undefined) return { trn, labels: metadata };
-  return withExtraLabels(
-    await buildMetaRequest({ trn, appName: owner.appName, appId: owner.appId }),
-    metadata,
-  );
+  const metadata = { ...params.labels, ...extraLabels };
+  if (params.owner === undefined) return { trn, labels: metadata };
+  return withExtraLabels(await buildMetaRequest({ trn, owner: params.owner }), metadata);
 }
 
 export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {

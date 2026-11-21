@@ -8,6 +8,30 @@ import type { ListMetadataResultSchema } from "@tailor-platform/tailor-proto/met
 const workspaceId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
 
 describe("createMetadataLookupClient", () => {
+  test("loads the resources a workspace config manages by its mark", async () => {
+    const client = mockOperatorClient({
+      listMetadata: {
+        results: [{ trn: "trn:managed", metadata: { labels: { "sdk-managed": "workspace" } } }],
+        nextPageToken: "",
+      },
+      getMetadata: { metadata: { labels: {} } },
+    });
+
+    const lookup = await createMetadataLookupClient({
+      client,
+      workspaceId,
+      owners: [{ kind: "workspace" }],
+    });
+
+    await expect(lookup.getMetadata({ trn: "trn:managed" })).resolves.toMatchObject({
+      metadata: { labels: { "sdk-managed": "workspace" } },
+    });
+    expect(client.getMetadata).not.toHaveBeenCalled();
+    expect(client.listMetadata.mock.calls.map(([request]) => request.labels)).toEqual([
+      { "sdk-managed": "workspace" },
+    ]);
+  });
+
   test("loads name and id matches through independently paginated ListMetadata queries", async () => {
     const client = mockOperatorClient({
       listMetadata: async (request) => {
@@ -57,9 +81,9 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [
-        { name: "billing", id: "billing-id" },
-        { name: "billing", id: "billing-id" },
+      owners: [
+        { kind: "application", name: "billing", id: "billing-id" },
+        { kind: "application", name: "billing", id: "billing-id" },
       ],
     });
 
@@ -101,7 +125,7 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [{ name: "billing", id: "billing-id" }],
+      owners: [{ kind: "application", name: "billing", id: "billing-id" }],
     });
 
     const [first, second] = await Promise.all([
@@ -144,7 +168,7 @@ describe("createMetadataLookupClient", () => {
     const lookup = await createMetadataLookupClient({
       client,
       workspaceId,
-      applications: [{ name: "billing" }],
+      owners: [{ kind: "application", name: "billing", id: undefined }],
     });
     await fetchExistingResourcesWithLabels({ client: lookup, ...params });
 

@@ -73,7 +73,7 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
     env: {},
-    authService: state.authService,
+    authServices: state.authService === undefined ? [] : [state.authService],
     tailorDBServices: [
       {
         namespace: "tailordb",

@@ -369,6 +369,7 @@ const invalidCases: Case<RegExp>[] = [
       input.secretManager.vaultChangeSet.creates.push({
         name: "INVALID_VAULT",
         workspaceId: WS_ID,
+        metaRequest: { trn: "trn:vault" },
       });
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,

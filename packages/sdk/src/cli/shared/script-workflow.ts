@@ -13,6 +13,7 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { applicationOwner } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -89,6 +90,7 @@ export async function withScriptWorkflow<T>(
   use: (run: RunScript) => Promise<T>,
 ): Promise<T> {
   const { client, workspaceId, name, appName, invoker, leftoverNote, profile } = options;
+  const owner = applicationOwner({ name: appName, id: undefined });
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
   await assertMachineUserExists({ client, workspaceId, invoker });
@@ -110,8 +112,7 @@ export async function withScriptWorkflow<T>(
       name,
       code: options.code,
       description: options.description,
-      appName,
-      appId: undefined,
+      owner,
     });
     workflowId = await createTemporaryWorkflow(
       {
@@ -119,8 +120,7 @@ export async function withScriptWorkflow<T>(
         workspaceId,
         name,
         jobFunctionNames: [name],
-        appName,
-        appId: undefined,
+        owner,
         subject: SUBJECT,
       },
       created,

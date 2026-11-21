@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -31,6 +32,19 @@ describe("checkVaultManaged", () => {
       "sdk-version": "v1-0-0",
       custom: "value",
     });
+  });
+
+  test("returns isManaged: true when a workspace config manages the vault", async () => {
+    const client = clientWithMetadata({
+      labels: { "sdk-managed": "workspace", "sdk-version": "v1-0-0" },
+    });
+
+    const result = await checkVaultManaged({ client, workspaceId: "ws-1", vaultName: "my-vault" });
+
+    expect(result.isManaged).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Vault "my-vault" is managed by the workspace config. Changes made via CLI may conflict with the config on the next apply.',
+    );
   });
 
   test("returns isManaged: false when vault has no sdk-name label", async () => {
@@ -69,6 +83,11 @@ describe("releaseVaultOwnership", () => {
       // still be deleted by the next deploy of a config that dropped it.
       "removes sdk-app-id, which decides ownership on its own",
       { "sdk-name": "my-app", "sdk-version": "v1-0-0", "sdk-app-id": "app-uuid", custom: "value" },
+      { custom: "value" },
+    ],
+    [
+      "removes the workspace mark, which decides ownership on its own",
+      { "sdk-managed": "workspace", "sdk-version": "v1-0-0", custom: "value" },
       { custom: "value" },
     ],
   ])("%s", async (_name, remoteLabels, expectedLabels) => {

@@ -21,6 +21,7 @@ import {
 } from "./grouped-display";
 import {
   collectOwnerConflicts,
+  collectTakeovers,
   collectUnmanagedResources,
   countLabelRefreshes,
   MANAGED_RESOURCES,
@@ -28,7 +29,7 @@ import {
 import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
-import type { MissingDependentApp } from "./confirm";
+import type { MissingDependentApp, WorkspaceTakeover } from "./confirm";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
@@ -61,6 +62,13 @@ type JsonPlanPayload = {
     resourceType: ManagedResourceType;
     name: string;
     currentOwner: string;
+  }>;
+  /** Resources an application config deployed that a workspace config takes over or deletes. */
+  takeovers?: Array<{
+    resourceType: ManagedResourceType;
+    name: string;
+    action: WorkspaceTakeover["action"];
+    currentOwner?: string;
   }>;
   /** Custom domains that produced no change, with the reason. */
   notes: Array<{
@@ -219,6 +227,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   const allUnmanaged = collectUnmanagedResources(results);
   const allConflicts = collectOwnerConflicts(results);
+  const allTakeovers = collectTakeovers(results);
 
   const serviceEntries = (serviceActions: ReadonlyArray<NamespaceAction>, label: string) =>
     serviceActions.map((serviceAction) => ({
@@ -299,6 +308,21 @@ function buildPlanReport(results: PlanResults): PlanReport {
     }
   }
 
+  if (allTakeovers.length > 0) {
+    allLines.push(
+      styles.bold("Taken over from application configs (will require confirmation on apply):"),
+    );
+    for (const { resourceLabel, resourceName, action, currentOwner } of allTakeovers) {
+      const outcome =
+        action === "delete"
+          ? `deleted${currentOwner ? ` (deployed by "${currentOwner}")` : ""}`
+          : `taken over${currentOwner ? ` from "${currentOwner}"` : ""}`;
+      allLines.push(
+        `  ${styles.warning("!")} ${styles.bold(resourceLabel)} "${resourceName}" — ${outcome}`,
+      );
+    }
+  }
+
   if (allConflicts.length > 0) {
     allLines.push(styles.bold("Owner conflicts (will require confirmation on apply):"));
     for (const { resourceLabel, resourceName, currentOwner } of allConflicts) {
@@ -319,7 +343,21 @@ function buildPlanReport(results: PlanResults): PlanReport {
 
   return {
     summary,
-    json: { summary, changes, warnings, conflicts, notes },
+    json: {
+      summary,
+      changes,
+      warnings,
+      conflicts,
+      ...(allTakeovers.length > 0 && {
+        takeovers: allTakeovers.map(({ resourceType, resourceName, action, currentOwner }) => ({
+          resourceType,
+          name: resourceName,
+          action,
+          ...(currentOwner && { currentOwner }),
+        })),
+      }),
+      notes,
+    },
     lines: allLines,
   };
 }
@@ -436,6 +474,9 @@ export function printDeploymentPlans(
         ),
       ],
       conflicts: reports.flatMap((report) => report.json.conflicts),
+      ...(reports.some((report) => report.json.takeovers) && {
+        takeovers: reports.flatMap((report) => report.json.takeovers ?? []),
+      }),
       notes: reports.flatMap((report) => report.json.notes),
       ...(opts.pendingDeployedHooks?.length
         ? { pendingDeployedHooks: opts.pendingDeployedHooks }

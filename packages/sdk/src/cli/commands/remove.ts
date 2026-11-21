@@ -10,6 +10,7 @@ import {
   planFunctionRegistry,
 } from "#/cli/commands/deploy/function-registry";
 import { applyIdP, planIdP } from "#/cli/commands/deploy/idp";
+import { applicationOwner } from "#/cli/commands/deploy/label";
 import { MANAGED_RESOURCES } from "#/cli/commands/deploy/managed-resources";
 import { applyPipeline, planPipeline } from "#/cli/commands/deploy/resolver";
 import { assertResourcesNotInUse } from "#/cli/commands/deploy/resources-in-use";
@@ -118,10 +119,12 @@ async function execRemove(
   confirm?: () => Promise<void>,
 ) {
   // Plan all resources with forRemoval=true
+  const owner = applicationOwner(application);
   const ctx: PlanContext = {
     client,
     workspaceId,
     application,
+    owner,
     forRemoval: true,
     config,
   };
@@ -136,21 +139,14 @@ async function execRemove(
     pipeline: await planPipeline(ctx),
     app: await planApplication(ctx),
     executor: await planExecutor(ctx),
-    workflow: await planWorkflow(client, workspaceId, application.name, application.id, {}, {}),
+    workflow: await planWorkflow(client, workspaceId, owner, {}, {}),
     workflowExecutionPolicy: await planWorkflowJobFunctionExecutionPolicy(
       client,
       workspaceId,
-      application.name,
-      application.id,
+      owner,
       {},
     ),
-    functionRegistry: await planFunctionRegistry(
-      client,
-      workspaceId,
-      application.name,
-      application.id,
-      [],
-    ),
+    functionRegistry: await planFunctionRegistry(client, workspaceId, owner, []),
     secretManager: await planSecretManager(ctx),
   } satisfies PlanResults;
 

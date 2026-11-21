@@ -1,10 +1,17 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
-import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  type DeployOwner,
+  deployedByApplication,
+  isOwnedBy,
+  sdkAppIdLabelKey,
+  sdkNameLabelKey,
+  type WithLabel,
+} from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { OwnerConflict, UnmanagedResource, WorkspaceTakeover } from "./confirm";
 
 /** The kind and name of a resource whose ownership a planner checks. */
-export type TrackedResource = Pick<UnmanagedResource, "resourceType" | "resourceName">;
+type TrackedResource = Pick<UnmanagedResource, "resourceType" | "resourceName">;
 
 type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promise<[T[], string]>;
 
@@ -49,6 +56,8 @@ export async function fetchExistingResourcesWithLabels<T>(
 export interface OwnershipResult {
   conflicts: OwnerConflict[];
   unmanaged: UnmanagedResource[];
+  /** Resources an application deployed that the workspace takes over or deletes. */
+  takeovers: WorkspaceTakeover[];
   resourceOwners: Set<string>;
 }
 
@@ -56,53 +65,75 @@ export interface OwnershipTracker {
   /** Confirmation data recorded so far, in the shape plan results carry. */
   result: OwnershipResult;
   /**
-   * Determine whether a same-named existing resource is managed by this app.
+   * Determine whether the deploy's owner manages a same-named existing resource.
    * Records the user-facing confirmation data when ownership does not match.
    * @param labels - Existing resource labels
    * @param resource - Resource kind and name for confirmation messages
-   * @returns True when the resource is owned by the current app
+   * @returns True when the owner manages the resource
    */
   ownsDesired(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
   /**
-   * Determine whether a remote-only resource is still owned by this app.
+   * Determine whether deploy deletes a remote-only resource: one the owner manages, or, for the
+   * workspace, one an application deployed with an id, which it records as a takeover deletion.
    * Also records other SDK owners so renamed-empty applications can be handled.
    * @param labels - Existing resource labels
-   * @returns True when the resource is owned by the current app
+   * @param resource - Resource kind and name for confirmation messages
+   * @returns True when deploy deletes the resource
    */
-  ownsRemaining(labels: Record<string, string> | undefined): boolean;
+  ownsRemaining(labels: Record<string, string> | undefined, resource: TrackedResource): boolean;
 }
 
 /**
  * Create the ownership bookkeeping one planner shares across its resources.
- * @param appName - Current application name
- * @param appId - Current application id, when present
+ *
+ * For the workspace, a resource an application deployed (it carries `sdk-name` or `sdk-app-id`
+ * but no workspace mark) is taken over when the config has it, and deleted when the config does
+ * not and it carries `sdk-app-id`.
+ * @param owner - Owner of the resources the deploy manages
  * @returns Tracker classifying resources and accumulating confirmation data
  */
-export function createOwnershipTracker(
-  appName: string,
-  appId: string | undefined,
-): OwnershipTracker {
-  const result: OwnershipResult = { conflicts: [], unmanaged: [], resourceOwners: new Set() };
+export function createOwnershipTracker(owner: DeployOwner): OwnershipTracker {
+  const result: OwnershipResult = {
+    conflicts: [],
+    unmanaged: [],
+    takeovers: [],
+    resourceOwners: new Set(),
+  };
+  const describe = (resource: TrackedResource) => ({
+    ...resource,
+    resourceLabel: MANAGED_RESOURCE_LABELS[resource.resourceType],
+  });
+  const takeover = (
+    labels: Record<string, string>,
+    resource: TrackedResource,
+    action: WorkspaceTakeover["action"],
+  ) => {
+    const currentOwner = labels[sdkNameLabelKey];
+    result.takeovers.push({ ...describe(resource), action, ...(currentOwner && { currentOwner }) });
+  };
   return {
     result,
     ownsDesired(labels, resource) {
-      if (isOwnedByApp(labels, appName, appId)) return true;
-      const described = {
-        ...resource,
-        resourceLabel: MANAGED_RESOURCE_LABELS[resource.resourceType],
-      };
+      if (isOwnedBy(labels, owner)) return true;
       const currentOwner = labels?.[sdkNameLabelKey];
-      if (currentOwner) {
-        result.conflicts.push({ ...described, currentOwner });
+      if (owner.kind === "workspace" && labels && deployedByApplication(labels)) {
+        takeover(labels, resource, "update");
+      } else if (owner.kind === "application" && currentOwner) {
+        result.conflicts.push({ ...describe(resource), currentOwner });
       } else {
-        result.unmanaged.push(described);
+        result.unmanaged.push(describe(resource));
       }
       return false;
     },
-    ownsRemaining(labels) {
-      if (isOwnedByApp(labels, appName, appId)) return true;
-      const owner = labels?.[sdkNameLabelKey];
-      if (owner) result.resourceOwners.add(owner);
+    ownsRemaining(labels, resource) {
+      if (isOwnedBy(labels, owner)) return true;
+      if (owner.kind === "workspace") {
+        if (!labels || !deployedByApplication(labels) || !labels[sdkAppIdLabelKey]) return false;
+        takeover(labels, resource, "delete");
+        return true;
+      }
+      const currentOwner = labels?.[sdkNameLabelKey];
+      if (currentOwner) result.resourceOwners.add(currentOwner);
       return false;
     },
   };
