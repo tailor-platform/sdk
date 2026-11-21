@@ -32,6 +32,7 @@ import {
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { withMetadataWriteBatch } from "../label";
+import { labelCountRejection } from "../test-helpers/label-count-rejection";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -846,6 +847,27 @@ describe("migration", () => {
           "existing-label": "value",
           [MIGRATION_LABEL_KEY]: "m0000",
           [MIGRATION_HISTORY_LABEL_KEY]: "hcurrent",
+        },
+      });
+    });
+
+    test("drops sdk-on-app labels to keep the checkpoint when the namespace holds no more labels", async () => {
+      const client = createMetadataClient({
+        labels: { "sdk-managed": "workspace", "sdk-on-app-admin": "", "sdk-on-app-shop": "" },
+      });
+      client.setMetadata.mockImplementation(async ({ labels }) => {
+        if (Object.keys(labels ?? {}).length > 3) throw labelCountRejection();
+        return {};
+      });
+
+      await updateMigrationLabel(client, workspaceId, namespace, 2);
+
+      expect(client.setMetadata).toHaveBeenLastCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "sdk-managed": "workspace",
+          "sdk-on-app-admin": "",
+          [MIGRATION_LABEL_KEY]: "m0002",
         },
       });
     });
