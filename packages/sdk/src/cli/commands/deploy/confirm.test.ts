@@ -237,6 +237,24 @@ describe("confirmUnmanagedResources", () => {
 
     expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
   });
+
+  test.for([
+    { label: "an application", appName: "my-app", owner: '"my-app"' },
+    { label: "a workspace config", appName: undefined, owner: "this workspace config" },
+  ])("names $label in the prompt", async ({ appName, owner }) => {
+    const { prompt } = await import("#/cli/shared/prompt");
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(true);
+
+    await confirmUnmanagedResources(
+      [{ resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1" }],
+      appName,
+      "prompt",
+    );
+
+    expect(prompt.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: `Allow tailor to manage these resources for ${owner}?` }),
+    );
+  });
 });
 
 describe("confirmMigrationCheckpointRepairs", () => {
