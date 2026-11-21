@@ -95,7 +95,6 @@ import {
   isOwnedBy,
   resourceTrn,
   sdkNameLabelKey,
-  onAppLabelledResourceOf,
 } from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
@@ -1199,13 +1198,9 @@ async function deployInternal(
       applied = await applyRemainingResources(client, deployments);
     }
     const { maintenance: tailordbMaintenance, labelRejections } = applied;
-    const warnings = [...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels]
-      .filter(({ applications }) => applications.length > 0)
-      .map(({ trn, applications }) => ({
-        type: "onAppLabelsDropped" as const,
-        ...onAppLabelledResourceOf(trn),
-        applications,
-      }));
+    const warnings = [...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels].map(
+      (dropped) => ({ type: "onAppLabelsDropped" as const, ...dropped }),
+    );
 
     const deployed =
       logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0

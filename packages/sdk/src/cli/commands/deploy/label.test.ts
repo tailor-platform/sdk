@@ -1135,6 +1135,60 @@ describe("labels the Platform allows no more of", () => {
     ]);
   });
 
+  test("reports the sdk-on-app labels left off a write queued after the flush started", async () => {
+    const labelsByTrn = new Map([
+      ["trn:late", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+    ]);
+    const client = limitedClient(labelsByTrn);
+    let bulkStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      bulkStarted = resolve;
+    });
+    let releaseBulk!: () => void;
+    const released = new Promise<void>((resolve) => {
+      releaseBulk = resolve;
+    });
+    client.bulkSetMetadata.mockImplementationOnce(async () => {
+      bulkStarted();
+      await released;
+      return { results: [] };
+    });
+    const dropped = vi.fn();
+    let late!: Promise<void>;
+
+    await withMetadataWriteBatch(
+      client,
+      async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:early", labels: { mine: "early" } });
+        late = (async () => {
+          await started;
+          const write = writeMetadataLabels(batchClient, { trn: "trn:late", labels: onApp("d") });
+          releaseBulk();
+          await write;
+        })();
+      },
+      dropped,
+    );
+    await late;
+
+    expect(dropped).toHaveBeenCalledExactlyOnceWith({ trn: "trn:late", applications: ["d"] });
+  });
+
+  test("rethrows a rejected bulk whose rejected request has no sdk-on-app labels", async () => {
+    const client = limitedClient(new Map());
+    client.bulkSetMetadata.mockRejectedValueOnce(bulkLabelCountRejection());
+
+    await expect(
+      withMetadataWriteBatch(client, async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:a", labels: { mine: "a" } });
+        await writeMetadataLabels(batchClient, { trn: "trn:b", labels: { mine: "b" } });
+        await writeMetadataLabels(batchClient, { trn: "trn:c", labels: onApp("shop") });
+      }),
+    ).rejects.toThrow("requests[0].labels");
+    expect(client.bulkSetMetadata).toHaveBeenCalledOnce();
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("keeps a migration label that does not fit by dropping sdk-on-app labels", async () => {
     const labelsByTrn = new Map([
       ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
@@ -1154,17 +1208,19 @@ describe("labels the Platform allows no more of", () => {
   });
 
   test("fails when the other labels alone are more than the Platform allows", async () => {
-    const labelsByTrn = new Map([["trn:db", { a: "1", b: "2", c: "3", d: "4" }]]);
+    const trn = "trn:v1:workspace:ws:tailordb:db";
+    const labelsByTrn = new Map([[trn, { a: "1", b: "2", c: "3", d: "4" }]]);
     const client = limitedClient(labelsByTrn);
 
     await expect(
       writeMetadataLabelsDroppingOnAppLabels(client, {
-        trn: "trn:db",
+        trn,
         labels: { "sdk-managed": "workspace", ...onApp("shop") },
       }),
     ).rejects.toMatchObject({
       code: "METADATA_LABEL_LIMIT_EXCEEDED",
-      context: { trn: "trn:db" },
+      message: expect.stringContaining('TailorDB namespace "db" holds more labels'),
+      context: { resourceType: "tailordb.service", name: "db", trn },
     });
   });
 });

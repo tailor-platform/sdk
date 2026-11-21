@@ -326,8 +326,9 @@ websites, and public OAuth client IDs. An application's `id` is the `id` from
 `defineConfig()` and is `undefined` when the config has none. OAuth client secrets
 are never included. `ctx.staticWebsites` holds the static websites of the
 registering config. `ctx.application`, the registering application, is deprecated
-and will be removed in v3: find the application in `ctx.applications` by name, and
-read the config's sites from `ctx.staticWebsites`.
+and will be removed in v3: the registering config's applications are the entries of
+`ctx.applications` whose `configPath` equals `ctx.configPath`, and its sites are in
+`ctx.staticWebsites`.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
@@ -344,7 +345,8 @@ const deployedInfo: Plugin = {
   id: "@example/deployed-info",
   description: "Reports the deployed application URL",
   onDeployed(ctx) {
-    const url = ctx.applications.find(({ name }) => name === "my-app")?.url;
+    const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);
+    const url = app?.url;
     if (!url) return;
     ctx.logger.success(`Application ready: ${url}`);
     return { outputs: { url } };

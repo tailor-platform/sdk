@@ -66,7 +66,7 @@ import type {
   StandardIdPPermissionCondition,
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
-import type { DeployApplication } from "./deploy-application";
+import type { ListingApplication } from "./deploy-application";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -363,7 +363,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
-  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  applications: ReadonlyArray<ListingApplication>,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,

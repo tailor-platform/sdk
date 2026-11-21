@@ -5,7 +5,8 @@ import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, internalError, isCLIError, toError } from "#/cli/shared/errors";
 import { plainRedacted } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
-import type { ManagedResourceType } from "./managed-resource-type";
+import { assertDefined } from "#/utils/assert";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   BulkSetMetadataRequestSchema,
@@ -518,19 +519,19 @@ export function withExtraLabels(
  * @returns The violation message, or undefined for any other error
  */
 export function labelCountViolation(error: unknown): string | undefined {
-  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return undefined;
+  return labelCountViolations(error)[0]?.message;
+}
+
+function labelCountViolations(error: unknown) {
+  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return [];
   return error
     .findDetails(ViolationsSchema)
     .flatMap(({ violations }) => violations)
-    .find(({ ruleId }) => ruleId === "map.max_pairs")?.message;
+    .filter(({ ruleId }) => ruleId === "map.max_pairs");
 }
 
 function labelCountViolationIndices(error: unknown): number[] | undefined {
-  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return undefined;
-  const indices = error
-    .findDetails(ViolationsSchema)
-    .flatMap(({ violations }) => violations)
-    .filter(({ ruleId }) => ruleId === "map.max_pairs")
+  const indices = labelCountViolations(error)
     .map(({ field }) => field?.elements[0]?.subscript)
     .map((subscript) => (subscript?.case === "index" ? Number(subscript.value) : undefined));
   if (indices.length === 0 || indices.some((index) => index === undefined)) return undefined;
@@ -553,7 +554,6 @@ const onAppLabelledResourceTypes = {
   auth: "auth.service",
   idp: "idp.service",
   function_registry: "function_registry",
-  application: "application",
 } as const satisfies Partial<Record<ResourceKind, ManagedResourceType>>;
 
 /**
@@ -612,11 +612,12 @@ async function setLabelsDroppingOnAppLabels(
     }
   }
   if (fitting < 0) {
+    const { resourceType, name } = onAppLabelledResourceOf(trn);
     throw CLIError({
       code: "METADATA_LABEL_LIMIT_EXCEEDED",
-      message: `${trn} holds more labels than the Platform allows, even without the labels that name the applications listing it.`,
+      message: `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" holds more labels than the Platform allows, even without the labels that name the applications listing it.`,
       suggestion: "Remove labels that tailor does not set from the resource, then deploy again.",
-      context: { trn },
+      context: { resourceType, name, trn },
     });
   }
   return onAppKeys.slice(fitting).map((key) => key.slice(onAppLabelPrefix.length));
@@ -799,16 +800,12 @@ class MetadataWriteBatch {
       const rest = requests.filter((_, index) => !rejected.includes(index));
       if (rest.length > 0) await this.#client.bulkSetMetadata({ requests: rest });
       for (const index of rejected) {
-        const { trn, labels } = requests[index] ?? throwMissingRequest(index);
+        const { trn, labels } = assertDefined(requests[index], "Rejected request missing");
         const applications = await setLabelsDroppingOnAppLabels(this.#client, trn, labels);
         this.#onDropped?.({ trn, applications });
       }
     }
   }
-}
-
-function throwMissingRequest(index: number): never {
-  throw internalError(`BulkSetMetadata rejected request ${index}, which it was not sent`);
 }
 
 function hasMetadataLabelChange(write: MetadataLabelWrite): boolean {

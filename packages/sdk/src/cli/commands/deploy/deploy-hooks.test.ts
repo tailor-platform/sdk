@@ -807,13 +807,15 @@ test("reports the sdk-on-app labels the Platform had no room for in the JSON res
   using _json = jsonMode();
   useWorkspaceTarget();
   mocks.prerequisite.mockResolvedValueOnce({
-    droppedOnAppLabels: [{ trn: "trn:v1:workspace:ws:auth:shop-auth", applications: ["ops"] }],
+    droppedOnAppLabels: [
+      { resourceType: "auth.service", name: "shop-auth", applications: ["ops"] },
+    ],
   });
   mocks.apply.mockResolvedValueOnce({
     maintenance: [],
     labelRejections: [],
     droppedOnAppLabels: [
-      { trn: "trn:v1:workspace:ws:tailordb:shared-db", applications: ["ops", "web"] },
+      { resourceType: "tailordb.service", name: "shared-db", applications: ["ops", "web"] },
     ],
   });
   await deploy({ yes: true, noValidate: true });

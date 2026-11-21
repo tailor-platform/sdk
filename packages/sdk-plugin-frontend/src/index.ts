@@ -1,7 +1,12 @@
 import { PluginValidationError } from "@tailor-platform/sdk";
 import * as path from "pathe";
 import type { FrontendBuildContext, FrontendDefinition, FrontendEnvContext } from "./types";
-import type { DeployedApplication, DeployedContext, Plugin } from "@tailor-platform/sdk";
+import type {
+  DeployedApplication,
+  DeployedContext,
+  DeployedStaticWebsite,
+  Plugin,
+} from "@tailor-platform/sdk";
 
 export type {
   FrontendBuildContext,
@@ -20,7 +25,7 @@ function withApplication<Context extends object>(
   context: Context,
 ): Context & { application: DeployedApplication } {
   return Object.defineProperty(context, "application", {
-    enumerable: true,
+    enumerable: Object.getOwnPropertyDescriptor(ctx, "application")?.enumerable ?? false,
     // oxlint-disable-next-line typescript/no-deprecated -- Read lazily, so a callback that leaves it unread works when reading it throws.
     get: () => ctx.application,
   }) as Context & { application: DeployedApplication };
@@ -76,9 +81,12 @@ export function frontendPlugin(
     async onDeployed(ctx) {
       const frontends: FrontendOutput[] = [];
       const sites = ctx.staticWebsites;
-      const staticWebsites = Object.fromEntries(
-        Object.entries(sites).flatMap(([name, site]) =>
-          site ? [[name, { name: site.name, url: site.url }]] : [],
+      const staticWebsites: Record<string, DeployedStaticWebsite> = Object.assign(
+        Object.create(null),
+        Object.fromEntries(
+          Object.entries(sites).flatMap(([name, site]) =>
+            site ? [[name, { name: site.name, url: site.url }]] : [],
+          ),
         ),
       );
       const registrant = registrantOf(ctx.applications, ctx.configPath);

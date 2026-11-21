@@ -1,5 +1,5 @@
 import { CLIError } from "#/cli/shared/errors";
-import { appIdLockKey, findAppIdLock } from "./app-id-lock";
+import { resolveAppId } from "./app-id-lock";
 import type { WorkspaceTakeover } from "./confirm";
 import type { DeploymentSource } from "./deployment-target";
 
@@ -27,11 +27,6 @@ function takenOverApplications(takeovers: readonly WorkspaceTakeover[]): TakenOv
   return [...byId.values()];
 }
 
-function lockedAppId(configPath: string): string | undefined {
-  const lock = findAppIdLock(configPath);
-  return lock?.appIds[appIdLockKey(lock.root, configPath)]?.toLowerCase();
-}
-
 /**
  * Stop a `defineApp()` config that would take over resources another config deployed. Its own
  * id is the one `.github/tailor.lock` records for it; without one, the only id among the
@@ -47,7 +42,7 @@ export function assertTakeoversFromOwnConfig(
   if (source.kind !== "workspace" || source.workspace.definedBy !== "defineApp") return;
   const configPath = source.workspace.path;
   const applications = takenOverApplications(takeovers);
-  const ownId = lockedAppId(configPath);
+  const ownId = resolveAppId({ configPath, configId: undefined })?.toLowerCase();
   const others =
     ownId === undefined
       ? applications.length > 1
@@ -65,7 +60,7 @@ export function assertTakeoversFromOwnConfig(
         ? `This defineApp() config would take over resources that several configs deployed: ${listed}.`
         : `This defineApp() config would take over resources that another config deployed: ${listed}.`,
     suggestion:
-      "Merge the configs deployed to this workspace into one defineWorkspace() config, and run `tailor remove -c <config>` for a config that is no longer used.",
+      "Merge every config deployed to this workspace into one defineWorkspace() config and deploy that instead: it takes over their resources. If a listed config's resources are no longer needed, delete them first with `tailor remove -c <that config>`.",
     context: { configPath, applications: others },
   });
 }

@@ -48,7 +48,7 @@ describe("defineUnambiguousContextField", () => {
           suggestion: 'Change the code that reads "auth" to read "auths".',
           context: {
             field: "auth",
-            replacement: "auths",
+            replacement: ["auths"],
             candidates: ["corp-auth", "partner-auth"],
           },
         }),
@@ -109,7 +109,7 @@ describe("defineUnambiguousContextField", () => {
       expect.objectContaining({
         code: "PLUGIN_CONTEXT_FIELD_UNAVAILABLE",
         message: '"application" cannot be read because the config has no applications.',
-        context: { field: "application", replacement: "applications", candidates: [] },
+        context: { field: "application", replacement: ["applications"], candidates: [] },
       }),
     );
     expect({ ...context }).toEqual({ baseDir: "out" });
