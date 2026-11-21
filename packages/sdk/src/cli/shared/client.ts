@@ -51,6 +51,12 @@ export function normalizeBaseUrl(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+/**
+ * Platform connection settings in effect: the given ones, completed from `TAILOR_PLATFORM_URL`,
+ * `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` and `TAILOR_PLATFORM_CONSOLE_URL`.
+ * @param config - Settings that take precedence over the environment
+ * @returns The effective settings, or undefined when none is set
+ */
 export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
   const platformUrl = config.platformUrl ?? getEnvPlatformUrl();
   const oauth2ClientId = config.oauth2ClientId ?? getEnvOAuth2ClientId();

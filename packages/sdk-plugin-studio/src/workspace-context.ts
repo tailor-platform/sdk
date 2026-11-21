@@ -1,0 +1,123 @@
+import { listProfileInfos } from "@tailor-platform/sdk/cli";
+
+export interface WorkspaceSelection {
+  profile?: string;
+  workspaceId?: string;
+}
+
+export interface ProfileInfo {
+  name: string;
+  workspaceId: string;
+}
+
+export interface SelectionStore {
+  load(): string | undefined;
+  save(profile: string | null): void;
+}
+
+export interface WorkspaceContext {
+  restore(): Promise<void>;
+  selection(): WorkspaceSelection;
+  select(profile: string | null): Promise<void>;
+  describe(): Promise<{ profiles: ProfileInfo[]; selected: WorkspaceSelection }>;
+  /** Call `listener` after every `select`; returns the function that stops it. */
+  subscribe(listener: () => void): () => void;
+}
+
+export interface WorkspaceContextOptions {
+  initialProfile?: string;
+  listProfiles: () => Promise<ProfileInfo[]>;
+  store?: SelectionStore;
+}
+
+/**
+ * List the profiles of the Tailor CLI configuration.
+ * @returns Profile names with their workspace IDs
+ */
+export async function listProfiles(): Promise<ProfileInfo[]> {
+  const profiles = await listProfileInfos();
+  return profiles.map(({ name, workspaceId }) => ({ name, workspaceId }));
+}
+
+/**
+ * Hold the profile / workspace every tab of the shell works against.
+ * @param options - Startup selection and the profile source
+ * @returns The shared selection
+ */
+export function createWorkspaceContext(options: WorkspaceContextOptions): WorkspaceContext {
+  let selected: WorkspaceSelection = {};
+  const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) listener();
+  };
+  return {
+    restore: async () => {
+      const profiles = await options.listProfiles();
+      if (options.initialProfile !== undefined) {
+        const found = profiles.find((p) => p.name === options.initialProfile);
+        if (!found) throw new Error(`Profile "${options.initialProfile}" not found`);
+        selected = { profile: found.name, workspaceId: found.workspaceId };
+        return;
+      }
+      const found = profiles.find((p) => p.name === options.store?.load());
+      if (found) selected = { profile: found.name, workspaceId: found.workspaceId };
+    },
+    selection: () => ({ ...selected }),
+    select: async (profile) => {
+      if (profile === null) {
+        selected = {};
+        options.store?.save(null);
+        notify();
+        return;
+      }
+      const found = (await options.listProfiles()).find((p) => p.name === profile);
+      if (!found) throw new Error(`Profile "${profile}" not found`);
+      selected = { profile: found.name, workspaceId: found.workspaceId };
+      options.store?.save(found.name);
+      notify();
+    },
+    describe: async () => ({ profiles: await options.listProfiles(), selected: { ...selected } }),
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}
+
+/**
+ * CLI options that point a `tailor` command at the selected workspace. The workspace ID is passed
+ * as well as the profile because `TAILOR_PLATFORM_WORKSPACE_ID` in the environment beats `-p`.
+ * @param selection - The shell's current selection
+ * @returns `--profile=<name>` and/or `--workspace-id=<id>`, or nothing when no workspace is selected
+ */
+export function selectionArgs(selection: WorkspaceSelection): string[] {
+  return [
+    ...(selection.profile ? [`--profile=${selection.profile}`] : []),
+    ...(selection.workspaceId ? [`--workspace-id=${selection.workspaceId}`] : []),
+  ];
+}
+
+/**
+ * The environment for a `tailor` command that works against the selected profile. The shell
+ * starts with the token of the startup user and the platform of the startup profile in
+ * `TAILOR_PLATFORM_TOKEN`, `TAILOR_PLATFORM_URL` and `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`. The CLI
+ * prefers that token to `--profile`, and uses the platform for what the profile does not store,
+ * so a command for another profile would run with the wrong user's credentials or platform; the
+ * three are left out while a profile is selected.
+ * @param selection - The shell's current selection
+ * @param env - Environment to start from
+ * @returns A copy of `env` to pass to the command, leaving the process environment untouched
+ */
+export function selectionEnv(
+  selection: WorkspaceSelection,
+  env: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  if (!selection.profile) return { ...env };
+  const {
+    TAILOR_PLATFORM_TOKEN: _token,
+    TAILOR_PLATFORM_URL: _url,
+    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: _clientId,
+    ...rest
+  } = env;
+  return rest;
+}
