@@ -99,9 +99,11 @@ export function selectionArgs(selection: WorkspaceSelection): string[] {
 
 /**
  * The environment for a `tailor` command that works against the selected profile. The shell
- * starts with the token of the startup user in `TAILOR_PLATFORM_TOKEN`, and the CLI prefers that
- * token to `--profile`, so a command for another profile would run with the wrong user's
- * credentials; the token is left out while a profile is selected.
+ * starts with the token of the startup user and the platform of the startup profile in
+ * `TAILOR_PLATFORM_TOKEN`, `TAILOR_PLATFORM_URL` and `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`. The CLI
+ * prefers that token to `--profile`, and uses the platform for what the profile does not store,
+ * so a command for another profile would run with the wrong user's credentials or platform; the
+ * three are left out while a profile is selected.
  * @param selection - The shell's current selection
  * @param env - Environment to start from
  * @returns A copy of `env` to pass to the command, leaving the process environment untouched
@@ -111,6 +113,11 @@ export function selectionEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {
   if (!selection.profile) return { ...env };
-  const { TAILOR_PLATFORM_TOKEN: _token, ...rest } = env;
+  const {
+    TAILOR_PLATFORM_TOKEN: _token,
+    TAILOR_PLATFORM_URL: _url,
+    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: _clientId,
+    ...rest
+  } = env;
   return rest;
 }

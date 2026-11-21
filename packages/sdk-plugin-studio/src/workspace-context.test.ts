@@ -162,6 +162,15 @@ describe("selectionEnv", () => {
     expect(selectionEnv({ profile: "test", workspaceId: "w" }, env)).toEqual({ PATH: "/bin" });
   });
 
+  test("leaves out the platform the startup profile injected, so a profile without its own falls back to the default", () => {
+    const injected = {
+      TAILOR_PLATFORM_URL: "https://custom.example.com",
+      TAILOR_PLATFORM_OAUTH2_CLIENT_ID: "custom-client",
+      PATH: "/bin",
+    };
+    expect(selectionEnv({ profile: "test" }, injected)).toEqual({ PATH: "/bin" });
+  });
+
   test("keeps the token when no profile is selected, so a token-only setup still works", () => {
     expect(selectionEnv({}, env)).toEqual(env);
   });

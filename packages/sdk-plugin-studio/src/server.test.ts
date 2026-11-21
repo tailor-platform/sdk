@@ -101,6 +101,33 @@ describe("startServer", () => {
     expect(cancelled).toBe(true);
   });
 
+  test("keeps serving when a HEAD response's stream fails to cancel", async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const server = await start(
+        () => (request) =>
+          new URL(request.url).pathname === "/stream"
+            ? new Response(
+                new ReadableStream<Uint8Array>({
+                  cancel() {
+                    throw new Error("cleanup failed");
+                  },
+                }),
+              )
+            : new Response("alive"),
+      );
+      const head = await fetch(`${server.url}stream`, { method: "HEAD" });
+      expect(head.status).toBe(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(unhandled).toEqual([]);
+      expect(await (await fetch(`${server.url}next`)).text()).toBe("alive");
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   test("delivers a streamed chunk before the response ends", async () => {
     const server = await start(() => () => {
       const stream = new ReadableStream<Uint8Array>({
