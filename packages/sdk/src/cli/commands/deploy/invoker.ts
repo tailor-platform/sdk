@@ -59,11 +59,16 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
   const defining = authNamespaces.filter((namespace) => machineUsers.get(namespace)?.has(invoker));
   const [namespace, ...alsoDefining] = defining;
   if (namespace === undefined) {
+    const names = [
+      ...new Set(authNamespaces.flatMap((name) => [...(machineUsers.get(name) ?? [])])),
+    ].toSorted();
     throw CLIError({
       code: "INVOKER_MACHINE_USER_NOT_FOUND",
       message: `${context} uses invoker "${invoker}", but none of the Auth services ${authNamespaces.join(", ")} has a machine user with that name.`,
-      suggestion: "Define the machine user in one of these Auth services, or name an existing one.",
-      context: { invoker, authNamespaces: [...authNamespaces] },
+      suggestion: names.length
+        ? `Use one of the existing machine users: ${names.join(", ")}.`
+        : "Define the machine user in one of these Auth services before using it as invoker.",
+      context: { invoker, authNamespaces: [...authNamespaces], machineUsers: names },
     });
   }
   if (alsoDefining.length > 0) {

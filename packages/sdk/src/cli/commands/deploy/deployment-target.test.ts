@@ -4,8 +4,16 @@ import { describe, expect, test } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
-import { assertHttpAdaptersHaveOneApplication, loadDeployConfigs } from "./deployment-target";
+import {
+  brandedDefault,
+  WORKSPACE_DB_SOURCE,
+  writeWorkspaceTables,
+} from "#/cli/shared/test-helpers/workspace-config";
+import {
+  assertHttpAdaptersHaveOneApplication,
+  buildDeploymentTargets,
+  loadDeployConfigs,
+} from "./deployment-target";
 
 const WORKSPACE_CONFIG = brandedDefault(
   "workspace-config",
@@ -67,13 +75,14 @@ describe("assertHttpAdaptersHaveOneApplication", () => {
     },
   });
 
-  test("rejects HTTP adapters in a workspace config that deploys several applications", () => {
-    expect(() =>
-      assertHttpAdaptersHaveOneApplication(services(1) as never, [app("shop"), app("admin")]),
-    ).toThrow(
+  test.for([
+    { label: "several applications", apps: ["shop", "admin"] },
+    { label: "no application", apps: [] },
+  ])("rejects HTTP adapters in a workspace config that deploys $label", ({ apps }) => {
+    expect(() => assertHttpAdaptersHaveOneApplication(services(1) as never, apps.map(app))).toThrow(
       expect.objectContaining({
         code: "HTTP_ADAPTER_MULTIPLE_APPLICATIONS",
-        context: { applications: ["shop", "admin"] },
+        context: { applications: apps },
       }),
     );
   });
@@ -85,5 +94,82 @@ describe("assertHttpAdaptersHaveOneApplication", () => {
     expect(() =>
       assertHttpAdaptersHaveOneApplication(services(adapters) as never, apps.map(app)),
     ).not.toThrow();
+  });
+});
+
+describe("buildDeploymentTargets for a workspace config", () => {
+  test("builds one target for the whole workspace with its applications and env overrides", async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(import.meta.dirname, ".workspace-target-")),
+    );
+    try {
+      writeWorkspaceTables(
+        dir,
+        (name) => `import {
+  db,
+  unsafeAllowAllGqlPermission,
+  unsafeAllowAllTypePermission,
+} from "@tailor-platform/sdk";
+export const table = db
+  .table("${name}", { name: db.string() })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`,
+      );
+      const auth = (name: string, machineUser: string) => `defineAuth("${name}", {
+        machineUserAttributes: { role: db.string() },
+        machineUsers: { ${machineUser}: { attributes: { role: "ADMIN" } } },
+      })`;
+      const configPath = path.join(dir, "tailor.config.ts");
+      fs.writeFileSync(
+        configPath,
+        `import { db, defineAuth } from "@tailor-platform/sdk";
+
+${brandedDefault(
+  "workspace-config",
+  `{
+  env: { tier: "root" },
+  db: ${WORKSPACE_DB_SOURCE},
+  resolver: { "shop-api": { files: [], env: { tier: "api" } } },
+  auth: { "shop-auth": ${auth("shop-auth", "admin")}, "admin-auth": ${auth("admin-auth", "batch")} },
+  apps: {
+    shop: { db: ["customer-db", "order-db"], resolver: ["shop-api"], auth: "shop-auth" },
+    admin: { db: ["order-db"], auth: "admin-auth" },
+  },
+}`,
+)}
+`,
+      );
+
+      const [target] = await buildDeploymentTargets({
+        configPaths: [configPath],
+        dryRun: true,
+        buildOnly: true,
+        noCache: true,
+        packageVersion: "test",
+        cacheDir: path.join(dir, ".cache"),
+      });
+
+      expect(target).toMatchObject({
+        source: { kind: "workspace", workspace: { path: configPath } },
+        owner: { kind: "workspace" },
+        envOverrides: { resolver: { "shop-api": { tier: "api" } } },
+      });
+      expect(
+        target?.applications.map(({ name, authNamespace }) => ({ name, authNamespace })),
+      ).toEqual([
+        { name: "shop", authNamespace: "shop-auth" },
+        { name: "admin", authNamespace: "admin-auth" },
+      ]);
+      expect(target?.application.authServices.map(({ config }) => config.name)).toEqual([
+        "shop-auth",
+        "admin-auth",
+      ]);
+      expect(fs.readFileSync(path.join(dir, "tailor.d.ts"), "utf-8")).toContain(
+        '"admin-auth": true',
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

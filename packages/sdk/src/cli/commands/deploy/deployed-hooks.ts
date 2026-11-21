@@ -2,7 +2,7 @@ import * as nodeFs from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
@@ -10,6 +10,7 @@ import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite, staticWebsiteDeployTimeoutError } from "../staticwebsite/deploy";
 import { sourceApplicationName, type BuiltDeploymentTarget } from "./deployment-target";
 import { execPluginCommand } from "./plugin-exec";
+import type { LoadedConfigFile } from "#/cli/shared/config-loader";
 import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
 
@@ -227,8 +228,15 @@ interface HookOwner {
   plugin: Plugin;
 }
 
-function hookApplicationName(target: BuiltDeploymentTarget): string {
-  return sourceApplicationName(target.source) ?? "workspace config";
+/**
+ * Name of the application whose config registers an onDeployed hook.
+ * @param target - Target whose plugins have the hook
+ * @returns The application name
+ */
+export function hookApplicationName(target: Pick<BuiltDeploymentTarget, "source">): string {
+  const name = sourceApplicationName(target.source);
+  if (name === undefined) throw internalError("A workspace config runs no onDeployed hooks");
+  return name;
 }
 
 function hookLabel(hook: HookOwner): string {
@@ -237,13 +245,13 @@ function hookLabel(hook: HookOwner): string {
 
 /**
  * Stop a deploy whose workspace config registers plugins with onDeployed hooks, which workspace
- * configs do not run yet, before anything is planned.
- * @param targets - Built deployment targets
+ * configs do not run yet, before a workspace is resolved or anything is built.
+ * @param configs - Loaded configs of the deploy
  */
-export function assertNoWorkspaceDeployedHooks(targets: readonly BuiltDeploymentTarget[]): void {
-  const pluginIds = targets.flatMap((target) =>
-    target.source.kind === "workspace"
-      ? target.plugins.filter((plugin) => plugin.onDeployed).map((plugin) => plugin.id)
+export function assertNoWorkspaceDeployedHooks(configs: readonly LoadedConfigFile[]): void {
+  const pluginIds = configs.flatMap((config) =>
+    config.kind === "workspace"
+      ? config.plugins.filter((plugin) => plugin.onDeployed).map((plugin) => plugin.id)
       : [],
   );
   if (pluginIds.length === 0) return;

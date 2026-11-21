@@ -153,7 +153,8 @@ describe("normalizeInvoker with several Auth namespaces", () => {
     expect(() => normalizeInvoker("ghost", authNamespaces, 'Resolver "foo"', machineUsers)).toThrow(
       expect.objectContaining({
         code: "INVOKER_MACHINE_USER_NOT_FOUND",
-        context: { invoker: "ghost", authNamespaces },
+        suggestion: "Use one of the existing machine users: batch, kiosk, seeder.",
+        context: { invoker: "ghost", authNamespaces, machineUsers: ["batch", "kiosk", "seeder"] },
       }),
     );
   });

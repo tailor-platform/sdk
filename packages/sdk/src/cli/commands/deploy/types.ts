@@ -26,7 +26,7 @@ export interface PlanContext {
   owner: DeployOwner;
   forRemoval: boolean;
   config: Readonly<ServiceSettings>;
-  /** `env` values each service uses in place of the root values; absent when the config has none. */
+  /** `env` values each service uses in place of the root values; absent when the plan has none, as in `remove`. */
   envOverrides?: EnvOverrides;
   noSchemaCheck?: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */

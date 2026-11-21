@@ -306,6 +306,17 @@ describe("applyDeploymentPlans", () => {
     expect(maintenance).toEqual([{ application: "buyer", ...report }]);
   });
 
+  test("applyRemainingResources reports a workspace config's maintenance without an application", async () => {
+    const report = { namespaces: ["tailordb"], maintenanceMs: 5, phases: {}, migrations: [] };
+    mocks.applyTailorDB.mockImplementationOnce(async () => report as never);
+
+    const { maintenance } = await applyRemainingResources(mockOperatorClient({}), [
+      { ...deployment("workspace"), source: { kind: "workspace", workspace: {} } } as never,
+    ]);
+
+    expect(maintenance).toEqual([report]);
+  });
+
   test("applyRemainingResources applies every kind except secretManager, staticWebsite, aiGateway, idp create-update, and auth prerequisites", async () => {
     mocks.calls.length = 0;
 

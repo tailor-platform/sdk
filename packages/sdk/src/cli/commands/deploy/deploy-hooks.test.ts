@@ -26,7 +26,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
   loadDeployConfigs: async () => [
-    { kind: "config", config: mocks.target.config as never, plugins: [...mocks.target.plugins] },
+    mocks.target.source.kind === "workspace"
+      ? {
+          kind: "workspace",
+          workspace: mocks.target.source.workspace,
+          plugins: [...mocks.target.plugins],
+        }
+      : {
+          kind: "config",
+          config: mocks.target.config as never,
+          plugins: [...mocks.target.plugins],
+        },
   ],
   buildDeploymentTargets: async () => [mocks.target],
 }));
