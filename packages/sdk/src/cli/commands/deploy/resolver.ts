@@ -27,7 +27,7 @@ import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { configAuthNamespaces } from "./deploy-application";
+import { applicationsListing, configAuthNamespaces } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -54,6 +54,7 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
+import type { DeployApplication } from "./deploy-application";
 
 type ExistingPipelineServices = WithLabel<
   Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
@@ -181,7 +182,14 @@ export async function planPipeline(
     takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
+  } = await planServices(
+    client,
+    workspaceId,
+    context.owner,
+    context.applications,
+    pipelines,
+    previous?.existingServices,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const authNamespaces = configAuthNamespaces(context);
   const invokerMachineUsers = await listInvokerMachineUsers({
@@ -260,6 +268,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   previousExisting?: ExistingPipelineServices,
 ) {
@@ -291,6 +300,7 @@ async function planServices(
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
         owner,
+        onApps: applicationsListing(applications, "pipeline", pipeline.namespace),
       }),
     });
   }

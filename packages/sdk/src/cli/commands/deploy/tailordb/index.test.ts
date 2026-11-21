@@ -544,6 +544,43 @@ describe("planTailorDB (service level)", () => {
       ]);
     });
 
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const client = createMockClient([]);
+      const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
+
+      await planTailorDB({
+        client,
+        workspaceId,
+        application,
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "tailordb", Name: "my-tailordb" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "tailordb", Name: "my-tailordb" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+        owner: { kind: "workspace" },
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:tailordb:my-tailordb$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
+    });
+
     test("reports an unmanaged service with its resource type and label", async () => {
       const client = createMockClient([{ name: "my-tailordb" }]);
       const application = createMockApplication([createMockTailorDBService("my-tailordb")]);

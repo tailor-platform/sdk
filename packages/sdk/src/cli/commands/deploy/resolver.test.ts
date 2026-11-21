@@ -542,6 +542,37 @@ describe("planPipeline (resolver service level)", () => {
       ]);
     });
 
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      await planPipeline({
+        ...buildCtx({ client: createMockClient([]), application }),
+        owner: { kind: "workspace" },
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:pipeline:resolver-a$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
+    });
+
     test("service update taking over ownership is not forced by the SDK version", async () => {
       const client = createMockClient([{ name: "resolver-a", label: "other-app" }]);
       const application = createMockApplication([createMockResolverService("resolver-a")]);

@@ -51,6 +51,25 @@ export function workspaceDeployApplications(
   });
 }
 
+/**
+ * Names of the applications whose subgraphs list a service.
+ * @param applications - Applications of the config
+ * @param type - Subgraph type of the service, such as `tailordb`
+ * @param name - Service name
+ * @returns The application names, in config order
+ */
+export function applicationsListing(
+  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>,
+  type: "tailordb" | "pipeline" | "auth" | "idp",
+  name: string,
+): string[] {
+  return applications
+    .filter(({ subgraphs }) =>
+      subgraphs.some((subgraph) => subgraph.Type === type && subgraph.Name === name),
+    )
+    .map((application) => application.name);
+}
+
 type AuthNamespaceContext = {
   application: Pick<ConfigServices, "authServices">;
   applications: ReadonlyArray<Pick<DeployApplication, "authNamespace">>;

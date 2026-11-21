@@ -592,6 +592,7 @@ async function planDeploymentTarget(
         owner,
         functionEntries,
         previous?.functionRegistry.existingMap,
+        target.applications,
       ),
     );
     const unchangedWorkflowJobs = collectUnchangedWorkflowJobs(functionRegistry.changeSet);

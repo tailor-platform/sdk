@@ -441,6 +441,8 @@ export function dependencyLabelWrite(
 export interface BuildMetaRequestParams {
   trn: string;
   owner: DeployOwner;
+  /** For a workspace owner, the applications that list the resource, each labelled `sdk-on-app-<name>`. */
+  onApps?: readonly string[];
 }
 
 /**
@@ -457,12 +459,13 @@ export interface BuildMetaRequestParams {
  * @param params - Parameters for building the metadata request
  * @param params.trn - Target TRN
  * @param params.owner - Owner of the resources the deploy manages
+ * @param params.onApps - For a workspace owner, the applications that list the resource
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
-  const { trn, owner } = params;
+  const { trn, owner, onApps = [] } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
@@ -475,6 +478,7 @@ export async function buildMetaRequest(
       labels: {
         [sdkManagedLabelKey]: sdkManagedLabelValue,
         [sdkVersionLabelKey]: sdkVersion,
+        ...Object.fromEntries(onApps.map((app) => [`${onAppLabelPrefix}${app}`, ""])),
       },
       remove: [sdkNameLabelKey, sdkAppIdLabelKey],
       removePrefixes: [dependedByAppLabelPrefix, jobDependedByAppLabelPrefix, onAppLabelPrefix],
