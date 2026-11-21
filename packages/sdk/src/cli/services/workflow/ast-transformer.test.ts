@@ -1081,8 +1081,35 @@ await myWorkflow.start({ id: 2 }, { invoker: "kiosk" });
       expect(() => transform(`{ invoker: ${invoker} }`)).toThrow(expect.objectContaining({ code }));
     });
 
-    test("rejects options it cannot read", () => {
-      expect(() => transform("options")).toThrow(
+    test("rejects options it cannot read, naming the file", () => {
+      let thrown: unknown;
+      try {
+        transform("options");
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toMatchObject({ code: "WORKFLOW_START_INVOKER_UNRESOLVED" });
+      expect(getErrorDiagnostics(thrown as Error).location).toEqual({
+        file: path.resolve("test.ts"),
+      });
+    });
+
+    test.for([
+      '{ invoker: "batch" as const }',
+      '{ invoker: ("batch") }',
+      "{ invoker: `batch` }",
+      '({ invoker: "batch" }) satisfies object',
+      '{ ...defaults, invoker: "batch" }',
+    ])("names the Auth service of the static invoker in %s", (options) => {
+      expect(transform(options)).toContain('{ namespace: "admin-auth", machineUserName: "batch" }');
+    });
+
+    test("accepts undefined options", () => {
+      expect(() => transform("undefined")).not.toThrow();
+    });
+
+    test("rejects spread options without an invoker of their own", () => {
+      expect(() => transform("{ ...defaults }")).toThrow(
         expect.objectContaining({ code: "WORKFLOW_START_INVOKER_UNRESOLVED" }),
       );
     });

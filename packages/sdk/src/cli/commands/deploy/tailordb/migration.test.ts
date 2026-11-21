@@ -35,7 +35,6 @@ import { withMetadataWriteBatch } from "../label";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
-  getMigrationMachineUser,
   groupMigrationsByNamespace,
   executeMigrations,
   isMigrationPartiallyApplied,
@@ -201,43 +200,6 @@ describe("migration", () => {
   });
 
   // ==========================================================================
-  // getMigrationMachineUser
-  // ==========================================================================
-  describe("getMigrationMachineUser", () => {
-    test.each<
-      [
-        name: string,
-        config: { machineUser?: string } | undefined,
-        machineUsers: string[] | undefined,
-        expected: string | undefined,
-      ]
-    >([
-      [
-        "returns explicit machineUser from config",
-        { machineUser: "explicit-user" },
-        ["fallback-user"],
-        "explicit-user",
-      ],
-      [
-        "falls back to first machine user from auth",
-        undefined,
-        ["first-user", "second-user"],
-        "first-user",
-      ],
-      [
-        "falls back to first machine user when config has no machineUser",
-        {},
-        ["first-user", "second-user"],
-        "first-user",
-      ],
-      ["returns undefined when no machine users available", undefined, undefined, undefined],
-      ["returns undefined when machine users array is empty", undefined, [], undefined],
-    ])("%s", (_name, config, machineUsers, expected) => {
-      expect(getMigrationMachineUser(config, machineUsers)).toBe(expected);
-    });
-  });
-
-  // ==========================================================================
   // resolveMigrationMachineUsers
   // ==========================================================================
   describe("resolveMigrationMachineUsers", () => {
@@ -265,6 +227,17 @@ describe("migration", () => {
 
     test("resolves only the namespaces with a script to run", () => {
       expect(resolve({ migrator: {} })).toEqual({
+        byNamespace: new Map([
+          ["namespace-a", { namespace: "auth", machineUserName: "migrator" }],
+          ["namespace-b", { namespace: "auth", machineUserName: "migrator" }],
+        ]),
+      });
+    });
+
+    test("runs as the first machine user when migration.machineUser is empty", () => {
+      expect(
+        resolve({ migrator: {} }, { "namespace-a": { migration: { machineUser: "" } } }),
+      ).toEqual({
         byNamespace: new Map([
           ["namespace-a", { namespace: "auth", machineUserName: "migrator" }],
           ["namespace-b", { namespace: "auth", machineUserName: "migrator" }],
