@@ -104,8 +104,8 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
   if (hasAll && (hasNamespace || hasTables)) {
     throw CLIError({
       code: "TRUNCATE_OPTIONS_CONFLICT",
-      message:
-        "--all truncates every table, so it takes neither --namespace nor table names. Please specify only one.",
+      message: "--all truncates every table, so it takes neither --namespace nor table names.",
+      suggestion: "Pass --all alone, or --namespace and table names without --all.",
       command: "tailordb truncate",
     });
   }
@@ -252,8 +252,7 @@ export const truncateCommand = defineAppCommand({
     }),
     all: arg(z.boolean().default(false), {
       alias: "a",
-      description:
-        "Truncate all tables in all owned namespaces (excludes external namespaces); for a workspace config, in every namespace",
+      description: "Truncate all tables in all owned namespaces (excludes external namespaces)",
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",

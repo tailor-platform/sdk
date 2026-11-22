@@ -66,7 +66,7 @@ export interface ScriptWorkflowOptions {
    * Name of the owning application, recorded in the resources' labels. Omit it when a workspace
    * config owns them.
    */
-  appName?: string | undefined;
+  appName: string | undefined;
   /** Sentence telling how a resource left behind after a failed removal gets removed */
   leftoverNote: string;
   /** Profile the run uses, carried into the hint of a refusal so the hinted command selects it too */

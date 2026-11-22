@@ -83,7 +83,7 @@ export const runFunctionCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Machine user name for authentication, or `<auth>/<name>` to name its Auth service. Falls back to the active profile's default machine user.",
+        "Machine user name for authentication. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
     ...configArg,
@@ -370,11 +370,15 @@ export async function resolveRunMachineUser(
       profile,
     })) ?? defaultMachineUser(loaded);
   if (!value) {
+    const sources =
+      "Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'";
     throw CLIError({
       code: "MACHINE_USER_REQUIRED",
       message: "Machine user is required.",
       suggestion:
-        "Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
+        machineUserAuths(loaded).length > 1
+          ? `${sources}: the config defines several Auth services, so none of their machine users runs by default.`
+          : `${sources}, or ensure tailor.config.ts has machine users configured.`,
     });
   }
   const { namespace: authNamespace, machineUserName: name } = resolveMachineUser({

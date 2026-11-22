@@ -1068,7 +1068,7 @@ describe("migrationTestCloneApplication", () => {
   });
 
   test.each([
-    ["several applications", { shop: { db: ["order-db"] }, admin: { db: ["order-db"] } }],
+    ["several applications", { shop: { db: ["ledger-db"] }, admin: { db: ["ledger-db"] } }],
     ["a pending namespace no application lists", { shop: { db: ["order-db"] } }],
   ])("rejects a workspace config with %s", (_, apps) => {
     expect(() => migrationTestCloneApplication(workspaceFile(apps), ["ledger-db"])).toThrow(

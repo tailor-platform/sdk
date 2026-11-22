@@ -9,8 +9,9 @@ import type { LoadedConfig, LoadedWorkspaceConfig } from "./config-loader";
 export type FunctionEnvKind = "resolver" | "executor" | "workflow-job" | "plain";
 
 /**
- * The `env` a function runs with: the root `env`, with the override of the workspace service whose
- * files hold the function laid over it.
+ * The `env` a function runs with: the root `env`, with the override of its workspace service laid
+ * over it. A resolver takes the override of the resolver namespace whose files hold it; an executor
+ * or workflow job, that of the executor or workflow service, as deploy bundles them.
  * @param config - Loaded config of either kind
  * @param kind - Kind of function the file defines
  * @param filePath - Path of the function's file
@@ -35,9 +36,9 @@ export function functionEnv(
   const overrides =
     override !== undefined
       ? envOverrides.resolver[override]
-      : kind === "executor" && holds(config.executor)
+      : kind === "executor"
         ? envOverrides.executor
-        : kind === "workflow-job" && holds(config.workflow)
+        : kind === "workflow-job"
           ? envOverrides.workflow
           : undefined;
   return { ...config.env, ...overrides };

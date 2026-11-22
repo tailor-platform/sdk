@@ -5,6 +5,7 @@ import {
   resolveMachineUserInputSource,
   type MachineUserInputSource,
 } from "#/cli/shared/args";
+import { loadAuthApplication } from "#/cli/shared/auth-applications";
 import { fetchMachineUserToken, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { configApplications, machineUserAuths } from "#/cli/shared/config-file";
@@ -14,7 +15,6 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { loadAuthApplication } from "../auth-namespaces";
 import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
@@ -164,7 +164,7 @@ export const tokenCommand = defineAppCommand({
     name: arg(z.string().optional(), {
       positional: true,
       description:
-        "Machine user name, or `<auth>/<name>` to name its Auth service. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
+        "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
     }),
   }),
   run: async (args) => {

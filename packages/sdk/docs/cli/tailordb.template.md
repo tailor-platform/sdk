@@ -43,8 +43,8 @@ tailor tailordb truncate User Post --yes
 
 **Notes:**
 
-- You must specify exactly one of: `--all`, `--namespace`, or table names
-- When truncating specific tables, the namespace is automatically detected from your config
+- Specify `--all`, `--namespace`, or table names; `--namespace` may also come with table names to look them up in that namespace only
+- When truncating specific tables without `--namespace`, the namespace is found from the tables deployed in your config's namespaces; a table name that several namespaces have stops the command with `TAILORDB_TABLE_NAMESPACE_AMBIGUOUS`
 - Confirmation prompts vary based on the operation:
   - `--all`: requires typing `truncate all`
   - `--namespace`: requires typing `truncate <namespace-name>`

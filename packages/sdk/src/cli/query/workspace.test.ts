@@ -174,6 +174,18 @@ describe("query with a workspace config", () => {
     });
   });
 
+  test("rejects --namespace with the gql engine", async () => {
+    await expect(
+      query({
+        configPath,
+        engine: "gql",
+        query: "{ __typename }",
+        machineUser: "seeder",
+        namespace: "order-db",
+      }),
+    ).rejects.toMatchObject({ code: "OPTIONS_INVALID" });
+  });
+
   test("rejects --app with the sql engine", async () => {
     await expect(
       query({ configPath, engine: "sql", query: "SELECT 1", machineUser: "seeder", app: "shop" }),

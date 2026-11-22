@@ -29,8 +29,7 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
     datasets?: unknown;
   };
   return {
-    machineUserName:
-      typeof options.machineUserName === "string" ? options.machineUserName : undefined,
+    machineUserName: machineUserValue(options.machineUserName),
     datasets:
       typeof options.datasets === "object" && options.datasets !== null
         ? (options.datasets as Record<string, unknown>)
@@ -40,6 +39,15 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
         ? path.resolve(path.dirname(configPath), options.distPath, "data")
         : undefined,
   };
+}
+
+function machineUserValue(machineUser: unknown): string | undefined {
+  if (typeof machineUser === "string") return machineUser;
+  if (typeof machineUser !== "object" || machineUser === null) return undefined;
+  const { namespace, machineUserName } = machineUser as Record<string, unknown>;
+  return typeof namespace === "string" && typeof machineUserName === "string"
+    ? `${namespace}/${machineUserName}`
+    : undefined;
 }
 
 function isDirectory(dirPath: string): boolean {

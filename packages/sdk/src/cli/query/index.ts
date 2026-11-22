@@ -15,6 +15,7 @@ import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
+import { loadAuthApplication } from "../shared/auth-applications";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import {
@@ -68,10 +69,13 @@ const queryBaseFields = {
   app: z.string().optional(),
 };
 
-function checkEngineOptions(
-  options: { engine: QueryEngine; namespace?: string | undefined; app?: string | undefined },
-  ctx: z.RefinementCtx,
-): void {
+type EngineOptions = {
+  engine: QueryEngine;
+  namespace?: string | undefined;
+  app?: string | undefined;
+};
+
+function checkEngineOptions(options: EngineOptions, ctx: z.RefinementCtx): void {
   if (options.engine === "sql" && options.app !== undefined) {
     ctx.addIssue({
       code: "custom",
@@ -158,7 +162,8 @@ async function getNamespaceFromSqlQuery(
     throw CLIError({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: `Could not infer namespace from query. Detected namespaces: ${namespaces.join(", ")}.`,
-      suggestion: "Reference a TailorDB table in the query; its namespace is resolved from it.",
+      suggestion:
+        "Reference a TailorDB table in the query, whose namespace is resolved from it, or pass --namespace.",
       context: { namespaces },
     });
   }
@@ -175,7 +180,7 @@ async function getNamespaceFromSqlQuery(
     throw CLIError({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: `Could not find namespace for tables in query: ${notFoundTables.join(", ")}.`,
-      suggestion: `Check the table names against the types deployed in namespaces: ${namespaces.join(", ")}.`,
+      suggestion: `Check the table names against the types deployed in namespaces: ${namespaces.join(", ")}, or pass --namespace.`,
       context: { tables: notFoundTables, namespaces },
     });
   }
@@ -224,7 +229,11 @@ async function loadOptions(options: QueryBaseOptions) {
 
   const application =
     validated.engine === "gql" || loaded.kind === "config"
-      ? await loadQueryApplication({ client, workspaceId, loaded, app: validated.app })
+      ? await loadAuthApplication({
+          client,
+          workspaceId,
+          name: selectApplication(loaded, validated.app).name,
+        })
       : undefined;
   const invoker = resolveQueryInvoker({ loaded, application, machineUser });
 
@@ -251,26 +260,6 @@ async function loadOptions(options: QueryBaseOptions) {
     machineUserResource,
     namespaces: validated.namespace === undefined ? namespaces : [validated.namespace],
   };
-}
-
-type LoadQueryApplicationParams = {
-  client: Client;
-  workspaceId: string;
-  loaded: LoadedConfigFile;
-  app: string | undefined;
-};
-
-async function loadQueryApplication(params: LoadQueryApplicationParams): Promise<Application> {
-  const { client, workspaceId, loaded, app } = params;
-  const { name } = selectApplication(loaded, app);
-  const { application } = await client.getApplication({ workspaceId, applicationName: name });
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${name} does not have an auth configuration.`,
-    });
-  }
-  return application;
 }
 
 type ResolveQueryInvokerParams = {
@@ -885,7 +874,7 @@ export const queryCommand = defineAppCommand({
       "machine-user": arg(z.string().optional(), {
         alias: "m",
         description:
-          "Machine user name for query execution, or `<auth>/<name>` to name its Auth service. Falls back to the active profile's default machine user.",
+          "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
       }),
       namespace: arg(z.string().optional(), {
@@ -894,8 +883,7 @@ export const queryCommand = defineAppCommand({
           "TailorDB namespace a SQL query runs in; omit to infer it from the tables the query references",
       }),
       app: arg(z.string().optional(), {
-        description:
-          "Application a GraphQL query runs against; required when the config deploys several",
+        description: "Application a GraphQL query runs against (default: the config's application)",
       }),
       "newline-on-enter": arg(z.boolean().optional(), {
         description:

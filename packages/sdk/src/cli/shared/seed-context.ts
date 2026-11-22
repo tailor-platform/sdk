@@ -44,10 +44,7 @@ export interface SeedIdpUserContext {
  * per-namespace seeding order, and IdP user context.
  */
 export interface SeedContext {
-  /**
-   * The loaded Tailor config. For a `defineWorkspace()` or `defineApp()` config, it holds the
-   * workspace's settings: read only its path and build settings.
-   */
+  /** The loaded Tailor config. */
   config: LoadedConfig;
   /** Absolute path to the seedPlugin output directory. */
   distPath: string;
@@ -63,8 +60,8 @@ export interface SeedContext {
   /** IdP `_User` seeding context, or null when not applicable. */
   idpUser: SeedIdpUserContext | null;
   /**
-   * Application the seed's temporary resources are labeled with: the `defineConfig()` config's
-   * application, or undefined for a workspace config, which owns them itself.
+   * Application the seed's temporary resources are labeled with, or undefined when no single
+   * application owns them.
    */
   appName?: string | undefined;
   /**

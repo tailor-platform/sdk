@@ -58,6 +58,17 @@ describe("truncate with a workspace config", () => {
     );
   });
 
+  test("names the namespace --namespace gives when a table is not in it", async () => {
+    client.current = workspaceClient({ "order-db": ["Order"] });
+
+    await expect(
+      truncate({ configPath, tables: ["Order"], namespace: "ledger-db" }),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_TABLE_NOT_FOUND",
+      message: 'The following tables were not found in namespace "ledger-db": Order',
+    });
+  });
+
   test("rejects a table several namespaces have, and truncates it in the one --namespace names", async () => {
     const mock = workspaceClient({ "order-db": ["Order"], "ledger-db": ["Entry", "Order"] });
     client.current = mock;

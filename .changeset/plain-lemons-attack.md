@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk-plugin-seed": minor
+"@tailor-platform/sdk-plugin-seed": patch
 ---
 
-`tailor seed apply` and `tailor seed dump` take `--machine-user <auth>/<name>` to name the machine user's Auth service, and find the Auth service from the config instead of reading the deployed application. They need an SDK version whose `loadSeedContext()` returns `resolveMachineUser()`.
+`tailor seed apply` and `tailor seed dump` find the Auth service of the machine user from the config instead of reading the deployed application.

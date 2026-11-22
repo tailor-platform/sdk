@@ -7,22 +7,49 @@ export interface MachineUserRef {
   name: string;
 }
 
+/** A kind of thing an Auth service defines by name, such as a machine user. */
+export interface AuthMemberKind {
+  /** What it is called in messages, e.g. `machine user`. */
+  noun: string;
+  /** Prefix of its error codes, e.g. `MACHINE_USER`. */
+  codePrefix: string;
+  /** Key naming it in error context, e.g. `machineUser`. */
+  contextKey: string;
+  /** Where the config defines it, e.g. `auth.machineUsers`. */
+  configField: string;
+}
+
+const MACHINE_USER: AuthMemberKind = {
+  noun: "machine user",
+  codePrefix: "MACHINE_USER",
+  contextKey: "machineUser",
+  configField: "auth.machineUsers",
+};
+
+function parseAuthMemberRef(value: string, kind: AuthMemberKind): MachineUserRef {
+  const parts = value.split("/");
+  const [first, second] = parts;
+  if (parts.length === 1 && first) return { name: first };
+  if (parts.length === 2 && first && second) return { authNamespace: first, name: second };
+  throw CLIError({
+    code: `${kind.codePrefix}_INVALID`,
+    message: `${capitalized(kind.noun)} "${value}" is neither a name nor <auth>/<name>.`,
+    suggestion: `Pass the ${kind.noun}'s name, or its Auth service and name as <auth>/<name>.`,
+    context: { [kind.contextKey]: value },
+  });
+}
+
+function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 /**
  * Read a machine user value given as `<machine-user>` or `<auth>/<machine-user>`.
  * @param value - Machine user value from an option, the environment, or a profile
  * @returns The machine user name, with its Auth service when the value names one
  */
 export function parseMachineUserRef(value: string): MachineUserRef {
-  const parts = value.split("/");
-  const [first, second] = parts;
-  if (parts.length === 1 && first) return { name: first };
-  if (parts.length === 2 && first && second) return { authNamespace: first, name: second };
-  throw CLIError({
-    code: "MACHINE_USER_INVALID",
-    message: `Machine user "${value}" is neither a name nor <auth>/<name>.`,
-    suggestion: "Pass the machine user's name, or its Auth service and name as <auth>/<name>.",
-    context: { machineUser: value },
-  });
+  return parseAuthMemberRef(value, MACHINE_USER);
 }
 
 /**
@@ -64,18 +91,93 @@ export interface ResolveMachineUserParams {
   auths: ReadonlyArray<MachineUserAuth>;
 }
 
-function machineUserNotFound(name: string, authNamespaces: ReadonlyArray<string>, known: string[]) {
+/** An Auth service with the members of one kind it defines; `undefined` when they are not known. */
+export interface AuthMembers {
+  name: string;
+  members: ReadonlyArray<string> | undefined;
+}
+
+export interface ResolveAuthMemberParams {
+  /** Member value: `<name>` or `<auth>/<name>`. */
+  value: string;
+  /** Auth services to look in. */
+  auths: ReadonlyArray<AuthMembers>;
+  /** Kind of member. */
+  kind: AuthMemberKind;
+}
+
+function memberNotFound(
+  kind: AuthMemberKind,
+  name: string,
+  authNamespaces: ReadonlyArray<string>,
+  available: string[],
+): CLIError {
   return CLIError({
-    code: "MACHINE_USER_NOT_FOUND",
+    code: `${kind.codePrefix}_NOT_FOUND`,
     message:
       authNamespaces.length === 1
-        ? `Auth service "${authNamespaces[0]}" defines no machine user "${name}".`
-        : `None of the Auth services ${authNamespaces.join(", ")} defines a machine user "${name}".`,
-    suggestion: known.length
-      ? `Use one of the machine users: ${known.join(", ")}.`
-      : "Define the machine user in auth.machineUsers.",
-    context: { machineUser: name, authNamespaces: [...authNamespaces], machineUsers: known },
+        ? `Auth service "${authNamespaces[0]}" defines no ${kind.noun} "${name}".`
+        : `None of the Auth services ${authNamespaces.join(", ")} defines a ${kind.noun} "${name}".`,
+    suggestion: available.length
+      ? `Use one of the ${kind.noun}s: ${available.join(", ")}.`
+      : `Define the ${kind.noun} in ${kind.configField}.`,
+    context: { [kind.contextKey]: name, authNamespaces: [...authNamespaces], available },
   });
+}
+
+/**
+ * Resolve the Auth service a member of a config's Auth services belongs to. A qualified value names
+ * it; with one Auth service, a bare name belongs to that one; with several, to the one that
+ * defines the name.
+ * @param params - Member value, the Auth services to look in, and the kind of member
+ * @returns Auth service and member name
+ */
+export function resolveAuthMember(params: ResolveAuthMemberParams): {
+  authNamespace: string;
+  name: string;
+} {
+  const { value, auths, kind } = params;
+  const { authNamespace, name } = parseAuthMemberRef(value, kind);
+  if (auths.length === 0) {
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: "No Auth service configured.",
+      suggestion: "Ensure tailor.config.ts has an auth config.",
+    });
+  }
+  const authNames = auths.map((candidate) => candidate.name);
+  if (authNamespace !== undefined) {
+    const auth = auths.find((candidate) => candidate.name === authNamespace);
+    if (!auth) {
+      throw CLIError({
+        code: "AUTH_NOT_FOUND",
+        message: `${capitalized(kind.noun)} "${value}" names Auth service "${authNamespace}", which the config does not define.`,
+        suggestion: `Use one of the Auth services: ${authNames.join(", ")}.`,
+        context: { [kind.contextKey]: value, authNamespaces: authNames },
+      });
+    }
+    if (auth.members && !auth.members.includes(name)) {
+      throw memberNotFound(kind, name, [auth.name], [...auth.members]);
+    }
+    return { authNamespace: auth.name, name };
+  }
+  const [only, ...others] = auths;
+  if (only && others.length === 0) return { authNamespace: only.name, name };
+  const defining = auths.filter((auth) => auth.members?.includes(name)).map((auth) => auth.name);
+  const [found, ...alsoDefining] = defining;
+  if (found === undefined) {
+    const available = [...new Set(auths.flatMap((auth) => auth.members ?? []))].toSorted();
+    throw memberNotFound(kind, name, authNames, available);
+  }
+  if (alsoDefining.length > 0) {
+    throw CLIError({
+      code: `${kind.codePrefix}_AMBIGUOUS`,
+      message: `${capitalized(kind.noun)} "${name}" is defined in several Auth services: ${defining.join(", ")}.`,
+      suggestion: `Name the Auth service as <auth>/<name>, for example ${found}/${name}.`,
+      context: { [`${kind.contextKey}s`]: [{ [kind.contextKey]: name, authNamespaces: defining }] },
+    });
+  }
+  return { authNamespace: found, name };
 }
 
 /**
@@ -85,49 +187,10 @@ function machineUserNotFound(name: string, authNamespaces: ReadonlyArray<string>
  * @returns Auth service and machine user name
  */
 export function resolveMachineUser(params: ResolveMachineUserParams): AuthInvokerObject {
-  const { value, auths } = params;
-  const { authNamespace, name } = parseMachineUserRef(value);
-  if (auths.length === 0) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "No Auth service configured.",
-      suggestion: "Ensure tailor.config.ts has an auth config.",
-    });
-  }
-  if (authNamespace !== undefined) {
-    const auth = auths.find((candidate) => candidate.name === authNamespace);
-    if (!auth) {
-      throw CLIError({
-        code: "AUTH_NOT_FOUND",
-        message: `Machine user "${value}" names Auth service "${authNamespace}", which the config does not define.`,
-        suggestion: `Use one of the Auth services: ${auths.map((candidate) => candidate.name).join(", ")}.`,
-        context: { machineUser: value, authNamespaces: auths.map((candidate) => candidate.name) },
-      });
-    }
-    if (auth.machineUsers && !auth.machineUsers.includes(name)) {
-      throw machineUserNotFound(name, [auth.name], [...auth.machineUsers]);
-    }
-    return { namespace: auth.name, machineUserName: name };
-  }
-  const [only, ...others] = auths;
-  if (only && others.length === 0) return { namespace: only.name, machineUserName: name };
-  const defining = authNamespacesDefining(name, auths);
-  const [found, ...alsoDefining] = defining;
-  if (found === undefined) {
-    const known = [...new Set(auths.flatMap((auth) => auth.machineUsers ?? []))].toSorted();
-    throw machineUserNotFound(
-      name,
-      auths.map((auth) => auth.name),
-      known,
-    );
-  }
-  if (alsoDefining.length > 0) {
-    throw CLIError({
-      code: "MACHINE_USER_AMBIGUOUS",
-      message: `Machine user "${name}" is defined in several Auth services: ${defining.join(", ")}.`,
-      suggestion: `Name the Auth service as <auth>/<name>, for example ${found}/${name}.`,
-      context: { machineUsers: [{ machineUser: name, authNamespaces: defining }] },
-    });
-  }
-  return { namespace: found, machineUserName: name };
+  const { authNamespace, name } = resolveAuthMember({
+    value: params.value,
+    auths: params.auths.map((auth) => ({ name: auth.name, members: auth.machineUsers })),
+    kind: MACHINE_USER,
+  });
+  return { namespace: authNamespace, machineUserName: name };
 }

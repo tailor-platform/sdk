@@ -754,8 +754,8 @@ export async function deleteExistingUserProfileConfig(
 
 /**
  * Choose the application whose data `--data clone` copies. The Platform clones one application's
- * data, so a workspace config needs exactly one application that lists every namespace with
- * pending migrations.
+ * data, so a workspace config must deploy a single application, and that application must list
+ * every namespace with pending migrations.
  * @param file - Loaded config file
  * @param pendingNamespaces - Namespaces with pending migrations
  * @returns Name of the application to clone
@@ -775,7 +775,7 @@ export function migrationTestCloneApplication(
       only && others.length === 0
         ? `--data clone copies the data of application ${only[0]}, which does not list ${unlisted.join(", ")}.`
         : "--data clone copies the data of one application, but the workspace config deploys several.",
-    suggestion: "Use --data seed or --data none.",
+    suggestion: "Use --data seed.",
     context: { apps: apps.map(([name]) => name), pendingNamespaces: [...pendingNamespaces] },
   });
 }

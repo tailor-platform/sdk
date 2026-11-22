@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
+import { listAcrossAuthNamespaces, listedAuthNamespaces } from "#/cli/shared/auth-applications";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfigFile } from "#/cli/shared/config-loader";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { listAcrossAuthNamespaces, listedAuthNamespaces } from "../auth-namespaces";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface ListOAuth2ClientsOptions {

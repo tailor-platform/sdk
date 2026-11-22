@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
+import { loadAuthApplication } from "#/cli/shared/auth-applications";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
@@ -9,7 +10,6 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
-import { loadAuthApplication } from "../auth-namespaces";
 import { oauth2ClientAuths, type OAuth2ClientRef, resolveOAuth2Client } from "./resolve";
 import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
@@ -81,6 +81,7 @@ export async function getOAuth2Client(
       throw CLIError({
         code: "OAUTH2_CLIENT_NOT_FOUND",
         message: `OAuth2 client '${options.name}' not found.`,
+        context: { oauth2Client: options.name },
         cause: error,
       });
     }
@@ -95,7 +96,7 @@ export const getCommand = defineAppCommand({
     ...deploymentArgs,
     name: arg(z.string(), {
       positional: true,
-      description: "OAuth2 client name, or `<auth>/<name>` to name its Auth service.",
+      description: "OAuth2 client name",
     }),
   }),
   run: async (args) => {

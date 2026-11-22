@@ -75,7 +75,7 @@ describe("truncate command", () => {
 
   describe("argument validation", () => {
     const mutuallyExclusiveError =
-      "--all truncates every table, so it takes neither --namespace nor table names. Please specify only one.";
+      "--all truncates every table, so it takes neither --namespace nor table names.";
 
     test.each<[string, TruncateOptions, string]>([
       [

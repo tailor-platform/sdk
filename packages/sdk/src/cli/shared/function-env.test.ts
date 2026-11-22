@@ -62,6 +62,12 @@ describe("functionEnv", () => {
     });
   });
 
+  test("lays the workflow override over a job whose file the workflow files leave out, as deploy does", () => {
+    expect(functionEnv(workspace(), "workflow-job", file("jobs/j.ts"))).toMatchObject({
+      REGION: "ap",
+    });
+  });
+
   test("uses the root env for a file no service holds", () => {
     expect(functionEnv(workspace(), "plain", file("scripts/fix.ts"))).toEqual({
       REGION: "us",
