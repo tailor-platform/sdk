@@ -1499,6 +1499,7 @@ describe("planExecutor", () => {
           code: "AUTH_CONFIG_REQUIRED",
           message:
             'Executor "on-auth-token-issued" uses an authAccessToken trigger, but its config uses no Auth service.',
+          suggestion: expect.stringContaining('auth: { name: "<auth-name>", external: true }'),
           context: { executor: "on-auth-token-issued", file: mockConfig.path },
         });
         expect(getErrorDiagnostics(error as Error).location).toEqual({ file: mockConfig.path });
