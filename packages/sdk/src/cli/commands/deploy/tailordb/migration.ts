@@ -74,7 +74,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError, locatedCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
-import { authNamespacesDefining } from "#/cli/shared/machine-user";
+import { authNamespacesDefining, parseMachineUserRef } from "#/cli/shared/machine-user";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
@@ -1517,16 +1517,19 @@ export function resolveScriptMachineUsers(
         });
       continue;
     }
+    const { authNamespace: named, name } = parseMachineUserRef(configured);
     const defining = authNamespacesDefining(
-      configured,
-      authServices.map((auth) => ({ name: auth.config.name, machineUsers: machineUsersOf(auth) })),
+      name,
+      authServices
+        .filter((auth) => named === undefined || auth.config.name === named)
+        .map((auth) => ({ name: auth.config.name, machineUsers: machineUsersOf(auth) })),
     );
     const [authNamespace, ...alsoDefining] = defining;
     if (authNamespace === undefined)
       undefinedMachineUsers.push({ namespace, machineUser: configured });
     else if (alsoDefining.length > 0) {
       ambiguous.push({ namespace, machineUser: configured, authNamespaces: defining });
-    } else byNamespace.set(namespace, { namespace: authNamespace, machineUserName: configured });
+    } else byNamespace.set(namespace, { namespace: authNamespace, machineUserName: name });
   }
   if (missing.length > 0) {
     throw locatedCLIError(
@@ -1577,7 +1580,8 @@ export function resolveScriptMachineUsers(
               `'${machineUser}' (namespace '${namespace}') in ${authNamespaces.join(", ")}`,
           )
           .join("; ")}.`,
-        suggestion: "Rename the machine user so that one Auth service defines it.",
+        suggestion:
+          "Name its Auth service as <auth>/<name> in migration.machineUser or --machine-user, or rename the machine user so that one Auth service defines it.",
         context: { machineUsers: ambiguous },
       },
     );

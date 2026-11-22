@@ -27,9 +27,9 @@ import { parseAge } from "#/cli/commands/workspace/age";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
 import { writeWorkspaceExpiry } from "#/cli/commands/workspace/expiry";
 import { type RecoveryContext } from "#/cli/shared/args";
-import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { configOf } from "#/cli/shared/config-file";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
@@ -37,7 +37,7 @@ import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
 import { loadSeedContext, type SeedContext } from "#/cli/shared/seed-context";
-import { loadApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { loadConfigFileNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -57,7 +57,13 @@ import {
   type SnapshotFieldConfig,
 } from "./snapshot";
 import { formatSchemaDrifts } from "./snapshot-remote";
-import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
+import type { ConfigServices } from "#/cli/services/application";
+import type {
+  LoadedConfig,
+  LoadedConfigFile,
+  LoadedWorkspaceConfig,
+} from "#/cli/shared/config-loader";
+import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
@@ -71,9 +77,18 @@ const CLONE_POLL_INTERVAL = 3_000;
 const CLONE_TIMEOUT = 30 * 60 * 1_000;
 const CLOCK_SKEW_TOLERANCE = 100;
 
+/** A config file with the services it defines and its loaded TailorDB namespaces. */
+interface MigrationTestLoaded {
+  file: LoadedConfigFile;
+  config: LoadedConfig | LoadedWorkspaceConfig;
+  application: ConfigServices;
+  plugins: Plugin[];
+  namespaces: TailorDBNamespaceData[];
+}
+
 interface RuntimeState {
   client: OperatorClient;
-  loaded: LoadedApplicationNamespaces;
+  loaded: MigrationTestLoaded;
   options: MigrationTestOptions;
   seeds: PreparedSeed[];
   seedMachineUsers?: MigrationMachineUsers;
@@ -727,18 +742,46 @@ export async function deleteExistingUserProfileConfig(
   state: RuntimeState,
   targetWorkspaceId: string,
 ): Promise<void> {
-  const auth = soleAuthService(state.loaded.application);
-  if (!auth) return;
-  const namespaceName = auth.config.name;
-  const existing = await getOrNull(() =>
-    state.client.getUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName }),
-  );
-  if (!existing) return;
-  await state.client.deleteUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName });
+  for (const auth of state.loaded.application.authServices) {
+    const namespaceName = auth.config.name;
+    const existing = await getOrNull(() =>
+      state.client.getUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName }),
+    );
+    if (!existing) continue;
+    await state.client.deleteUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName });
+  }
+}
+
+/**
+ * Choose the application whose data `--data clone` copies. The Platform clones one application's
+ * data, so a workspace config needs exactly one application that lists every namespace with
+ * pending migrations.
+ * @param file - Loaded config file
+ * @param pendingNamespaces - Namespaces with pending migrations
+ * @returns Name of the application to clone
+ */
+export function migrationTestCloneApplication(
+  file: LoadedConfigFile,
+  pendingNamespaces: readonly string[],
+): string {
+  if (file.kind === "config") return file.config.name;
+  const apps = Object.entries(file.workspace.apps);
+  const [only, ...others] = apps;
+  const unlisted = only ? pendingNamespaces.filter((ns) => !only[1].db.includes(ns)) : [];
+  if (only && others.length === 0 && unlisted.length === 0) return only[0];
+  throw CLIError({
+    code: "MIGRATION_TEST_CLONE_UNSUPPORTED",
+    message:
+      only && others.length === 0
+        ? `--data clone copies the data of application ${only[0]}, which does not list ${unlisted.join(", ")}.`
+        : "--data clone copies the data of one application, but the workspace config deploys several.",
+    suggestion: "Use --data seed or --data none.",
+    context: { apps: apps.map(([name]) => name), pendingNamespaces: [...pendingNamespaces] },
+  });
 }
 
 function prepareSeedData(
-  loaded: LoadedApplicationNamespaces,
+  loaded: MigrationTestLoaded,
   seedContext: SeedContext,
   baselines: PreparedMigrationTest["baselines"],
 ): PreparedSeed[] {
@@ -768,7 +811,14 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   state: RuntimeState;
   prepared: PreparedMigrationTest;
 }> {
-  const loaded = await loadApplicationNamespaces({ configPath: options.configPath });
+  const fileNamespaces = await loadConfigFileNamespaces({ configPath: options.configPath });
+  const loaded: MigrationTestLoaded = {
+    file: fileNamespaces.loaded,
+    config: configOf(fileNamespaces.loaded),
+    application: fileNamespaces.services,
+    plugins: fileNamespaces.loaded.plugins,
+    namespaces: fileNamespaces.namespaces,
+  };
   const configDir = path.dirname(loaded.config.path);
   const namespaces = getNamespacesWithMigrations(loaded.config, configDir);
   if (namespaces.length === 0) {
@@ -797,12 +847,15 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   });
   assertTargetWorkspaceDiffers(sourceWorkspaceId, options.targetWorkspaceId);
 
+  const configApplicationName = loaded.file.kind === "config" ? loaded.file.config.name : undefined;
   const [workspaceResponse, applicationResponse, targetWorkspaceResponse] = await Promise.all([
     client.getWorkspace({ workspaceId: sourceWorkspaceId }),
-    client.getApplication({
-      workspaceId: sourceWorkspaceId,
-      applicationName: loaded.config.name,
-    }),
+    configApplicationName === undefined
+      ? Promise.resolve(undefined)
+      : client.getApplication({
+          workspaceId: sourceWorkspaceId,
+          applicationName: configApplicationName,
+        }),
     options.targetWorkspaceId
       ? client.getWorkspace({ workspaceId: options.targetWorkspaceId })
       : Promise.resolve(undefined),
@@ -811,10 +864,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     workspaceResponse.workspace,
     `source workspace "${sourceWorkspaceId}" not found`,
   );
-  assertDefined(
-    applicationResponse.application,
-    `application "${loaded.config.name}" not found in source workspace`,
-  );
+  if (applicationResponse) {
+    assertDefined(
+      applicationResponse.application,
+      `application "${configApplicationName}" not found in source workspace`,
+    );
+  }
   const designatedTarget = targetWorkspaceResponse
     ? assertDefined(
         targetWorkspaceResponse.workspace,
@@ -900,6 +955,10 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       message: "No pending TailorDB migrations found in the source workspace.",
     });
   }
+  const sourceApplicationName =
+    options.data === "clone"
+      ? migrationTestCloneApplication(loaded.file, pendingNamespaces)
+      : configApplicationName;
 
   const machineUserSource = {
     application: loaded.application,
@@ -943,7 +1002,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   const prepared: PreparedMigrationTest = {
     assertion,
     sourceWorkspaceId,
-    sourceApplicationName: loaded.config.name,
+    sourceApplicationName,
     temporaryWorkspace: {
       name: temporaryWorkspaceName(),
       region: sourceWorkspace.region,
