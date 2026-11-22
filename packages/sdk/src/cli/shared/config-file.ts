@@ -1,5 +1,7 @@
+import { PluginManager } from "#/plugin/manager";
 import { extractAllNamespaces, extractOwnedNamespaces } from "./config";
 import { CLIError } from "./errors";
+import type { ConfigServices, ServiceSettings } from "#/cli/services/application";
 import type { LoadedConfig, LoadedConfigFile, LoadedWorkspaceConfig } from "./config-loader";
 import type { MachineUserAuth } from "./machine-user";
 
@@ -157,4 +159,36 @@ export function selectApplication(
     suggestion: only ? "Pass the application to --app." : "Add an application under apps.",
     context: { apps: names },
   });
+}
+
+/** The services a config file defines, with the settings they share. */
+export type ConfigFileServices = ConfigServices & { readonly settings: ServiceSettings };
+
+/**
+ * Define the services of a config file of either kind, without loading or bundling them.
+ * @param loaded - Loaded config file
+ * @param precompileTailorDBScripts - Bundle each table's hook and validator scripts while loading types
+ * @returns The services, with the settings they share
+ */
+export async function defineConfigFileServices(
+  loaded: LoadedConfigFile,
+  precompileTailorDBScripts?: boolean,
+): Promise<ConfigFileServices> {
+  const services = await import("#/cli/services/application");
+  const pluginManager = loaded.plugins.length > 0 ? new PluginManager(loaded.plugins) : undefined;
+  if (loaded.kind === "workspace") {
+    return services.defineWorkspaceServices({
+      workspace: loaded.workspace,
+      pluginManager,
+      precompileTailorDBScripts,
+    });
+  }
+  return {
+    ...services.defineApplication({
+      config: loaded.config,
+      pluginManager,
+      precompileTailorDBScripts,
+    }),
+    settings: loaded.config,
+  };
 }

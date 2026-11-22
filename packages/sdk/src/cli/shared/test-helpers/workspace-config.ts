@@ -69,17 +69,27 @@ export const table = db
   .gqlPermission(unsafeAllowAllGqlPermission);
 `;
 
+/** Source spliced into the config {@link writeWorkspaceProject} writes. */
+export interface WorkspaceProjectOptions {
+  /** Further properties of the `defineWorkspace()` object, such as `workflow: { ... },`. */
+  extra?: string;
+  /** Items of the `plugins` export. */
+  plugins?: string;
+  /** The `db` object, reading the tables {@link writeWorkspaceTables} writes. */
+  db?: string;
+}
+
 /**
  * Write a workspace project shaped like the one commands run against: apps `shop` and `backoffice`
  * on Auth service `corp-auth` (machine users `admin`, `seeder`) with `customer-db` and `order-db`,
  * app `partner` on `partner-auth` (machine user `admin`) with `order-db`, and `ledger-db` in no app.
  * Run it inside the package, so the project's `@tailor-platform/sdk` imports resolve to its build.
  * @param dir - Directory to write `tailor.config.ts` and the table files into
- * @param extra - Further source spliced into the `defineWorkspace()` object, such as `workflow: { ... },`
- * @param plugins - Source of the `plugins` export's items
+ * @param options - Source spliced into the config
  * @returns Path of the written config file
  */
-export function writeWorkspaceProject(dir: string, extra = "", plugins = ""): string {
+export function writeWorkspaceProject(dir: string, options: WorkspaceProjectOptions = {}): string {
+  const { extra = "", plugins = "", db = WORKSPACE_DB_SOURCE } = options;
   writeWorkspaceTables(dir, ALLOW_ALL_TABLE);
   const configPath = path.join(dir, "tailor.config.ts");
   fs.writeFileSync(
@@ -90,7 +100,7 @@ const machineUserAttributes = { role: db.string() };
 ${brandedDefault(
   "workspace-config",
   `{
-  db: ${WORKSPACE_DB_SOURCE},
+  db: ${db},
   auth: {
     "corp-auth": defineAuth("corp-auth", {
       machineUserAttributes,
