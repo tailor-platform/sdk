@@ -2,11 +2,11 @@ import { z } from "zod";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { listAcrossAuthNamespaces, listedAuthNamespaces } from "../auth-namespaces";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface ListOAuth2ClientsOptions {
@@ -18,7 +18,7 @@ export interface ListOAuth2ClientsOptions {
 }
 
 /**
- * List OAuth2 clients for the current application.
+ * List OAuth2 clients of the config's Auth services.
  * @param options - OAuth2 client listing options
  * @returns List of OAuth2 clients
  */
@@ -29,35 +29,33 @@ export async function listOAuth2Clients(
     profile: options?.profile,
     workspaceId: options?.workspaceId,
   });
-
-  const { config } = await loadConfig(options?.configPath);
-  const { application } = await client.getApplication({
-    workspaceId,
-    applicationName: config.name,
-  });
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${config.name} does not have an auth configuration.`,
-    });
-  }
+  const loaded = await loadConfigFile(options?.configPath);
+  const authNamespaces = await listedAuthNamespaces({ client, workspaceId, loaded });
 
   const pageDirection = toPageDirection(options?.order);
-  const oauth2Clients = await fetchPaged(
-    async (pageToken, pageSize) => {
-      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
-        workspaceId,
-        pageToken,
-        pageSize,
-        namespaceName: application.authNamespace,
-        pageDirection,
-      });
-      return [oauth2Clients, nextPageToken];
+  return await listAcrossAuthNamespaces({
+    authNamespaces,
+    order: options?.order,
+    limit: options?.limit,
+    itemLabel: "OAuth2 clients",
+    fetch: async (authNamespace, limit) => {
+      const oauth2Clients = await fetchPaged(
+        async (pageToken, pageSize) => {
+          const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+            workspaceId,
+            pageToken,
+            pageSize,
+            namespaceName: authNamespace,
+            pageDirection,
+          });
+          return [oauth2Clients, nextPageToken];
+        },
+        { limit },
+      );
+      return oauth2Clients.map((oauth2Client) => toOAuth2ClientInfo(oauth2Client, authNamespace));
     },
-    { limit: options?.limit },
-  );
-
-  return oauth2Clients.map(toOAuth2ClientInfo);
+    createdAt: (oauth2Client) => oauth2Client.createdAt,
+  });
 }
 
 export const listCommand = defineAppCommand({

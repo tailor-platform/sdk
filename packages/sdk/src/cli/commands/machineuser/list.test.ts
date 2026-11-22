@@ -3,7 +3,7 @@ import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { runCommand } from "@politty/zod";
 import { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfig } from "#/cli/shared/config-loader";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -15,7 +15,7 @@ vi.mock("#/cli/shared/operator-context", () => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 const createdAt = new Date("2024-01-01T00:00:00.000Z");
@@ -31,9 +31,11 @@ const machineUser = create(MachineUserSummarySchema, {
 
 describe("machineuser list", () => {
   aroundEach(async (runTest) => {
-    vi.mocked(loadConfig).mockResolvedValue({
-      config: { name: "my-app" },
-    } as Awaited<ReturnType<typeof loadConfig>>);
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
+      config: { name: "my-app" } as LoadedConfig,
+      plugins: [],
+    });
 
     vi.mocked(loadOperatorWorkspaceContext).mockResolvedValue({
       workspaceId: "workspace-1",
@@ -53,6 +55,7 @@ describe("machineuser list", () => {
       {
         id: "9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
         name: "ci-bot",
+        authNamespace: "auth-ns",
         clientId: "client-id",
         createdAt,
         updatedAt,

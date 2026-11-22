@@ -190,9 +190,9 @@ tailor machineuser token [options] [name]
 
 **Arguments**
 
-| Argument | Description                                                                                                         | Required |
-| -------- | ------------------------------------------------------------------------------------------------------------------- | -------- |
-| `name`   | Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user. | No       |
+| Argument | Description                                                                                                                                                      | Required |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `name`   | Machine user name, or `<auth>/<name>` to name its Auth service. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user. | No       |
 
 **Options**
 
@@ -268,9 +268,9 @@ tailor oauth2client get [options] <name>
 
 **Arguments**
 
-| Argument | Description        | Required |
-| -------- | ------------------ | -------- |
-| `name`   | OAuth2 client name | Yes      |
+| Argument | Description                                                      | Required |
+| -------- | ---------------------------------------------------------------- | -------- |
+| `name`   | OAuth2 client name, or `<auth>/<name>` to name its Auth service. | Yes      |
 
 **Options**
 

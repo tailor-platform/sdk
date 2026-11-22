@@ -4,11 +4,11 @@ import { z } from "zod";
 import { deploymentArgs, type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
-import { CLIError } from "#/cli/shared/errors";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { listAcrossAuthNamespaces, listedAuthNamespaces } from "../auth-namespaces";
 import type { MachineUserSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
@@ -22,6 +22,8 @@ export interface ListMachineUsersOptions {
 export interface MachineUserInfo {
   id: string;
   name: string;
+  /** Auth service the machine user belongs to. */
+  authNamespace?: string;
   clientId: string;
   /** @deprecated since 2.30.0 — the Platform no longer returns the secret from list calls, so this is never set; use `machineuser token` instead. codemod: none (no automatic migration exists) */
   clientSecret?: string;
@@ -33,12 +35,14 @@ export interface MachineUserInfo {
 /**
  * Map a MachineUserSummary protobuf message to CLI-friendly info.
  * @param user - Machine user resource
+ * @param authNamespace - Auth service the machine user belongs to
  * @returns Flattened machine user info
  */
-function machineUserInfo(user: MachineUserSummary): MachineUserInfo {
+function machineUserInfo(user: MachineUserSummary, authNamespace: string): MachineUserInfo {
   return {
     id: user.id,
     name: user.name,
+    authNamespace,
     clientId: user.clientId,
     createdAt: user.createdAt ? timestampDate(user.createdAt) : null,
     updatedAt: user.updatedAt ? timestampDate(user.updatedAt) : null,
@@ -49,48 +53,44 @@ function machineUserInfo(user: MachineUserSummary): MachineUserInfo {
 }
 
 /**
- * List machine users for the current application.
+ * List machine users of the config's Auth services.
  * @param options - Machine user listing options
  * @returns List of machine users
  */
 export async function listMachineUsers(
   options?: ListMachineUsersOptions,
 ): Promise<MachineUserInfo[]> {
-  // Load and validate options
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
     workspaceId: options?.workspaceId,
   });
-
-  // Get application
-  const { config } = await loadConfig(options?.configPath);
-  const { application } = await client.getApplication({
-    workspaceId,
-    applicationName: config.name,
-  });
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${config.name} does not have an auth configuration.`,
-    });
-  }
+  const loaded = await loadConfigFile(options?.configPath);
+  const authNamespaces = await listedAuthNamespaces({ client, workspaceId, loaded });
 
   const pageDirection = toPageDirection(options?.order);
-  const machineUsers = await fetchPaged(
-    async (pageToken, pageSize) => {
-      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-        workspaceId,
-        pageToken,
-        pageSize,
-        authNamespace: application.authNamespace,
-        pageDirection,
-      });
-      return [machineUsers, nextPageToken];
+  return await listAcrossAuthNamespaces({
+    authNamespaces,
+    order: options?.order,
+    limit: options?.limit,
+    itemLabel: "machine users",
+    fetch: async (authNamespace, limit) => {
+      const machineUsers = await fetchPaged(
+        async (pageToken, pageSize) => {
+          const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+            workspaceId,
+            pageToken,
+            pageSize,
+            authNamespace,
+            pageDirection,
+          });
+          return [machineUsers, nextPageToken];
+        },
+        { limit },
+      );
+      return machineUsers.map((user) => machineUserInfo(user, authNamespace));
     },
-    { limit: options?.limit },
-  );
-
-  return machineUsers.map(machineUserInfo);
+    createdAt: (user) => user.createdAt,
+  });
 }
 
 export const listCommand = defineAppCommand({

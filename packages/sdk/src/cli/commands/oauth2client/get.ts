@@ -2,12 +2,15 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { deploymentArgs } from "#/cli/shared/args";
+import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
+import { loadAuthApplication } from "../auth-namespaces";
+import { oauth2ClientAuths, type OAuth2ClientRef, resolveOAuth2Client } from "./resolve";
 import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./transform";
 
 export interface GetOAuth2ClientOptions {
@@ -17,8 +20,34 @@ export interface GetOAuth2ClientOptions {
   configPath?: string;
 }
 
+interface ResolveOAuth2ClientTargetParams {
+  client: OperatorClient;
+  workspaceId: string;
+  loaded: LoadedConfigFile;
+  value: string;
+}
+
+async function resolveOAuth2ClientTarget(
+  params: ResolveOAuth2ClientTargetParams,
+): Promise<OAuth2ClientRef> {
+  const { client, workspaceId, loaded, value } = params;
+  if (loaded.kind === "workspace") {
+    return resolveOAuth2Client({ value, auths: oauth2ClientAuths(loaded) });
+  }
+  const { authNamespace } = await loadAuthApplication({
+    client,
+    workspaceId,
+    name: loaded.config.name,
+  });
+  const auth = oauth2ClientAuths(loaded).find(({ name }) => name === authNamespace);
+  return resolveOAuth2Client({
+    value,
+    auths: [{ name: authNamespace, oauth2Clients: auth?.oauth2Clients }],
+  });
+}
+
 /**
- * Get OAuth2 client credentials for the current application.
+ * Get OAuth2 client credentials. The name may name its Auth service as `<auth>/<name>`.
  * @param options - OAuth2 client lookup options
  * @returns OAuth2 client credentials
  */
@@ -29,24 +58,19 @@ export async function getOAuth2Client(
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
-
-  const { config } = await loadConfig(options.configPath);
-  const { application } = await client.getApplication({
+  const loaded = await loadConfigFile(options.configPath);
+  const { authNamespace, name } = await resolveOAuth2ClientTarget({
+    client,
     workspaceId,
-    applicationName: config.name,
+    loaded,
+    value: options.name,
   });
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${config.name} does not have an auth configuration.`,
-    });
-  }
 
   try {
     const { oauth2Client } = await client.getAuthOAuth2Client({
       workspaceId,
-      namespaceName: application.authNamespace,
-      name: options.name,
+      namespaceName: authNamespace,
+      name,
     });
 
     return toOAuth2ClientCredentials(
@@ -71,7 +95,7 @@ export const getCommand = defineAppCommand({
     ...deploymentArgs,
     name: arg(z.string(), {
       positional: true,
-      description: "OAuth2 client name",
+      description: "OAuth2 client name, or `<auth>/<name>` to name its Auth service.",
     }),
   }),
   run: async (args) => {
