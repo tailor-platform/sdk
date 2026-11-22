@@ -60,6 +60,16 @@ describe("createMockClient", () => {
     );
   });
 
+  test("accepts creating a table and its GraphQL permission again after deleting the table", async () => {
+    const client = createMockClient();
+    await client.createTailorDBType(table("User"));
+    await client.createTailorDBGQLPermission(permission("User"));
+    await client.deleteTailorDBType(tableName("User"));
+
+    await expect(client.createTailorDBType(table("User"))).resolves.toEqual({});
+    await expect(client.createTailorDBGQLPermission(permission("User"))).resolves.toEqual({});
+  });
+
   test("rejects creating a GraphQL permission it already created", async () => {
     const client = createMockClient();
     await client.createTailorDBGQLPermission(permission("User"));
