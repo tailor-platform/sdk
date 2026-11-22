@@ -248,6 +248,12 @@ describe("migration", () => {
       });
     });
 
+    test("reads migration.machineUser as a bare machine user name", () => {
+      expect(() =>
+        resolve({ admin: {} }, { "namespace-a": { migration: { machineUser: "auth/admin" } } }),
+      ).toThrow(expect.objectContaining({ code: "MACHINE_USER_NOT_FOUND" }));
+    });
+
     test("resolves only the namespaces with a script to run", () => {
       expect(resolve({ migrator: {} })).toEqual({
         byNamespace: new Map([

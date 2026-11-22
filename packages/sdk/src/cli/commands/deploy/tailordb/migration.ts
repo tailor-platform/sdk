@@ -1517,7 +1517,10 @@ export function resolveScriptMachineUsers(
         });
       continue;
     }
-    const { authNamespace: named, name } = parseMachineUserRef(configured);
+    const { authNamespace: named, name } =
+      source.migrationMachineUserOverride === undefined
+        ? { authNamespace: undefined, name: configured }
+        : parseMachineUserRef(configured);
     const defining = authNamespacesDefining(
       name,
       authServices
@@ -1580,8 +1583,7 @@ export function resolveScriptMachineUsers(
               `'${machineUser}' (namespace '${namespace}') in ${authNamespaces.join(", ")}`,
           )
           .join("; ")}.`,
-        suggestion:
-          "Name its Auth service as <auth>/<name> in migration.machineUser or --machine-user, or rename the machine user so that one Auth service defines it.",
+        suggestion: "Rename the machine user so that one Auth service defines it.",
         context: { machineUsers: ambiguous },
       },
     );

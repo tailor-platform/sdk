@@ -12,7 +12,6 @@ import {
   generateLinesDbSchemaFileWithPluginAPI,
   type PluginSchemaParams,
 } from "./lines-db-processor";
-import type { MachineUserInvoker } from "#/configure/services/auth/types";
 import type {
   GeneratorAuthInput,
   GeneratorResult,
@@ -45,7 +44,7 @@ type DisableIdpUserSyncDirections = {
 export type SeedPluginOptions = {
   distPath: string;
   /** Machine user the seed runs as, by name or with its Auth service as `{ namespace, machineUserName }`. */
-  machineUserName?: MachineUserInvoker;
+  machineUserName?: string | { namespace: string; machineUserName: string };
   /**
    * Disable individual `_User <-> userProfile` foreign keys emitted into
    * the generated seed schema. Both directions are emitted by default.

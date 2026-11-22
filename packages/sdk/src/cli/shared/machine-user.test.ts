@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   authNamespacesDefining,
-  denotesPinnedMachineUser,
+  acceptsPinnedMachineUser,
   parseMachineUserRef,
   resolveMachineUser,
 } from "./machine-user";
@@ -96,15 +96,15 @@ describe("resolveMachineUser", () => {
   });
 });
 
-describe("denotesPinnedMachineUser", () => {
+describe("acceptsPinnedMachineUser", () => {
   test.each([
     ["admin", "admin", true],
-    ["admin", "corp-auth/admin", true],
+    ["admin", "corp-auth/admin", false],
     ["corp-auth/admin", "admin", true],
     ["corp-auth/admin", "corp-auth/admin", true],
     ["corp-auth/admin", "partner-auth/admin", false],
     ["admin", "seeder", false],
   ])("pinned %s, explicit %s: %s", (pinned, explicit, expected) => {
-    expect(denotesPinnedMachineUser(pinned, explicit)).toBe(expected);
+    expect(acceptsPinnedMachineUser(pinned, explicit)).toBe(expected);
   });
 });

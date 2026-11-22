@@ -25,28 +25,17 @@ export function parseMachineUserRef(value: string): MachineUserRef {
   });
 }
 
-function splitPinned(value: string): MachineUserRef {
-  const slash = value.indexOf("/");
-  return slash === -1
-    ? { name: value }
-    : { authNamespace: value.slice(0, slash), name: value.slice(slash + 1) };
-}
-
 /**
- * Whether a machine user value can name the machine user a profile pins. A bare name and an
- * Auth-qualified one name the same machine user when their names match; two qualified ones also
- * need the same Auth service.
+ * Whether a profile that pins a machine user accepts one given by an option or the environment: the
+ * same value, or the pinned machine user's name without the Auth service the pin names.
  * @param pinned - Machine user the profile pins
  * @param explicit - Machine user given by an option or the environment
  * @returns Whether the explicit value names the pinned machine user
  */
-export function denotesPinnedMachineUser(pinned: string, explicit: string): boolean {
-  const a = splitPinned(pinned);
-  const b = splitPinned(explicit);
-  if (a.name !== b.name) return false;
-  return a.authNamespace === undefined || b.authNamespace === undefined
-    ? true
-    : a.authNamespace === b.authNamespace;
+export function acceptsPinnedMachineUser(pinned: string, explicit: string): boolean {
+  if (explicit === pinned) return true;
+  const slash = pinned.indexOf("/");
+  return slash !== -1 && explicit === pinned.slice(slash + 1);
 }
 
 /** An Auth service with the machine users it defines; `undefined` when they are not known. */

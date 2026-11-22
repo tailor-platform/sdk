@@ -13,7 +13,7 @@ import {
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
 import { configOf, machineUserAuths } from "./config-file";
-import { tailorDBTypeNameScopeOf } from "./config-loader";
+import { atConfigSource, tailorDBTypeNameScopeOf } from "./config-loader";
 import { type CLIError, locatedCLIError } from "./errors";
 import { resolveMachineUser } from "./machine-user";
 import { loadConfigFileNamespaces } from "./tailordb-namespaces";
@@ -126,14 +126,19 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   // userProfile is only populated once auth namespaces are resolved (the
   // generate flow does the same after loading TailorDB namespaces).
   await Promise.all(services.authServices.map((authService) => authService.resolveNamespaces()));
-  const idpUserMeta = soleIdpUser(
-    Object.fromEntries(
-      services.authServices.map((authService) => [
-        authService.config.name,
-        getAuthInput(authService),
-      ]),
-    ),
-  );
+  let idpUserMeta: ReturnType<typeof soleIdpUser>;
+  try {
+    idpUserMeta = soleIdpUser(
+      Object.fromEntries(
+        services.authServices.map((authService) => [
+          authService.config.name,
+          getAuthInput(authService),
+        ]),
+      ),
+    );
+  } catch (error) {
+    throw atConfigSource(error, config.path);
+  }
   const idpUser: SeedIdpUserContext | null = idpUserMeta
     ? {
         idpNamespace: idpUserMeta.idpNamespace,
@@ -156,7 +161,10 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   };
 }
 
-function machineUserValue(machineUser: SeedPluginOptions["machineUserName"]): string | undefined {
+function machineUserValue(
+  machineUser: SeedPluginOptions["machineUserName"] | null,
+): string | undefined {
+  if (machineUser === null || machineUser === undefined) return undefined;
   return typeof machineUser === "object"
     ? `${machineUser.namespace}/${machineUser.machineUserName}`
     : machineUser;
