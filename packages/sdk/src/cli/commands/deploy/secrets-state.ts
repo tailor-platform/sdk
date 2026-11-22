@@ -54,7 +54,9 @@ export type SecretsStateScope = {
  * @param context - Planning context
  * @returns Secrets state scope for the plan's workspace, owner, and config
  */
-export function secretsStateScope(context: PlanContext): SecretsStateScope {
+export function secretsStateScope(
+  context: Pick<PlanContext, "owner" | "workspaceId" | "config">,
+): SecretsStateScope {
   const { owner, workspaceId } = context;
   const configPath = context.config.path;
   if (owner.kind === "workspace") return { workspaceId, configPath, workspace: true };

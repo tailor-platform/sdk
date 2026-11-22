@@ -6,8 +6,10 @@ import {
   hashValue,
   loadSecretsState,
   saveSecretsState,
+  secretsStateScope,
   withSecretsStateLock,
 } from "./secrets-state";
+import type { DeployOwner } from "./label";
 import type { SecretsStateScope } from "./secrets-state";
 
 const { getDistDir } = vi.hoisted(() => ({
@@ -30,6 +32,14 @@ const scopeB = {
   configPath: "/proj/app/tailor.config.ts",
 } satisfies SecretsStateScope;
 
+function scopeOf(owner: DeployOwner): SecretsStateScope {
+  return secretsStateScope({
+    owner,
+    workspaceId: scopeA.workspaceId,
+    config: { path: scopeA.configPath },
+  });
+}
+
 function removeStateFiles(): void {
   const stateDirectory = path.dirname(getSecretsStatePath(scopeA));
   if (existsSync(stateDirectory)) {
@@ -49,17 +59,20 @@ describe("secrets-state", () => {
   });
 
   test("keeps the state of a workspace config apart from an application's in the same workspace", () => {
-    const workspaceScope = {
-      workspaceId: scopeA.workspaceId,
-      configPath: scopeA.configPath,
-      workspace: true,
-    } satisfies SecretsStateScope;
-    const state = { vaults: { app: { token: { hash: hashValue("v1") } } } };
+    const workspaceScope = scopeOf({ kind: "workspace" });
+    const applicationScope = scopeOf({
+      kind: "application",
+      name: scopeA.applicationName,
+      id: scopeA.applicationId,
+    });
+    const workspaceState = { vaults: { app: { token: { hash: hashValue("v1") } } } };
+    const applicationState = { vaults: { app: { token: { hash: hashValue("v2") } } } };
 
-    saveSecretsState(workspaceScope, state);
+    saveSecretsState(workspaceScope, workspaceState);
+    saveSecretsState(applicationScope, applicationState);
 
-    expect(loadSecretsState(workspaceScope)).toEqual(state);
-    expect(loadSecretsState(scopeA)).toEqual({ vaults: {} });
+    expect(loadSecretsState(workspaceScope)).toEqual(workspaceState);
+    expect(loadSecretsState(applicationScope)).toEqual(applicationState);
   });
 
   test.each([
@@ -140,10 +153,11 @@ describe("secrets-state", () => {
   });
 
   test("state without a stable application id is always a cache miss", () => {
-    const scopeWithoutId = {
-      ...scopeA,
-      applicationId: undefined,
-    };
+    const scopeWithoutId = scopeOf({
+      kind: "application",
+      name: scopeA.applicationName,
+      id: undefined,
+    });
 
     saveSecretsState(scopeWithoutId, {
       vaults: { "shared-vault": { "shared-secret": { hash: "matching-hash" } } },
