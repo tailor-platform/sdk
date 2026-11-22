@@ -358,9 +358,9 @@ seed row that is not valid JSON or not a JSON object. `seed apply` and `seed val
 the same for a row that lacks `id` or a required field with `--upsert`, and for a row defined in
 more than one of the data directories applied together. A rejected config or a TailorDB type,
 resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. `deploy`
-and `tailordb migration test` report the config when it lacks an Auth service, IdP, or machine user
-that a resolver, executor, or migration needs, and the resolver or executor file when a value it
-names cannot be resolved. A `.ts` or
+and `tailordb migration test` report the config, or the resolver or executor file, whichever
+holds what to change when an Auth service, IdP, invoker, machine user, or trigger target cannot
+be resolved. A `.ts` or
 `.mts` file that cannot be parsed — one of those files, the file passed to `function run`, or a
 file one of them imports — reports that file and the line it failed on.
 Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a
