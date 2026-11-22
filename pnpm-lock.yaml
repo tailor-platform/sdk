@@ -431,6 +431,10 @@ snapshots:
 				"@secretlint/core": "14.0.1",
 				"@standard-schema/spec": "1.1.0",
 				"@tailor-platform/function-kysely-tailordb": "0.1.3",
+				"@toiroakr/chisel": {
+					"specifier": "file:vendor/toiroakr-chisel-0.2.0.tgz",
+					"version": "file:packages/sdk/vendor/toiroakr-chisel-0.2.0.tgz",
+				},
 				"@toiroakr/read-multiline": "0.4.3",
 				"amaro": "1.3.0",
 				"chokidar": "5.0.0",
@@ -3421,6 +3425,32 @@ snapshots:
 			"integrity": "sha512-oLaihTHU+vutFmWOXTJexrIYFTF2f60QMTXQjvWO0/jJmCXQ2yfOq6xic0XO2MjG7A1d0UIk4oBMXTLps3mfsg==",
 		},
 
+		"@toiroakr/chisel@file:packages/sdk/vendor/toiroakr-chisel-0.2.0.tgz": {
+			"resolution": {"tarball": "file:packages/sdk/vendor/toiroakr-chisel-0.2.0.tgz"},
+			"integrity": "sha512-UsHM7rsPtqvzaTVbVXuwgdGz/IdqPMzlwWv/AxTrrJjTayn8NJ7DGk+pYIatPTuDikav/AgDpVKGY312T8Jong==",
+			"version": "0.2.0",
+			"engines": {"node": "^22.22.0 || ^24.15.0 || >=26.0.0"},
+			"hasBin": true,
+			"peerDependencies": {
+				"@clack/prompts": {
+					"version": "1.9.0",
+					"below": true,
+				},
+				"@inquirer/prompts": {
+					"version": "8.8.0",
+					"below": true,
+				},
+			},
+			"dependencies": {
+				"@politty/zod": "0.7.5",
+				"decimal.js": "10.6.0",
+				"temporal-spec": "1.0.1",
+				"tla-ts": "0.0.10",
+				"tsx": "4.23.15",
+				"zod": "4.6.7",
+			},
+		},
+
 		"@toiroakr/read-multiline@0.4.3": {
 			"integrity": "sha512-qvxveKObkZVsnV2aN+rWyE/IitfZtQW42fi8etRKaF5TjZ6tr4sjcit0tSWquq9cTPpU1CF5JywmR4akulisKg==",
 		},
@@ -3834,6 +3864,14 @@ snapshots:
 			"cpu": ["x64"],
 			"os": ["win32"],
 			"optional": true,
+		},
+
+		"@typescript/typescript6@6.0.2": {
+			"integrity": "sha512-mbCddXd+jm7hfx7w2YU64/Av4/NqqeG3GoRZgxPcgoTxYjhrcfJRw9ULch71SS4G+Q3bOXFhRvPqjguN0Hyp5w==",
+			"hasBin": true,
+			"dependencies": {
+				"@typescript/old": "typescript@6.0.3",
+			},
 		},
 
 		"@typescript/vfs@1.6.1": {
@@ -4280,6 +4318,10 @@ snapshots:
 			"dependencies": {
 				"ms": "2.1.3",
 			},
+		},
+
+		"decimal.js@10.6.0": {
+			"integrity": "sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==",
 		},
 
 		"deep-extend@0.6.0": {
@@ -4800,6 +4842,10 @@ snapshots:
 					"optional": true,
 				},
 			},
+		},
+
+		"fflate@0.8.3": {
+			"integrity": "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==",
 		},
 
 		"figures@6.1.0": {
@@ -6614,6 +6660,15 @@ snapshots:
 		"tinyrainbow@3.2.0": {
 			"integrity": "sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A==",
 			"engines": {"node": ">=14.0.0"},
+		},
+
+		"tla-ts@0.0.10": {
+			"integrity": "sha512-Ki4mbMjn3Gq8BjxlRVUISDQJCwZlPUsj3cSgg365eckHpoZMbqi3v0vRZ1ZPNcWfcRMzvC8S9lERtOQlNTD30A==",
+			"hasBin": true,
+			"dependencies": {
+				"@typescript/typescript6": "6.0.2",
+				"fflate": "0.8.3",
+			},
 		},
 
 		"treeify@1.1.0": {

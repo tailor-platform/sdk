@@ -1,13 +1,12 @@
+import { performSync } from "@toiroakr/chisel";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
-import {
-  type DeployOwner,
-  deployedByApplication,
-  isOwnedBy,
-  sdkAppIdLabelKey,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { type DeployOwner, type WithLabel } from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
+import {
+  ownershipInputOf,
+  ownsDesiredImplementation,
+  ownsRemainingImplementation,
+} from "./ownership-model";
 import type { OwnerConflict, UnmanagedResource, WorkspaceTakeover } from "./confirm";
 
 /** The kind and name of a resource whose ownership a planner checks. */
@@ -104,37 +103,48 @@ export function createOwnershipTracker(owner: DeployOwner): OwnershipTracker {
     resourceLabel: MANAGED_RESOURCE_LABELS[resource.resourceType],
   });
   const takeover = (
-    labels: Record<string, string>,
     resource: TrackedResource,
     action: WorkspaceTakeover["action"],
+    currentOwner: string | undefined,
   ) => {
-    const currentOwner = labels[sdkNameLabelKey];
     result.takeovers.push({ ...describe(resource), action, ...(currentOwner && { currentOwner }) });
   };
   return {
     result,
     ownsDesired(labels, resource) {
-      if (isOwnedBy(labels, owner)) return true;
-      const currentOwner = labels?.[sdkNameLabelKey];
-      if (owner.kind === "workspace" && labels && deployedByApplication(labels)) {
-        takeover(labels, resource, "update");
-      } else if (owner.kind === "application" && currentOwner) {
-        result.conflicts.push({ ...describe(resource), currentOwner });
-      } else {
-        result.unmanaged.push(describe(resource));
+      const { result: verdict } = performSync(
+        ownsDesiredImplementation,
+        ownershipInputOf(labels, owner),
+      );
+      switch (verdict.verdict) {
+        case "owned":
+          return true;
+        case "takeover":
+          takeover(resource, "update", verdict.currentOwner);
+          return false;
+        case "conflict":
+          result.conflicts.push({ ...describe(resource), currentOwner: verdict.currentOwner });
+          return false;
+        case "unmanaged":
+          result.unmanaged.push(describe(resource));
+          return false;
       }
-      return false;
     },
     ownsRemaining(labels, resource) {
-      if (isOwnedBy(labels, owner)) return true;
-      if (owner.kind === "workspace") {
-        if (!labels || !deployedByApplication(labels) || !labels[sdkAppIdLabelKey]) return false;
-        takeover(labels, resource, "delete");
-        return true;
+      const { result: verdict } = performSync(
+        ownsRemainingImplementation,
+        ownershipInputOf(labels, owner),
+      );
+      switch (verdict.verdict) {
+        case "delete":
+          return true;
+        case "takeoverDelete":
+          takeover(resource, "delete", verdict.currentOwner);
+          return true;
+        case "keep":
+          if (verdict.otherOwner) result.resourceOwners.add(verdict.otherOwner);
+          return false;
       }
-      const currentOwner = labels?.[sdkNameLabelKey];
-      if (currentOwner) result.resourceOwners.add(currentOwner);
-      return false;
     },
   };
 }
