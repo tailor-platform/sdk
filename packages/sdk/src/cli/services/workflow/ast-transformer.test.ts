@@ -1053,6 +1053,10 @@ await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineU
       });
     });
 
+    test.for(["undefined", "{ invoker: undefined }"])("accepts %s", (options) => {
+      expect(() => transform(options)).not.toThrow();
+    });
+
     test.for(["{ invoker: machineUser }", "options", "{ ...defaults }"])(
       "rejects %s, whose invoker the build cannot read",
       (options) => {
@@ -1151,8 +1155,8 @@ await order.default.start({ id: 1 }, { invoker: "kiosk" });
       expect(transform(options)).toContain('{ namespace: "admin-auth", machineUserName: "batch" }');
     });
 
-    test("accepts undefined options", () => {
-      expect(() => transform("undefined")).not.toThrow();
+    test.for(["undefined", "{ invoker: undefined }"])("accepts %s", (options) => {
+      expect(() => transform(options)).not.toThrow();
     });
 
     test("rejects spread options without an invoker of their own", () => {

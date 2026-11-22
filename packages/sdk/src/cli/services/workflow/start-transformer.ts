@@ -434,6 +434,11 @@ function staticString(node: StartOptionsNode): string | undefined {
   return undefined;
 }
 
+function isUndefined(node: StartOptionsNode): boolean {
+  const value = unwrapExpression(node);
+  return value.type === "Identifier" && value.name === "undefined";
+}
+
 type ResolveStartInvokerParams = {
   call: ResolvedStartCall;
   currentFilePath: string;
@@ -452,9 +457,8 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
   const fail = (code: StartInvokerErrorCode, message: string, suggestion: string) =>
     startInvokerError({ call, currentFilePath, code, message, suggestion });
   const wording = UNRESOLVED_INVOKER_WORDING[machineUserAuthNamespaces ? "several" : "none"];
-  if (!call.options) return undefined;
+  if (!call.options || isUndefined(call.options)) return undefined;
   const options = unwrapExpression(call.options);
-  if (options.type === "Identifier" && options.name === "undefined") return undefined;
   if (options.type !== "ObjectExpression") {
     throw fail(
       "WORKFLOW_START_INVOKER_UNRESOLVED",
@@ -470,7 +474,13 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
       wording.suggestions.spread,
     );
   }
-  if (!invoker || unwrapExpression(invoker.value).type === "ObjectExpression") return undefined;
+  if (
+    !invoker ||
+    isUndefined(invoker.value) ||
+    unwrapExpression(invoker.value).type === "ObjectExpression"
+  ) {
+    return undefined;
+  }
   const machineUserName = staticString(invoker.value);
   if (machineUserName === undefined) {
     throw fail(
