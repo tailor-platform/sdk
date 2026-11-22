@@ -49,7 +49,8 @@ describe("normalizeInvoker", () => {
       expect.objectContaining({
         code: "INVOKER_AUTH_REQUIRED",
         message: expect.stringContaining('Resolver "foo"'),
-        suggestion: "Configure an Auth service before using invoker.",
+        suggestion:
+          'Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: "kiosk" }, or configure an Auth service.',
       }),
     );
   });

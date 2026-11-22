@@ -14,7 +14,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
-import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
+import { internalError, locatedCLIError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
@@ -30,8 +30,8 @@ import {
 import {
   type DefinitionRef,
   type InvokerScope,
-  listInvokerMachineUsers,
   normalizeInvoker,
+  planInvokerScope,
 } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
@@ -172,20 +172,12 @@ export async function planExecutor(
       getTrn: (name) => resourceTrn(workspaceId, "executor", name),
     }));
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
-  const authNamespaces = configAuthNamespaces(context);
-  const invokerScope: InvokerScope = {
-    authNamespaces,
-    machineUsers: await listInvokerMachineUsers({
-      client,
-      workspaceId,
-      invokers: Object.values(executors).map((executor) =>
-        "invoker" in executor.operation ? executor.operation.invoker : undefined,
-      ),
-      authNamespaces,
-      plannedMachineUsers: context.plannedMachineUsers,
-    }),
-    configPath: context.config.path,
-  };
+  const invokerScope = await planInvokerScope(
+    context,
+    Object.values(executors).map((executor) =>
+      "invoker" in executor.operation ? executor.operation.invoker : undefined,
+    ),
+  );
   const cachedDetails = previousExisting?.existingExecutorDetails;
   const existingExecutorDetails = new Map(
     await Promise.all(
@@ -307,25 +299,24 @@ export function formatExecutorChangeEntries(
  * Resolve a resource's namespace from same-run peer configs, throwing when the
  * name is claimed by more than one namespace in the deploy run.
  * @param sameRunNamespaces - Namespaces keyed by resource name across the deploy run
- * @param resourceName - Resource name to resolve
- * @param resourceLabel - Resource label used in error messages
+ * @param resource - Resource to resolve and the executor whose trigger names it
  * @returns The owning namespace, or undefined when the name is unknown
  */
 function resolveSameRunNamespace(
   sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
-  resourceName: string,
-  resourceLabel: string,
+  resource: NamespacedResource,
 ): string | undefined {
-  if (!sameRunNamespaces?.has(resourceName)) {
+  const { executor, label, name } = resource;
+  if (!sameRunNamespaces?.has(name)) {
     return undefined;
   }
-  const namespace = sameRunNamespaces.get(resourceName);
+  const namespace = sameRunNamespaces.get(name);
   if (!namespace) {
-    throw CLIError({
+    throw locatedCLIError(executor.file, {
       code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-      message:
-        `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
-        `Move the trigger to the application that owns it or use unique names.`,
+      message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces in this deploy run define.`,
+      suggestion: "Move the trigger to the application that owns it, or use unique names.",
+      context: { executor: executor.name, resource: name },
     });
   }
   return namespace;
@@ -360,41 +351,49 @@ export function findResolverNamespace(
   )?.namespace;
 }
 
+/** A TailorDB table or resolver an executor trigger names. */
+type NamespacedResource = {
+  executor: DefinitionRef;
+  /** Kind of the resource in error messages, such as `TailorDB table`. */
+  label: string;
+  name: string;
+};
+
 function resolveNamespace(params: {
-  resourceLabel: string;
-  resourceName: string;
+  resource: NamespacedResource;
   localNamespaces: ReadonlyArray<string>;
   findLocalNamespace: () => string | undefined;
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>;
 }): string {
-  const { resourceLabel, resourceName, localNamespaces, findLocalNamespace, sameRunNamespaces } =
-    params;
+  const { resource, localNamespaces, findLocalNamespace, sameRunNamespaces } = params;
   const localNamespace = findLocalNamespace();
   if (localNamespace !== undefined) {
     return localNamespace;
   }
-  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resourceName, resourceLabel);
+  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resource);
   if (sameRunNamespace !== undefined) {
     return sameRunNamespace;
   }
   const sameRunAvailableNamespaces = sameRunNamespaces
     ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
     : [];
-  const availableNamespaces = [...localNamespaces, ...sameRunAvailableNamespaces];
-  throw CLIError({
+  const available = [...localNamespaces, ...sameRunAvailableNamespaces];
+  const { executor, label, name } = resource;
+  throw locatedCLIError(executor.file, {
     code: "DEPLOY_RESOURCE_NOT_FOUND",
-    message: `${resourceLabel} "${resourceName}" not found in any namespace. Available namespaces: ${availableNamespaces.join(", ")}`,
+    message: `Executor "${executor.name}" triggers on ${label} "${name}", which is not found in any namespace. Available namespaces: ${available.join(", ")}`,
+    context: { executor: executor.name, resource: name, available },
   });
 }
 
 function resolveTailorDBNamespace(
   application: Readonly<ConfigServices>,
+  executor: DefinitionRef,
   typeName: string,
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
   return resolveNamespace({
-    resourceLabel: "TailorDB table",
-    resourceName: typeName,
+    resource: { executor, label: "TailorDB table", name: typeName },
     localNamespaces: application.tailorDBServices.map((service) => service.namespace),
     findLocalNamespace: () => findTailorDBNamespace(application, typeName),
     sameRunNamespaces,
@@ -403,12 +402,12 @@ function resolveTailorDBNamespace(
 
 function resolveResolverNamespace(
   application: Readonly<ConfigServices>,
+  executor: DefinitionRef,
   resolverName: string,
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
 ): string {
   return resolveNamespace({
-    resourceLabel: "Resolver",
-    resourceName: resolverName,
+    resource: { executor, label: "Resolver", name: resolverName },
     localNamespaces: application.resolverServices.map((service) => service.namespace),
     findLocalNamespace: () => findResolverNamespace(application, resolverName),
     sameRunNamespaces,
@@ -475,18 +474,18 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
-function defaultGraphQLAppName(context: PlanContext, executorName: string): string {
+function defaultGraphQLAppName(context: PlanContext, executor: DefinitionRef): string {
   const available = context.applications.map(({ name }) => name);
   const [only, ...others] = available;
   if (only !== undefined && others.length === 0) return only;
-  throw CLIError({
+  throw locatedCLIError(executor.file, {
     code: available.length === 0 ? "EXECUTOR_APP_NAME_REQUIRED" : "EXECUTOR_APP_NAME_AMBIGUOUS",
-    message: `Executor "${executorName}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
+    message: `Executor "${executor.name}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
     suggestion:
       available.length === 0
         ? "Add an application to the config's apps, or remove the operation."
         : `Set appName on the operation to one of ${available.join(", ")}.`,
-    context: { executor: executorName, available },
+    context: { executor: executor.name, available },
   });
 }
 
@@ -572,6 +571,7 @@ function protoExecutor(
           eventTypes: trigger.events,
           namespaceName: resolveTailorDBNamespace(
             application,
+            definition,
             trigger.tableName,
             context.tailorDBTypeNamespaces,
           ),
@@ -590,6 +590,7 @@ function protoExecutor(
           eventTypes: ["pipeline.resolver.executed"],
           namespaceName: resolveResolverNamespace(
             application,
+            definition,
             trigger.resolverName,
             context.resolverNamespaces,
           ),
@@ -712,7 +713,7 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.appName ?? defaultGraphQLAppName(context, executor.name),
+            appName: target.appName ?? defaultGraphQLAppName(context, definition),
             query: target.query,
             variables: target.variables
               ? {

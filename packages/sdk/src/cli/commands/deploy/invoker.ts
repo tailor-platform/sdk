@@ -1,6 +1,8 @@
 import { fetchAll, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { internalError, locatedCLIError } from "#/cli/shared/errors";
+import { configAuthNamespaces } from "./deploy-application";
 import type { AuthInvoker } from "#/types/auth.generated";
+import type { PlanContext } from "./types";
 
 /**
  * Machine users that each Auth namespace an invoker names has after the deploy, by namespace;
@@ -44,21 +46,21 @@ function definitionContext(definition: DefinitionRef): Record<string, string> {
  * - an object `{ namespace, machineUserName }` — returned as-is
  * @param invoker - String machine user name or object form
  * @param scope - Auth namespaces, machine users, and config file the invoker resolves against
- * @param owner - Executor or resolver whose invoker this is
+ * @param definition - Executor or resolver whose invoker this is
  * @returns Object form of the invoker, or undefined
  */
 export function normalizeInvoker(
   invoker: string | AuthInvoker | undefined,
   scope: InvokerScope,
-  owner: DefinitionRef,
+  definition: DefinitionRef,
 ): AuthInvoker | undefined {
   if (invoker === undefined) return undefined;
-  const resolved = resolveInvoker({ invoker, scope, owner });
+  const resolved = resolveInvoker({ invoker, scope, definition });
   if (scope.machineUsers) {
     assertInvokerMachineUser({
       invoker: resolved,
-      namespaceFile: typeof invoker === "string" ? scope.configPath : owner.file,
-      owner,
+      namespaceFile: typeof invoker === "string" ? scope.configPath : definition.file,
+      definition,
       machineUsers: scope.machineUsers,
     });
   }
@@ -68,24 +70,24 @@ export function normalizeInvoker(
 type ResolveInvokerParams = {
   invoker: string | AuthInvoker;
   scope: InvokerScope;
-  owner: DefinitionRef;
+  definition: DefinitionRef;
 };
 
 function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
   const {
     invoker,
-    scope: { authNamespaces, machineUsers, configPath },
-    owner,
+    scope: { authNamespaces, machineUsers },
+    definition,
   } = params;
   if (typeof invoker !== "string") return invoker;
-  const label = definitionLabel(owner);
+  const label = definitionLabel(definition);
   const [only, ...others] = authNamespaces;
   if (only === undefined) {
-    throw locatedCLIError(configPath, {
+    throw locatedCLIError(definition.file, {
       code: "INVOKER_AUTH_REQUIRED",
       message: `${label} uses a string invoker ("${invoker}"), but no Auth service is configured.`,
-      suggestion: "Configure an Auth service before using invoker.",
-      context: { invoker, ...definitionContext(owner) },
+      suggestion: `Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: ${JSON.stringify(invoker)} }, or configure an Auth service.`,
+      context: { invoker, ...definitionContext(definition) },
     });
   }
   if (others.length === 0) return { namespace: only, machineUserName: invoker };
@@ -98,7 +100,7 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
     const names = [
       ...new Set(authNamespaces.flatMap((name) => [...(machineUsers.get(name) ?? [])])),
     ].toSorted();
-    throw locatedCLIError(owner.file, {
+    throw locatedCLIError(definition.file, {
       code: "INVOKER_MACHINE_USER_NOT_FOUND",
       message: `${label} uses invoker "${invoker}", but none of the Auth services ${authNamespaces.join(", ")} has a machine user with that name.`,
       suggestion: names.length
@@ -108,16 +110,16 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
         invoker,
         authNamespaces: [...authNamespaces],
         machineUsers: names,
-        ...definitionContext(owner),
+        ...definitionContext(definition),
       },
     });
   }
   if (alsoDefining.length > 0) {
-    throw locatedCLIError(owner.file, {
+    throw locatedCLIError(definition.file, {
       code: "INVOKER_MACHINE_USER_AMBIGUOUS",
       message: `${label} uses invoker "${invoker}", which the Auth services ${defining.join(", ")} all define.`,
       suggestion: `Name the Auth service, for example invoker: { namespace: "${namespace}", machineUserName: "${invoker}" }.`,
-      context: { invoker, authNamespaces: defining, ...definitionContext(owner) },
+      context: { invoker, authNamespaces: defining, ...definitionContext(definition) },
     });
   }
   return { namespace, machineUserName: invoker };
@@ -127,7 +129,7 @@ type AssertInvokerMachineUserParams = {
   invoker: AuthInvoker;
   /** File that names the invoker's Auth namespace: the config for a string invoker. */
   namespaceFile: string;
-  owner: DefinitionRef;
+  definition: DefinitionRef;
   machineUsers: InvokerMachineUsers;
 };
 
@@ -135,10 +137,10 @@ function assertInvokerMachineUser(params: AssertInvokerMachineUserParams): void 
   const {
     invoker: { namespace: authNamespace, machineUserName },
     namespaceFile,
-    owner,
+    definition,
     machineUsers,
   } = params;
-  const label = definitionLabel(owner);
+  const label = definitionLabel(definition);
   const known = machineUsers.get(authNamespace);
   if (known === undefined) {
     throw internalError(`Machine users of Auth namespace "${authNamespace}" were not listed`);
@@ -148,12 +150,12 @@ function assertInvokerMachineUser(params: AssertInvokerMachineUserParams): void 
       code: "INVOKER_AUTH_NOT_FOUND",
       message: `${label} uses invoker "${machineUserName}" of Auth service "${authNamespace}", but the workspace has no Auth service with that name.`,
       suggestion: `Name an existing Auth service, or deploy the config that defines "${authNamespace}" first or in the same run.`,
-      context: { invoker: machineUserName, authNamespace, ...definitionContext(owner) },
+      context: { invoker: machineUserName, authNamespace, ...definitionContext(definition) },
     });
   }
   if (known.has(machineUserName)) return;
   const names = [...known].toSorted();
-  throw locatedCLIError(owner.file, {
+  throw locatedCLIError(definition.file, {
     code: "INVOKER_MACHINE_USER_NOT_FOUND",
     message: `${label} uses invoker "${machineUserName}", but Auth service "${authNamespace}" has no machine user with that name.`,
     suggestion: names.length
@@ -163,7 +165,7 @@ function assertInvokerMachineUser(params: AssertInvokerMachineUserParams): void 
       invoker: machineUserName,
       authNamespace,
       machineUsers: names,
-      ...definitionContext(owner),
+      ...definitionContext(definition),
     },
   });
 }
@@ -231,4 +233,28 @@ async function listWorkspaceMachineUsers(
     if (isNotFoundError(error)) return null;
     throw error;
   }
+}
+
+/**
+ * Collect what the invokers of a config resolve against.
+ * @param context - Planning context of the config
+ * @param invokers - Invokers of the config's executors or resolvers
+ * @returns Auth namespaces of the config, the machine users of the namespaces the invokers name, and the config file
+ */
+export async function planInvokerScope(
+  context: PlanContext,
+  invokers: Iterable<string | AuthInvoker | undefined>,
+): Promise<InvokerScope> {
+  const authNamespaces = configAuthNamespaces(context);
+  return {
+    authNamespaces,
+    machineUsers: await listInvokerMachineUsers({
+      client: context.client,
+      workspaceId: context.workspaceId,
+      invokers,
+      authNamespaces,
+      plannedMachineUsers: context.plannedMachineUsers,
+    }),
+    configPath: context.config.path,
+  };
 }

@@ -772,16 +772,24 @@ describe("planExecutor", () => {
         });
       });
 
-      test("points a string invoker without Auth at the config", async () => {
+      test("points a string invoker without Auth at the executor", async () => {
         const application = createMockApplication([createInvokerExecutor("batch-user")]);
 
         const error = await planError(buildPlanContext(application));
 
         expect(error).toMatchObject({
           code: "INVOKER_AUTH_REQUIRED",
-          context: { invoker: "batch-user", executor: "test-executor", file: mockConfig.path },
+          suggestion:
+            'Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: "batch-user" }, or configure an Auth service.',
+          context: {
+            invoker: "batch-user",
+            executor: "test-executor",
+            file: executorFile("test-executor"),
+          },
         });
-        expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("test-executor"),
+        });
       });
 
       test.for([
@@ -997,12 +1005,13 @@ describe("planExecutor", () => {
         { kind: "graphql", query: "query { ok }" },
       );
 
-      await expect(
-        planExecutor({ ...workspaceContext(executor), applications: [] }),
-      ).rejects.toMatchObject({
+      const error = await planError({ ...workspaceContext(executor), applications: [] });
+
+      expect(error).toMatchObject({
         code: "EXECUTOR_APP_NAME_REQUIRED",
-        context: { executor: "on-event", available: [] },
+        context: { executor: "on-event", available: [], file: executorFile("on-event") },
       });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
     });
 
     test("asks for the application of a GraphQL operation that names none", async () => {
@@ -1011,10 +1020,17 @@ describe("planExecutor", () => {
         { kind: "graphql", query: "query { ok }" },
       );
 
-      await expect(planExecutor(workspaceContext(executor))).rejects.toMatchObject({
+      const error = await planError(workspaceContext(executor));
+
+      expect(error).toMatchObject({
         code: "EXECUTOR_APP_NAME_AMBIGUOUS",
-        context: { executor: "on-event", available: ["shop", "admin"] },
+        context: {
+          executor: "on-event",
+          available: ["shop", "admin"],
+          file: executorFile("on-event"),
+        },
       });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
     });
   });
 
@@ -1451,17 +1467,57 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          applications: [deployApplicationOf(application)],
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NOT_FOUND",
+        message:
+          'Executor "on-record-created" triggers on TailorDB table "Unknown", which is not found in any namespace. Available namespaces: my-tailordb',
+        context: {
+          executor: "on-record-created",
+          resource: "Unknown",
+          available: ["my-tailordb"],
+          file: executorFile("on-record-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-record-created"),
+      });
+    });
+
+    test("recordCreated throws when several namespaces of the deploy run define the table", async () => {
+      const executor: Executor = {
+        name: "on-record-created",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
+          tableName: "Order",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const error = await planError(
+        buildPlanContext(application, {
+          tailorDBTypeNamespaces: new Map([["Order", undefined]]),
         }),
-      ).rejects.toThrow('TailorDB table "Unknown" not found in any namespace');
+      );
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+        message:
+          'Executor "on-record-created" triggers on TailorDB table "Order", which several namespaces in this deploy run define.',
+        context: {
+          executor: "on-record-created",
+          resource: "Order",
+          file: executorFile("on-record-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-record-created"),
+      });
     });
 
     test("resolverExecuted throws when resolver not found in any namespace", async () => {
@@ -1477,17 +1533,22 @@ describe("planExecutor", () => {
         resolverNames: { myResolver: "my-pipeline" },
       });
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          applications: [deployApplicationOf(application)],
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
-        }),
-      ).rejects.toThrow('Resolver "unknown" not found in any namespace');
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NOT_FOUND",
+        message:
+          'Executor "on-resolver-exec" triggers on Resolver "unknown", which is not found in any namespace. Available namespaces: my-pipeline',
+        context: {
+          executor: "on-resolver-exec",
+          resource: "unknown",
+          available: ["my-pipeline"],
+          file: executorFile("on-resolver-exec"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-resolver-exec"),
+      });
     });
 
     test("idpUserCreated throws when no IdP service configured", async () => {
@@ -1582,9 +1643,7 @@ describe("planExecutor", () => {
         };
         const application = createMockApplication([executor]);
 
-        const error = await planExecutor(buildPlanContext(application)).catch(
-          (error: unknown) => error,
-        );
+        const error = await planError(buildPlanContext(application));
 
         expect(error).toMatchObject({
           code: "AUTH_CONFIG_REQUIRED",
@@ -1593,7 +1652,7 @@ describe("planExecutor", () => {
           suggestion: expect.stringContaining('auth: { name: "<auth-name>", external: true }'),
           context: { executor: "on-auth-token-issued", file: mockConfig.path },
         });
-        expect(getErrorDiagnostics(error as Error).location).toEqual({ file: mockConfig.path });
+        expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
       },
     );
 
@@ -1787,41 +1846,6 @@ describe("planExecutor", () => {
         "tailordb.type_record.deleted",
       ]);
       expect(typedConfig.value.condition).toBeDefined();
-    });
-
-    test.each([
-      {
-        name: "recordCreated throws when typeName not found in any TailorDB service",
-        executor: {
-          name: "on-record-created",
-          description: "test",
-          disabled: false,
-          trigger: {
-            kind: "tailordb",
-            events: ["tailordb.type_record.created"],
-            tableName: "Unknown",
-          },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { tailorDBTypes: { User: "my-tailordb" } },
-        errorPattern: 'TailorDB table "Unknown" not found in any namespace',
-      },
-      {
-        name: "resolverExecuted throws when resolver not found in any namespace",
-        executor: {
-          name: "on-resolver-exec",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "resolverExecuted", resolverName: "unknown" },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { resolverNames: { myResolver: "my-pipeline" } },
-        errorPattern: 'Resolver "unknown" not found in any namespace',
-      },
-    ])("$name", async ({ executor, appOptions, errorPattern }) => {
-      const application = createMockApplication([executor], appOptions);
-
-      await expect(planExecutor(buildPlanContext(application))).rejects.toThrow(errorPattern);
     });
   });
 

@@ -169,15 +169,11 @@ read them:
   `steps` are not valid.
 - `MIGRATION_SCRIPT_BUNDLE_FAILED`: a pending migration's `migrate.ts` could not be bundled.
 - `AUTH_CONFIG_REQUIRED`: a pending migration has a `migrate.ts`, but the config defines no auth to
-  run it.
+  run it. `error.context.file` names the config.
 - `MACHINE_USER_REQUIRED`: a pending migration has a `migrate.ts`, but no machine user is selected
-  to run the scripts of its namespace.
+  to run the scripts of its namespace. `error.context.file` names the config.
 - `MACHINE_USER_NOT_FOUND`: the machine user selected to run a pending migration's `migrate.ts` is
-  not defined in auth.
-
-  For `AUTH_CONFIG_REQUIRED`, `MACHINE_USER_REQUIRED`, and `MACHINE_USER_NOT_FOUND`,
-  `error.context.file` names the config.
-
+  not defined in auth. `error.context.file` names the config.
 - `MIGRATION_OUTCOME_UNSETTLED`: an earlier deploy could not confirm whether a migration's script
   ran, and the migration has not been settled since.
 - `MIGRATION_IN_PROGRESS_INVALID`: the migration recorded as in progress cannot be read, is not the
@@ -368,7 +364,10 @@ offending JSONL file and line, including a line that is not valid JSON. `seed ap
 seed row that is not valid JSON or not a JSON object. `seed apply` and `seed validate --upsert` do
 the same for a row that lacks `id` or a required field with `--upsert`, and for a row defined in
 more than one of the data directories applied together. A rejected config or a TailorDB type,
-resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. A `.ts` or
+resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. `deploy`
+and `tailordb migration test` report the config when it lacks an Auth service, IdP, or machine user
+that a resolver, executor, or migration needs, and the resolver or executor file when a value it
+names cannot be resolved. A `.ts` or
 `.mts` file that cannot be parsed — one of those files, the file passed to `function run`, or a
 file one of them imports — reports that file and the line it failed on.
 Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a

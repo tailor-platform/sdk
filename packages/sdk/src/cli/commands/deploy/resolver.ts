@@ -27,14 +27,14 @@ import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { applicationsListing, configAuthNamespaces } from "./deploy-application";
+import { applicationsListing } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { type InvokerScope, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { type InvokerScope, normalizeInvoker, planInvokerScope } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -191,20 +191,12 @@ export async function planPipeline(
     previous?.existingServices,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const authNamespaces = configAuthNamespaces(context);
-  const invokerScope: InvokerScope = {
-    authNamespaces,
-    machineUsers: await listInvokerMachineUsers({
-      client,
-      workspaceId,
-      invokers: pipelines.flatMap((pipeline) =>
-        Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
-      ),
-      authNamespaces,
-      plannedMachineUsers: context.plannedMachineUsers,
-    }),
-    configPath: context.config.path,
-  };
+  const invokerScope = await planInvokerScope(
+    context,
+    pipelines.flatMap((pipeline) =>
+      Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
+    ),
+  );
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,

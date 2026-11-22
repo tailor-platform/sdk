@@ -928,7 +928,7 @@ describe("processResolver invoker mapping", () => {
     });
   });
 
-  test("string invoker without auth service configured points at the config", async () => {
+  test("string invoker without auth service configured points at the resolver", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
     const error = (await planWithResolverService(resolverService).catch(
@@ -938,9 +938,16 @@ describe("processResolver invoker mapping", () => {
     expect(error).toMatchObject({
       code: "INVOKER_AUTH_REQUIRED",
       message: expect.stringMatching(/no Auth service is configured/),
-      context: { invoker: "batch-user", resolver: "myResolver", file: mockConfig.path },
+      suggestion: expect.stringContaining(
+        'invoker: { namespace: "<auth>", machineUserName: "batch-user" }',
+      ),
+      context: {
+        invoker: "batch-user",
+        resolver: "myResolver",
+        file: "/test/resolvers/myResolver.ts",
+      },
     });
-    expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/test/resolvers/myResolver.ts" });
   });
 
   test("invoker is undefined when invoker is not set", async () => {
