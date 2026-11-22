@@ -802,6 +802,28 @@ test("stops a defineApp() config before checking resources in use when it would 
   expect(mocks.assertResourcesNotInUse).not.toHaveBeenCalled();
 });
 
+test("stops a defineApp() config that would delete an application another workspace config deployed", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  Object.assign(mocks.target, {
+    source: {
+      kind: "workspace",
+      workspace: { path: "/repo/tailor.config.ts", apps: {}, definedBy: "defineApp" },
+    },
+    applications: [mocks.target.applications[0]],
+  });
+  mocks.results.app.deletes.push(
+    ...["shop", "admin"].map((name) => ({
+      name,
+      request: { workspaceId: "ws", applicationName: name },
+    })),
+  );
+  await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+    context: expect.objectContaining({ deletedApplications: ["admin"] }),
+  });
+});
+
 test("reports the sdk-on-app labels the Platform had no room for in the JSON result", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();

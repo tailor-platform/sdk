@@ -48,7 +48,7 @@ import {
   type WorkspaceTakeover,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
-import { assertTakeoversFromOwnConfig } from "./define-app-guard";
+import { assertResourcesFromOwnConfig } from "./define-app-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
   deployedHookLabel,
@@ -1082,10 +1082,11 @@ async function deployInternal(
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
       for (const deployment of deployments) {
-        assertTakeoversFromOwnConfig(
-          deployment.source,
-          collectTakeovers(deploymentPlanResults(deployment)),
-        );
+        assertResourcesFromOwnConfig(deployment.source, {
+          applications: deployment.applications,
+          takeovers: collectTakeovers(deploymentPlanResults(deployment)),
+          applicationDeletes: deployment.app.deletes,
+        });
       }
       await assertResourcesNotInUse({ deployments, command: "deploy", client, workspaceId });
       assertNoSingleRunTransferHandoff(deployments);
