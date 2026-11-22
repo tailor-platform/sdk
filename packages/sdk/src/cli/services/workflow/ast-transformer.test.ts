@@ -1043,7 +1043,11 @@ await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineU
       } catch (error) {
         thrown = error;
       }
-      expect(thrown).toMatchObject({ code: "WORKFLOW_START_INVOKER_AUTH_REQUIRED" });
+      expect(thrown).toMatchObject({
+        code: "WORKFLOW_START_INVOKER_AUTH_REQUIRED",
+        message: 'myWorkflow.start() runs as "kiosk", but the config has no Auth service.',
+        suggestion: expect.stringContaining('{ namespace: "<auth>", machineUserName: "kiosk" }'),
+      });
       expect(getErrorDiagnostics(thrown as Error).location).toEqual({
         file: path.resolve("test.ts"),
       });
@@ -1053,10 +1057,32 @@ await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineU
       "rejects %s, whose invoker the build cannot read",
       (options) => {
         expect(() => transform(options)).toThrow(
-          expect.objectContaining({ code: "WORKFLOW_START_INVOKER_UNRESOLVED" }),
+          expect.objectContaining({
+            code: "WORKFLOW_START_INVOKER_UNRESOLVED",
+            message: expect.stringContaining("the config has no Auth service"),
+            suggestion:
+              'Write the invoker in the .start() call as an object literal: { invoker: { namespace: "<auth>", machineUserName: "<machine user>" } }.',
+          }),
         );
       },
     );
+
+    test("names a start through a namespace import as it is written", () => {
+      const source = `
+import * as order from "./order";
+await order.default.start({ id: 1 }, { invoker: "kiosk" });
+`;
+      expect(() =>
+        transformStartCalls(
+          source,
+          new Map(),
+          new Map(),
+          new Map([[path.resolve("order.ts"), "order"]]),
+        ),
+      ).toThrow(
+        expect.objectContaining({ message: expect.stringMatching(/^order\.default\.start\(\) /) }),
+      );
+    });
   });
   describe("workflow start invokers in a config with several Auth services", () => {
     const machineUserAuthNamespaces = new Map([
