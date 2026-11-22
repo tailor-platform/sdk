@@ -1,4 +1,4 @@
-import { Code } from "@connectrpc/connect";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test } from "vitest";
 import { createMockClient, createRemoteCheckpoint } from "./migration-apply";
 
@@ -99,6 +99,29 @@ describe("createMockClient", () => {
     ]);
 
     expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected"]);
+  });
+
+  test("accepts creating a table or its GraphQL permission again after its create fails", async () => {
+    const rejectFirst = () => {
+      let rejected = false;
+      return async () => {
+        if (rejected) return {};
+        rejected = true;
+        throw new ConnectError("internal", Code.Internal);
+      };
+    };
+    const client = createMockClient({
+      createTailorDBType: rejectFirst(),
+      createTailorDBGQLPermission: rejectFirst(),
+    });
+    const internal = { code: Code.Internal };
+
+    await expect(client.createTailorDBType(table("User"))).rejects.toMatchObject(internal);
+    await expect(client.createTailorDBType(table("User"))).resolves.toEqual({});
+    await expect(client.createTailorDBGQLPermission(permission("User"))).rejects.toMatchObject(
+      internal,
+    );
+    await expect(client.createTailorDBGQLPermission(permission("User"))).resolves.toEqual({});
   });
 
   test.each([
