@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
 import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
@@ -73,6 +74,8 @@ function createMockApplication(
 ): Application {
   return {
     name: appName,
+    config: {},
+    subgraphs: [],
     env: {},
     resolverServices,
     executorService: createMockExecutorService(),
@@ -130,15 +133,19 @@ function createMockClient(
   });
 }
 
-function buildCtx(overrides: Partial<PlanContext>): PlanContext {
+function buildCtx(
+  overrides: Omit<Partial<PlanContext>, "application"> & { application?: Application },
+): PlanContext {
+  const application = overrides.application ?? createMockApplication([]);
   return {
     client: createMockClient([]),
     workspaceId,
-    application: createMockApplication([]),
     owner: applicationOwner(createMockApplication([])),
     forRemoval: false,
     config: mockConfig,
     ...overrides,
+    application,
+    applications: [deployApplicationOf(application)],
   };
 }
 
@@ -195,6 +202,7 @@ describe("planPipeline (resolver service level)", () => {
         client,
         workspaceId,
         application: createMockApplication([createResolverServiceWith(publishEvents)]),
+        applications: [],
         owner: applicationOwner(createMockApplication([createResolverServiceWith(publishEvents)])),
         forRemoval: false,
         config: mockConfig,
@@ -248,6 +256,7 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -276,6 +285,7 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -299,6 +309,7 @@ describe("planPipeline (resolver service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([createResolverServiceWith(false)]),
+          applications: [],
           owner: applicationOwner(createMockApplication([createResolverServiceWith(false)])),
           forRemoval: false,
           config: mockConfig,

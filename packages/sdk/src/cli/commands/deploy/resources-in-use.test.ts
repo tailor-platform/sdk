@@ -23,9 +23,11 @@ import {
 } from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
 import { describe, expect, test } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
 import { emptyPlanResults } from "./test-helpers/plan-results";
+import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanResults, PlannedDeployment } from "./apply-phases";
 
@@ -63,8 +65,15 @@ function check(
 }
 
 function deployment(application: ApplicationShape, results: PlanResults) {
+  const full = {
+    subgraphs: [],
+    authServices: [],
+    config: {},
+    ...application,
+  } as unknown as Application;
   return {
-    application: { subgraphs: [], authServices: [], ...application },
+    application: full,
+    applications: [deployApplicationOf(full)],
     ...results,
   } as unknown as PlannedDeployment;
 }
@@ -172,6 +181,32 @@ describe("assertResourcesNotInUse", () => {
       expect.objectContaining({
         code: "SERVICE_IN_USE",
         message: expect.stringContaining('application "portal"'),
+      }),
+    );
+  });
+
+  test("names each application of a config that still uses a deleted Auth service", async () => {
+    const results = plannedApplication("shop");
+    results.app.unchanged.push({ name: "backoffice", request: {} } as never);
+    const twoApplications = {
+      ...deployment({ name: "shop" }, results),
+      applications: [
+        { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+        { name: "backoffice", subgraphs: [], authNamespace: "shared-auth", settings: {} },
+      ],
+    };
+
+    await expect(
+      check(
+        [deployment({ name: "core" }, ownerDeleting("shared-auth")), twoApplications],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: "SERVICE_IN_USE",
+        context: {
+          uses: [{ resourceType: "auth.service", name: "shared-auth", application: "backoffice" }],
+        },
       }),
     );
   });

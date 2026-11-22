@@ -20,7 +20,11 @@ import {
   resolveLockedAppIds,
 } from "./app-id-lock";
 import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
+import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner } from "./label";
 import type { Plugin } from "#/plugin/types";
+import type { DeployApplication } from "./deploy-application";
+import type { DeployOwner } from "./label";
 
 type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
 
@@ -61,6 +65,10 @@ export type BuiltDeploymentTarget = {
   plugins: readonly Plugin[];
   config: Awaited<ReturnType<typeof loadConfig>>["config"];
   application: Application;
+  /** Owner of the resources the config deploys. */
+  owner: DeployOwner;
+  /** Applications the config deploys. */
+  applications: ReadonlyArray<DeployApplication>;
   workflowBuildResult: Awaited<ReturnType<typeof loadApplication>>["workflowBuildResult"];
   httpAdapterBuildResult: Awaited<ReturnType<typeof loadApplication>>["httpAdapterBuildResult"];
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
@@ -177,6 +185,8 @@ async function buildDeploymentTarget(
     plugins,
     config,
     application,
+    owner: applicationOwner(application),
+    applications: [deployApplicationOf(application)],
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,

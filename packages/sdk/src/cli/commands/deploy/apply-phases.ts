@@ -29,6 +29,7 @@ import {
 } from "./workflow-execution-policy";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployApplication } from "./deploy-application";
 import type { MaintenanceReport } from "./tailordb/migration-timing";
 
 /** How long one application's TailorDB migrations kept tables in maintenance mode. */
@@ -38,6 +39,8 @@ export interface TailorDBMaintenance extends MaintenanceReport {
 
 export type PlannedDeployment = {
   readonly application: Readonly<Application>;
+  /** Applications the deployment plans. */
+  readonly applications: ReadonlyArray<DeployApplication>;
   /** Owner of the resources the deployment manages. */
   readonly owner: DeployOwner;
   /**
@@ -66,7 +69,10 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application" | "owner" | "forceApplyAll">;
+export type PlanResults = Omit<
+  PlannedDeployment,
+  "application" | "applications" | "owner" | "forceApplyAll"
+>;
 
 /**
  * Resource kinds whose plan cannot change between a deploy's first plan and
@@ -87,6 +93,7 @@ export type ReusablePlanKind =
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
   const {
     application: _application,
+    applications: _applications,
     owner: _owner,
     forceApplyAll: _forceApplyAll,
     ...results

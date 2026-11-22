@@ -15,7 +15,7 @@ import {
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
@@ -174,38 +174,34 @@ export function authHookFunctionName(authName: string, hookPoint: string): strin
 
 /**
  * Collect all function entries from in-memory bundled scripts for all services.
- * @param application - Application definition
+ * @param application - Services the config defines
  * @param workflowJobs - Collected workflow jobs from config
  * @param bundledScripts - In-memory bundled code organized by kind
  * @returns Array of function entries to register
  */
 export function collectFunctionEntries(
-  application: Readonly<Application>,
+  application: Readonly<ConfigServices>,
   workflowJobs: CollectedJob[],
   bundledScripts: BundledScripts,
 ): FunctionEntry[] {
   const entries: FunctionEntry[] = [];
 
   // Resolvers
-  for (const app of application.applications) {
-    for (const pipeline of app.resolverServices) {
-      for (const resolver of Object.values(pipeline.resolvers)) {
-        const content = bundledScripts.resolvers.get(
-          resolverBundleKey(pipeline.namespace, resolver.name),
-        );
-        if (!content) {
-          logger.warn(
-            `Bundled code not found for resolver: ${pipeline.namespace}/${resolver.name}`,
-          );
-          continue;
-        }
-        entries.push({
-          name: resolverFunctionName(pipeline.namespace, resolver.name),
-          scriptContent: content,
-          contentHash: computeContentHash(content),
-          description: `Resolver: ${pipeline.namespace}/${resolver.name}`,
-        });
+  for (const pipeline of application.resolverServices) {
+    for (const resolver of Object.values(pipeline.resolvers)) {
+      const content = bundledScripts.resolvers.get(
+        resolverBundleKey(pipeline.namespace, resolver.name),
+      );
+      if (!content) {
+        logger.warn(`Bundled code not found for resolver: ${pipeline.namespace}/${resolver.name}`);
+        continue;
       }
+      entries.push({
+        name: resolverFunctionName(pipeline.namespace, resolver.name),
+        scriptContent: content,
+        contentHash: computeContentHash(content),
+        description: `Resolver: ${pipeline.namespace}/${resolver.name}`,
+      });
     }
   }
 
@@ -245,7 +241,7 @@ export function collectFunctionEntries(
   }
 
   // Auth hooks
-  for (const authService of application.applications.flatMap((app) => app.authServices)) {
+  for (const authService of application.authServices) {
     if (authService.config.hooks?.beforeLogin) {
       const authName = authService.config.name;
       const funcName = authHookFunctionName(authName, "before-login");

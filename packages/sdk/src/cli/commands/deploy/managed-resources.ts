@@ -405,7 +405,10 @@ function retainDeletesNotClaimed(
 const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   Pick<ResourceNameCheck, "namesOf"> & { resourceType: ManagedResourceType }
 > = [
-  { resourceType: "application", namesOf: (target) => [target.application.name] },
+  {
+    resourceType: "application",
+    namesOf: (target) => target.applications.map((application) => application.name),
+  },
   {
     resourceType: "executor",
     namesOf: (target) =>
@@ -540,7 +543,9 @@ function collectDeploymentResourceOwners(
  * @param deployments - Planned deployments of this run
  */
 export function scheduleRenamedAppDeletes(deployments: ReadonlyArray<PlannedDeployment>): void {
-  const protectedAppNames = new Set(deployments.map((deployment) => deployment.application.name));
+  const protectedAppNames = new Set(
+    deployments.flatMap((deployment) => deployment.applications.map(({ name }) => name)),
+  );
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduled = new Set(
     deployments.flatMap((deployment) => deployment.app.deletes.map((del) => del.name)),

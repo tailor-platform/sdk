@@ -44,6 +44,16 @@ type TargetSpec = {
 type Target = Parameters<typeof collectEventSubscriptions>[0][number];
 
 function target(spec: TargetSpec): Target {
+  const built = targetServices(spec);
+  const { name, id, subgraphs } = built.application;
+  return {
+    ...built,
+    owner: { kind: "application", name, id },
+    applications: [{ name, subgraphs, authNamespace: undefined, settings: {} }],
+  } as unknown as Target;
+}
+
+function targetServices(spec: TargetSpec) {
   const suffix = spec.namespace === undefined ? "" : `-${spec.namespace}`;
   return {
     config: { path: spec.configPath },
@@ -142,7 +152,7 @@ function target(spec: TargetSpec): Target {
         ]),
       ),
     },
-  } as unknown as Target;
+  };
 }
 
 const supplierId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";

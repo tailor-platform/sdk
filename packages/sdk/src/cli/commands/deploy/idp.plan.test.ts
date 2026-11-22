@@ -189,9 +189,10 @@ function createContext(client: OperatorClient): PlanContext {
     client,
     workspaceId,
     application: createMockApplication(),
+    applications: [],
     owner: applicationOwner(createMockApplication()),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 

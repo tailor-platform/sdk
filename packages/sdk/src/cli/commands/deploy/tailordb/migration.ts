@@ -96,8 +96,7 @@ import {
   type MigrationStepsWorkflowResult,
 } from "./migration-workflow";
 import type { MigrationScriptForm } from "#/cli/commands/tailordb/migrate/script-form";
-import type { Application } from "#/cli/services/application";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { Application, ServiceSettings } from "#/cli/services/application";
 import type { Spinner } from "#/cli/shared/spinner";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
@@ -1461,7 +1460,7 @@ export function getMigrationMachineUser(
 /** The auth, config, and environment variables a deploy runs its migration scripts with. */
 interface MigrationRunSource {
   application: Pick<Application, "authServices" | "env">;
-  config: LoadedConfig;
+  config: ServiceSettings;
   /** Machine user that runs every namespace's scripts in place of the configured one. */
   migrationMachineUserOverride?: string;
 }

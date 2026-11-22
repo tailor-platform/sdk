@@ -4,6 +4,7 @@ import { findAppIdLock, resolveLockedAppIds } from "#/cli/commands/deploy/app-id
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
 import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
+import { deployApplicationOf } from "#/cli/commands/deploy/deploy-application";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -124,6 +125,7 @@ async function execRemove(
     client,
     workspaceId,
     application,
+    applications: [deployApplicationOf(application)],
     owner,
     forRemoval: true,
     config,
@@ -154,7 +156,7 @@ async function execRemove(
   // planned deletions are already final.
   assertStaticWebsiteDeletesNotOffered(plans.staticWebsite);
   await assertResourcesNotInUse({
-    deployments: [{ application, ...plans }],
+    deployments: [{ application, applications: ctx.applications, ...plans }],
     command: "remove",
     client,
     workspaceId,

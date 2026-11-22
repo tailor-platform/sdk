@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getApplicationAuthNamespace, requireApplicationAuthNamespace } from "./auth-namespace";
+import { getApplicationAuthNamespace, requireAuthNamespace } from "./auth-namespace";
 
 describe("getApplicationAuthNamespace", () => {
   test("uses the local auth service name first", () => {
@@ -33,11 +33,11 @@ describe("getApplicationAuthNamespace", () => {
   });
 });
 
-describe("requireApplicationAuthNamespace", () => {
-  test("rejects an application without auth as AUTH_CONFIG_REQUIRED", () => {
+describe("requireAuthNamespace", () => {
+  test("rejects a missing auth namespace as AUTH_CONFIG_REQUIRED", () => {
     let error: unknown;
     try {
-      requireApplicationAuthNamespace({ authServices: [], config: {} });
+      requireAuthNamespace(undefined);
     } catch (thrown) {
       error = thrown;
     }

@@ -39,12 +39,11 @@ export function getApplicationAuthNamespace(
 }
 
 /**
- * Resolve the auth namespace configured for an application, throwing when none is configured.
- * @param application - Loaded application with local or external Auth config
+ * Require an auth namespace, throwing when none is configured.
+ * @param authNamespace - Auth namespace the config uses
  * @returns Auth namespace
  */
-export function requireApplicationAuthNamespace(application: AuthNamespaceApplication): string {
-  const authNamespace = getApplicationAuthNamespace(application);
+export function requireAuthNamespace(authNamespace: string | undefined): string {
   if (!authNamespace) {
     throw CLIError({
       code: "AUTH_CONFIG_REQUIRED",

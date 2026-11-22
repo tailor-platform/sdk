@@ -1,7 +1,7 @@
 import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices, ServiceSettings } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { DeployApplication } from "./deploy-application";
 import type { DeployOwner, DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
 
@@ -18,11 +18,14 @@ export type TailorDBMigrationTestSnapshots = ReadonlyMap<string, NormalizedSchem
 export interface PlanContext {
   client: OperatorClient;
   workspaceId: string;
-  application: Readonly<Application>;
+  /** Services the config defines. */
+  application: Readonly<ConfigServices>;
+  /** Applications the config deploys, each exposing some of the services. */
+  applications: ReadonlyArray<DeployApplication>;
   /** Owner of the resources the deploy manages, which decides their labels and ownership. */
   owner: DeployOwner;
   forRemoval: boolean;
-  config: LoadedConfig;
+  config: Readonly<ServiceSettings>;
   noSchemaCheck?: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
