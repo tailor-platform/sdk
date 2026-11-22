@@ -170,7 +170,7 @@ export const seedDumpCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Machine user name for authentication, or <auth>/<name> to name its Auth service (required unless machineUserName is configured in seedPlugin options)",
+        "Machine user name for authentication, or `<auth>/<name>` to name its Auth service (required unless machineUserName is configured in seedPlugin options)",
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
