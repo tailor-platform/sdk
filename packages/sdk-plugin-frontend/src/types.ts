@@ -29,7 +29,7 @@ export interface FrontendEnvContext {
   site: DeployedStaticWebsite;
   /**
    * Application whose config registers this frontend.
-   * @deprecated Read `applications`, or the config's sites from `staticWebsites`, instead.
+   * @deprecated Read `applications`, or the config's sites from `staticWebsites`, instead. codemod: v3/plugin-context-application
    */
   application: DeployedApplication;
   /** Every application in this deploy run. Read other configs' site URLs from their `staticWebsites`. */
