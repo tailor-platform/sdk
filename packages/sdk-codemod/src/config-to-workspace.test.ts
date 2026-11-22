@@ -355,7 +355,7 @@ describe("v3/config-to-workspace", () => {
       workspaces: ["tailor.config.ts"],
     });
     expect(result.warnings).toContain(
-      ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
+      ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup update` to regenerate it.",
     );
   });
 
@@ -393,7 +393,7 @@ describe("v3/config-to-workspace", () => {
       expect.arrayContaining([
         ".github/tailor.lock: the preview user workflow deploys only apps/user, whose config was merged into tailor.config.ts. Run `tailor setup ci preview` again for the workspace config, or delete the workflow.",
         ".github/tailor.lock: the branch shop workflow previews ERDs or runs migration tests, which a workspace config does not support yet. Run `tailor setup ci branch` again without --erd-preview and --migration-test. Until then, it deploys the deleted configs.",
-        ".github/tailor.lock: the autofix workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
+        ".github/tailor.lock: the autofix workflow now deploys tailor.config.ts. Run `tailor setup update` to regenerate it.",
       ]),
     );
   });
@@ -772,7 +772,7 @@ describe("v3/config-to-workspace", () => {
     });
   });
 
-  test("leaves the workflows tailor setup ci generated to `tailor setup ci update`, and reports the others", async () => {
+  test("leaves the workflows tailor setup ci generated to `tailor setup update`, and reports the others", async () => {
     const workflow = lines(
       "env:",
       "  TAILOR_CONFIG_PATH: apps/user/tailor.config.ts,apps/admin/tailor.config.ts",
@@ -806,7 +806,7 @@ describe("v3/config-to-workspace", () => {
       },
     ]);
     expect(result.warnings).toContain(
-      ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
+      ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup update` to regenerate it.",
     );
   });
 

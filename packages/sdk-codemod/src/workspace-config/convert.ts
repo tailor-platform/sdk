@@ -259,7 +259,7 @@ class Conversion {
     if (retarget) {
       for (const label of retarget.retargeted) {
         this.changes.warnings.push(
-          `${this.lock!.path}: the ${label} workflow now deploys ${outputPath}. Run \`tailor setup ci update\` to regenerate it.`,
+          `${this.lock!.path}: the ${label} workflow now deploys ${outputPath}. Run \`tailor setup update\` to regenerate it.`,
         );
       }
       this.changes.warnings.push(...retarget.warnings);
