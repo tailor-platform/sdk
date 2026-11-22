@@ -463,13 +463,18 @@ describe("remove command", () => {
         configPath,
         "--workspace-id",
         workspaceId,
+        "--profile",
+        "dev",
         "--yes",
       ]);
 
       expect(result.error).toMatchObject({
         code: "CONFIG_KIND_UNSUPPORTED",
         suggestion: expect.stringMatching(
-          new RegExp(`tailor deploy.*tailor workspace delete --workspace-id ${workspaceId}`, "s"),
+          new RegExp(
+            `\`tailor deploy --workspace-id=${workspaceId} --profile=dev --config=[^\`]+\`.*\`tailor workspace delete --workspace-id=${workspaceId}\``,
+            "s",
+          ),
         ),
       });
       expect(initOperatorClient).not.toHaveBeenCalled();

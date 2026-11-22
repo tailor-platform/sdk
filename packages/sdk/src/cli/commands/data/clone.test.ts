@@ -349,6 +349,7 @@ describe("data clone", () => {
               "order-db": { files: [] },
               "ledger-db": { files: [] },
             },
+            auth: { "shop-auth": { name: "shop-auth" } },
             apps: ${apps},
           }`,
         ),
@@ -378,6 +379,26 @@ describe("data clone", () => {
         suggestion: expect.stringContaining("--name"),
       });
       expect(client.getApplication).not.toHaveBeenCalled();
+      expect(client.cloneApplicationData).not.toHaveBeenCalled();
+    });
+
+    test("asks for --name when the config defines no application", async () => {
+      const configPath = await writeWorkspaceConfig(`{}`);
+
+      const result = await runCommand(cloneCommand, [
+        "--from",
+        "src",
+        "--to",
+        "dst",
+        "--yes",
+        "--config",
+        configPath,
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "CONFIG_APP_REQUIRED",
+        message: "The config defines no application.",
+      });
       expect(client.cloneApplicationData).not.toHaveBeenCalled();
     });
 
@@ -423,6 +444,27 @@ describe("data clone", () => {
       expect(suggestion).toContain("tailordb truncate --namespace=order-db");
       expect(suggestion).not.toContain("--all");
       expect(suggestion).not.toContain("ledger-db");
+    });
+
+    test("suggests no truncate when the application exposes no TailorDB namespace", async () => {
+      const configPath = await writeWorkspaceConfig(`{ shop: { db: [], auth: "shop-auth" } }`);
+      client.cloneApplicationData.mockRejectedValue(
+        new ConnectError("target is not empty", Code.FailedPrecondition),
+      );
+
+      const result = await runCommand(cloneCommand, [
+        "--from",
+        "src",
+        "--to",
+        "dst",
+        "--yes",
+        "--config",
+        configPath,
+      ]);
+
+      const suggestion = (result.error as { suggestion?: string }).suggestion;
+      expect(suggestion).not.toContain("To empty the target's TailorDB records");
+      expect(suggestion).toContain("--copy-idp-users or --copy-files");
     });
   });
 });

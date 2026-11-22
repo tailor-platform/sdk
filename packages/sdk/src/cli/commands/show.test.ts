@@ -408,6 +408,35 @@ describe("show", () => {
     ]);
   });
 
+  test("names an unknown subgraph type unspecified", async () => {
+    client.getApplication.mockResolvedValue({
+      application: {
+        ...application,
+        subgraphs: [{ serviceType: 99 as Subgraph_ServiceType, serviceNamespace: "future" }],
+      },
+    });
+
+    const info = await show();
+
+    expect(info.subgraphs).toEqual([{ type: "unspecified", namespace: "future" }]);
+  });
+
+  test("fails with one error when the application and an AI Gateway cannot be read", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      client.getApplication.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+      client.getAIGateway.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+
+      await expect(show()).rejects.toThrow("unavailable");
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
   test("rejects --app that is not the application of a defineConfig() config", async () => {
     const result = await runCommand(showCommand, ["--app", "other-app"]);
 
@@ -556,6 +585,35 @@ describe("show", () => {
         suggestion: expect.stringContaining("shop, backoffice"),
       });
       expect(client.getApplication).not.toHaveBeenCalled();
+    });
+
+    test("lists the OAuth2 clients of an auth namespace once for the applications that share it", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const configPath = await writeWorkspaceConfig(`{
+        shop: { db: ["customer-db"], auth: "shop-auth" },
+        storefront: { db: ["order-db"], auth: "shop-auth" },
+      }`);
+      serveApplications();
+      client.getApplication.mockImplementation((request) =>
+        Promise.resolve({
+          application: {
+            ...application,
+            name: request.applicationName,
+            authNamespace: "shop-auth",
+          },
+        }),
+      );
+      client.listAuthOAuth2Clients.mockRejectedValue(
+        new ConnectError("permission denied", Code.PermissionDenied),
+      );
+      using _stdout = captureStdout();
+      using _json = jsonMode();
+
+      const result = await runCommand(showCommand, ["--config", configPath]);
+
+      expect(result.error).toBeUndefined();
+      expect(client.listAuthOAuth2Clients).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
     });
 
     test("show() requires app when the config defines several applications", async () => {

@@ -11,7 +11,7 @@ export const openCommand = defineAppCommand({
   description: "Open Tailor Platform Console.",
   args: z.strictObject({
     ...deploymentArgs,
-    ...appArg,
+    ...appArg("the application list of the workspace"),
   }),
   run: async (args) => {
     const workspaceId = await loadWorkspaceId({

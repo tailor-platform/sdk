@@ -28,7 +28,12 @@ import {
   planWorkflowJobFunctionExecutionPolicy,
 } from "#/cli/commands/deploy/workflow-execution-policy";
 import { type Application, defineApplication } from "#/cli/services/application";
-import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import {
+  confirmationArgs,
+  deploymentArgs,
+  formatConfigArg,
+  recoveryContextArgs,
+} from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
@@ -37,7 +42,7 @@ import {
   type LoadedConfig,
 } from "#/cli/shared/config-loader";
 import { tryLoadWorkspaceId } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -73,14 +78,26 @@ async function resolveRemoveConfigId(config: LoadedConfig): Promise<LoadedConfig
 async function loadOptions(options?: RemoveOptions) {
   const loaded = await loadConfigFile(options?.configPath);
   if (loaded.kind === "workspace") {
-    const workspaceId =
-      (await tryLoadWorkspaceId({
-        profile: options?.profile,
-        workspaceId: options?.workspaceId,
-      })) ?? "<workspace-id>";
+    const context = {
+      profile: options?.profile,
+      workspaceId:
+        (await tryLoadWorkspaceId({
+          profile: options?.profile,
+          workspaceId: options?.workspaceId,
+        })) ?? "<workspace-id>",
+    };
+    const configArg = formatConfigArg(options?.configPath);
+    const deploy = formatCommandHint({
+      command: "tailor",
+      args: ["deploy", ...recoveryContextArgs(context), ...(configArg ? [configArg] : [])],
+    });
+    const deleteWorkspace = formatCommandHint({
+      command: "tailor",
+      args: ["workspace", "delete", `--workspace-id=${context.workspaceId}`],
+    });
     throw configKindUnsupportedError(loaded.workspace, {
       message: "tailor remove does not remove the resources of a workspace config.",
-      suggestion: `To remove applications or services, remove them from the config and run tailor deploy. To delete the whole workspace, run tailor workspace delete --workspace-id ${workspaceId}.`,
+      suggestion: `To remove applications or services, remove them from the config and run ${deploy}. To delete the whole workspace, run ${deleteWorkspace}.`,
     });
   }
   const { client, workspaceId } = await loadOperatorWorkspaceContext({

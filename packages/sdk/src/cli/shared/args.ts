@@ -590,15 +590,18 @@ export const configArg = {
 } satisfies ArgsShape;
 
 /**
- * Shared arg for commands that act on one application of the config
+ * Arg for commands that act on one application of the config
+ * @param withSeveral - What the command acts on without it when the config defines several applications
+ * @returns The `--app` arg
  */
-export const appArg = {
-  app: arg(z.string().optional(), {
-    description:
-      "Application of the config to act on (default: the only application the config defines)",
-    completion: { type: "none" },
-  }),
-} satisfies ArgsShape;
+export function appArg(withSeveral: string) {
+  return {
+    app: arg(z.string().optional(), {
+      description: `Application of the config (default: the only application the config defines; with several, ${withSeveral})`,
+      completion: { type: "none" },
+    }),
+  } satisfies ArgsShape;
+}
 
 /**
  * Shared config arg for commands that accept one or more comma-separated config file paths

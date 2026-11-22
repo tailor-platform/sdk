@@ -1,6 +1,7 @@
-import { loadConfigFile, type LoadedConfigFile } from "./config-loader";
+import { loadConfigFile, type LoadedConfig } from "./config-loader";
 import { CLIError } from "./errors";
 import { atUserModule } from "./validation-errors";
+import type { AuthOwnConfig } from "#/configure/services/auth/types";
 
 /** An application a config deploys, with what commands read about it. */
 export interface ConfigApplication {
@@ -13,7 +14,6 @@ export interface ConfigApplication {
 
 /** The applications of a config of either kind, with the services the workspace shares. */
 export interface ConfigApplications {
-  file: LoadedConfigFile;
   path: string;
   applications: ConfigApplication[];
   aiGatewayNames: string[];
@@ -24,9 +24,9 @@ function uniqueNames(entries: ReadonlyArray<{ name: string }> | undefined): stri
   return [...new Set((entries ?? []).map((entry) => entry.name))];
 }
 
-function oauth2ClientNamesOf(auth: object | undefined): string[] {
-  if (!auth || !("oauth2Clients" in auth) || !auth.oauth2Clients) return [];
-  return Object.keys(auth.oauth2Clients);
+function oauth2ClientNamesOf(auth: LoadedConfig["auth"] | AuthOwnConfig | undefined): string[] {
+  if (!auth || "external" in auth) return [];
+  return Object.keys(auth.oauth2Clients ?? {});
 }
 
 /**
@@ -39,7 +39,6 @@ export async function loadConfigApplications(configPath?: string): Promise<Confi
   if (file.kind === "config") {
     const { config } = file;
     return {
-      file,
       path: config.path,
       applications: [
         {
@@ -54,7 +53,6 @@ export async function loadConfigApplications(configPath?: string): Promise<Confi
   }
   const { workspace } = file;
   return {
-    file,
     path: workspace.path,
     applications: Object.entries(workspace.apps).map(([name, app]) => ({
       name,
@@ -101,19 +99,23 @@ export function selectApplication(
   );
 }
 
+/** Inputs to {@link requireApplication}. */
+export interface RequireApplicationParams {
+  config: ConfigApplications;
+  /** Application name the command was given. */
+  name: string | undefined;
+  /** How the caller names an application, such as `--name <application>`. */
+  option: string;
+}
+
 /**
  * Pick the application a command names, or the only one the config defines, and fail when that
  * leaves no single application.
- * @param config - Applications of the loaded config
- * @param name - Application name the command was given
- * @param option - How the caller names an application, such as `--name <application>`
+ * @param params - The loaded applications, the name given, and how to give one
  * @returns The application
  */
-export function requireApplication(
-  config: ConfigApplications,
-  name: string | undefined,
-  option: string,
-): ConfigApplication {
+export function requireApplication(params: RequireApplicationParams): ConfigApplication {
+  const { config, name, option } = params;
   const application = selectApplication(config, name);
   if (application) return application;
   const { applications } = config;

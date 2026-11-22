@@ -45,20 +45,57 @@ function truncateScopes(options: CloneOptions): string[] {
     : options.tailordbNamespaces.map((namespace) => `--namespace=${namespace}`);
 }
 
+const SEPARATE_REMOVAL_HINT =
+  "with --copy-idp-users or --copy-files, remove IdP users or files from the target separately.";
+
+function emptyTargetHint(options: CloneOptions, configArgs: string[]): string {
+  if (!options.nameFromConfig) {
+    return `To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help). That does not remove IdP users or files: ${SEPARATE_REMOVAL_HINT}`;
+  }
+  const scopes = truncateScopes(options);
+  if (scopes.length === 0) {
+    return `The application exposes no TailorDB namespace, so ${SEPARATE_REMOVAL_HINT}`;
+  }
+  const commands = scopes.map((scope) =>
+    formatCommandHint({
+      command: "tailor",
+      args: [
+        "tailordb",
+        "truncate",
+        scope,
+        ...recoveryContextArgs({
+          workspaceId: options.targetWorkspaceId,
+          profile: options.profile,
+        }),
+        ...configArgs,
+      ],
+    }),
+  );
+  return `To empty the target's TailorDB records, run ${commands.join(" and ")}. That does not remove IdP users or files: ${SEPARATE_REMOVAL_HINT}`;
+}
+
 type CloneTarget = Pick<CloneOptions, "name" | "nameFromConfig" | "tailordbNamespaces">;
 
-async function cloneTarget(name: string | undefined, configPath: string | undefined) {
-  if (name !== undefined) return { name, nameFromConfig: false } satisfies CloneTarget;
-  const application = requireApplication(
-    await loadConfigApplications(configPath),
-    undefined,
-    "--name <application>",
-  );
+interface CloneTargetParams {
+  /** `--name`, when given. */
+  name: string | undefined;
+  /** `--config`, when given. */
+  configPath: string | undefined;
+}
+
+async function cloneTarget(params: CloneTargetParams): Promise<CloneTarget> {
+  const { name, configPath } = params;
+  if (name !== undefined) return { name, nameFromConfig: false };
+  const application = requireApplication({
+    config: await loadConfigApplications(configPath),
+    name: undefined,
+    option: "--name <application>",
+  });
   return {
     name: application.name,
     nameFromConfig: true,
     tailordbNamespaces: application.tailordbNamespaces,
-  } satisfies CloneTarget;
+  };
 }
 
 async function $clone(options: CloneOptions & { yes?: boolean }) {
@@ -142,27 +179,7 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
       throw CLIError({
         code: "DATA_CLONE_PRECONDITION_FAILED",
         message: error.rawMessage,
-        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${
-          options.nameFromConfig
-            ? `To empty the target's TailorDB records, run ${truncateScopes(options)
-                .map((scope) =>
-                  formatCommandHint({
-                    command: "tailor",
-                    args: [
-                      "tailordb",
-                      "truncate",
-                      scope,
-                      ...recoveryContextArgs({
-                        workspaceId: options.targetWorkspaceId,
-                        profile: options.profile,
-                      }),
-                      ...configArgs,
-                    ],
-                  }),
-                )
-                .join(" and ")}.`
-            : "To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help)."
-        } That does not remove IdP users or files: with --copy-idp-users or --copy-files, remove those from the target separately.`,
+        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${emptyTargetHint(options, configArgs)}`,
         command: "data clone",
         cause: error,
       });
@@ -254,7 +271,7 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const { operationId, status } = await $clone({
-      ...(await cloneTarget(args.name, args.config)),
+      ...(await cloneTarget({ name: args.name, configPath: args.config })),
       sourceWorkspaceId: args.from,
       targetWorkspaceId: args.to,
       config: args.config,

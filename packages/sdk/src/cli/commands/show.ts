@@ -38,7 +38,9 @@ interface WorkspaceInfo {
 
 /** A service the application's GraphQL API exposes. */
 export interface ShowSubgraphInfo {
+  /** Kind of service: `tailordb`, `pipeline` (resolvers), `auth`, `idp`, `stateflow`, `ai`, or `unspecified`. */
   type: string;
+  /** Name of the service. */
   namespace: string;
 }
 
@@ -47,6 +49,7 @@ export interface ApplicationInfo {
   domain: string;
   url: string;
   auth: string;
+  /** Services the application's GraphQL API exposes. */
   subgraphs: ShowSubgraphInfo[];
   cors: string[];
   allowedIpAddresses: string[];
@@ -94,6 +97,10 @@ const SUBGRAPH_TYPES = {
   [Subgraph_ServiceType.IDP]: "idp",
 } as const satisfies Record<Subgraph_ServiceType, string>;
 
+function subgraphType(serviceType: Subgraph_ServiceType): string {
+  return serviceType in SUBGRAPH_TYPES ? SUBGRAPH_TYPES[serviceType] : "unspecified";
+}
+
 function applicationInfo(app: Application): ApplicationInfo {
   return {
     name: app.name,
@@ -101,7 +108,7 @@ function applicationInfo(app: Application): ApplicationInfo {
     url: app.url,
     auth: app.authNamespace,
     subgraphs: app.subgraphs.map((subgraph) => ({
-      type: SUBGRAPH_TYPES[subgraph.serviceType],
+      type: subgraphType(subgraph.serviceType),
       namespace: subgraph.serviceNamespace,
     })),
     cors: app.cors,
@@ -143,18 +150,15 @@ async function fetchStaticWebsites(
   return websites.filter((website): website is ShowStaticWebsiteInfo => website !== undefined);
 }
 
-async function fetchOAuth2Clients(
+type OAuth2ClientLister = (namespaceName: string) => Promise<AuthOAuth2ClientSummary[] | null>;
+
+async function listOAuth2Clients(
   client: OperatorClient,
   workspaceId: string,
   namespaceName: string,
-  names: string[],
-): Promise<ShowOAuth2ClientInfo[] | null> {
-  if (!namespaceName || names.length === 0) {
-    return [];
-  }
-  let deployed: AuthOAuth2ClientSummary[];
+): Promise<AuthOAuth2ClientSummary[] | null> {
   try {
-    deployed = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+    return await fetchAllTolerant(async (pageToken, maxPageSize) => {
       const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
         workspaceId,
         namespaceName,
@@ -171,6 +175,32 @@ async function fetchOAuth2Clients(
       return null;
     }
     throw error;
+  }
+}
+
+function oauth2ClientLister(client: OperatorClient, workspaceId: string): OAuth2ClientLister {
+  const listed = new Map<string, Promise<AuthOAuth2ClientSummary[] | null>>();
+  return (namespaceName) => {
+    let clients = listed.get(namespaceName);
+    if (clients === undefined) {
+      clients = listOAuth2Clients(client, workspaceId, namespaceName);
+      listed.set(namespaceName, clients);
+    }
+    return clients;
+  };
+}
+
+async function fetchOAuth2Clients(
+  listClients: OAuth2ClientLister,
+  namespaceName: string,
+  names: string[],
+): Promise<ShowOAuth2ClientInfo[] | null> {
+  if (!namespaceName || names.length === 0) {
+    return [];
+  }
+  const deployed = await listClients(namespaceName);
+  if (deployed === null) {
+    return null;
   }
   const clientIds = new Map<string, string>();
   for (const oauth2Client of deployed) {
@@ -222,56 +252,77 @@ async function fetchSharedServices(target: ShowTarget): Promise<SharedServices> 
   return { aiGateways, staticWebsites };
 }
 
+interface FetchedApplication {
+  info: ApplicationInfo;
+  oauth2Clients: ShowApplicationInfo["oauth2Clients"];
+}
+
 async function fetchApplication(
   target: ShowTarget,
   application: ConfigApplication,
-  sharedServices: Promise<SharedServices>,
-): Promise<ShowApplicationInfo> {
+  listClients: OAuth2ClientLister,
+): Promise<FetchedApplication> {
   const { client, workspaceId } = target;
   const resp = await client.getApplication({ workspaceId, applicationName: application.name });
   const deployed = assertDefined(
     resp.application,
     `application "${application.name}" not found in workspace`,
   );
-  const [shared, oauth2Clients] = await Promise.all([
-    sharedServices,
-    fetchOAuth2Clients(client, workspaceId, deployed.authNamespace, application.oauth2ClientNames),
-  ]);
-  return { ...applicationInfo(deployed), ...shared, oauth2Clients };
+  const oauth2Clients = await fetchOAuth2Clients(
+    listClients,
+    deployed.authNamespace,
+    application.oauth2ClientNames,
+  );
+  return { info: applicationInfo(deployed), oauth2Clients };
 }
 
 async function showApplication(
   target: ShowTarget,
   application: ConfigApplication,
 ): Promise<ShowInfo> {
-  const [workspace, { name, ...appInfo }] = await Promise.all([
-    fetchWorkspaceInfo(target.client, target.workspaceId),
-    fetchApplication(target, application, fetchSharedServices(target)),
+  const { client, workspaceId } = target;
+  const [workspace, shared, fetched] = await Promise.all([
+    fetchWorkspaceInfo(client, workspaceId),
+    fetchSharedServices(target),
+    fetchApplication(target, application, oauth2ClientLister(client, workspaceId)),
   ]);
-  return { name, ...workspace, ...appInfo };
+  const { name, ...info } = fetched.info;
+  return { name, ...workspace, ...info, ...shared, oauth2Clients: fetched.oauth2Clients };
 }
 
 async function showWorkspace(target: ShowTarget): Promise<WorkspaceShowInfo> {
-  const sharedServices = fetchSharedServices(target);
-  const [workspace, applications] = await Promise.all([
-    fetchWorkspaceInfo(target.client, target.workspaceId),
+  const { client, workspaceId } = target;
+  const listClients = oauth2ClientLister(client, workspaceId);
+  const [workspace, shared, applications] = await Promise.all([
+    fetchWorkspaceInfo(client, workspaceId),
+    fetchSharedServices(target),
     Promise.all(
       target.config.applications.map((application) =>
-        fetchApplication(target, application, sharedServices),
+        fetchApplication(target, application, listClients),
       ),
     ),
   ]);
-  return { ...workspace, applications };
+  return {
+    ...workspace,
+    applications: applications.map(({ info, oauth2Clients }) => ({
+      ...info,
+      ...shared,
+      oauth2Clients,
+    })),
+  };
 }
 
 /**
  * Show applied application information for the current workspace.
  * @param options - Show options
- * @returns Deployed application, workspace, AI Gateway, static website, and OAuth2 client information
+ * @returns Deployed application with its subgraphs, workspace, AI Gateway, static website, and OAuth2 client information
  */
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
   const target = await loadShowTarget(options);
-  return showApplication(target, requireApplication(target.config, options?.app, "the app option"));
+  return showApplication(
+    target,
+    requireApplication({ config: target.config, name: options?.app, option: "the app option" }),
+  );
 }
 
 const showWorkspaceNameTransformer = createWorkspaceNameTransformer(
@@ -285,7 +336,7 @@ export const showCommand = defineAppCommand({
   description: "Show information about the deployed application.",
   args: z.strictObject({
     ...deploymentArgs,
-    ...appArg,
+    ...appArg("every application"),
   }),
   run: async (args) => {
     const target = await loadShowTarget({
