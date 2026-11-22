@@ -264,7 +264,8 @@ describe("query", () => {
     ).rejects.toMatchObject({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: "Could not infer namespace from query. Detected namespaces: crm, sales.",
-      suggestion: "Reference a TailorDB table in the query; its namespace is resolved from it.",
+      suggestion:
+        "Reference a TailorDB table in the query, whose namespace is resolved from it, or pass --namespace.",
       context: { namespaces: ["crm", "sales"] },
     });
   });
@@ -306,7 +307,8 @@ describe("query", () => {
     ).rejects.toMatchObject({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: "Could not find namespace for tables in query: Ghost.",
-      suggestion: "Check the table names against the types deployed in namespaces: crm, sales.",
+      suggestion:
+        "Check the table names against the types deployed in namespaces: crm, sales, or pass --namespace.",
       context: { tables: ["Ghost"], namespaces: ["crm", "sales"] },
     });
   });
