@@ -35,7 +35,7 @@ describe("resolveTableNamespaces", () => {
     const client = listingClient();
     client.listTailorDBTypes
       .mockResolvedValueOnce(namesResult("User"))
-      .mockResolvedValueOnce(namesResult("user", "Event"));
+      .mockResolvedValueOnce(namesResult("User", "Event"));
 
     const result = await resolveTableNamespaces({
       workspaceId: "workspace-id",
@@ -109,6 +109,23 @@ describe("resolveTableNamespaces", () => {
 
     expect(result.get("User")).toEqual(["main"]);
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+  });
+
+  test("prefers the namespaces whose table name matches with the same case", async () => {
+    const client = listingClient();
+    client.listTailorDBTypes.mockImplementation(async ({ namespaceName }) =>
+      namespaceName === "order-db" ? namesResult("Ledgeritem") : namesResult("LedgerItem"),
+    );
+
+    const result = await resolveTableNamespaces({
+      workspaceId: "workspace-id",
+      namespaces: ["order-db", "ledger-db"],
+      tableNames: ["Ledgeritem", "ledgeritem"],
+      client,
+    });
+
+    expect(result.get("Ledgeritem")).toEqual(["order-db"]);
+    expect(result.get("ledgeritem")).toEqual(["order-db", "ledger-db"]);
   });
 
   test("matches requested type names case-insensitively", async () => {

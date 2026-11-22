@@ -22,7 +22,8 @@ type ResolveTableNamespacesArgs = {
 };
 
 /**
- * Find every namespace that has each TailorDB table, matching names case-insensitively.
+ * Find every namespace that has each TailorDB table. A table name matches with the same case
+ * when any namespace has it so; otherwise it matches case-insensitively.
  * @param args - Resolution inputs
  * @returns Namespaces of each found table, in the given namespace order; tables no namespace has are left out
  */
@@ -40,7 +41,13 @@ export async function resolveTableNamespaces(
     requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const tableNamespaces = new Map<string, string[]>();
+  const exact = new Map<string, string[]>();
+  const caseInsensitive = new Map<string, string[]>();
+  const add = (matches: Map<string, string[]>, tableName: string, namespace: string) => {
+    const namespaces = matches.get(tableName) ?? [];
+    if (!namespaces.includes(namespace)) namespaces.push(namespace);
+    matches.set(tableName, namespaces);
+  };
 
   for (const namespace of args.namespaces) {
     const unfound = new Set(args.tableNames);
@@ -56,10 +63,11 @@ export async function resolveTableNamespaces(
       for (const type of tailordbTypes) {
         for (const requestedTableName of requestedTablesByLowercase.get(type.name.toLowerCase()) ??
           []) {
-          if (!unfound.delete(requestedTableName)) continue;
-          const namespaces = tableNamespaces.get(requestedTableName) ?? [];
-          namespaces.push(namespace);
-          tableNamespaces.set(requestedTableName, namespaces);
+          add(caseInsensitive, requestedTableName, namespace);
+          if (type.name === requestedTableName) {
+            add(exact, requestedTableName, namespace);
+            unfound.delete(requestedTableName);
+          }
         }
       }
 
@@ -67,7 +75,12 @@ export async function resolveTableNamespaces(
     } while (pageToken && unfound.size > 0);
   }
 
-  return tableNamespaces;
+  return new Map(
+    [...caseInsensitive].map(([tableName, namespaces]) => [
+      tableName,
+      exact.get(tableName) ?? namespaces,
+    ]),
+  );
 }
 
 /**
