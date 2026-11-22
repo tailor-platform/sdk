@@ -94,6 +94,10 @@ function objectValue(node: SgNode | null | undefined): SgNode | null {
   return node?.kind() === "object" ? node : null;
 }
 
+function idpName(ref: ServiceRef): string {
+  return ref.name ?? ref.node.text();
+}
+
 function isIdentifier(text: string | undefined): boolean {
   return text !== undefined && /^[A-Za-z_$][\w$]*$/u.test(text);
 }
@@ -329,6 +333,14 @@ class SectionsBuilder {
       list(key, ref.nameExpression);
       if (ref.external) continue;
       const namespaceObject = objectValue(pairValue(namespace));
+      if (!namespaceObject && member.dir !== this.outputDir) {
+        this.stop(
+          member,
+          namespace,
+          `The \`${key}\` namespace "${ref.name}" is not an object literal, so its files patterns cannot be rewritten relative to ${this.outputDir}.`,
+        );
+        continue;
+      }
       const namespaceEdits = namespaceObject ? this.rebaseEdits(member, namespaceObject) : [];
       if (namespaceObject && key === "db") {
         const edit = this.migrationMachineUserEdit(member, namespaceObject, auth);
@@ -432,9 +444,9 @@ class SectionsBuilder {
     list("idp", `[${refs[0]!.nameExpression}]`);
     if (refs.length > 1) {
       this.sections.warnings.push(
-        `${member.path}: application ${member.appName} exposes only the first of its IdPs (${refs[0]!.node.text()}) in its GraphQL API, as before; the others (${refs
+        `${member.path}: application ${member.appName} exposes only the first of its IdPs (${idpName(refs[0]!)}) in its GraphQL API, as before; the others (${refs
           .slice(1)
-          .map((ref) => ref.node.text())
+          .map(idpName)
           .join(", ")}) stay defined in the workspace.`,
       );
     }
@@ -485,7 +497,9 @@ class SectionsBuilder {
   private addSetting(setting: (typeof WORKSPACE_SETTINGS)[number]): void {
     const values = this.members.map((member) => {
       const entry = member.entries.find((candidate) => candidate.key === setting);
-      return { member, entry, text: entry?.value?.text() ?? DEFAULT_SETTINGS[setting] };
+      const literal = literalText(entry?.value);
+      const text = literal === null ? entry?.value?.text() : JSON.stringify(literal);
+      return { member, entry, text: text ?? DEFAULT_SETTINGS[setting] };
     });
     const distinct = new Set(values.map(({ text }) => text));
     const first = values.find(({ entry }) => entry?.value);

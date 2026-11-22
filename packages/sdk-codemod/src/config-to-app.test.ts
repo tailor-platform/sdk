@@ -4,7 +4,7 @@ import { createProject, runOnProject } from "./test-helpers/project";
 const APP_ID = "8b1f4c1e-2f6a-4c55-9a43-5d1f0c3e7a21";
 const CODEMODS = ["v3/config-to-app"];
 const TAKEOVER_WARNING =
-  "tailor.config.ts: the next `tailor deploy` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.";
+  "tailor.config.ts: the next `tailor deploy` asks to take over the resources that defineConfig() deployed. Check its plan with `tailor deploy --dry-run` first, then run it where it can prompt, or pass --yes.";
 
 function lock(fields: Record<string, unknown>): string {
   return `${JSON.stringify({ version: 2, targets: [], ...fields }, null, 2)}\n`;
@@ -93,9 +93,9 @@ describe("v3/config-to-app", () => {
   test.each([
     ['  db: { "shared-db": { external: true } },', 'db namespace "shared-db"'],
     ['  resolver: { "shared-api": { external: true } },', 'resolver namespace "shared-api"'],
-    ['  auth: { name: "shared-auth", external: true },', "auth"],
-    ["  auth: sharedAuth.asExternal(),", "auth"],
-    ['  idp: { name: "shared-idp", external: true },', "idp"],
+    ['  auth: { name: "shared-auth", external: true },', 'Auth service "shared-auth"'],
+    ["  auth: sharedAuth.asExternal(),", "Auth service"],
+    ['  idp: { name: "shared-idp", external: true },', 'IdP "shared-idp"'],
   ])("leaves a config that uses a service it does not define: %s", async (entry, service) => {
     const source = lines(
       'import { defineConfig } from "@tailor-platform/sdk";',
@@ -187,7 +187,91 @@ describe("v3/config-to-app", () => {
       ),
     );
     expect(result.warnings).toContain(
-      "tailor.config.ts: application shop exposes only the first of its IdPs (idp) in its GraphQL API, as before; the others (partnerIdp) stay defined in the workspace.",
+      "tailor.config.ts: application shop exposes only the first of its IdPs (shop-idp) in its GraphQL API, as before; the others (partner-idp) stay defined in the workspace.",
+    );
+  });
+
+  test.each([
+    [
+      "a spread",
+      ["const base = { cors: [] };", 'export default defineConfig({ ...base, name: "shop" });'],
+      "The config has a spread or a computed key, which may hold settings defineApp() does not take, so it was not converted.",
+    ],
+    [
+      "an idp it cannot read",
+      [
+        "const idps = [shopIdp, partnerIdp];",
+        'export default defineConfig({ name: "shop", idp: idps });',
+      ],
+      "The conversion cannot tell which IdPs `idp` holds, so the config was not converted. A defineApp() config takes one IdP; a config with several becomes a defineWorkspace() config with one application.",
+    ],
+  ])("leaves a config with %s", async (_, body, message) => {
+    const source = lines('import { defineConfig } from "@tailor-platform/sdk";', ...body);
+    const project = createProject({ "tailor.config.ts": source });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toBe(source);
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([message]);
+  });
+
+  test("converts a config with another file name that a deploy script names", async () => {
+    const project = createProject({
+      "package.json": `${JSON.stringify({ scripts: { deploy: "tailor deploy -c apps/shop/app.config.ts" } })}\n`,
+      "apps/shop/app.config.ts": lines(
+        'import { defineConfig } from "@tailor-platform/sdk";',
+        'export default defineConfig({ name: "shop" });',
+      ),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("apps/shop/app.config.ts")).toContain("export default defineApp({");
+  });
+
+  test("leaves a config that a setup target deploys together with a config outside the upgraded directory", async () => {
+    const config = (name: string) =>
+      lines(
+        'import { defineConfig } from "@tailor-platform/sdk";',
+        `export default defineConfig({ name: "${name}" });`,
+      );
+    const project = createProject({
+      ".git/": "",
+      ".github/tailor.lock": lock({
+        targets: [
+          {
+            kind: "branch",
+            workspaceName: "shop",
+            inputs: { dir: ".", apps: [{ dir: "apps/user" }, { dir: "apps/admin" }] },
+          },
+        ],
+      }),
+      "apps/user/tailor.config.ts": config("user"),
+      "apps/admin/tailor.config.ts": config("admin"),
+    });
+
+    const result = await runOnProject(CODEMODS, project, "apps/user");
+
+    expect(project.read("apps/user/tailor.config.ts")).toBe(config("user"));
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([
+      "../../.github/tailor.lock deploys this config together with ../admin, outside the upgraded directory, so it was not converted. Run the upgrade from a directory that holds all of them.",
+    ]);
+  });
+
+  test("converts the config and warns when the lock is not JSON", async () => {
+    const project = createProject({
+      "tailor.config.ts": lines(
+        'import { defineConfig } from "@tailor-platform/sdk";',
+        'export default defineConfig({ name: "shop" });',
+      ),
+      ".github/tailor.lock": "{",
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read(".github/tailor.lock")).toBe("{");
+    expect(result.warnings).toContain(
+      ".github/tailor.lock is not a JSON object, so the conversion left it as it is. Record each converted config under `workspaces` and remove its `appIds` entry by hand.",
     );
   });
 });

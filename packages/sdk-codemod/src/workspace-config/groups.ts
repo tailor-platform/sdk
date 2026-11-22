@@ -89,7 +89,7 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
   return uses;
 }
 
-class Groups {
+class UnionFind {
   private readonly parent = new Map<string, string>();
 
   find(key: string): string {
@@ -115,6 +115,24 @@ function owner(configs: ConfigModule[], ref: ServiceRef): ConfigModule | undefin
   );
 }
 
+/**
+ * How a report names a service, such as `db namespace "main"` or `Auth service "shop-auth"`.
+ * @param ref - The service
+ * @returns Its description
+ */
+function describeService(ref: ServiceRef): string {
+  const name = ref.name === null ? "" : ` "${ref.name}"`;
+  switch (ref.service) {
+    case "db":
+    case "resolver":
+      return `${ref.service} namespace${name}`;
+    case "auth":
+      return `Auth service${name}`;
+    case "idp":
+      return `IdP${name}`;
+  }
+}
+
 function configAt(configs: ConfigModule[], configOrDir: string): ConfigModule | undefined {
   return configs.find((config) => config.path === configOrDir || config.dir === configOrDir);
 }
@@ -132,8 +150,9 @@ export function groupConfigs(
   configs: ConfigModule[],
   uses: ConfigPathUse[],
   lock: Lock | null,
+  exists: (relativePath: string) => boolean,
 ): ConfigGroup[] {
-  const groups = new Groups();
+  const groups = new UnionFind();
   const blockers = new Map<string, Report[]>();
   const block = (config: ConfigModule, report: Report) => {
     blockers.set(config.path, [...(blockers.get(config.path) ?? []), report]);
@@ -146,10 +165,7 @@ export function groupConfigs(
       const defining = ref.name === null ? undefined : owner(configs, ref);
       if (defining) groups.union(config.path, defining.path);
       else {
-        const what =
-          ref.service === "db" || ref.service === "resolver"
-            ? `${ref.service} namespace "${ref.name}"`
-            : ref.service;
+        const what = describeService(ref);
         block(config, {
           file: config.path,
           node: ref.node,
@@ -160,20 +176,35 @@ export function groupConfigs(
   }
 
   const together = [
-    ...uses.filter((use) => use.deploysTogether).map((use) => ({ paths: use.paths, use })),
-    ...(lock?.multiConfigTargetDirs() ?? []).map((paths) => ({ paths, use: undefined })),
+    ...uses
+      .filter((use) => use.deploysTogether)
+      .map((use) => ({ paths: use.paths, source: `${use.file}:${use.line}` })),
+    ...(lock?.multiConfigTargetDirs() ?? []).map((paths) => ({ paths, source: lock!.path })),
   ];
-  for (const { paths, use } of together) {
+  for (const { paths, source } of together) {
     if (paths.length < 2) continue;
-    const members = paths.map((entry) => configAt(configs, entry));
-    const present = members.filter((member): member is ConfigModule => member !== undefined);
+    const present = paths.flatMap((entry) => configAt(configs, entry) ?? []);
     for (const member of present.slice(1)) groups.union(present[0]!.path, member.path);
+    if (present.length === 0) continue;
     const outside = paths.filter((entry) => entry.startsWith("../"));
-    if (outside.length > 0 && present.length > 0 && use) {
+    const unreadable = paths.filter(
+      (entry) =>
+        !entry.startsWith("../") &&
+        configAt(configs, entry) === undefined &&
+        (exists(entry) || exists(`${entry}/tailor.config.ts`)),
+    );
+    if (outside.length > 0) {
       block(present[0]!, {
         file: present[0]!.path,
         node: present[0]!.call,
-        message: `${use.file}:${use.line} deploys this config together with ${outside.join(", ")}, outside the project directory, so it was not converted. Run the upgrade from the directory that holds all of them.`,
+        message: `${source} deploys this config together with ${outside.join(", ")}, outside the upgraded directory, so it was not converted. Run the upgrade from a directory that holds all of them.`,
+      });
+    }
+    if (unreadable.length > 0) {
+      block(present[0]!, {
+        file: present[0]!.path,
+        node: present[0]!.call,
+        message: `${source} deploys this config together with ${unreadable.join(", ")}, which the conversion cannot read, so it was not converted.`,
       });
     }
   }

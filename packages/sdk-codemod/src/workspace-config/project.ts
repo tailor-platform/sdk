@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { parseRoot } from "../ast-grep-helpers";
+import { excerptOf, lineOf, parseRoot } from "../ast-grep-helpers";
 import type { LlmReviewFinding, ProjectFiles } from "../types";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -49,15 +49,6 @@ export class ModuleCache {
 }
 
 /**
- * The project-relative directory of a project-relative path, `.` for the project directory.
- * @param relativePath - Project-relative path
- * @returns Its directory
- */
-export function dirOf(relativePath: string): string {
-  return path.dirname(relativePath);
-}
-
-/**
  * The relative import specifier from a file to another file.
  * @param fromPath - Project-relative path of the importing file
  * @param toPath - Project-relative path of the imported file, or a module specifier relative to it
@@ -90,9 +81,9 @@ export function toFinding(report: Report): LlmReviewFinding {
   }
   return {
     file: report.file,
-    line: report.node.range().start.line + 1,
+    line: lineOf(report.node),
     message: report.message,
-    excerpt: report.excerpt ?? report.node.text().split("\n", 1)[0]!.trim(),
+    excerpt: report.excerpt ?? excerptOf(report.node),
   };
 }
 

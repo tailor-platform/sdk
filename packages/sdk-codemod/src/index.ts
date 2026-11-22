@@ -86,7 +86,8 @@ const main = defineCommand({
 
 - \`filesModified\`: files a codemod changed or created
 - \`filesDeleted\`: files a codemod deleted
-- \`warnings\`: files that may still need manual migration
+- \`warnings\`: files that may still need manual migration, and follow-up steps such as
+  commands to run
 - \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
   entry has the affected \`files\`, optional file-local \`findings\`, and a
   \`prompt\` — hand the prompt and files to an LLM (or follow it yourself) to

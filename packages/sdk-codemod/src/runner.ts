@@ -636,26 +636,30 @@ class ProjectOverlay {
   }
 
   /**
-   * Write the changes, or print them as diffs in a dry run.
+   * Write the changes, every written file before any deletion, or print them as diffs in a dry run.
    * @param dryRun - Whether to print instead of writing
    * @returns The absolute paths of the changed or created files and of the deleted files
    */
   async commit(dryRun: boolean): Promise<{ filesModified: string[]; filesDeleted: string[] }> {
-    const filesModified: string[] = [];
-    const filesDeleted: string[] = [];
-    for (const [absolute, content] of this.contents) {
-      const original = this.originals.get(absolute) ?? null;
-      if (content === original) continue;
-      (content === null ? filesDeleted : filesModified).push(absolute);
-      if (dryRun) {
-        printDiff(absolute, original, content);
-      } else if (content === null) {
-        await fs.promises.rm(absolute, { force: true });
-      } else {
-        await fs.promises.mkdir(path.dirname(absolute), { recursive: true });
-        await fs.promises.writeFile(absolute, content, "utf-8");
-      }
+    const changed = [...this.contents].filter(
+      ([absolute, content]) => content !== (this.originals.get(absolute) ?? null),
+    );
+    const filesModified = changed.flatMap(([absolute, content]) =>
+      content === null ? [] : [absolute],
+    );
+    const filesDeleted = changed.flatMap(([absolute, content]) =>
+      content === null ? [absolute] : [],
+    );
+    for (const [absolute, content] of changed) {
+      if (dryRun) printDiff(absolute, this.originals.get(absolute) ?? null, content);
     }
+    if (dryRun) return { filesModified, filesDeleted };
+    for (const [absolute, content] of changed) {
+      if (content === null) continue;
+      await fs.promises.mkdir(path.dirname(absolute), { recursive: true });
+      await fs.promises.writeFile(absolute, content, "utf-8");
+    }
+    for (const absolute of filesDeleted) await fs.promises.rm(absolute, { force: true });
     return { filesModified, filesDeleted };
   }
 }
@@ -707,7 +711,7 @@ export async function runCodemods(
   const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
 
   const absoluteTargetPath = path.resolve(targetPath);
-  const workspace = new ProjectOverlay(absoluteTargetPath);
+  const overlay = new ProjectOverlay(absoluteTargetPath);
   const warningsByFile = new Map<string, string[]>();
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
@@ -745,7 +749,7 @@ export async function runCodemods(
       if (lt.prompt) reviewTargets.push({ lt, input, snapshot: current });
     }
 
-    if (current !== original) workspace.set(absolute, original, current);
+    if (current !== original) overlay.set(absolute, original, current);
 
     const residualBySnapshot = new Map<string, ResidualEntry>();
     const residualFor = (content: string): ResidualEntry => {
@@ -838,50 +842,65 @@ export async function runCodemods(
   const projectWarnings: string[] = [];
   const projectTransforms = loaded.filter((lt) => lt.transformProject);
   if (projectTransforms.length > 0) {
-    const afterPerFile = workspace.snapshot();
+    const afterPerFile = overlay.snapshot();
     const paths = new Set(walked);
+    const mergedInto = new Map<string, string>();
+    const projectFindings = new Map<string, LlmReviewFinding[]>();
     for (const lt of projectTransforms) {
-      const changes = await lt.transformProject!(workspace.view(paths));
-      if (workspace.apply(changes, paths)) appliedCodemodIds.add(lt.id);
+      const changes = await lt.transformProject!(overlay.view(paths));
+      if (overlay.apply(changes, paths)) appliedCodemodIds.add(lt.id);
       projectWarnings.push(...(changes.warnings ?? []));
+      for (const [from, to] of Object.entries(changes.mergedInto ?? {})) mergedInto.set(from, to);
       if (changes.findings && changes.findings.length > 0) {
-        let files = suspiciousByCodemod.get(lt.id);
-        if (!files) {
-          files = new Set<string>();
-          suspiciousByCodemod.set(lt.id, files);
-        }
-        for (const finding of changes.findings) files.add(finding.file);
-        findingsByCodemod.set(lt.id, [
-          ...(findingsByCodemod.get(lt.id) ?? []),
-          ...changes.findings,
-        ]);
+        projectFindings.set(lt.id, [...(projectFindings.get(lt.id) ?? []), ...changes.findings]);
       }
     }
+    const isDeleted = (relative: string) =>
+      overlay.current(path.resolve(absoluteTargetPath, relative)) === null;
+    const relocate = (finding: LlmReviewFinding, fromPerFile: boolean): LlmReviewFinding[] => {
+      const absolute = path.resolve(absoluteTargetPath, finding.file);
+      const final = overlay.current(absolute);
+      if (final === null) {
+        const target = mergedInto.get(finding.file);
+        const content = target && overlay.current(path.resolve(absoluteTargetPath, target));
+        if (!target || !content) return [];
+        const index =
+          finding.excerpt === ""
+            ? -1
+            : content.split("\n").findIndex((line) => line.includes(finding.excerpt));
+        return [{ ...finding, file: target, line: index === -1 ? 1 : index + 1 }];
+      }
+      const prior = afterPerFile.get(absolute) ?? overlay.original(absolute);
+      if (!fromPerFile || prior === null || prior === final) return [finding];
+      return [{ ...finding, line: lineRemapper(prior, final)(finding.line) }];
+    };
     for (const [codemodId, findings] of findingsByCodemod) {
-      if (projectTransforms.some((lt) => lt.id === codemodId)) continue;
       findingsByCodemod.set(
         codemodId,
-        findings.flatMap((finding) => {
-          const absolute = path.resolve(absoluteTargetPath, finding.file);
-          const final = workspace.current(absolute);
-          if (final === null) return [];
-          const prior = afterPerFile.get(absolute) ?? workspace.original(absolute);
-          if (prior === null || prior === final) return [finding];
-          return [{ ...finding, line: lineRemapper(prior, final)(finding.line) }];
-        }),
+        findings.flatMap((finding) => relocate(finding, true)),
       );
     }
+    for (const [codemodId, findings] of projectFindings) {
+      findingsByCodemod.set(codemodId, [
+        ...(findingsByCodemod.get(codemodId) ?? []),
+        ...findings.flatMap((finding) => relocate(finding, false)),
+      ]);
+      if (!suspiciousByCodemod.has(codemodId)) suspiciousByCodemod.set(codemodId, new Set());
+    }
     for (const relative of walked) {
-      if (workspace.current(path.resolve(absoluteTargetPath, relative)) !== null) continue;
-      warningsByFile.delete(relative);
-      for (const files of suspiciousByCodemod.values()) files.delete(relative);
+      if (isDeleted(relative) && !mergedInto.has(relative)) warningsByFile.delete(relative);
     }
     for (const [codemodId, files] of suspiciousByCodemod) {
-      if (files.size === 0) suspiciousByCodemod.delete(codemodId);
+      const relocated = new Set(
+        [...files].flatMap((file) => (!isDeleted(file) ? [file] : (mergedInto.get(file) ?? []))),
+      );
+      for (const finding of findingsByCodemod.get(codemodId) ?? []) relocated.add(finding.file);
+      if (relocated.size === 0) suspiciousByCodemod.delete(codemodId);
+      else suspiciousByCodemod.set(codemodId, relocated);
     }
   }
 
-  const { filesModified, filesDeleted } = await workspace.commit(dryRun);
+  const { filesModified, filesDeleted } = await overlay.commit(dryRun);
   const warnings = [
     ...walked.flatMap((relative) => warningsByFile.get(relative) ?? []),
     ...projectWarnings,

@@ -2528,5 +2528,83 @@ describe("runCodemods", () => {
 
       expect(result.warnings).toEqual(["merged a.ts and c.ts"]);
     });
+
+    test("reports the findings on a merged file at the file its code moved to", async () => {
+      const detectorPath = path.join(os.tmpdir(), "transform-project-detector.ts");
+      const movePath = path.join(os.tmpdir(), "transform-project-move.ts");
+      await fs.promises.writeFile(
+        detectorPath,
+        `export default function transform() { return null; }
+        export function reviewFindings(source, filePath, relativePath) {
+          return source.split("\\n").flatMap((line, index) =>
+            line.includes("flagMe") ? [{ file: relativePath, line: index + 1, message: "flagged", excerpt: line.trim() }] : []);
+        }`,
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        movePath,
+        `export function transformProject(project) {
+          const c = project.read("c.ts");
+          if (c === undefined) return {};
+          return {
+            writes: { "merged.ts": "// header\\n" + c },
+            deletes: ["c.ts"],
+            mergedInto: { "c.ts": "merged.ts" },
+            findings: [{ file: "c.ts", line: 2, message: "moved", excerpt: "second();" }],
+          };
+        }`,
+        "utf-8",
+      );
+      const dir = await project({ "c.ts": "first();\nsecond();\nflagMe();\n" });
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/detect", detectorPath, undefined, undefined, {
+              prompt: "Fix.",
+            }),
+            scriptPath: detectorPath,
+          },
+          {
+            codemod: makeCodemod("test/move", movePath, undefined, undefined, { prompt: "Merge." }),
+            scriptPath: movePath,
+          },
+        ],
+        dir,
+        true,
+      );
+      await fs.promises.rm(detectorPath, { force: true });
+      await fs.promises.rm(movePath, { force: true });
+
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "test/detect",
+          prompt: "Fix.",
+          files: ["merged.ts"],
+          findings: [{ file: "merged.ts", line: 4, message: "flagged", excerpt: "flagMe();" }],
+        },
+        {
+          codemodId: "test/move",
+          prompt: "Merge.",
+          files: ["merged.ts"],
+          findings: [{ file: "merged.ts", line: 3, message: "moved", excerpt: "second();" }],
+        },
+      ]);
+    });
+
+    test("writes every file before deleting any", async () => {
+      const dir = await project({ "a.ts": "oldFunc();\n", "c.ts": "oldFunc(2);\n" });
+      const calls: string[] = [];
+      using _write = vi.spyOn(fs.promises, "writeFile").mockImplementation(async (file) => {
+        calls.push(`write ${path.relative(dir, file as string)}`);
+      });
+      using _rm = vi.spyOn(fs.promises, "rm").mockImplementation(async (file) => {
+        calls.push(`rm ${path.relative(dir, String(file))}`);
+      });
+
+      await runCodemods(merge, dir, false);
+
+      expect(calls).toEqual(["write a.ts", "write merged/b.ts", "rm c.ts"]);
+    });
   });
 });

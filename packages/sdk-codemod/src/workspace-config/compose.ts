@@ -4,10 +4,12 @@ import {
   entryKey,
   findImportStatements,
   importSource,
+  importSpecNames,
+  isInsideImportStatement,
   pairValue,
   parseRoot,
 } from "../ast-grep-helpers";
-import { parseConfigModule, SDK_MODULE, type ConfigModule } from "./config-module";
+import { callArguments, parseConfigModule, SDK_MODULE, type ConfigModule } from "./config-module";
 import { literalText, relativeSpecifier, type ModuleCache, type Report } from "./project";
 import { applyEdits, rebasePattern, replaceNode, type TextEdit } from "./text";
 import type { SgNode } from "@ast-grep/napi";
@@ -171,7 +173,7 @@ function renameEdits(root: SgNode, renames: ReadonlyMap<string, string>): TextEd
   })) {
     const renamed = renames.get(node.text());
     if (renamed === undefined) continue;
-    if (findImportAncestor(node)) continue;
+    if (isInsideImportStatement(node)) continue;
     edits.push(
       replaceNode(
         node,
@@ -182,21 +184,11 @@ function renameEdits(root: SgNode, renames: ReadonlyMap<string, string>): TextEd
   return edits;
 }
 
-function findImportAncestor(node: SgNode): boolean {
-  for (let current = node.parent(); current; current = current.parent()) {
-    if (current.kind() === "import_statement") return true;
-  }
-  return false;
-}
-
 function pluginExpressions(value: SgNode): string[] | null {
   if (value.kind() === "array") return arrayElements(value).map((element) => element.text());
   if (value.kind() !== "call_expression" || value.children()[0]?.text() !== "definePlugins")
     return null;
-  const args = value.children().find((child) => child.kind() === "arguments");
-  return (args?.children() ?? [])
-    .filter((child) => !["(", ")", ",", "comment"].includes(String(child.kind())))
-    .map((child) => child.text());
+  return callArguments(value).map((child) => child.text());
 }
 
 /**
@@ -444,7 +436,32 @@ export function composeMembers(
           ? ""
           : renamed.module.source.slice(previousEnd, statement.range().start.index);
       if (statements.length > 0 && /\n[ \t]*\n/u.test(gap)) statements.push("");
-      statements.push(statement.text());
+      const reexported =
+        statement.kind() === "export_statement"
+          ? statement.children().find((child) => child.kind() === "string")
+          : undefined;
+      const reexportPath = literalText(reexported);
+      if (reexported && reexportPath !== null && reexportPath.startsWith(".")) {
+        if (memberPaths.has(cache.resolve(member.path, reexportPath) ?? "")) {
+          composed.stops.push({
+            file: member.path,
+            node: statement,
+            message:
+              "The config re-exports another config's exports, which the merge puts in one module.",
+          });
+        }
+        const quote = reexported.text()[0];
+        const rewritten = relativeSpecifier(outputPath, path.join(member.dir, reexportPath));
+        statements.push(
+          applyEdits(
+            statement.text(),
+            [replaceNode(reexported, `${quote}${rewritten}${quote}`)],
+            statement.range().start.index,
+          ),
+        );
+      } else {
+        statements.push(statement.text());
+      }
       previousEnd = statement.range().end.index;
       for (const relativeUse of statement.findAll({
         rule: {
@@ -486,14 +503,13 @@ function importedNames(statement: SgNode): Array<Omit<ImportedName, "source">> {
       if (local) names.push({ kind: "namespace", local: local.text(), typeOnly });
     } else if (child.kind() === "named_imports") {
       for (const specifier of child.findAll({ rule: { kind: "import_specifier" } })) {
-        const ids = specifier.children().filter((grandchild) => grandchild.kind() === "identifier");
-        if (ids.length === 0) continue;
+        const spec = importSpecNames(specifier);
+        if (!spec) continue;
         names.push({
           kind: "named",
-          imported: ids[0]!.text(),
-          local: (ids[1] ?? ids[0]!).text(),
-          typeOnly:
-            typeOnly || specifier.children().some((grandchild) => grandchild.kind() === "type"),
+          imported: spec.importedName,
+          local: spec.localName,
+          typeOnly: typeOnly || spec.typeOnly,
         });
       }
     }

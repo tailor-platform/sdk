@@ -12,6 +12,8 @@ type LockApp = {
 };
 
 type LockTarget = {
+  file?: unknown;
+  cleanup?: { file?: unknown };
   kind?: unknown;
   workspaceName?: unknown;
   inputs?: {
@@ -30,7 +32,7 @@ type LockData = Record<string, unknown> & {
   targets?: LockTarget[];
   appIds?: Record<string, string>;
   workspaces?: string[];
-  autofix?: { inputs?: { dirs?: unknown } };
+  autofix?: { file?: unknown; inputs?: { dirs?: unknown } };
 };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -40,6 +42,14 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function normalizeDir(dir: string): string {
   const normalized = path.normalize(dir);
   return normalized === "" ? "." : normalized;
+}
+
+function hasUnsupportedJobs(inputs: NonNullable<LockTarget["inputs"]>): boolean {
+  return inputs.erdPreview === true || inputs.migrationTest === true;
+}
+
+function unsupportedJobsWarning(lockPath: string, target: LockTarget): string {
+  return `${lockPath}: the ${String(target.kind)} ${String(target.workspaceName)} workflow previews ERDs or runs migration tests, which a workspace config does not support yet. Run \`tailor setup ci ${String(target.kind)}\` again without --erd-preview and --migration-test`;
 }
 
 /** The `.github/tailor.lock` that governs the project, with the edits the conversions make. */
@@ -58,9 +68,9 @@ export class Lock {
   /**
    * Find the lock in the project directory or the nearest ancestor, without leaving the repository.
    * @param project - The project
-   * @returns The lock, or null when there is none or it is not a JSON object
+   * @returns The lock, the project-relative path of a lock that is not a JSON object, or null when there is none
    */
-  static find(project: ProjectFiles): Lock | null {
+  static find(project: ProjectFiles): Lock | string | null {
     let root = ".";
     for (let depth = 0; depth < MAX_ANCESTORS; depth += 1) {
       const lockPath = path.join(root, LOCK_FILENAME);
@@ -70,9 +80,9 @@ export class Lock {
         try {
           data = JSON.parse(source);
         } catch {
-          return null;
+          return lockPath;
         }
-        return isPlainObject(data) ? new Lock(project, lockPath, root, data as LockData) : null;
+        return isPlainObject(data) ? new Lock(project, lockPath, root, data as LockData) : lockPath;
       }
       if (project.exists(path.join(root, ".git"))) return null;
       const parent = path.join(root, "..");
@@ -80,6 +90,30 @@ export class Lock {
       root = parent;
     }
     return null;
+  }
+
+  /**
+   * The project-relative paths of the workflow files `tailor setup ci` generated.
+   * @returns The paths
+   */
+  managedWorkflowFiles(): string[] {
+    const workflows = [
+      ...(this.data.targets ?? []).flatMap((target) => [target, target.cleanup]),
+      this.data.autofix,
+    ];
+    return workflows.flatMap((workflow) =>
+      typeof workflow?.file === "string" ? [this.toProject(workflow.file)] : [],
+    );
+  }
+
+  /**
+   * The project-relative paths of the configs the lock records app ids for.
+   * @returns The paths
+   */
+  appIdConfigPaths(): string[] {
+    return isPlainObject(this.data.appIds)
+      ? Object.keys(this.data.appIds).map((key) => this.toProject(key))
+      : [];
   }
 
   /**
@@ -146,10 +180,17 @@ export class Lock {
         const dirs = inputs.apps.map((app) =>
           typeof app.dir === "string" ? normalizeDir(app.dir) : "",
         );
-        if (dirs.length !== members.size || !dirs.every((appDir) => members.has(appDir))) continue;
-        if (inputs.erdPreview === true || inputs.migrationTest === true) {
+        const matches = dirs.filter((appDir) => members.has(appDir)).length;
+        if (matches === 0) continue;
+        if (matches !== dirs.length || dirs.length !== members.size) {
           warnings.push(
-            `${LOCK_FILENAME}: the ${label} workflow previews ERDs or runs migration tests, which a workspace config does not support yet, so it still deploys the deleted configs. Run \`tailor setup ci ${String(target.kind)}\` again without --erd-preview and --migration-test.`,
+            `${this.path}: the ${label} workflow deploys some of the merged configs together with others, so it still deploys the deleted configs. Run \`tailor setup ci ${String(target.kind)}\` again for the workspace config.`,
+          );
+          continue;
+        }
+        if (hasUnsupportedJobs(inputs)) {
+          warnings.push(
+            `${unsupportedJobsWarning(this.path, target)}. Until then, it deploys the deleted configs.`,
           );
           continue;
         }
@@ -166,7 +207,7 @@ export class Lock {
         this.changed = true;
       } else if (typeof inputs.dir === "string" && members.has(normalizeDir(inputs.dir))) {
         warnings.push(
-          `${LOCK_FILENAME}: the ${label} workflow deploys only ${inputs.dir}, whose config was merged into ${this.toLock(path.join(dir, "tailor.config.ts"))}. Run \`tailor setup ci ${String(target.kind)}\` again for the workspace config, or delete the workflow.`,
+          `${this.path}: the ${label} workflow deploys only ${inputs.dir}, whose config was merged into ${this.toLock(path.join(dir, "tailor.config.ts"))}. Run \`tailor setup ci ${String(target.kind)}\` again for the workspace config, or delete the workflow.`,
         );
       }
     }
@@ -199,10 +240,7 @@ export class Lock {
     return (this.data.targets ?? []).flatMap((target) => {
       const inputs = target.inputs;
       if (typeof inputs?.dir !== "string" || normalizeDir(inputs.dir) !== configDir) return [];
-      if (inputs.erdPreview !== true && inputs.migrationTest !== true) return [];
-      return [
-        `${LOCK_FILENAME}: the ${String(target.kind)} ${String(target.workspaceName)} workflow previews ERDs or runs migration tests, which a workspace config does not support yet. Run \`tailor setup ci ${String(target.kind)}\` again without --erd-preview and --migration-test.`,
-      ];
+      return hasUnsupportedJobs(inputs) ? [`${unsupportedJobsWarning(this.path, target)}.`] : [];
     });
   }
 

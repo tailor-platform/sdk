@@ -2,9 +2,9 @@ import * as path from "pathe";
 import picomatch from "picomatch";
 import { arrayElements, entryKey, objectEntries, pairValue } from "../ast-grep-helpers";
 import { SOURCE_EXTENSIONS } from "../walk-files";
+import { callArguments, calleeName, type ConfigModule } from "./config-module";
 import { literalText, type ModuleCache, type Report } from "./project";
 import { addProperty, applyEdits, replaceNode, type TextEdit } from "./text";
-import type { ConfigModule } from "./config-module";
 import type { GroupFacts } from "./sections";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -20,6 +20,35 @@ const AUTH_TRIGGERS: ReadonlySet<string> = new Set([
   "authAccessTokenRevokedTrigger",
   "authAccessTokenTrigger",
 ]);
+
+/** The service an executor trigger names, which a merge with several of them makes it name. */
+type TriggerService = {
+  calls: ReadonlySet<string>;
+  option: "idp" | "auth";
+  singular: string;
+  plural: string;
+  count: (facts: GroupFacts) => number;
+  service: (context: MemberContext) => string | null;
+};
+
+const TRIGGER_SERVICES: readonly TriggerService[] = [
+  {
+    calls: IDP_TRIGGERS,
+    option: "idp",
+    singular: "IdP",
+    plural: "IdPs",
+    count: (facts) => facts.idpCount,
+    service: (context) => context.idpName,
+  },
+  {
+    calls: AUTH_TRIGGERS,
+    option: "auth",
+    singular: "Auth service",
+    plural: "Auth services",
+    count: (facts) => facts.authCount,
+    service: (context) => context.authName,
+  },
+];
 
 /** What a merged config's functions relied on its config for. */
 export type MemberContext = {
@@ -110,17 +139,6 @@ function functionFiles(cache: ModuleCache, member: ConfigModule): string[] {
   ];
 }
 
-function calleeName(call: SgNode): string | null {
-  const callee = call.children()[0];
-  if (callee?.kind() === "identifier") return callee.text();
-  if (callee?.kind() === "member_expression") return callee.children().at(-1)?.text() ?? null;
-  return null;
-}
-
-function callArgs(call: SgNode): SgNode | null {
-  return call.children().find((child) => child.kind() === "arguments") ?? null;
-}
-
 /**
  * Rewrite what the merge makes ambiguous in the functions of the merged configs: a string
  * invoker naming a machine user several Auth services define, an IdP or authAccessToken trigger
@@ -195,35 +213,26 @@ export function rewriteFunctionFiles(
 
     for (const call of module.root.findAll({ rule: { kind: "call_expression" } })) {
       const name = calleeName(call);
-      const option =
-        name !== null && IDP_TRIGGERS.has(name) && facts.idpCount > 1
-          ? "idp"
-          : name !== null && AUTH_TRIGGERS.has(name) && facts.authCount > 1
-            ? "auth"
-            : null;
-      if (option === null) continue;
-      const args = callArgs(call);
-      const values =
-        args
-          ?.children()
-          .filter((child) => !["(", ")", ",", "comment"].includes(String(child.kind()))) ?? [];
-      const options = values[0];
+      const trigger = TRIGGER_SERVICES.find(
+        (candidate) => name !== null && candidate.calls.has(name) && candidate.count(facts) > 1,
+      );
+      if (!trigger) continue;
+      const args = call.children().find((child) => child.kind() === "arguments");
+      const options = callArguments(call)[0];
       if (options && options.kind() !== "object") {
         report(
           call,
-          `The merged workspace has several ${option === "idp" ? "IdPs" : "Auth services"}; set \`${option}\` on this trigger.`,
+          `The merged workspace has several ${trigger.plural}; set \`${trigger.option}\` on this trigger.`,
         );
         continue;
       }
-      if (options && objectEntries(options).some((entry) => entryKey(entry) === option)) continue;
-      needs(
-        call,
-        option === "idp" ? "IdP" : "Auth service",
-        option === "idp" ? owner?.idpName : owner?.authName,
-        (service) =>
-          options
-            ? addProperty(module.source, options, `${option}: ${JSON.stringify(service)}`)
-            : replaceNode(args!, `({ ${option}: ${JSON.stringify(service)} })`),
+      if (options && objectEntries(options).some((entry) => entryKey(entry) === trigger.option))
+        continue;
+      const property = (service: string) => `${trigger.option}: ${JSON.stringify(service)}`;
+      needs(call, trigger.singular, owner && trigger.service(owner), (service) =>
+        options
+          ? addProperty(module.source, options, property(service))
+          : replaceNode(args!, `({ ${property(service)} })`),
       );
     }
 

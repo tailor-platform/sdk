@@ -6,7 +6,7 @@ import { createProject, runOnProject, type TestProject } from "./test-helpers/pr
 
 const CODEMODS = ["v3/config-to-app", "v3/config-to-workspace"];
 const TAKEOVER_WARNING =
-  "tailor.config.ts: the next `tailor deploy` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.";
+  "tailor.config.ts: the next `tailor deploy` asks to take over the resources that defineConfig() deployed. Check its plan with `tailor deploy --dry-run` first, then run it where it can prompt, or pass --yes.";
 
 function lines(...source: string[]): string {
   return `${source.join("\n")}\n`;
@@ -138,7 +138,10 @@ describe("v3/config-to-workspace", () => {
         "export const namespace = sharedDb;",
       ),
     );
-    expect(result.warnings).toEqual([TAKEOVER_WARNING]);
+    expect(result.warnings).toEqual([
+      TAKEOVER_WARNING,
+      "tailor.config.ts: run `tailor generate` to generate its type definitions, which replace the ones the conversion deleted (apps/user/tailor.d.ts).",
+    ]);
     expect(findingsOf(result).map(({ file, line, message }) => ({ file, line, message }))).toEqual([
       {
         file: "package.json",
@@ -389,7 +392,7 @@ describe("v3/config-to-workspace", () => {
     expect(result.warnings).toEqual(
       expect.arrayContaining([
         ".github/tailor.lock: the preview user workflow deploys only apps/user, whose config was merged into tailor.config.ts. Run `tailor setup ci preview` again for the workspace config, or delete the workflow.",
-        ".github/tailor.lock: the branch shop workflow previews ERDs or runs migration tests, which a workspace config does not support yet, so it still deploys the deleted configs. Run `tailor setup ci branch` again without --erd-preview and --migration-test.",
+        ".github/tailor.lock: the branch shop workflow previews ERDs or runs migration tests, which a workspace config does not support yet. Run `tailor setup ci branch` again without --erd-preview and --migration-test. Until then, it deploys the deleted configs.",
         ".github/tailor.lock: the autofix workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
       ]),
     );
@@ -632,7 +635,7 @@ describe("v3/config-to-workspace", () => {
       multiApplication["apps/user/tailor.config.ts"],
     );
     expect(findingsOf(result).map((finding) => finding.message)).toContain(
-      "tailor.config.ts already exists in the project directory, so the configs deployed together with this one were not merged into it.",
+      "tailor.config.ts already exists in the upgraded directory, so the configs deployed together with this one were not merged into it.",
     );
   });
 
@@ -643,5 +646,240 @@ describe("v3/config-to-workspace", () => {
     const loaded = await loadConverted(project);
 
     expect(loaded.kind).toBe("workspace");
+  });
+
+  test("reports what it could not rewrite in a merged config at the workspace config", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'const dir = "db";',
+        'export default defineConfig({ name: "a", db: { a: { files: [`./${dir}/*.ts`] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ file, line, message }) => ({ file, line, message })),
+    ).toEqual([
+      {
+        file: "tailor.config.ts",
+        line: output.split("\n").findIndex((line) => line.includes("`./${dir}/*.ts`")) + 1,
+        message: "This `files` pattern is not a literal, so it still names files relative to a.",
+      },
+    ]);
+  });
+
+  test("leaves the configs when a namespace is not an object literal", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'const shared = { files: ["./db/*.ts"] };',
+        'export default defineConfig({ name: "a", db: { shared } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toBeUndefined();
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([
+      'The `db` namespace "shared" is not an object literal, so its files patterns cannot be rewritten relative to ..',
+    ]);
+  });
+
+  test("treats settings that differ only in quotes as the same", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        "export default defineConfig({ name: \"a\", maintenanceMode: 'migration', db: { a: { files: [] } } });",
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toContain("  maintenanceMode: 'migration',\n");
+  });
+
+  test("reports a seedPlugin machine user that several merged Auth services define", async () => {
+    const config = (name: string, plugins: string) =>
+      lines(
+        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+        'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";',
+        `const ${name}Auth = defineAuth("${name}-auth", { machineUsers: { admin: {} } });`,
+        `export default defineConfig({ name: "${name}", auth: ${name}Auth });`,
+        plugins,
+      );
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": config(
+        "a",
+        'export const plugins = [seedPlugin({ distPath: "./seed", machineUserName: "admin" })];',
+      ),
+      "b/tailor.config.ts": config("b", ""),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(findingsOf(result).map((finding) => finding.message)).toContain(
+      'seedPlugin seeds as machine user "admin", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.',
+    );
+  });
+
+  test("leaves a second group of configs that would take the same workspace config path", async () => {
+    const config = (name: string) =>
+      lines(
+        SDK_IMPORT,
+        `export default defineConfig({ name: "${name}", db: { ${name}: { files: [] } } });`,
+      );
+    const project = createProject({
+      "package.json": `${JSON.stringify({
+        scripts: {
+          shop: "tailor deploy -c a/tailor.config.ts,b/tailor.config.ts",
+          blog: "tailor deploy -c c/tailor.config.ts,d/tailor.config.ts",
+        },
+      })}\n`,
+      "a/tailor.config.ts": config("a"),
+      "b/tailor.config.ts": config("b"),
+      "c/tailor.config.ts": config("c"),
+      "d/tailor.config.ts": config("d"),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("c/tailor.config.ts")).toBe(config("c"));
+    expect(findingsOf(result).map(({ file, message }) => ({ file, message }))).toContainEqual({
+      file: "c/tailor.config.ts",
+      message:
+        "Another group of configs was merged into tailor.config.ts, so the configs deployed together with this one were not merged. Run the upgrade from a directory that holds only this group's configs, or merge them by hand.",
+    });
+  });
+
+  test("leaves the workflows tailor setup ci generated to `tailor setup ci update`, and reports the others", async () => {
+    const workflow = lines(
+      "env:",
+      "  TAILOR_CONFIG_PATH: apps/user/tailor.config.ts,apps/admin/tailor.config.ts",
+    );
+    const project = createProject({
+      ...multiApplication,
+      ".github/workflows/tailor-shop.yml": workflow,
+      ".github/workflows/deploy.yml": workflow,
+      ".github/tailor.lock": `${JSON.stringify({
+        version: 2,
+        targets: [
+          {
+            kind: "branch",
+            workspaceName: "shop",
+            file: ".github/workflows/tailor-shop.yml",
+            inputs: { dir: ".", apps: [{ dir: "apps/user" }, { dir: "apps/admin" }] },
+          },
+        ],
+      })}\n`,
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(findingsOf(result).filter(({ file }) => file.startsWith(".github/"))).toEqual([
+      {
+        file: ".github/workflows/deploy.yml",
+        line: 2,
+        excerpt: "TAILOR_CONFIG_PATH: apps/user/tailor.config.ts,apps/admin/tailor.config.ts",
+        message:
+          "This workflow names apps/user/tailor.config.ts, apps/admin/tailor.config.ts, which the conversion merged into tailor.config.ts. Point it at tailor.config.ts, or generate a workflow for the workspace config with `tailor setup ci`.",
+      },
+    ]);
+    expect(result.warnings).toContain(
+      ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
+    );
+  });
+
+  test("rewrites re-exports of and in the merged configs", async () => {
+    const project = createProject({
+      ...multiApplication,
+      "apps/user/tailor.config.ts": multiApplication["apps/user/tailor.config.ts"].replace(
+        'export const sharedDb = "shared-db";',
+        'export const sharedDb = "shared-db";\nexport { roles } from "./roles";',
+      ),
+      "apps/user/roles.ts": 'export const roles = ["ADMIN"];\n',
+      "shared/index.ts": 'export { sharedDb } from "../apps/user/tailor.config";\n',
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toContain(
+      'export { roles } from "./apps/user/roles";\n',
+    );
+    expect(project.read("shared/index.ts")).toBe('export { sharedDb } from "../tailor.config";\n');
+  });
+
+  test("warns about a setup target that deploys only some of the merged configs with others", async () => {
+    const project = createProject({
+      ...multiApplication,
+      ".github/tailor.lock": `${JSON.stringify({
+        version: 2,
+        targets: [
+          {
+            kind: "branch",
+            workspaceName: "shop",
+            inputs: {
+              dir: ".",
+              apps: [{ dir: "apps/user" }, { dir: "apps/admin" }, { dir: "apps/blog" }],
+            },
+          },
+        ],
+      })}\n`,
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(JSON.parse(project.read(".github/tailor.lock")!).targets[0].inputs.apps).toHaveLength(3);
+    expect(result.warnings).toContain(
+      ".github/tailor.lock: the branch shop workflow deploys some of the merged configs together with others, so it still deploys the deleted configs. Run `tailor setup ci branch` again for the workspace config.",
+    );
+  });
+
+  test("leaves a config deployed together with a config it cannot read", async () => {
+    const config = lines(
+      SDK_IMPORT,
+      'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+    );
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": config,
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'const config = defineConfig({ name: "b" });',
+        "export default config;",
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("a/tailor.config.ts")).toBe(config);
+    expect(
+      result.llmReviews
+        .flatMap((review) => review.findings ?? [])
+        .filter((finding) => finding.file === "a/tailor.config.ts")
+        .map((finding) => finding.message),
+    ).toEqual([
+      "package.json:1 deploys this config together with b/tailor.config.ts, which the conversion cannot read, so it was not converted.",
+    ]);
   });
 });

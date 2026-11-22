@@ -174,6 +174,11 @@ export interface ProjectChanges {
   writes?: Record<string, string>;
   /** Files to delete. */
   deletes?: string[];
+  /**
+   * Deleted files whose code now lives in a written file, by deleted path: findings on a deleted
+   * file are reported at the line of that file that holds their excerpt.
+   */
+  mergedInto?: Record<string, string>;
   /** Follow-up steps for the user. */
   warnings?: string[];
   /** Code the transform left for a manual migration, reviewed with the codemod's `prompt`. */

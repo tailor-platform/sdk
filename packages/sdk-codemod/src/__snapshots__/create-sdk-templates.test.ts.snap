@@ -34,7 +34,7 @@ exports[`next-major codemods on create-sdk templates > content-mapper 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -87,7 +87,7 @@ exports[`next-major codemods on create-sdk templates > executor 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -139,7 +139,7 @@ exports[`next-major codemods on create-sdk templates > generators 1`] = `
     },
   ],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -169,7 +169,7 @@ exports[`next-major codemods on create-sdk templates > hello-world 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -211,7 +211,7 @@ exports[`next-major codemods on create-sdk templates > inventory-management 1`] 
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -281,7 +281,7 @@ exports[`next-major codemods on create-sdk templates > multi-application 1`] = `
     },
   ],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -319,7 +319,7 @@ exports[`next-major codemods on create-sdk templates > resolver 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -353,7 +353,7 @@ exports[`next-major codemods on create-sdk templates > static-web-site 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -386,7 +386,7 @@ exports[`next-major codemods on create-sdk templates > tailordb 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;
@@ -430,7 +430,7 @@ exports[`next-major codemods on create-sdk templates > workflow 1`] = `
   },
   "llmReviews": [],
   "warnings": [
-    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.",
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
   ],
 }
 `;

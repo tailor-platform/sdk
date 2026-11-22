@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import {
   arrayElements,
   callArgument,
@@ -9,7 +10,7 @@ import {
 } from "../ast-grep-helpers";
 import { findDefineConfigCalls } from "../define-config";
 import { isTailorConfigPath } from "../plugin-export-bindings";
-import { dirOf, literalText, type ModuleCache, type Report, type SourceModule } from "./project";
+import { literalText, type ModuleCache, type Report, type SourceModule } from "./project";
 import type { SgNode } from "@ast-grep/napi";
 
 export const SDK_MODULE = "@tailor-platform/sdk";
@@ -161,14 +162,24 @@ function resolveString(
   return binding ? literalText(binding.value) : null;
 }
 
-function calleeName(call: SgNode): string | null {
+/**
+ * The name a call's callee ends with: `f` for `f()` and `a.b.f()`.
+ * @param call - The call expression
+ * @returns The name, or null for another callee
+ */
+export function calleeName(call: SgNode): string | null {
   const callee = call.children()[0];
   if (callee?.kind() === "identifier") return callee.text();
   if (callee?.kind() === "member_expression") return callee.children().at(-1)?.text() ?? null;
   return null;
 }
 
-function callArguments(call: SgNode): SgNode[] {
+/**
+ * The arguments of a call.
+ * @param call - The call expression
+ * @returns Its argument nodes
+ */
+export function callArguments(call: SgNode): SgNode[] {
   const args = call.children().find((child) => child.kind() === "arguments");
   return args
     ? args.children().filter((child) => !["(", ")", ",", "comment"].includes(String(child.kind())))
@@ -232,6 +243,12 @@ function namespaceRefs(
 ): ServiceRef[] {
   if (value.kind() !== "object") return [];
   return objectEntries(value).flatMap((entry): ServiceRef[] => {
+    if (entry.kind() === "shorthand_property_identifier") {
+      const name = entry.text();
+      return [
+        { service, name, external: false, node: entry, nameExpression: JSON.stringify(name) },
+      ];
+    }
     if (entry.kind() !== "pair") return [];
     const key = entry.children()[0]!;
     const namespaceValue = pairValue(entry);
@@ -383,7 +400,7 @@ export function parseConfigModule(
   const nameEntry = entries.find((entry) => entry.key === "name");
   return {
     path: file,
-    dir: dirOf(file),
+    dir: path.dirname(file),
     module,
     call: exported.value,
     callee: exported.value.children()[0]!,
@@ -396,14 +413,20 @@ export function parseConfigModule(
 }
 
 /**
- * Find the `defineConfig()` configs of a project.
+ * Find the `defineConfig()` configs of a project: its `tailor.config.*` files and the files that
+ * scripts, workflows, and the lock name as configs.
  * @param cache - Module cache of the project
+ * @param named - Project-relative paths that scripts, workflows, and the lock name as configs
  * @returns The convertible configs and the reports for the others
  */
-export function scanConfigs(cache: ModuleCache): ConfigScan {
+export function scanConfigs(cache: ModuleCache, named: readonly string[] = []): ConfigScan {
   const scan: ConfigScan = { configs: [], unconvertible: [] };
-  for (const file of cache.project.paths.toSorted()) {
-    if (!isTailorConfigPath(file)) continue;
+  const paths = new Set(cache.project.paths);
+  const candidates = new Set([
+    ...cache.project.paths.filter((file) => isTailorConfigPath(file)),
+    ...named.filter((file) => paths.has(file)),
+  ]);
+  for (const file of [...candidates].toSorted()) {
     const source = cache.project.read(file);
     if (source === undefined) continue;
     const config = parseConfigModule(cache, file, source);

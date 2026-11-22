@@ -16,8 +16,10 @@ const WORKSPACE_CONFIG = "tailor.config.ts";
 export type ConversionKind = "app" | "workspace";
 
 function takeoverWarning(configPath: string): string {
-  return `${configPath}: the next \`tailor deploy\` asks to take over the resources this config deployed before the conversion. Run it where it can prompt, or pass --yes.`;
+  return `${configPath}: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.`;
 }
+
+const SEED_MACHINE_USER = /\bseedPlugin\s*\([^)]*?\bmachineUserName\s*:\s*(["'`])([^"'`]+)\1/u;
 
 /**
  * Facts about a group's services that the merge depends on.
@@ -48,6 +50,7 @@ class Conversion {
   readonly changes: Required<Omit<ProjectChanges, "findings">> & { findings: Report[] } = {
     writes: {},
     deletes: [],
+    mergedInto: {},
     warnings: [],
     findings: [],
   };
@@ -59,12 +62,34 @@ class Conversion {
     readonly project: ProjectFiles,
     readonly cache: ModuleCache,
     readonly lock: Lock | null,
+    /** Project-relative path of a lock file that is not a JSON object. */
+    readonly invalidLock: string | null,
   ) {}
 
   convertApp(group: ConfigGroup): void {
     const [member] = group.members;
     if (!member) return;
+    const hidden = member.entries.find((entry) => entry.key === null);
+    if (hidden) {
+      this.changes.findings.push({
+        file: member.path,
+        node: hidden.node,
+        message:
+          "The config has a spread or a computed key, which may hold settings defineApp() does not take, so it was not converted.",
+      });
+      return;
+    }
     const idps = member.services.filter((ref) => ref.service === "idp");
+    const unreadableIdp = idps.find((ref) => ref.name === null);
+    if (unreadableIdp) {
+      this.changes.findings.push({
+        file: member.path,
+        node: unreadableIdp.node,
+        message:
+          "The conversion cannot tell which IdPs `idp` holds, so the config was not converted. A defineApp() config takes one IdP; a config with several becomes a defineWorkspace() config with one application.",
+      });
+      return;
+    }
     if (idps.length > 1) {
       const sections = collectSections([member], member.path, groupFacts([member]));
       if (sections.stops.length > 0) {
@@ -94,16 +119,21 @@ class Conversion {
           b.services.filter((ref) => ref.external).length || a.path.localeCompare(b.path),
     );
     const outputPath = WORKSPACE_CONFIG;
-    if (
-      (this.project.exists(outputPath) || outputPath in this.changes.writes) &&
-      !members.some((member) => member.path === outputPath)
-    ) {
-      this.changes.findings.push({
-        file: members[0]!.path,
-        node: members[0]!.call,
-        message: `${outputPath} already exists in the project directory, so the configs deployed together with this one were not merged into it.`,
-      });
-      return;
+    if (!members.some((member) => member.path === outputPath)) {
+      const taken =
+        outputPath in this.changes.writes
+          ? `Another group of configs was merged into ${outputPath}, so the configs deployed together with this one were not merged. Run the upgrade from a directory that holds only this group's configs, or merge them by hand.`
+          : this.project.exists(outputPath)
+            ? `${outputPath} already exists in the upgraded directory, so the configs deployed together with this one were not merged into it.`
+            : null;
+      if (taken !== null) {
+        this.changes.findings.push({
+          file: members[0]!.path,
+          node: members[0]!.call,
+          message: taken,
+        });
+        return;
+      }
     }
     const composed = composeMembers(this.cache, members, outputPath);
     const facts = groupFacts(composed.members);
@@ -146,6 +176,7 @@ class Conversion {
       merged,
       outputPath,
       uses,
+      new Set(this.lock?.managedWorkflowFiles() ?? []),
     );
 
     const pluginsText =
@@ -170,9 +201,27 @@ class Conversion {
     for (const member of members) this.converted.add(member.path);
     Object.assign(this.changes.writes, rewrites.writes, references.writes);
     this.changes.deletes.push(...merged, ...references.deletes);
+    for (const memberPath of merged) this.changes.mergedInto[memberPath] = outputPath;
 
     const pluginNames = plugins.map((plugin) => /^([A-Za-z_$][\w$]*)\s*\(/u.exec(plugin)?.[1]);
     const lines = text.split("\n");
+    const seedMachineUser = plugins
+      .map((plugin) => SEED_MACHINE_USER.exec(plugin)?.[2])
+      .find((name) => name !== undefined);
+    if (
+      seedMachineUser !== undefined &&
+      facts.authCount > 1 &&
+      [...(facts.machineUsers?.values() ?? [])].filter((users) => users.includes(seedMachineUser))
+        .length !== 1
+    ) {
+      const line = lines.findIndex((candidate) => candidate.includes("seedPlugin(")) + 1;
+      this.changes.findings.push({
+        file: outputPath,
+        line: Math.max(line, 1),
+        excerpt: "seedPlugin",
+        message: `seedPlugin seeds as machine user "${seedMachineUser}", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.`,
+      });
+    }
     pluginNames.forEach((name, index) => {
       if (name === undefined || pluginNames.indexOf(name) === index) return;
       const line =
@@ -202,6 +251,11 @@ class Conversion {
       ...sections.warnings,
       ...references.warnings,
     );
+    if (references.deletes.length > 0) {
+      this.changes.warnings.push(
+        `${outputPath}: run \`tailor generate\` to generate its type definitions, which replace the ones the conversion deleted (${references.deletes.join(", ")}).`,
+      );
+    }
     if (retarget) {
       for (const label of retarget.retargeted) {
         this.changes.warnings.push(
@@ -215,6 +269,11 @@ class Conversion {
   result(): ProjectChanges {
     const lockText = this.lock?.render();
     if (lockText) this.changes.writes[this.lock!.path] = lockText;
+    if (this.invalidLock !== null && Object.keys(this.changes.writes).length > 0) {
+      this.changes.warnings.push(
+        `${this.invalidLock} is not a JSON object, so the conversion left it as it is. Record each converted config under \`workspaces\` and remove its \`appIds\` entry by hand.`,
+      );
+    }
     return { ...this.changes, findings: this.changes.findings.map(toFinding) };
   }
 }
@@ -227,11 +286,17 @@ class Conversion {
  */
 export function convertConfigs(project: ProjectFiles, kind: ConversionKind): ProjectChanges {
   const cache = new ModuleCache(project);
-  const scan = scanConfigs(cache);
-  const lock = Lock.find(project);
+  const found = Lock.find(project);
+  const lock = found instanceof Lock ? found : null;
   const uses = findConfigPathUses(cache);
-  const groups = groupConfigs(scan.configs, uses, lock);
-  const conversion = new Conversion(project, cache, lock);
+  const scan = scanConfigs(cache, [
+    ...uses.flatMap((use) => use.paths),
+    ...(lock?.appIdConfigPaths() ?? []),
+  ]);
+  const groups = groupConfigs(scan.configs, uses, lock, (relativePath) =>
+    project.exists(relativePath),
+  );
+  const conversion = new Conversion(project, cache, lock, typeof found === "string" ? found : null);
   if (kind === "app") conversion.changes.findings.push(...scan.unconvertible);
   for (const group of groups) {
     const isApp = group.members.length === 1;
