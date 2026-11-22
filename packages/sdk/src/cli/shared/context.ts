@@ -34,6 +34,7 @@ import {
   toError,
 } from "./errors";
 import { logger } from "./logger";
+import { denotesPinnedMachineUser } from "./machine-user";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 import {
@@ -794,7 +795,7 @@ export async function loadMachineUserName(
   }
 
   if (entry.machine_user && entry.machine_user_override === "deny") {
-    if (explicit && explicit !== entry.machine_user) {
+    if (explicit && !denotesPinnedMachineUser(entry.machine_user, explicit)) {
       const details =
         explicitMachineUser.source === "env"
           ? `The machine user is being set to "${explicit}" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile's pinned machine user "${entry.machine_user}".`
@@ -811,7 +812,7 @@ export async function loadMachineUserName(
         )}.`,
       });
     }
-    return entry.machine_user;
+    return explicit?.includes("/") ? explicit : entry.machine_user;
   }
 
   return explicit || entry.machine_user;

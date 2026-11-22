@@ -74,6 +74,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, isCLIError, locatedCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { authNamespacesDefining } from "#/cli/shared/machine-user";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
 import { assertDefined } from "#/utils/assert";
@@ -1516,16 +1517,16 @@ export function resolveScriptMachineUsers(
         });
       continue;
     }
-    const defining = authServices.filter((auth) => machineUsersOf(auth).includes(configured));
-    const [auth, ...alsoDefining] = defining;
-    if (auth === undefined) undefinedMachineUsers.push({ namespace, machineUser: configured });
+    const defining = authNamespacesDefining(
+      configured,
+      authServices.map((auth) => ({ name: auth.config.name, machineUsers: machineUsersOf(auth) })),
+    );
+    const [authNamespace, ...alsoDefining] = defining;
+    if (authNamespace === undefined)
+      undefinedMachineUsers.push({ namespace, machineUser: configured });
     else if (alsoDefining.length > 0) {
-      ambiguous.push({
-        namespace,
-        machineUser: configured,
-        authNamespaces: defining.map(({ config }) => config.name),
-      });
-    } else byNamespace.set(namespace, { namespace: auth.config.name, machineUserName: configured });
+      ambiguous.push({ namespace, machineUser: configured, authNamespaces: defining });
+    } else byNamespace.set(namespace, { namespace: authNamespace, machineUserName: configured });
   }
   if (missing.length > 0) {
     throw locatedCLIError(
