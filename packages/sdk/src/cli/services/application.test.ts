@@ -1343,12 +1343,10 @@ describe("loadApplication workflow start rewriting", () => {
     }
   });
 
-  test("rewrites .start() on a default-exported workflow created through a helper function", async () => {
+  function workflowConfig(callerBody: string) {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
-    const syncFile = path.join(tmpDir, "sync.ts");
-    const callerFile = path.join(tmpDir, "caller.ts");
     fs.writeFileSync(
-      syncFile,
+      path.join(tmpDir, "sync.ts"),
       `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -1359,28 +1357,40 @@ export default defineSync(syncStep);
 `,
     );
     fs.writeFileSync(
-      callerFile,
+      path.join(tmpDir, "caller.ts"),
       `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 import syncWorkflow from "./sync";
 
 export const callerJob = createWorkflowJob({
   name: "caller-job",
-  body: async () => await syncWorkflow.start({}),
+  body: async () => ${callerBody},
 });
 export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
 `,
     );
-    const config = {
+    return {
       ...defineConfig({ name: "testApp", workflow: { files: ["sync.ts", "caller.ts"] } }),
       path: path.join(tmpDir, "tailor.config.ts"),
     };
+  }
+
+  test("rewrites .start() on a default-exported workflow created through a helper function", async () => {
+    const config = workflowConfig("await syncWorkflow.start({})");
 
     const { workflowBuildResult } = await loadApplication({ config });
 
     expect(workflowBuildResult?.bundledCode.get("caller-job")).toMatch(
       /startWorkflow\([`'"]sync-gl-balances/,
     );
+  });
+
+  test("stops at a string invoker when the config has no Auth service", async () => {
+    const config = workflowConfig('await syncWorkflow.start({}, { invoker: "admin" })');
+
+    await expect(loadApplication({ config })).rejects.toMatchObject({
+      code: "WORKFLOW_START_INVOKER_AUTH_REQUIRED",
+    });
   });
 });
 

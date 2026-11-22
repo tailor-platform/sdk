@@ -24,6 +24,10 @@ export interface StartModuleBindings {
 
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
+  /**
+   * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
+   * config has no Auth service, and a string invoker stops the build.
+   */
   authNamespace?: string;
   /** Name of the job function a job is started under (default: the job's own name) */
   jobFunctionName?: (jobName: string) => string;
@@ -107,7 +111,7 @@ export interface LoadedWorkflowSource {
 /**
  * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
- * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
+ * @param authNamespace - Namespace of the config's only Auth service; undefined for a config with none or several
  * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
  * @param loadedWorkflows - Default-exported workflows read by importing the workflow files, which also covers workflows the source text alone cannot identify
  * @param tsconfigCache - tsconfig lookup cache shared with the bundlers in this CLI run

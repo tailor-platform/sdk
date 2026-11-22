@@ -303,7 +303,7 @@ export function transformStartCalls(
       text: prefix,
     });
     const normalizeOptions = call.kind === "workflow" && optionsRange;
-    if (normalizeOptions && startContext.machineUserAuthNamespaces) {
+    if (normalizeOptions && authNamespace === undefined) {
       const invoker = resolveStartInvoker({
         call,
         currentFilePath,
@@ -335,6 +335,7 @@ export function transformStartCalls(
 
 type StartInvokerErrorCode =
   | "WORKFLOW_START_INVOKER_AMBIGUOUS"
+  | "WORKFLOW_START_INVOKER_AUTH_REQUIRED"
   | "WORKFLOW_START_INVOKER_NOT_FOUND"
   | "WORKFLOW_START_INVOKER_UNRESOLVED";
 
@@ -359,8 +360,8 @@ function startInvokerError(params: StartInvokerErrorParams): Error {
   );
 }
 
-const OBJECT_INVOKER_SUGGESTION =
-  'Pass the invoker as a string literal, or name its Auth service with { invoker: { namespace: "<auth>", machineUserName: "<machine user>" } }.';
+const NAMED_AUTH_INVOKER =
+  '{ invoker: { namespace: "<auth>", machineUserName: "<machine user>" } }';
 
 type StartOptionsNode = NonNullable<ResolvedStartCall["options"]>;
 
@@ -398,12 +399,13 @@ function staticString(node: StartOptionsNode): string | undefined {
 type ResolveStartInvokerParams = {
   call: ResolvedStartCall;
   currentFilePath: string;
-  machineUserAuthNamespaces: ReadonlyMap<string, readonly string[]>;
+  /** Auth namespaces that define each machine user; undefined for a config without an Auth service. */
+  machineUserAuthNamespaces: ReadonlyMap<string, readonly string[]> | undefined;
 };
 
 /**
- * Resolve the string-literal invoker of a workflow start in a config with several Auth services,
- * whose runtime cannot tell which Auth service a machine user name belongs to.
+ * Resolve the string-literal invoker of a workflow start in a config without exactly one Auth
+ * service, whose runtime cannot tell which Auth service a machine user name belongs to.
  * @param params - The start call, its file, and the Auth namespaces that define each machine user
  * @returns The rewrite of a string-literal invoker into the form that names its Auth service, or undefined when the call needs none
  */
@@ -411,13 +413,16 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
   const { call, currentFilePath, machineUserAuthNamespaces } = params;
   const fail = (code: StartInvokerErrorCode, message: string, suggestion: string) =>
     startInvokerError({ call, currentFilePath, code, message, suggestion });
+  const unresolvedReason = machineUserAuthNamespaces
+    ? "so the build cannot tell which Auth service the invoker belongs to"
+    : "and the config has no Auth service, so the build cannot tell whether the invoker names one";
   if (!call.options) return undefined;
   const options = unwrapExpression(call.options);
   if (options.type === "Identifier" && options.name === "undefined") return undefined;
   if (options.type !== "ObjectExpression") {
     throw fail(
       "WORKFLOW_START_INVOKER_UNRESOLVED",
-      "passes options the build cannot read, so it cannot tell which Auth service the invoker belongs to.",
+      `passes options the build cannot read, ${unresolvedReason}.`,
       "Pass the options as an object literal.",
     );
   }
@@ -425,7 +430,7 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
   if (!invoker && options.properties.some((property) => property.type !== "Property")) {
     throw fail(
       "WORKFLOW_START_INVOKER_UNRESOLVED",
-      "spreads its options, so the build cannot tell which Auth service the invoker belongs to.",
+      `spreads its options, ${unresolvedReason}.`,
       "Write the invoker in the options object literal.",
     );
   }
@@ -434,8 +439,17 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
   if (machineUserName === undefined) {
     throw fail(
       "WORKFLOW_START_INVOKER_UNRESOLVED",
-      "passes an invoker the build cannot read, and the config has several Auth services.",
-      OBJECT_INVOKER_SUGGESTION,
+      `passes an invoker the build cannot read, and the config has ${machineUserAuthNamespaces ? "several Auth services" : "no Auth service"}.`,
+      machineUserAuthNamespaces
+        ? `Pass the invoker as a string literal, or name its Auth service with ${NAMED_AUTH_INVOKER}.`
+        : `Name its Auth service with ${NAMED_AUTH_INVOKER}.`,
+    );
+  }
+  if (!machineUserAuthNamespaces) {
+    throw fail(
+      "WORKFLOW_START_INVOKER_AUTH_REQUIRED",
+      `runs as "${machineUserName}", but the config has no Auth service.`,
+      `Name the Auth service that defines the machine user: { invoker: { namespace: "<auth>", machineUserName: "${machineUserName}" } }, or configure an Auth service.`,
     );
   }
   const namespaces = machineUserAuthNamespaces.get(machineUserName) ?? [];
