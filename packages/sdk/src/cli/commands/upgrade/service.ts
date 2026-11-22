@@ -36,6 +36,17 @@ function printUpgradeSummary(output: RunOutput, dryRun: boolean): void {
     }
   }
 
+  const filesDeleted = output.filesDeleted ?? [];
+  if (filesDeleted.length > 0) {
+    logger.log("");
+    logger.info(
+      `${dryRun ? "Files that would be deleted" : "Deleted files"} (${filesDeleted.length}):`,
+    );
+    for (const file of filesDeleted) {
+      logger.log(`  ${styles.path(file)}`);
+    }
+  }
+
   if (output.warnings.length > 0) {
     logger.log("");
     logger.warn(`Manual attention needed (${output.warnings.length}):`);

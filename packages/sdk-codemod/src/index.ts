@@ -84,7 +84,8 @@ const main = defineCommand({
   notes: `Applies the codemods matching the \`--from\`/\`--to\` version range to the
 \`--target\` directory, then writes a JSON summary to \`stdout\`:
 
-- \`filesModified\`: files a codemod changed
+- \`filesModified\`: files a codemod changed or created
+- \`filesDeleted\`: files a codemod deleted
 - \`warnings\`: files that may still need manual migration
 - \`llmReviews\`: changes the codemods could not fully migrate on their own. Each
   entry has the affected \`files\`, optional file-local \`findings\`, and a
@@ -136,6 +137,7 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
       codemodsApplied: 0,
       codemodsSkipped: 0,
       filesModified: [],
+      filesDeleted: [],
       warnings: [],
       errors: [],
       llmReviews: [],
@@ -162,11 +164,14 @@ human-readable form, so \`stdout\` stays pure JSON for piping.`,
       output.codemodsApplied = result.appliedCodemodIds.size;
       output.codemodsSkipped = codemods.length - result.appliedCodemodIds.size;
       output.filesModified = result.filesModified;
+      output.filesDeleted = result.filesDeleted;
       output.warnings = result.warnings;
       output.llmReviews = result.llmReviews;
 
       if (result.changed) {
-        process.stderr.write(`  ${result.filesModified.length} file(s) modified\n`);
+        const deleted =
+          result.filesDeleted.length > 0 ? `, ${result.filesDeleted.length} deleted` : "";
+        process.stderr.write(`  ${result.filesModified.length} file(s) modified${deleted}\n`);
       } else {
         process.stderr.write("  No changes needed\n");
       }

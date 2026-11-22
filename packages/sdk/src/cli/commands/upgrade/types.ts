@@ -5,6 +5,8 @@ export interface RunOutput {
   codemodsApplied: number;
   codemodsSkipped: number;
   filesModified: string[];
+  /** Files the codemods deleted; absent from runners that cannot delete files. */
+  filesDeleted?: string[];
   warnings: string[];
   errors: Array<{ codemodId: string; message: string }>;
   /** Changes a codemod could not migrate on its own, with the prompt that describes them. */

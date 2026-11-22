@@ -2392,4 +2392,141 @@ describe("runCodemods", () => {
       ]);
     });
   });
+
+  describe("project transforms", () => {
+    const renamePath = path.join(os.tmpdir(), "transform-project-rename.ts");
+    const projectPath = path.join(os.tmpdir(), "transform-project-merge.ts");
+    const findingPath = path.join(os.tmpdir(), "transform-project-finding.ts");
+
+    aroundEach(async (runTest) => {
+      await fs.promises.writeFile(
+        renamePath,
+        `export default function transform(source) {
+          return source.includes("oldFunc") ? source.replace(/\\boldFunc\\b/g, "newFunc") : null;
+        }`,
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        projectPath,
+        `export function transformProject(project) {
+          const a = project.read("a.ts");
+          if (a === undefined || !project.paths.includes("c.ts")) return {};
+          return {
+            writes: { "merged/b.ts": a + project.read("c.ts") },
+            deletes: ["c.ts"],
+            warnings: ["merged a.ts and c.ts"],
+          };
+        }`,
+        "utf-8",
+      );
+      await fs.promises.writeFile(
+        findingPath,
+        `export function transformProject(project) {
+          if (!project.paths.includes("flag.ts")) return {};
+          return { findings: [{ file: "flag.ts", line: 1, message: "merge by hand", excerpt: "flag" }] };
+        }`,
+        "utf-8",
+      );
+      await runTest();
+      for (const file of [renamePath, projectPath, findingPath]) {
+        await fs.promises.rm(file, { force: true });
+      }
+    });
+
+    async function project(files: Record<string, string>): Promise<string> {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-project-test-"));
+      tmpDir = dir;
+      for (const [file, content] of Object.entries(files)) {
+        await fs.promises.writeFile(path.join(dir, file), content, "utf-8");
+      }
+      return dir;
+    }
+
+    const merge = [
+      { codemod: makeCodemod("test/rename", renamePath), scriptPath: renamePath },
+      {
+        codemod: makeCodemod("test/merge", projectPath, undefined, ["oldFunc"]),
+        scriptPath: projectPath,
+      },
+    ];
+
+    test("reads per-file results, creates and deletes files", async () => {
+      const dir = await project({ "a.ts": "oldFunc();\n", "c.ts": "oldFunc(2);\n" });
+
+      const result = await runCodemods(merge, dir, false);
+
+      expect(await fs.promises.readFile(path.join(dir, "merged/b.ts"), "utf-8")).toBe(
+        "newFunc();\nnewFunc(2);\n",
+      );
+      expect(fs.existsSync(path.join(dir, "c.ts"))).toBe(false);
+      expect(result.filesModified.map((file) => path.relative(dir, file)).toSorted()).toEqual([
+        "a.ts",
+        "merged/b.ts",
+      ]);
+      expect(result.filesDeleted.map((file) => path.relative(dir, file))).toEqual(["c.ts"]);
+      expect(result.warnings).toEqual(["merged a.ts and c.ts"]);
+      expect([...result.appliedCodemodIds].toSorted()).toEqual(["test/merge", "test/rename"]);
+    });
+
+    test("leaves the project unchanged in a dry run and diffs created and deleted files", async () => {
+      const dir = await project({ "a.ts": "oldFunc();\n", "c.ts": "oldFunc(2);\n" });
+      const stderr: string[] = [];
+      using _stderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+        stderr.push(String(chunk));
+        return true;
+      });
+
+      const result = await runCodemods(merge, dir, true);
+
+      expect(fs.readdirSync(dir).toSorted()).toEqual(["a.ts", "c.ts"]);
+      expect(await fs.promises.readFile(path.join(dir, "c.ts"), "utf-8")).toBe("oldFunc(2);\n");
+      expect(result.filesDeleted.map((file) => path.relative(dir, file))).toEqual(["c.ts"]);
+      const output = stderr.join("");
+      expect(output).toContain(`+++ ${path.join(dir, "merged/b.ts")}`);
+      expect(output).toContain("+newFunc(2);");
+      expect(output).toContain(`--- ${path.join(dir, "c.ts")}`);
+      expect(output).toContain("-oldFunc(2);");
+    });
+
+    test("reviews a project transform only where it reports findings", async () => {
+      const codemod = makeCodemod("test/finding", findingPath, undefined, undefined, {
+        prompt: "Merge the configs by hand.",
+      });
+      const withoutFinding = await project({ "a.ts": "const a = 1;\n" });
+
+      expect(
+        (await runCodemods([{ codemod, scriptPath: findingPath }], withoutFinding, true))
+          .llmReviews,
+      ).toEqual([]);
+
+      const withFinding = await project({ "flag.ts": "flag();\n" });
+      expect(
+        (await runCodemods([{ codemod, scriptPath: findingPath }], withFinding, true)).llmReviews,
+      ).toEqual([
+        {
+          codemodId: "test/finding",
+          prompt: "Merge the configs by hand.",
+          files: ["flag.ts"],
+          findings: [{ file: "flag.ts", line: 1, message: "merge by hand", excerpt: "flag" }],
+        },
+      ]);
+    });
+
+    test("drops the warnings of a file a project transform deletes", async () => {
+      const dir = await project({ "a.ts": "const a = 1;\n", "c.ts": "oldFunc(2);\n" });
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/merge", projectPath, undefined, ["oldFunc"]),
+            scriptPath: projectPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.warnings).toEqual(["merged a.ts and c.ts"]);
+    });
+  });
 });

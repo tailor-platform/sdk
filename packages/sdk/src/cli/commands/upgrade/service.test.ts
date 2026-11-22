@@ -137,6 +137,27 @@ describe("upgrade service", () => {
     expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
   });
 
+  test.each([
+    [false, "Deleted files (1):"],
+    [true, "Files that would be deleted (1):"],
+  ])("should list the files the codemods deleted (dry run: %s)", async (dryRun, heading) => {
+    const upgrade = await setupUpgrade("2.0.0");
+    const { spawnSync } = await import("node:child_process");
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({
+        stdout: JSON.stringify(makeOutput({ filesDeleted: ["/test/apps/a/tailor.config.ts"] })),
+      }),
+    );
+
+    await upgrade({ from: "1.33.0", dryRun, path: "/test" });
+
+    const { logger } = await import("#/cli/shared/logger");
+    expect(vi.mocked(logger.info).mock.calls.map((c) => c[0])).toContain(heading);
+    expect(vi.mocked(logger.log).mock.calls.map((c) => c[0])).toContain(
+      "  /test/apps/a/tailor.config.ts",
+    );
+  });
+
   test("should keep the changes left for review in the result it prints", async () => {
     const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
