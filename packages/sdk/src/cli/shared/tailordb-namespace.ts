@@ -1,4 +1,6 @@
+import { assertDefined } from "#/utils/assert";
 import { MAX_PAGE_SIZE } from "./client";
+import { CLIError } from "./errors";
 
 type ListTailorDBTypesClient = {
   listTailorDBTypes(args: {
@@ -20,13 +22,13 @@ type ResolveTableNamespacesArgs = {
 };
 
 /**
- * Resolve TailorDB table names to namespace names.
+ * Find every namespace that has each TailorDB table, matching names case-insensitively.
  * @param args - Resolution inputs
- * @returns Table to namespace map for found tables
+ * @returns Namespaces of each found table, in the given namespace order; tables no namespace has are left out
  */
 export async function resolveTableNamespaces(
   args: ResolveTableNamespacesArgs,
-): Promise<Map<string, string>> {
+): Promise<Map<string, string[]>> {
   const requestedTablesByLowercase = new Map<string, string[]>();
   for (const tableName of args.tableNames) {
     const key = tableName.toLowerCase();
@@ -38,14 +40,10 @@ export async function resolveTableNamespaces(
     requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const unresolvedTables = new Set(args.tableNames);
-  const tableNamespaceMap = new Map<string, string>();
+  const tableNamespaces = new Map<string, string[]>();
 
   for (const namespace of args.namespaces) {
-    if (unresolvedTables.size === 0) {
-      break;
-    }
-
+    const unfound = new Set(args.tableNames);
     let pageToken = "";
     do {
       const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
@@ -56,48 +54,48 @@ export async function resolveTableNamespaces(
       });
 
       for (const type of tailordbTypes) {
-        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-        if (!matchedRequestedTypes) {
-          continue;
-        }
-
-        for (const requestedTableName of matchedRequestedTypes) {
-          if (tableNamespaceMap.has(requestedTableName)) {
-            continue;
-          }
-          tableNamespaceMap.set(requestedTableName, namespace);
-          unresolvedTables.delete(requestedTableName);
+        for (const requestedTableName of requestedTablesByLowercase.get(type.name.toLowerCase()) ??
+          []) {
+          if (!unfound.delete(requestedTableName)) continue;
+          const namespaces = tableNamespaces.get(requestedTableName) ?? [];
+          namespaces.push(namespace);
+          tableNamespaces.set(requestedTableName, namespaces);
         }
       }
 
       pageToken = nextPageToken;
-    } while (pageToken && unresolvedTables.size > 0);
+    } while (pageToken && unfound.size > 0);
   }
 
-  return tableNamespaceMap;
+  return tableNamespaces;
 }
 
-type ResolveTableNamespaceArgs = {
-  workspaceId: string;
-  namespaces: string[];
-  tableName: string;
-  client: ListTailorDBTypesClient;
-};
-
 /**
- * Resolve a single TailorDB table name to namespace.
+ * Resolve each TailorDB table name to the one namespace that has it.
  * @param args - Resolution inputs
- * @returns Namespace name if found
+ * @returns Namespace of each found table; tables no namespace has are left out
  */
-export async function resolveTableNamespace(
-  args: ResolveTableNamespaceArgs,
-): Promise<string | null> {
-  const tableNamespaceMap = await resolveTableNamespaces({
-    workspaceId: args.workspaceId,
-    namespaces: args.namespaces,
-    tableNames: [args.tableName],
-    client: args.client,
-  });
-
-  return tableNamespaceMap.get(args.tableName) ?? null;
+export async function resolveUniqueTableNamespaces(
+  args: ResolveTableNamespacesArgs,
+): Promise<Map<string, string>> {
+  const found = await resolveTableNamespaces(args);
+  const ambiguous = [...found]
+    .filter(([, namespaces]) => namespaces.length > 1)
+    .map(([table, namespaces]) => ({ table, namespaces }));
+  if (ambiguous.length > 0) {
+    throw CLIError({
+      code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+      message: `Several TailorDB namespaces have ${ambiguous
+        .map(({ table, namespaces }) => `table "${table}" (${namespaces.join(", ")})`)
+        .join(", ")}.`,
+      suggestion: "Pass --namespace to choose the namespace.",
+      context: { tables: ambiguous },
+    });
+  }
+  return new Map(
+    [...found].map(([table, namespaces]) => [
+      table,
+      assertDefined(namespaces[0], "table namespace missing"),
+    ]),
+  );
 }

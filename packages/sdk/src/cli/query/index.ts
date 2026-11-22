@@ -17,16 +17,28 @@ import { bundleQueryScript } from "../bundler/query/query-bundler";
 import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
-import { extractAllNamespaces } from "../shared/config";
-import { loadConfig, type LoadedConfig } from "../shared/config-loader";
+import {
+  assertDeclaredNamespace,
+  configOf,
+  declaredNamespaces,
+  machineUserAuths,
+  selectApplication,
+} from "../shared/config-file";
+import {
+  loadConfigFile,
+  type LoadedConfig,
+  type LoadedConfigFile,
+  type LoadedWorkspaceConfig,
+} from "../shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "../shared/context";
 import { getEditorCommand, openInEditor } from "../shared/editor";
 import { CLIError, internalError, isCLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
+import { parseMachineUserRef, resolveMachineUser } from "../shared/machine-user";
 import { parseBoolean } from "../shared/parse-boolean";
 import { parseOptions } from "../shared/parse-options";
 import { executeScript } from "../shared/script-executor";
-import { resolveTableNamespaces } from "../shared/tailordb-namespace";
+import { resolveUniqueTableNamespaces } from "../shared/tailordb-namespace";
 import { mapQueryExecutionError, sqlParseError } from "./errors";
 import { isGraphQLInputComplete } from "./graphql-repl";
 import { isSqlInputComplete } from "./sql-repl";
@@ -37,23 +49,51 @@ import {
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import { queryEngines, type QueryEngine } from "./types";
+import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
-// strip unknown keys
-const queryBaseOptionsSchema = z.object({
+const queryBaseFields = {
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
   configPath: z.string().optional(),
   engine: queryEngineSchema,
   machineUser: z.string().optional(),
   machineUserSource: z.enum(["option", "env"]).optional(),
-});
-const queryOptionsSchema = queryBaseOptionsSchema.extend({
-  query: z.string(),
-});
+  /** TailorDB namespace a SQL query runs in, in place of the one its tables give. */
+  namespace: z.string().optional(),
+  /** Application a GraphQL query runs against; needed when the config deploys several. */
+  app: z.string().optional(),
+};
+
+function checkEngineOptions(
+  options: { engine: QueryEngine; namespace?: string | undefined; app?: string | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  if (options.engine === "sql" && options.app !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["app"],
+      message: "--app applies to --engine gql only; a SQL query takes --namespace.",
+    });
+  }
+  if (options.engine === "gql" && options.namespace !== undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["namespace"],
+      message: "--namespace applies to --engine sql only; a GraphQL query takes --app.",
+    });
+  }
+}
+
+// strip unknown keys
+const queryBaseOptionsSchema = z.object(queryBaseFields).superRefine(checkEngineOptions);
+// strip unknown keys
+const queryOptionsSchema = z
+  .object({ ...queryBaseFields, query: z.string() })
+  .superRefine(checkEngineOptions);
 
 type QueryOptions = z.input<typeof queryOptionsSchema>;
 type QueryBaseOptions = z.input<typeof queryBaseOptionsSchema>;
@@ -123,7 +163,7 @@ async function getNamespaceFromSqlQuery(
     });
   }
 
-  const tableNamespaceMap = await resolveTableNamespaces({
+  const tableNamespaceMap = await resolveUniqueTableNamespaces({
     workspaceId,
     namespaces,
     tableNames,
@@ -178,30 +218,26 @@ async function loadOptions(options: QueryBaseOptions) {
     workspaceId: validated.workspaceId,
     profile: validated.profile,
   });
-  const { config } = await loadConfig(options.configPath);
-  const namespaces = extractAllNamespaces(config);
-  const { application } = await client.getApplication({
-    workspaceId,
-    applicationName: config.name,
-  });
+  const loaded = await loadConfigFile(options.configPath);
+  const namespaces = declaredNamespaces(loaded);
+  if (validated.namespace !== undefined) assertDeclaredNamespace(loaded, validated.namespace);
 
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${config.name} does not have an auth configuration.`,
-    });
-  }
+  const application =
+    validated.engine === "gql" || loaded.kind === "config"
+      ? await loadQueryApplication({ client, workspaceId, loaded, app: validated.app })
+      : undefined;
+  const invoker = resolveQueryInvoker({ loaded, application, machineUser });
 
   const { machineUser: machineUserResource } = await client.getAuthMachineUser({
     workspaceId: workspaceId,
-    authNamespace: application.authNamespace,
-    name: machineUser,
+    authNamespace: invoker.namespace,
+    name: invoker.machineUserName,
   });
 
   if (!machineUserResource) {
     throw CLIError({
       code: "MACHINE_USER_NOT_FOUND",
-      message: `Machine user ${machineUser} not found.`,
+      message: `Machine user ${invoker.machineUserName} not found.`,
     });
   }
 
@@ -209,11 +245,59 @@ async function loadOptions(options: QueryBaseOptions) {
     engine: validated.engine,
     client,
     workspaceId,
-    config,
+    config: configOf(loaded),
     application,
+    invoker,
     machineUserResource,
-    namespaces,
+    namespaces: validated.namespace === undefined ? namespaces : [validated.namespace],
   };
+}
+
+type LoadQueryApplicationParams = {
+  client: Client;
+  workspaceId: string;
+  loaded: LoadedConfigFile;
+  app: string | undefined;
+};
+
+async function loadQueryApplication(params: LoadQueryApplicationParams): Promise<Application> {
+  const { client, workspaceId, loaded, app } = params;
+  const { name } = selectApplication(loaded, app);
+  const { application } = await client.getApplication({ workspaceId, applicationName: name });
+  if (!application?.authNamespace) {
+    throw CLIError({
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Application ${name} does not have an auth configuration.`,
+    });
+  }
+  return application;
+}
+
+type ResolveQueryInvokerParams = {
+  loaded: LoadedConfigFile;
+  /** Application the query runs against; its Auth service is the only one the invoker may use. */
+  application: Application | undefined;
+  machineUser: string;
+};
+
+function resolveQueryInvoker(params: ResolveQueryInvokerParams): AuthInvokerObject {
+  const { loaded, application, machineUser } = params;
+  if (!application)
+    return resolveMachineUser({ value: machineUser, auths: machineUserAuths(loaded) });
+  const { authNamespace: requested } = parseMachineUserRef(machineUser);
+  if (requested !== undefined && requested !== application.authNamespace) {
+    throw CLIError({
+      code: "QUERY_MACHINE_USER_AUTH_MISMATCH",
+      message: `Machine user "${machineUser}" belongs to Auth service "${requested}", but application ${application.name} uses "${application.authNamespace}".`,
+      suggestion: `Use a machine user of Auth service "${application.authNamespace}", or pass the application that uses "${requested}" to --app.`,
+      context: { machineUser, authNamespace: application.authNamespace, app: application.name },
+    });
+  }
+  const auth = machineUserAuths(loaded).find(({ name }) => name === application.authNamespace);
+  return resolveMachineUser({
+    value: machineUser,
+    auths: [{ name: application.authNamespace, machineUsers: auth?.machineUsers }],
+  });
 }
 
 function queryExecutionFailedError(reason: string | undefined): CLIError {
@@ -415,13 +499,11 @@ export async function query(options: QueryOptions): Promise<QueryDispatchResult>
 async function prepareQueryExecutor(
   options: QueryBaseOptions,
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
+  const loadedOptions = await loadOptions(options);
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
-    await loadOptions(options);
+    loadedOptions;
   const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
-  const invoker = create(AuthInvokerSchema, {
-    namespace: application.authNamespace,
-    machineUserName: machineUserResource.name,
-  });
+  const invoker = create(AuthInvokerSchema, loadedOptions.invoker);
 
   return async (queryString: string) => {
     let namespace: string | undefined;
@@ -439,11 +521,17 @@ async function prepareQueryExecutor(
           return reorderSqlColumns(result, config, namespace, queryString);
         }
         case "gql":
-          return await gqlQuery(client, invoker, application, machineUserResource, {
-            workspaceId,
-            bundledCode,
-            query: queryString,
-          });
+          return await gqlQuery(
+            client,
+            invoker,
+            assertDefined(application, "gql application missing"),
+            machineUserResource,
+            {
+              workspaceId,
+              bundledCode,
+              query: queryString,
+            },
+          );
         default:
           throw internalError(`Unsupported query engine: ${engine satisfies never}`);
       }
@@ -690,7 +778,7 @@ async function queryGql(options: QuerySharedOptions): Promise<GQLQueryDispatchRe
 
 async function reorderSqlColumns(
   result: SQLQueryDispatchResult,
-  config: LoadedConfig,
+  config: LoadedConfig | LoadedWorkspaceConfig,
   namespace: string,
   sqlQuery: string,
 ): Promise<SQLQueryDispatchResult> {
@@ -797,8 +885,17 @@ export const queryCommand = defineAppCommand({
       "machine-user": arg(z.string().optional(), {
         alias: "m",
         description:
-          "Machine user name for query execution. Falls back to the active profile's default machine user.",
+          "Machine user name for query execution, or <auth>/<name> to name its Auth service. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+      }),
+      namespace: arg(z.string().optional(), {
+        alias: "n",
+        description:
+          "TailorDB namespace a SQL query runs in; omit to infer it from the tables the query references",
+      }),
+      app: arg(z.string().optional(), {
+        description:
+          "Application a GraphQL query runs against; required when the config deploys several",
       }),
       "newline-on-enter": arg(z.boolean().optional(), {
         description:
@@ -845,6 +942,8 @@ export const queryCommand = defineAppCommand({
       engine: args.engine,
       machineUser: args["machine-user"],
       machineUserSource: resolveMachineUserInputSource(args["machine-user"]),
+      namespace: args.namespace,
+      app: args.app,
     };
 
     if (mode.mode === "abort") {
