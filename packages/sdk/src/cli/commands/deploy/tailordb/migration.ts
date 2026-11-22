@@ -72,7 +72,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/types";
 import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { CLIError, isCLIError, locatedCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
@@ -1482,12 +1482,14 @@ export function resolveScriptMachineUsers(
   if (namespaces.size === 0) return undefined;
   const authServices = source.application.authServices;
   const [onlyAuth, ...otherAuths] = authServices;
+  const configPath = source.config.path;
   if (onlyAuth === undefined) {
-    throw CLIError({
+    throw locatedCLIError(configPath, {
       code: "AUTH_CONFIG_REQUIRED",
       message: "Auth configuration is required to execute migration scripts.",
       suggestion:
         "Define auth with machine users in this config; migration scripts run as one of them.",
+      context: { namespaces: [...namespaces] },
     });
   }
   const machineUsersOf = (auth: (typeof authServices)[number]) =>
@@ -1523,7 +1525,7 @@ export function resolveScriptMachineUsers(
     } else byNamespace.set(namespace, { namespace: auth.config.name, machineUserName: configured });
   }
   if (missing.length > 0) {
-    throw CLIError({
+    throw locatedCLIError(configPath, {
       code: "MACHINE_USER_REQUIRED",
       message: `No machine user available for migration execution in ${describeNamespaces(missing)}.`,
       suggestion:
@@ -1538,7 +1540,7 @@ export function resolveScriptMachineUsers(
     const described = undefinedMachineUsers
       .map(({ namespace, machineUser }) => `'${machineUser}' (namespace '${namespace}')`)
       .join(", ");
-    throw CLIError({
+    throw locatedCLIError(configPath, {
       code: "MACHINE_USER_NOT_FOUND",
       message:
         otherAuths.length === 0
@@ -1555,7 +1557,7 @@ export function resolveScriptMachineUsers(
     });
   }
   if (ambiguous.length > 0) {
-    throw CLIError({
+    throw locatedCLIError(configPath, {
       code: "MACHINE_USER_AMBIGUOUS",
       message: `Machine user for migration execution is defined in several Auth services: ${ambiguous
         .map(

@@ -1,4 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
@@ -389,6 +390,8 @@ describe("planPipeline (resolver service level)", () => {
   });
 
   describe("invoker", () => {
+    const resolverFile = "/test/resolvers/test-resolver.ts";
+
     function createPipelineWithInvoker(
       invoker: string | { namespace: string; machineUserName: string },
     ): ResolverService {
@@ -396,7 +399,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: {
-          "test-resolver": {
+          [resolverFile]: {
             name: "test-resolver",
             operation: "query",
             output: { type: "string", metadata: {} },
@@ -427,17 +430,19 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
-      await expect(
-        planPipeline(
-          buildCtx({
-            client: createMockClient([], {}, {}, ["portal"]),
-            application: createExternalAuthApplication("portl"),
-          }),
-        ),
-      ).rejects.toMatchObject({
+      const error = (await planPipeline(
+        buildCtx({
+          client: createMockClient([], {}, {}, ["portal"]),
+          application: createExternalAuthApplication("portl"),
+        }),
+      ).catch((error: unknown) => error)) as Error;
+
+      expect(error).toMatchObject({
         code: "INVOKER_MACHINE_USER_NOT_FOUND",
         message: expect.stringContaining('Resolver "test-resolver"'),
+        context: { resolver: "test-resolver", file: resolverFile },
       });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: resolverFile });
     });
 
     test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
@@ -864,7 +869,7 @@ describe("processResolver invoker mapping", () => {
       namespace: "test-ns",
       config: {},
       resolvers: {
-        myResolver: {
+        "/test/resolvers/myResolver.ts": {
           name: "myResolver",
           operation: "query",
           body: () => "hello",
@@ -923,12 +928,19 @@ describe("processResolver invoker mapping", () => {
     });
   });
 
-  test("string invoker without auth service configured throws", async () => {
+  test("string invoker without auth service configured points at the config", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    await expect(planWithResolverService(resolverService)).rejects.toThrow(
-      /no Auth service is configured/,
-    );
+    const error = (await planWithResolverService(resolverService).catch(
+      (error: unknown) => error,
+    )) as Error;
+
+    expect(error).toMatchObject({
+      code: "INVOKER_AUTH_REQUIRED",
+      message: expect.stringMatching(/no Auth service is configured/),
+      context: { invoker: "batch-user", resolver: "myResolver", file: mockConfig.path },
+    });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
   });
 
   test("invoker is undefined when invoker is not set", async () => {

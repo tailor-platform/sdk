@@ -34,7 +34,7 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { type InvokerMachineUsers, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { type InvokerScope, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -192,15 +192,19 @@ export async function planPipeline(
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const authNamespaces = configAuthNamespaces(context);
-  const invokerMachineUsers = await listInvokerMachineUsers({
-    client,
-    workspaceId,
-    invokers: pipelines.flatMap((pipeline) =>
-      Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
-    ),
+  const invokerScope: InvokerScope = {
     authNamespaces,
-    plannedMachineUsers: context.plannedMachineUsers,
-  });
+    machineUsers: await listInvokerMachineUsers({
+      client,
+      workspaceId,
+      invokers: pipelines.flatMap((pipeline) =>
+        Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
+      ),
+      authNamespaces,
+      plannedMachineUsers: context.plannedMachineUsers,
+    }),
+    configPath: context.config.path,
+  };
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,
@@ -209,8 +213,7 @@ export async function planPipeline(
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
     (namespace) => ({ ...application.env, ...context.envOverrides?.resolver[namespace] }),
-    authNamespaces,
-    invokerMachineUsers,
+    invokerScope,
     forceApplyAll,
     {
       owner: context.owner,
@@ -375,8 +378,7 @@ async function planResolvers(
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   envOf: (namespace: string) => ApplicationEnv,
-  authNamespaces: ReadonlyArray<string>,
-  invokerMachineUsers: InvokerMachineUsers | undefined,
+  invokerScope: InvokerScope,
   forceApplyAll = false,
   records: ResolverRecordInputs,
   previousExisting?: PreviousPipelineResolvers,
@@ -453,7 +455,7 @@ async function planResolvers(
   const namespaces = [
     ...pipelines.map((pipeline) => ({
       namespaceName: pipeline.namespace,
-      resolvers: Object.values(pipeline.resolvers),
+      resolvers: Object.entries(pipeline.resolvers),
       deleted: false,
     })),
     ...deletedServices.map((namespaceName) => ({ namespaceName, resolvers: [], deleted: true })),
@@ -464,7 +466,7 @@ async function planResolvers(
     const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
     const existingNames = new Set(existingResolvers.map((resolver) => resolver.name));
     const desired: DesiredResolver[] = [];
-    for (const resolver of resolvers) {
+    for (const [file, resolver] of resolvers) {
       if (existingNames.has(resolver.name)) {
         existingResolverDetails.set(
           resolver.name,
@@ -487,10 +489,10 @@ async function planResolvers(
           pipelineResolver: processResolver(
             namespaceName,
             resolver,
+            file,
             executorUsedResolvers,
             envOf(namespaceName),
-            authNamespaces,
-            invokerMachineUsers,
+            invokerScope,
           ),
         },
         metaRequest: await resolverMetaRequest(namespaceName, resolver),
@@ -563,10 +565,10 @@ export function formatResolverChangeEntries(
 function processResolver(
   namespace: string,
   resolver: Resolver,
+  file: string,
   executorUsedResolvers: ReadonlySet<string>,
   env: ApplicationEnv,
-  authNamespaces: ReadonlyArray<string>,
-  invokerMachineUsers: InvokerMachineUsers | undefined,
+  invokerScope: InvokerScope,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -579,12 +581,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: normalizeInvoker(
-        resolver.invoker,
-        authNamespaces,
-        `Resolver "${resolver.name}"`,
-        invokerMachineUsers,
-      ),
+      invoker: normalizeInvoker(resolver.invoker, invokerScope, {
+        kind: "resolver",
+        name: resolver.name,
+        file,
+      }),
     },
   ];
 

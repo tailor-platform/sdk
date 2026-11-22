@@ -62,7 +62,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
@@ -348,7 +348,10 @@ export async function applyAuth(
   }
 }
 
-function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]): void {
+function assertAuthMachineUsersDefined(
+  config: Readonly<AuthService>["config"],
+  configPath: string,
+): void {
   const machineUsers = Object.keys(config.machineUsers ?? {}).toSorted();
   const missing = [
     { field: "scim.machineUserName", machineUserName: config.scim?.machineUserName },
@@ -359,7 +362,7 @@ function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]):
       : [{ field, machineUserName }],
   );
   if (missing.length === 0) return;
-  throw CLIError({
+  throw locatedCLIError(configPath, {
     code: "AUTH_MACHINE_USER_NOT_FOUND",
     message: missing
       .map(
@@ -391,7 +394,7 @@ export async function planAuth(context: PlanContext) {
   if (!forRemoval) {
     for (const authService of application.authServices) {
       await authService.resolveNamespaces();
-      assertAuthMachineUsersDefined(authService.config);
+      assertAuthMachineUsersDefined(authService.config, context.config.path);
       auths.push(authService);
     }
   }

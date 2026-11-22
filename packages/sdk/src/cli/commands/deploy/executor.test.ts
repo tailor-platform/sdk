@@ -1,4 +1,5 @@
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
@@ -144,9 +145,17 @@ describe("planExecutor", () => {
     });
   }
 
+  function executorFile(name: string): string {
+    return `/test/executors/${name}.ts`;
+  }
+
+  async function planError(context: PlanContext): Promise<Error> {
+    return (await planExecutor(context).catch((error: unknown) => error)) as Error;
+  }
+
   // Helper to create mock executor service
   function createMockExecutorService(executors: Executor[]): ExecutorService {
-    const executorMap = Object.fromEntries(executors.map((e) => [e.name, e]));
+    const executorMap = Object.fromEntries(executors.map((e) => [executorFile(e.name), e]));
     return {
       config: {},
       executors: executorMap,
@@ -747,16 +756,63 @@ describe("planExecutor", () => {
           externalAuthName: "external-auth",
         });
 
-        await expect(
-          planExecutor(
-            buildPlanContext(application, {
-              client: createMockClient([], ["batch-user"]),
-            }),
-          ),
-        ).rejects.toMatchObject({
+        const error = await planError(
+          buildPlanContext(application, {
+            client: createMockClient([], ["batch-user"]),
+          }),
+        );
+
+        expect(error).toMatchObject({
           code: "INVOKER_MACHINE_USER_NOT_FOUND",
           message: expect.stringContaining('Executor "test-executor"'),
+          context: { executor: "test-executor", file: executorFile("test-executor") },
         });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("test-executor"),
+        });
+      });
+
+      test("points a string invoker without Auth at the config", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")]);
+
+        const error = await planError(buildPlanContext(application));
+
+        expect(error).toMatchObject({
+          code: "INVOKER_AUTH_REQUIRED",
+          context: { invoker: "batch-user", executor: "test-executor", file: mockConfig.path },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
+      });
+
+      test.for([
+        {
+          label: "a string invoker whose external Auth is missing at the config",
+          invoker: "batch-user",
+          file: mockConfig.path,
+        },
+        {
+          label: "an object invoker whose Auth is missing at the executor",
+          invoker: { namespace: "external-auth", machineUserName: "batch-user" },
+          file: executorFile("test-executor"),
+        },
+      ])("points $label", async ({ invoker, file }) => {
+        const application = createMockApplication([createInvokerExecutor(invoker)], {
+          externalAuthName: "external-auth",
+        });
+        const client = mockOperatorClient({
+          listAuthMachineUsers: () => {
+            throw new ConnectError("auth namespace not found", Code.NotFound);
+          },
+          listExecutorExecutors: { executors: [], nextPageToken: "" },
+        });
+
+        const error = await planError(buildPlanContext(application, { client }));
+
+        expect(error).toMatchObject({
+          code: "INVOKER_AUTH_NOT_FOUND",
+          context: { invoker: "batch-user", executor: "test-executor", file },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({ file });
       });
 
       test("accepts a machine user that another config in the same deploy creates", async () => {
@@ -819,6 +875,8 @@ describe("planExecutor", () => {
             invoker: "batch-usr",
             authNamespace: "other-auth",
             machineUsers: ["batch-user"],
+            executor: "test-executor",
+            file: executorFile("test-executor"),
           },
         });
       });
@@ -865,10 +923,39 @@ describe("planExecutor", () => {
         events: ["auth.access_token.issued"],
       });
 
-      await expect(planExecutor(workspaceContext(executor))).rejects.toMatchObject({
+      const error = await planError(workspaceContext(executor));
+
+      expect(error).toMatchObject({
         code: "EXECUTOR_AUTH_AMBIGUOUS",
-        context: { executor: "on-event", available: ["shop-auth", "admin-auth"] },
+        context: {
+          executor: "on-event",
+          available: ["shop-auth", "admin-auth"],
+          file: executorFile("on-event"),
+        },
       });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
+    });
+
+    test("points a string invoker that two Auth services define at the executor", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "function", body: () => {}, invoker: "batch" },
+      );
+      const context = workspaceContext(executor);
+
+      const error = await planError({
+        ...context,
+        plannedMachineUsers: new Map([
+          ["shop-auth", new Set(["batch"])],
+          ["admin-auth", new Set(["batch"])],
+        ]),
+      });
+
+      expect(error).toMatchObject({
+        code: "INVOKER_MACHINE_USER_AMBIGUOUS",
+        context: { invoker: "batch", executor: "on-event", file: executorFile("on-event") },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
     });
 
     test("subscribes an authAccessToken trigger to the Auth service it names", async () => {
@@ -1414,17 +1501,14 @@ describe("planExecutor", () => {
       };
       const application = createMockApplication([executor]);
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          applications: [deployApplicationOf(application)],
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
-        }),
-      ).rejects.toThrow(/no IdP is configured/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_REQUIRED",
+        message: expect.stringMatching(/no IdP is configured/),
+        context: { executor: "on-idp-user-created", file: mockConfig.path },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
     });
 
     test("idpUserCreated throws when multiple IdPs are configured and idp is omitted", async () => {
@@ -1440,17 +1524,20 @@ describe("planExecutor", () => {
         idpNames: ["idp-a", "idp-b"],
       });
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          applications: [deployApplicationOf(application)],
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
-        }),
-      ).rejects.toThrow(/multiple IdPs/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_AMBIGUOUS",
+        message: expect.stringMatching(/multiple IdPs/),
+        context: {
+          executor: "on-idp-user-created",
+          available: ["idp-a", "idp-b"],
+          file: executorFile("on-idp-user-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-idp-user-created"),
+      });
     });
 
     test("idpUserCreated throws when specified idp does not exist", async () => {
@@ -1466,17 +1553,21 @@ describe("planExecutor", () => {
         idpNames: ["idp-a", "idp-b"],
       });
 
-      await expect(
-        planExecutor({
-          client,
-          workspaceId,
-          application,
-          applications: [deployApplicationOf(application)],
-          owner: applicationOwner(application),
-          forRemoval: false,
-          config: mockConfig,
-        }),
-      ).rejects.toThrow(/no IdP with that name is configured/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_NOT_FOUND",
+        message: expect.stringMatching(/no IdP with that name is configured/),
+        context: {
+          executor: "on-idp-user-created",
+          idp: "missing",
+          available: ["idp-a", "idp-b"],
+          file: executorFile("on-idp-user-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-idp-user-created"),
+      });
     });
 
     test.for([undefined, "my-auth"])(
@@ -1543,9 +1634,19 @@ describe("planExecutor", () => {
         };
         const application = createMockApplication([executor], appOptions);
 
-        await expect(planExecutor(buildPlanContext(application))).rejects.toMatchObject({
+        const error = await planError(buildPlanContext(application));
+
+        expect(error).toMatchObject({
           code: "EXECUTOR_AUTH_NOT_FOUND",
-          context: { executor: "on-auth-token-issued", auth: "other-auth", available: ["my-auth"] },
+          context: {
+            executor: "on-auth-token-issued",
+            auth: "other-auth",
+            available: ["my-auth"],
+            file: executorFile("on-auth-token-issued"),
+          },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("on-auth-token-issued"),
         });
       },
     );
@@ -1716,42 +1817,6 @@ describe("planExecutor", () => {
         } satisfies Executor,
         appOptions: { resolverNames: { myResolver: "my-pipeline" } },
         errorPattern: 'Resolver "unknown" not found in any namespace',
-      },
-      {
-        name: "idpUserCreated throws when no IdP service configured",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: undefined,
-        errorPattern: /no IdP is configured/,
-      },
-      {
-        name: "idpUserCreated throws when multiple IdPs are configured and idp is omitted",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { idpNames: ["idp-a", "idp-b"] },
-        errorPattern: /multiple IdPs/,
-      },
-      {
-        name: "idpUserCreated throws when specified idp does not exist",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "missing" },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { idpNames: ["idp-a", "idp-b"] },
-        errorPattern: /no IdP with that name is configured/,
       },
     ])("$name", async ({ executor, appOptions, errorPattern }) => {
       const application = createMockApplication([executor], appOptions);

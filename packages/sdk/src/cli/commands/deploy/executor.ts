@@ -14,8 +14,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
@@ -28,7 +27,12 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { type InvokerMachineUsers, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import {
+  type DefinitionRef,
+  type InvokerScope,
+  listInvokerMachineUsers,
+  normalizeInvoker,
+} from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
@@ -168,15 +172,20 @@ export async function planExecutor(
       getTrn: (name) => resourceTrn(workspaceId, "executor", name),
     }));
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
-  const invokerMachineUsers = await listInvokerMachineUsers({
-    client,
-    workspaceId,
-    invokers: Object.values(executors).map((executor) =>
-      "invoker" in executor.operation ? executor.operation.invoker : undefined,
-    ),
-    authNamespaces: configAuthNamespaces(context),
-    plannedMachineUsers: context.plannedMachineUsers,
-  });
+  const authNamespaces = configAuthNamespaces(context);
+  const invokerScope: InvokerScope = {
+    authNamespaces,
+    machineUsers: await listInvokerMachineUsers({
+      client,
+      workspaceId,
+      invokers: Object.values(executors).map((executor) =>
+        "invoker" in executor.operation ? executor.operation.invoker : undefined,
+      ),
+      authNamespaces,
+      plannedMachineUsers: context.plannedMachineUsers,
+    }),
+    configPath: context.config.path,
+  };
   const cachedDetails = previousExisting?.existingExecutorDetails;
   const existingExecutorDetails = new Map(
     await Promise.all(
@@ -194,7 +203,7 @@ export async function planExecutor(
     ),
   );
   const desired: DesiredExecutor[] = [];
-  for (const executor of Object.values(executors)) {
+  for (const [file, executor] of Object.entries(executors)) {
     desired.push({
       name: executor.name,
       request: {
@@ -202,8 +211,9 @@ export async function planExecutor(
         executor: protoExecutor(
           context,
           executor,
+          file,
           { ...application.env, ...context.envOverrides?.executor },
-          invokerMachineUsers,
+          invokerScope,
         ),
       },
       metaRequest: await buildMetaRequest({
@@ -426,38 +436,40 @@ export function collectConfigIdpNames(config: IdpNamesSource): ReadonlySet<strin
 }
 
 function resolveIdpNamespace(
-  config: IdpNamesSource,
-  executorName: string,
+  context: PlanContext,
+  executor: DefinitionRef,
   idpName: string | undefined,
-  sameRunIdpNames?: ReadonlySet<string>,
 ): string {
-  const localIdpNames = collectConfigIdpNames(config);
+  const localIdpNames = collectConfigIdpNames(context);
   if (idpName !== undefined) {
-    const candidateNames = sameRunIdpNames ?? localIdpNames;
+    const candidateNames = context.idpNames ?? localIdpNames;
     if (!candidateNames.has(idpName)) {
-      const available = [...candidateNames].join(", ");
-      throw CLIError({
+      const available = [...candidateNames];
+      throw locatedCLIError(executor.file, {
         code: "EXECUTOR_IDP_NOT_FOUND",
         message:
-          `Executor "${executorName}" specifies IdP "${idpName}" in its idpUser trigger, ` +
-          `but no IdP with that name is configured. Available IdPs: ${available}`,
+          `Executor "${executor.name}" specifies IdP "${idpName}" in its idpUser trigger, ` +
+          `but no IdP with that name is configured. Available IdPs: ${available.join(", ")}`,
+        context: { executor: executor.name, idp: idpName, available },
       });
     }
     return idpName;
   }
   if (localIdpNames.size === 0) {
-    throw CLIError({
+    throw locatedCLIError(context.config.path, {
       code: "EXECUTOR_IDP_REQUIRED",
-      message: `Executor "${executorName}" uses an idpUser trigger but no IdP is configured.`,
+      message: `Executor "${executor.name}" uses an idpUser trigger but no IdP is configured.`,
+      context: { executor: executor.name },
     });
   }
   if (localIdpNames.size > 1) {
-    const available = [...localIdpNames].join(", ");
-    throw CLIError({
+    const available = [...localIdpNames];
+    throw locatedCLIError(executor.file, {
       code: "EXECUTOR_IDP_AMBIGUOUS",
       message:
-        `Executor "${executorName}" uses an idpUser trigger but the project defines multiple IdPs ` +
-        `(${available}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
+        `Executor "${executor.name}" uses an idpUser trigger but the project defines multiple IdPs ` +
+        `(${available.join(", ")}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
+      context: { executor: executor.name, available },
     });
   }
   return assertDefined([...localIdpNames][0], "idp service missing");
@@ -480,43 +492,39 @@ function defaultGraphQLAppName(context: PlanContext, executorName: string): stri
 
 function resolveAuthAccessTokenNamespace(
   context: PlanContext,
-  executorName: string,
+  executor: DefinitionRef,
   auth: string | undefined,
 ): string {
   const available = configAuthNamespaces(context);
   const [only, ...others] = available;
   if (only === undefined) {
-    const file = context.config.path;
-    throw withErrorDiagnostics(
-      CLIError({
-        code: "AUTH_CONFIG_REQUIRED",
-        message: `Executor "${executorName}" uses an authAccessToken trigger, but its config uses no Auth service.`,
-        suggestion:
-          'Add defineAuth() to this config, or reference an existing Auth service with auth: { name: "<auth-name>", external: true }.',
-        context: { executor: executorName, file },
-      }),
-      { location: { file } },
-    );
+    throw locatedCLIError(context.config.path, {
+      code: "AUTH_CONFIG_REQUIRED",
+      message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses no Auth service.`,
+      suggestion:
+        'Define an Auth service in this config. A defineConfig() config can instead reference one that another config defines with auth: { name: "<auth-name>", external: true }.',
+      context: { executor: executor.name },
+    });
   }
   const uses = others.length === 0 ? `Auth "${only}"` : `the Auth services ${available.join(", ")}`;
   if (auth !== undefined) {
     if (available.includes(auth)) return auth;
-    throw CLIError({
+    throw locatedCLIError(executor.file, {
       code: "EXECUTOR_AUTH_NOT_FOUND",
-      message: `Executor "${executorName}" names Auth "${auth}" in its authAccessToken trigger, but its config uses ${uses}.`,
+      message: `Executor "${executor.name}" names Auth "${auth}" in its authAccessToken trigger, but its config uses ${uses}.`,
       suggestion:
         others.length === 0
           ? `Set the trigger's "auth" to "${only}", or omit it.`
           : `Set the trigger's "auth" to one of ${available.join(", ")}.`,
-      context: { executor: executorName, auth, available },
+      context: { executor: executor.name, auth, available },
     });
   }
   if (others.length > 0) {
-    throw CLIError({
+    throw locatedCLIError(executor.file, {
       code: "EXECUTOR_AUTH_AMBIGUOUS",
-      message: `Executor "${executorName}" uses an authAccessToken trigger, but its config uses ${uses}.`,
+      message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses ${uses}.`,
       suggestion: `Set the trigger's "auth" to the Auth service it subscribes to.`,
-      context: { executor: executorName, available },
+      context: { executor: executor.name, available },
     });
   }
   return only;
@@ -525,10 +533,12 @@ function resolveAuthAccessTokenNamespace(
 function protoExecutor(
   context: PlanContext,
   executor: Executor,
+  file: string,
   env: ApplicationEnv,
-  invokerMachineUsers: InvokerMachineUsers | undefined,
+  invokerScope: InvokerScope,
 ): MessageInitShape<typeof ExecutorExecutorSchema> {
   const { application } = context;
+  const definition: DefinitionRef = { kind: "executor", name: executor.name, file };
   const trigger = executor.trigger;
   let triggerType: ExecutorTriggerType;
   let triggerConfig: MessageInitShape<typeof ExecutorTriggerConfigSchema>;
@@ -620,7 +630,7 @@ function protoExecutor(
         case: "idp",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveIdpNamespace(context, executor.name, trigger.idp, context.idpNames),
+          namespaceName: resolveIdpNamespace(context, definition, trigger.idp),
         },
       });
       break;
@@ -630,7 +640,7 @@ function protoExecutor(
         case: "auth",
         value: {
           eventTypes: trigger.events,
-          namespaceName: resolveAuthAccessTokenNamespace(context, executor.name, trigger.auth),
+          namespaceName: resolveAuthAccessTokenNamespace(context, definition, trigger.auth),
         },
       });
       break;
@@ -655,9 +665,6 @@ function protoExecutor(
   const target = executor.operation;
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
-
-  const authNamespaces = configAuthNamespaces(context);
-  const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
     case "webhook": {
@@ -712,12 +719,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: normalizeInvoker(
-              target.invoker,
-              authNamespaces,
-              invokerContext,
-              invokerMachineUsers,
-            ),
+            invoker: normalizeInvoker(target.invoker, invokerScope, definition),
           },
         },
       };
@@ -740,12 +742,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: normalizeInvoker(
-              target.invoker,
-              authNamespaces,
-              invokerContext,
-              invokerMachineUsers,
-            ),
+            invoker: normalizeInvoker(target.invoker, invokerScope, definition),
           },
         },
       };
@@ -764,12 +761,7 @@ function protoExecutor(
                   ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
                   : { expr: JSON.stringify(target.args) }
                 : undefined,
-            invoker: normalizeInvoker(
-              target.invoker,
-              authNamespaces,
-              invokerContext,
-              invokerMachineUsers,
-            ),
+            invoker: normalizeInvoker(target.invoker, invokerScope, definition),
           },
         },
       };

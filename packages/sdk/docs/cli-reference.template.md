@@ -167,6 +167,10 @@ read them:
   to run the scripts of its namespace.
 - `MACHINE_USER_NOT_FOUND`: the machine user selected to run a pending migration's `migrate.ts` is
   not defined in auth.
+
+  For `AUTH_CONFIG_REQUIRED`, `MACHINE_USER_REQUIRED`, and `MACHINE_USER_NOT_FOUND`,
+  `error.context.file` names the config.
+
 - `MIGRATION_OUTCOME_UNSETTLED`: an earlier deploy could not confirm whether a migration's script
   ran, and the migration has not been settled since.
 - `MIGRATION_IN_PROGRESS_INVALID`: the migration recorded as in progress cannot be read, is not the

@@ -1658,7 +1658,12 @@ describe("tailordb migration validate", () => {
         pendingMigrationScripts: {
           valid: false,
           migrationNumbers: [1],
-          error: { code: row.code },
+          error: {
+            code: row.code,
+            context: expect.objectContaining({
+              file: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+            }),
+          },
         },
       });
       expect(bundleMigrationScript).not.toHaveBeenCalled();
@@ -1727,8 +1732,12 @@ describe("tailordb migration validate", () => {
       const result = await runCommand(validateCommand, []);
 
       expect(result.success).toBe(false);
+      const configFile = path.relative(
+        process.cwd(),
+        path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      );
       expect(stderr.output).toContain(
-        "Pending migration scripts: Auth configuration is required to execute migration scripts.",
+        `Pending migration scripts: ${configFile}: Auth configuration is required to execute migration scripts.`,
       );
       expect(stderr.output).toContain(
         "Define auth with machine users in this config; migration scripts run as one of them.",
