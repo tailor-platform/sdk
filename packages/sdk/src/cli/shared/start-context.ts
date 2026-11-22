@@ -26,7 +26,7 @@ export interface StartContext {
   modules: Map<string, StartModuleBindings>;
   /**
    * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
-   * config has no Auth service, and a string invoker stops the build.
+   * config has no Auth service, and a string-literal invoker stops the build.
    */
   authNamespace?: string;
   /** Name of the job function a job is started under (default: the job's own name) */

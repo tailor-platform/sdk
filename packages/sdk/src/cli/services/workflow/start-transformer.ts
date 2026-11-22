@@ -371,37 +371,30 @@ function namedAuthInvoker(namespace = "<auth>", machineUserName = "<machine user
   return `{ invoker: { namespace: ${JSON.stringify(namespace)}, machineUserName: ${JSON.stringify(machineUserName)} } }`;
 }
 
-interface UnresolvedInvokerWording {
-  reason: string;
-  unreadableInvoker: string;
-  suggestions: { options: string; spread: string; invoker: string };
-}
+type UnreadableStartPart = "options" | "spread" | "invoker";
 
-const NO_AUTH_SUGGESTION = `Write the invoker in the .start() call as an object literal: ${namedAuthInvoker()}.`;
-
-const UNRESOLVED_INVOKER_WORDING = {
-  none: {
-    reason:
-      "and the config has no Auth service, so the build cannot tell whether the invoker names one",
-    unreadableInvoker: "and the config has no Auth service",
-    suggestions: {
-      options: NO_AUTH_SUGGESTION,
-      spread: NO_AUTH_SUGGESTION,
-      invoker: NO_AUTH_SUGGESTION,
-    },
+const UNRESOLVED_INVOKER = {
+  options: {
+    message:
+      "passes options the build cannot read, so the build cannot tell which Auth service the invoker belongs to.",
+    suggestion: "Pass the options as an object literal.",
   },
-  several: {
-    reason: "so the build cannot tell which Auth service the invoker belongs to",
-    unreadableInvoker: "and the config has several Auth services",
-    suggestions: {
-      options: "Pass the options as an object literal.",
-      spread: "Write the invoker in the options object literal.",
-      invoker: `Pass the invoker as a string literal, or name its Auth service with ${namedAuthInvoker()}.`,
-    },
+  spread: {
+    message:
+      "spreads its options, so the build cannot tell which Auth service the invoker belongs to.",
+    suggestion: "Write the invoker in the options object literal.",
   },
-} satisfies Record<string, UnresolvedInvokerWording>;
+  invoker: {
+    message: "passes an invoker the build cannot read, and the config has several Auth services.",
+    suggestion: `Pass the invoker as a string literal, or name its Auth service with ${namedAuthInvoker()}.`,
+  },
+} satisfies Record<UnreadableStartPart, { message: string; suggestion: string }>;
 
 type StartOptionsNode = NonNullable<ResolvedStartCall["options"]>;
+
+type StartInvoker =
+  | { kind: "string"; node: StartOptionsNode; machineUserName: string }
+  | { kind: "unreadable"; part: UnreadableStartPart };
 
 /**
  * Strip the wrappers that do not change a value: parentheses and TypeScript-only assertions.
@@ -439,6 +432,30 @@ function isUndefined(node: StartOptionsNode): boolean {
   return value.type === "Identifier" && value.name === "undefined";
 }
 
+/**
+ * Read the invoker in the options of a workflow start.
+ * @param options - The options argument as written
+ * @returns A string-literal invoker or the part the build cannot read, or undefined when the start passes no invoker, `undefined`, or an object literal invoker
+ */
+function readStartInvoker(options: StartOptionsNode | undefined): StartInvoker | undefined {
+  if (!options || isUndefined(options)) return undefined;
+  const value = unwrapExpression(options);
+  if (value.type !== "ObjectExpression") return { kind: "unreadable", part: "options" };
+  const invoker = findProperty(value.properties, "invoker");
+  if (!invoker) {
+    return value.properties.some((property) => property.type !== "Property")
+      ? { kind: "unreadable", part: "spread" }
+      : undefined;
+  }
+  if (isUndefined(invoker.value) || unwrapExpression(invoker.value).type === "ObjectExpression") {
+    return undefined;
+  }
+  const machineUserName = staticString(invoker.value);
+  return machineUserName === undefined
+    ? { kind: "unreadable", part: "invoker" }
+    : { kind: "string", node: invoker.value, machineUserName };
+}
+
 type ResolveStartInvokerParams = {
   call: ResolvedStartCall;
   currentFilePath: string;
@@ -456,39 +473,13 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
   const { call, currentFilePath, machineUserAuthNamespaces } = params;
   const fail = (code: StartInvokerErrorCode, message: string, suggestion: string) =>
     startInvokerError({ call, currentFilePath, code, message, suggestion });
-  const wording = UNRESOLVED_INVOKER_WORDING[machineUserAuthNamespaces ? "several" : "none"];
-  if (!call.options || isUndefined(call.options)) return undefined;
-  const options = unwrapExpression(call.options);
-  if (options.type !== "ObjectExpression") {
-    throw fail(
-      "WORKFLOW_START_INVOKER_UNRESOLVED",
-      `passes options the build cannot read, ${wording.reason}.`,
-      wording.suggestions.options,
-    );
+  const invoker = readStartInvoker(call.options);
+  if (!invoker || (invoker.kind === "unreadable" && !machineUserAuthNamespaces)) return undefined;
+  if (invoker.kind === "unreadable") {
+    const { message, suggestion } = UNRESOLVED_INVOKER[invoker.part];
+    throw fail("WORKFLOW_START_INVOKER_UNRESOLVED", message, suggestion);
   }
-  const invoker = findProperty(options.properties, "invoker");
-  if (!invoker && options.properties.some((property) => property.type !== "Property")) {
-    throw fail(
-      "WORKFLOW_START_INVOKER_UNRESOLVED",
-      `spreads its options, ${wording.reason}.`,
-      wording.suggestions.spread,
-    );
-  }
-  if (
-    !invoker ||
-    isUndefined(invoker.value) ||
-    unwrapExpression(invoker.value).type === "ObjectExpression"
-  ) {
-    return undefined;
-  }
-  const machineUserName = staticString(invoker.value);
-  if (machineUserName === undefined) {
-    throw fail(
-      "WORKFLOW_START_INVOKER_UNRESOLVED",
-      `passes an invoker the build cannot read, ${wording.unreadableInvoker}.`,
-      wording.suggestions.invoker,
-    );
-  }
+  const { node, machineUserName } = invoker;
   if (!machineUserAuthNamespaces) {
     throw fail(
       "WORKFLOW_START_INVOKER_AUTH_REQUIRED",
@@ -513,8 +504,8 @@ function resolveStartInvoker(params: ResolveStartInvokerParams): Replacement | u
     );
   }
   return {
-    start: invoker.value.start,
-    end: invoker.value.end,
+    start: node.start,
+    end: node.end,
     text: `{ namespace: ${JSON.stringify(namespace)}, machineUserName: ${JSON.stringify(machineUserName)} }`,
   };
 }

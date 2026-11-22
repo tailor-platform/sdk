@@ -1053,23 +1053,15 @@ await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineU
       });
     });
 
-    test.for(["undefined", "{ invoker: undefined }"])("accepts %s", (options) => {
-      expect(() => transform(options)).not.toThrow();
+    test.for([
+      "undefined",
+      "{ invoker: undefined }",
+      "{ invoker: machineUser }",
+      "options",
+      "{ ...defaults }",
+    ])("passes %s to the runtime normalizer", (options) => {
+      expect(transform(options)).toContain(`__tailor_normalizeStartOptions(${options})`);
     });
-
-    test.for(["{ invoker: machineUser }", "options", "{ ...defaults }"])(
-      "rejects %s, whose invoker the build cannot read",
-      (options) => {
-        expect(() => transform(options)).toThrow(
-          expect.objectContaining({
-            code: "WORKFLOW_START_INVOKER_UNRESOLVED",
-            message: expect.stringContaining("the config has no Auth service"),
-            suggestion:
-              'Write the invoker in the .start() call as an object literal: { invoker: { namespace: "<auth>", machineUserName: "<machine user>" } }.',
-          }),
-        );
-      },
-    );
 
     test("names a start through a namespace import as it is written", () => {
       const source = `
