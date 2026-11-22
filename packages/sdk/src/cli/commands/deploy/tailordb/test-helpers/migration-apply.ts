@@ -9,6 +9,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/types";
 import {
   mockOperatorClient,
+  type OperatorClientMock,
   type OperatorClientMocks,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
@@ -42,15 +43,107 @@ function namespaceTrn(namespace: string) {
   return `trn:v1:workspace:${WORKSPACE_ID}:tailordb:${namespace}`;
 }
 
+type RemoteTableWrite =
+  | "createTailorDBType"
+  | "updateTailorDBType"
+  | "deleteTailorDBType"
+  | "createTailorDBGQLPermission"
+  | "updateTailorDBGQLPermission"
+  | "deleteTailorDBGQLPermission";
+
 /**
- * Build an operator client whose TailorDB, metadata, and workflow cleanup methods succeed.
- * @param overrides - Methods to mock differently, or in addition
- * @returns The client, with each mocked method as a `vi.fn` spy
+ * Make a mocked client reject the table and GraphQL permission writes the Platform rejects:
+ * creating one the client created fails with `AlreadyExists`; updating or deleting one the client
+ * deleted, and any write to the permission of a table the client deleted, fails with `NotFound`.
+ * A table the client creates starts without a permission, and deleting a table also deletes its
+ * permission. A write counts from the moment it is sent until it is rejected, so two concurrent
+ * writes conflict as they would on the Platform. A name the client has not written is accepted,
+ * whether or not `listTailorDBTypes` lists it. The client's current implementations are wrapped,
+ * so a method replaced afterwards keeps this only if the replacement calls the implementation
+ * `getMockImplementation()` returned before it.
+ * @param client - Client whose table and permission writes to wrap
+ * @returns The same client
  */
-export function createMockClient<K extends keyof OperatorClient = never>(
-  overrides?: OperatorClientMocks<K>,
-) {
-  const client = mockOperatorClient({
+export function trackRemoteTables<C extends OperatorClientMock<RemoteTableWrite>>(client: C): C {
+  const tables = new Map<string, boolean>();
+  const permissions = new Map<string, boolean>();
+  const keyOf = (namespaceName: string | undefined, tableName: string | undefined) =>
+    `${namespaceName}/${tableName}`;
+  const tableMissing = (key: string) => tables.get(key) === false;
+  const permissionMissing = (key: string) => tableMissing(key) || permissions.get(key) === false;
+  const refuseIf = (refused: boolean, code: Code, message: string) => {
+    if (refused) throw new ConnectError(message, code);
+  };
+  const setOrDelete = (map: Map<string, boolean>, key: string, value: boolean | undefined) => {
+    if (value === undefined) map.delete(key);
+    else map.set(key, value);
+  };
+  const recordWrite = async <T>(
+    key: string,
+    next: { table?: boolean; permission?: boolean },
+    write: () => T,
+  ): Promise<Awaited<T>> => {
+    const before = { table: tables.get(key), permission: permissions.get(key) };
+    if (next.table !== undefined) tables.set(key, next.table);
+    if (next.permission !== undefined) permissions.set(key, next.permission);
+    try {
+      return await write();
+    } catch (error) {
+      setOrDelete(tables, key, before.table);
+      setOrDelete(permissions, key, before.permission);
+      throw error;
+    }
+  };
+
+  const createType = client.createTailorDBType.getMockImplementation();
+  const updateType = client.updateTailorDBType.getMockImplementation();
+  const deleteType = client.deleteTailorDBType.getMockImplementation();
+  const createPermission = client.createTailorDBGQLPermission.getMockImplementation();
+  const updatePermission = client.updateTailorDBGQLPermission.getMockImplementation();
+  const deletePermission = client.deleteTailorDBGQLPermission.getMockImplementation();
+  assert(createType && updateType && deleteType);
+  assert(createPermission && updatePermission && deletePermission);
+
+  client.createTailorDBType.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.tailordbType?.name);
+    refuseIf(tables.get(key) === true, Code.AlreadyExists, `table ${key} already exists`);
+    return recordWrite(key, { table: true, permission: false }, () => createType(request, options));
+  });
+  client.updateTailorDBType.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.tailordbType?.name);
+    refuseIf(tableMissing(key), Code.NotFound, `table ${key} not found`);
+    return updateType(request, options);
+  });
+  client.deleteTailorDBType.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.tailordbTypeName);
+    refuseIf(tableMissing(key), Code.NotFound, `table ${key} not found`);
+    return recordWrite(key, { table: false }, () => deleteType(request, options));
+  });
+  client.createTailorDBGQLPermission.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.typeName);
+    refuseIf(tableMissing(key), Code.NotFound, `table ${key} not found`);
+    refuseIf(
+      permissions.get(key) === true,
+      Code.AlreadyExists,
+      `permission of ${key} already exists`,
+    );
+    return recordWrite(key, { permission: true }, () => createPermission(request, options));
+  });
+  client.updateTailorDBGQLPermission.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.typeName);
+    refuseIf(permissionMissing(key), Code.NotFound, `permission of ${key} not found`);
+    return updatePermission(request, options);
+  });
+  client.deleteTailorDBGQLPermission.mockImplementation(async (request, options) => {
+    const key = keyOf(request.namespaceName, request.typeName);
+    refuseIf(permissionMissing(key), Code.NotFound, `permission of ${key} not found`);
+    return recordWrite(key, { permission: false }, () => deletePermission(request, options));
+  });
+  return client;
+}
+
+function untrackedMockClient() {
+  return mockOperatorClient({
     createTailorDBService: {},
     getMetadata: { metadata: { labels: {} } },
     setMetadata: {},
@@ -66,7 +159,18 @@ export function createMockClient<K extends keyof OperatorClient = never>(
     deleteWorkflowJobFunction: {},
     deleteFunctionRegistry: {},
   });
-  return withOperatorClientMocks(client, overrides);
+}
+
+/**
+ * Build an operator client whose TailorDB, metadata, and workflow cleanup methods succeed, except
+ * for the table and permission writes {@link trackRemoteTables} rejects.
+ * @param overrides - Methods to mock differently, or in addition; {@link trackRemoteTables} wraps them too
+ * @returns The client, with each mocked method as a `vi.fn` spy
+ */
+export function createMockClient<K extends keyof OperatorClient = never>(
+  overrides?: OperatorClientMocks<K>,
+) {
+  return trackRemoteTables(withOperatorClientMocks(untrackedMockClient(), overrides));
 }
 
 type MockedRemoteState = Pick<RemoteMigrationState, "number" | "historyId"> &
@@ -155,36 +259,38 @@ export function createRemoteCheckpoint(initialNumber: number | null) {
     createMockClient: <K extends keyof OperatorClient = never>(
       overrides?: OperatorClientMocks<K>,
     ) =>
-      withOperatorClientMocks(
-        createMockClient({
-          getMetadata: async () => ({
-            metadata: {
-              labels: {
-                ...(state.number !== null && {
-                  "sdk-migration": sanitizeMigrationLabel(state.number),
-                }),
-                ...(state.historyId && { "sdk-migration-history": state.historyId }),
-                ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
-                ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
+      trackRemoteTables(
+        withOperatorClientMocks(
+          withOperatorClientMocks(untrackedMockClient(), {
+            getMetadata: async () => ({
+              metadata: {
+                labels: {
+                  ...(state.number !== null && {
+                    "sdk-migration": sanitizeMigrationLabel(state.number),
+                  }),
+                  ...(state.historyId && { "sdk-migration-history": state.historyId }),
+                  ...(state.maintenanceMode && { "sdk-maintenance-mode": state.maintenanceMode }),
+                  ...(state.cleanup && { "sdk-migration-cleanup": state.cleanup }),
+                },
               },
+            }),
+            setMetadata: async (request) => {
+              const maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
+              if (
+                request.trn === namespaceTrn(NAMESPACE) &&
+                maintenanceMode !== state.maintenanceMode
+              ) {
+                state.maintenanceMode = maintenanceMode;
+                state.maintenanceModeChanges.push(maintenanceMode);
+              }
+              if (request.trn === namespaceTrn(NAMESPACE)) {
+                setCleanup(request.labels?.["sdk-migration-cleanup"] ?? null);
+              }
+              return {};
             },
           }),
-          setMetadata: async (request) => {
-            const maintenanceMode = request.labels?.["sdk-maintenance-mode"] ?? null;
-            if (
-              request.trn === namespaceTrn(NAMESPACE) &&
-              maintenanceMode !== state.maintenanceMode
-            ) {
-              state.maintenanceMode = maintenanceMode;
-              state.maintenanceModeChanges.push(maintenanceMode);
-            }
-            if (request.trn === namespaceTrn(NAMESPACE)) {
-              setCleanup(request.labels?.["sdk-migration-cleanup"] ?? null);
-            }
-            return {};
-          },
-        }),
-        overrides,
+          overrides,
+        ),
       ),
   };
 }
