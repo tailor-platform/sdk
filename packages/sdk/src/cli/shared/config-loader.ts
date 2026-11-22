@@ -79,6 +79,25 @@ export interface LoadConfigOptions {
   importNonce?: string;
 }
 
+/** What a command that does not accept a workspace config says about it. */
+export interface ConfigKindUnsupportedOptions {
+  message: string;
+  suggestion: string;
+}
+
+/**
+ * The error a command throws for a `defineWorkspace()` or `defineApp()` config it does not accept.
+ * @param workspace - The loaded workspace config
+ * @param options - What the command says about the config
+ * @returns The error, located at the config file
+ */
+export function configKindUnsupportedError(
+  workspace: LoadedWorkspaceConfig,
+  options: ConfigKindUnsupportedOptions,
+): unknown {
+  return atUserModule(CLIError({ code: "CONFIG_KIND_UNSUPPORTED", ...options }), workspace.path);
+}
+
 /**
  * Load Tailor configuration file and associated plugins.
  * @param configPath - Optional explicit config path
@@ -91,15 +110,11 @@ export async function loadConfig(
 ): Promise<{ config: LoadedConfig; plugins: Plugin[] }> {
   const loaded = await loadConfigFile(configPath, options);
   if (loaded.kind === "workspace") {
-    throw atUserModule(
-      CLIError({
-        code: "CONFIG_KIND_UNSUPPORTED",
-        message:
-          "This command does not support a config defined with defineWorkspace() or defineApp().",
-        suggestion: "Define the config with defineConfig() to use this command.",
-      }),
-      loaded.workspace.path,
-    );
+    throw configKindUnsupportedError(loaded.workspace, {
+      message:
+        "This command does not support a config defined with defineWorkspace() or defineApp().",
+      suggestion: "Define the config with defineConfig() to use this command.",
+    });
   }
   return { config: loaded.config, plugins: loaded.plugins };
 }

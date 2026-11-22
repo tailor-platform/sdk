@@ -31,7 +31,12 @@ import { type Application, defineApplication } from "#/cli/services/application"
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import {
+  configKindUnsupportedError,
+  loadConfigFile,
+  type LoadedConfig,
+} from "#/cli/shared/config-loader";
+import { tryLoadWorkspaceId } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
@@ -66,12 +71,23 @@ async function resolveRemoveConfigId(config: LoadedConfig): Promise<LoadedConfig
 }
 
 async function loadOptions(options?: RemoveOptions) {
+  const loaded = await loadConfigFile(options?.configPath);
+  if (loaded.kind === "workspace") {
+    const workspaceId =
+      (await tryLoadWorkspaceId({
+        profile: options?.profile,
+        workspaceId: options?.workspaceId,
+      })) ?? "<workspace-id>";
+    throw configKindUnsupportedError(loaded.workspace, {
+      message: "tailor remove does not remove the resources of a workspace config.",
+      suggestion: `To remove applications or services, remove them from the config and run tailor deploy. To delete the whole workspace, run tailor workspace delete --workspace-id ${workspaceId}.`,
+    });
+  }
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options?.profile,
     workspaceId: options?.workspaceId,
   });
-  const { config: loadedConfig } = await loadConfig(options?.configPath);
-  const config = await resolveRemoveConfigId(loadedConfig);
+  const config = await resolveRemoveConfigId(loaded.config);
   const application = defineApplication({ config });
   return {
     client,
