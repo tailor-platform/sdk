@@ -1,5 +1,9 @@
 import * as path from "pathe";
-import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
+import {
+  type ErrorSourceLocation,
+  getErrorDiagnostics,
+  withErrorDiagnostics,
+} from "./error-diagnostics";
 import { redactSecrets, styles } from "./logger";
 import { formatShellCommandLines } from "./shell-quote";
 import type { Jsonifiable } from "type-fest";
@@ -130,15 +134,16 @@ export function CLIError(options: CLIErrorOptions): CLIError {
 }
 
 /**
- * Create a CLI error that points at a file, carried as its `context.file` and its source location.
- * @param file - Absolute path of the file the failure points at
+ * Create a CLI error that points at a file, carried as its `context.file` (and `context.line`)
+ * and its source location.
+ * @param location - File, and line when known, the failure points at
  * @param options - Options to construct the CLIError
  * @returns Constructed CLIError instance
  */
-export function locatedCLIError(file: string, options: CLIErrorOptions): CLIError {
-  return withErrorDiagnostics(CLIError({ ...options, context: { ...options.context, file } }), {
-    location: { file },
-  });
+export function locatedCLIError(location: ErrorSourceLocation, options: CLIErrorOptions): CLIError {
+  const { file, line } = location;
+  const context = { ...options.context, file, ...(line === undefined ? {} : { line }) };
+  return withErrorDiagnostics(CLIError({ ...options, context }), { location: { file, line } });
 }
 
 /**

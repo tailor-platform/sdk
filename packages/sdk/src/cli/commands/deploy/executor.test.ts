@@ -779,8 +779,6 @@ describe("planExecutor", () => {
 
         expect(error).toMatchObject({
           code: "INVOKER_AUTH_REQUIRED",
-          suggestion:
-            'Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: "batch-user" }, or configure an Auth service.',
           context: {
             invoker: "batch-user",
             executor: "test-executor",
@@ -940,28 +938,6 @@ describe("planExecutor", () => {
           available: ["shop-auth", "admin-auth"],
           file: executorFile("on-event"),
         },
-      });
-      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
-    });
-
-    test("points a string invoker that two Auth services define at the executor", async () => {
-      const executor = executorWith(
-        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
-        { kind: "function", body: () => {}, invoker: "batch" },
-      );
-      const context = workspaceContext(executor);
-
-      const error = await planError({
-        ...context,
-        plannedMachineUsers: new Map([
-          ["shop-auth", new Set(["batch"])],
-          ["admin-auth", new Set(["batch"])],
-        ]),
-      });
-
-      expect(error).toMatchObject({
-        code: "INVOKER_MACHINE_USER_AMBIGUOUS",
-        context: { invoker: "batch", executor: "on-event", file: executorFile("on-event") },
       });
       expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
     });

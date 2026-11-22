@@ -90,17 +90,20 @@ export function resolveResolverDefaultPermissionForFile(
 
   if (owners.length > 1) {
     const namespaces = owners.map((owner) => owner.namespace);
-    throw locatedCLIError(configPath, {
-      code: "RESOLVER_NAMESPACE_AMBIGUOUS",
-      message:
-        `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
-        `namespace: ${namespaces.map((namespace) => `"${namespace}"`).join(", ")}`,
-      details: "Each namespace applies its own `defaultPermission`.",
-      suggestion:
-        "Narrow the `files` patterns, for example with a `!` pattern, until exactly one " +
-        "namespace claims this file.",
-      context: { resolverFile: targetFile, namespaces },
-    });
+    throw locatedCLIError(
+      { file: configPath },
+      {
+        code: "RESOLVER_NAMESPACE_AMBIGUOUS",
+        message:
+          `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
+          `namespace: ${namespaces.map((namespace) => `"${namespace}"`).join(", ")}`,
+        details: "Each namespace applies its own `defaultPermission`.",
+        suggestion:
+          "Narrow the `files` patterns, for example with a `!` pattern, until exactly one " +
+          "namespace claims this file.",
+        context: { resolverFile: targetFile, namespaces },
+      },
+    );
   }
 
   const [owner] = owners;

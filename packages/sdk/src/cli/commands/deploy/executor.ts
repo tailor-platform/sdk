@@ -312,12 +312,15 @@ function resolveSameRunNamespace(
   }
   const namespace = sameRunNamespaces.get(name);
   if (!namespace) {
-    throw locatedCLIError(executor.file, {
-      code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-      message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces in this deploy run define.`,
-      suggestion: "Move the trigger to the application that owns it, or use unique names.",
-      context: { executor: executor.name, resource: name },
-    });
+    throw locatedCLIError(
+      { file: executor.file },
+      {
+        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+        message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces in this deploy run define.`,
+        suggestion: "Move the trigger to the application that owns it, or use unique names.",
+        context: { executor: executor.name, resource: name },
+      },
+    );
   }
   return namespace;
 }
@@ -359,12 +362,14 @@ type NamespacedResource = {
   name: string;
 };
 
-function resolveNamespace(params: {
+type ResolveNamespaceParams = {
   resource: NamespacedResource;
   localNamespaces: ReadonlyArray<string>;
   findLocalNamespace: () => string | undefined;
   sameRunNamespaces?: ReadonlyMap<string, string | undefined>;
-}): string {
+};
+
+function resolveNamespace(params: ResolveNamespaceParams): string {
   const { resource, localNamespaces, findLocalNamespace, sameRunNamespaces } = params;
   const localNamespace = findLocalNamespace();
   if (localNamespace !== undefined) {
@@ -379,11 +384,14 @@ function resolveNamespace(params: {
     : [];
   const available = [...localNamespaces, ...sameRunAvailableNamespaces];
   const { executor, label, name } = resource;
-  throw locatedCLIError(executor.file, {
-    code: "DEPLOY_RESOURCE_NOT_FOUND",
-    message: `Executor "${executor.name}" triggers on ${label} "${name}", which is not found in any namespace. Available namespaces: ${available.join(", ")}`,
-    context: { executor: executor.name, resource: name, available },
-  });
+  throw locatedCLIError(
+    { file: executor.file },
+    {
+      code: "DEPLOY_RESOURCE_NOT_FOUND",
+      message: `Executor "${executor.name}" triggers on ${label} "${name}", which is not found in any namespace. Available namespaces: ${available.join(", ")}`,
+      context: { executor: executor.name, resource: name, available },
+    },
+  );
 }
 
 function resolveTailorDBNamespace(
@@ -444,32 +452,41 @@ function resolveIdpNamespace(
     const candidateNames = context.idpNames ?? localIdpNames;
     if (!candidateNames.has(idpName)) {
       const available = [...candidateNames];
-      throw locatedCLIError(executor.file, {
-        code: "EXECUTOR_IDP_NOT_FOUND",
-        message:
-          `Executor "${executor.name}" specifies IdP "${idpName}" in its idpUser trigger, ` +
-          `but no IdP with that name is configured. Available IdPs: ${available.join(", ")}`,
-        context: { executor: executor.name, idp: idpName, available },
-      });
+      throw locatedCLIError(
+        { file: executor.file },
+        {
+          code: "EXECUTOR_IDP_NOT_FOUND",
+          message:
+            `Executor "${executor.name}" specifies IdP "${idpName}" in its idpUser trigger, ` +
+            `but no IdP with that name is configured. Available IdPs: ${available.join(", ")}`,
+          context: { executor: executor.name, idp: idpName, available },
+        },
+      );
     }
     return idpName;
   }
   if (localIdpNames.size === 0) {
-    throw locatedCLIError(context.config.path, {
-      code: "EXECUTOR_IDP_REQUIRED",
-      message: `Executor "${executor.name}" uses an idpUser trigger but no IdP is configured.`,
-      context: { executor: executor.name },
-    });
+    throw locatedCLIError(
+      { file: context.config.path },
+      {
+        code: "EXECUTOR_IDP_REQUIRED",
+        message: `Executor "${executor.name}" uses an idpUser trigger but no IdP is configured.`,
+        context: { executor: executor.name },
+      },
+    );
   }
   if (localIdpNames.size > 1) {
     const available = [...localIdpNames];
-    throw locatedCLIError(executor.file, {
-      code: "EXECUTOR_IDP_AMBIGUOUS",
-      message:
-        `Executor "${executor.name}" uses an idpUser trigger but the project defines multiple IdPs ` +
-        `(${available.join(", ")}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
-      context: { executor: executor.name, available },
-    });
+    throw locatedCLIError(
+      { file: executor.file },
+      {
+        code: "EXECUTOR_IDP_AMBIGUOUS",
+        message:
+          `Executor "${executor.name}" uses an idpUser trigger but the project defines multiple IdPs ` +
+          `(${available.join(", ")}). Specify which IdP to subscribe to via the trigger's "idp" option.`,
+        context: { executor: executor.name, available },
+      },
+    );
   }
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
@@ -478,15 +495,18 @@ function defaultGraphQLAppName(context: PlanContext, executor: DefinitionRef): s
   const available = context.applications.map(({ name }) => name);
   const [only, ...others] = available;
   if (only !== undefined && others.length === 0) return only;
-  throw locatedCLIError(executor.file, {
-    code: available.length === 0 ? "EXECUTOR_APP_NAME_REQUIRED" : "EXECUTOR_APP_NAME_AMBIGUOUS",
-    message: `Executor "${executor.name}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
-    suggestion:
-      available.length === 0
-        ? "Add an application to the config's apps, or remove the operation."
-        : `Set appName on the operation to one of ${available.join(", ")}.`,
-    context: { executor: executor.name, available },
-  });
+  throw locatedCLIError(
+    { file: executor.file },
+    {
+      code: available.length === 0 ? "EXECUTOR_APP_NAME_REQUIRED" : "EXECUTOR_APP_NAME_AMBIGUOUS",
+      message: `Executor "${executor.name}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
+      suggestion:
+        available.length === 0
+          ? "Add an application to the config's apps, or remove the operation."
+          : `Set appName on the operation to one of ${available.join(", ")}.`,
+      context: { executor: executor.name, available },
+    },
+  );
 }
 
 function resolveAuthAccessTokenNamespace(
@@ -497,34 +517,43 @@ function resolveAuthAccessTokenNamespace(
   const available = configAuthNamespaces(context);
   const [only, ...others] = available;
   if (only === undefined) {
-    throw locatedCLIError(context.config.path, {
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses no Auth service.`,
-      suggestion:
-        'Define an Auth service in this config. A defineConfig() config can instead reference one that another config defines with auth: { name: "<auth-name>", external: true }.',
-      context: { executor: executor.name },
-    });
+    throw locatedCLIError(
+      { file: context.config.path },
+      {
+        code: "AUTH_CONFIG_REQUIRED",
+        message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses no Auth service.`,
+        suggestion:
+          'Define an Auth service in this config. A defineConfig() config can instead reference one that another config defines with auth: { name: "<auth-name>", external: true }.',
+        context: { executor: executor.name },
+      },
+    );
   }
   const uses = others.length === 0 ? `Auth "${only}"` : `the Auth services ${available.join(", ")}`;
   if (auth !== undefined) {
     if (available.includes(auth)) return auth;
-    throw locatedCLIError(executor.file, {
-      code: "EXECUTOR_AUTH_NOT_FOUND",
-      message: `Executor "${executor.name}" names Auth "${auth}" in its authAccessToken trigger, but its config uses ${uses}.`,
-      suggestion:
-        others.length === 0
-          ? `Set the trigger's "auth" to "${only}", or omit it.`
-          : `Set the trigger's "auth" to one of ${available.join(", ")}.`,
-      context: { executor: executor.name, auth, available },
-    });
+    throw locatedCLIError(
+      { file: executor.file },
+      {
+        code: "EXECUTOR_AUTH_NOT_FOUND",
+        message: `Executor "${executor.name}" names Auth "${auth}" in its authAccessToken trigger, but its config uses ${uses}.`,
+        suggestion:
+          others.length === 0
+            ? `Set the trigger's "auth" to "${only}", or omit it.`
+            : `Set the trigger's "auth" to one of ${available.join(", ")}.`,
+        context: { executor: executor.name, auth, available },
+      },
+    );
   }
   if (others.length > 0) {
-    throw locatedCLIError(executor.file, {
-      code: "EXECUTOR_AUTH_AMBIGUOUS",
-      message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses ${uses}.`,
-      suggestion: `Set the trigger's "auth" to the Auth service it subscribes to.`,
-      context: { executor: executor.name, available },
-    });
+    throw locatedCLIError(
+      { file: executor.file },
+      {
+        code: "EXECUTOR_AUTH_AMBIGUOUS",
+        message: `Executor "${executor.name}" uses an authAccessToken trigger, but its config uses ${uses}.`,
+        suggestion: `Set the trigger's "auth" to the Auth service it subscribes to.`,
+        context: { executor: executor.name, available },
+      },
+    );
   }
   return only;
 }

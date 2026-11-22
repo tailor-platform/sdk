@@ -194,7 +194,7 @@ function jobUndetectableError(
   sourceFile: string,
   description: JobUndetectableDescription,
 ): CLIError {
-  return locatedCLIError(sourceFile, { ...description, code: JOB_UNDETECTABLE });
+  return locatedCLIError({ file: sourceFile }, { ...description, code: JOB_UNDETECTABLE });
 }
 
 /**
@@ -515,10 +515,13 @@ async function filterUsedJobs(
         const source = await fs.promises.readFile(sourceFile, "utf-8");
         const { program, errors } = parseSync(sourceFile, source);
         if (errors.length > 0) {
-          throw locatedCLIError(sourceFile, {
-            code: SOURCE_PARSE_FAILED,
-            message: `Failed to parse workflow source: ${errors.map((e) => e.message).join("; ")}`,
-          });
+          throw locatedCLIError(
+            { file: sourceFile },
+            {
+              code: SOURCE_PARSE_FAILED,
+              message: `Failed to parse workflow source: ${errors.map((e) => e.message).join("; ")}`,
+            },
+          );
         }
 
         const [firstDirectExecCall] = findDirectExecJobFunctionCalls(program as unknown as ASTNode);

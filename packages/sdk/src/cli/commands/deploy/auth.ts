@@ -362,19 +362,22 @@ function assertAuthMachineUsersDefined(
       : [{ field, machineUserName }],
   );
   if (missing.length === 0) return;
-  throw locatedCLIError(configPath, {
-    code: "AUTH_MACHINE_USER_NOT_FOUND",
-    message: missing
-      .map(
-        ({ field, machineUserName }) =>
-          `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
-      )
-      .join("\n"),
-    suggestion: machineUsers.length
-      ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
-      : "Add each listed machine user to machineUsers.",
-    context: { authNamespace: config.name, missing, machineUsers },
-  });
+  throw locatedCLIError(
+    { file: configPath },
+    {
+      code: "AUTH_MACHINE_USER_NOT_FOUND",
+      message: missing
+        .map(
+          ({ field, machineUserName }) =>
+            `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
+        )
+        .join("\n"),
+      suggestion: machineUsers.length
+        ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
+        : "Add each listed machine user to machineUsers.",
+      context: { authNamespace: config.name, missing, machineUsers },
+    },
+  );
 }
 
 /** An auth namespace whose child resources deploy plans; `auth` is undefined when its service is deleted. */

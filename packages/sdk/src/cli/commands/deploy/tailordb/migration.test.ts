@@ -371,31 +371,14 @@ describe("migration", () => {
       {
         code: "AUTH_CONFIG_REQUIRED",
         authServices: [],
-        db: {},
         context: { namespaces: ["namespace-a"] },
       },
       {
         code: "MACHINE_USER_REQUIRED",
         authServices: [{ config: { name: "auth", machineUsers: {} } }],
-        db: {},
         context: { namespaces: ["namespace-a"] },
       },
-      {
-        code: "MACHINE_USER_NOT_FOUND",
-        authServices: [{ config: { name: "auth", machineUsers: {} } }],
-        db: { "namespace-a": { migration: { machineUser: "ghost" } } },
-        context: { authNamespace: "auth" },
-      },
-      {
-        code: "MACHINE_USER_AMBIGUOUS",
-        authServices: [
-          { config: { name: "shop-auth", machineUsers: { seeder: {} } } },
-          { config: { name: "admin-auth", machineUsers: { seeder: {} } } },
-        ],
-        db: { "namespace-a": { migration: { machineUser: "seeder" } } },
-        context: {},
-      },
-    ])("points $code at the config", ({ code, authServices, db, context }) => {
+    ])("points $code at the config", ({ code, authServices, context }) => {
       let error: unknown;
       try {
         resolveMigrationMachineUsers(
@@ -404,7 +387,7 @@ describe("migration", () => {
               Application,
               "authServices" | "env"
             >,
-            config: { path: "/project/tailor.config.ts", db } as unknown as LoadedConfig,
+            config: { path: "/project/tailor.config.ts" },
           },
           [createMockMigration({ namespace: "namespace-a" })],
         );

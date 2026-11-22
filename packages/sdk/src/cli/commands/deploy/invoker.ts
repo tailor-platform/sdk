@@ -83,12 +83,15 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
   const label = definitionLabel(definition);
   const [only, ...others] = authNamespaces;
   if (only === undefined) {
-    throw locatedCLIError(definition.file, {
-      code: "INVOKER_AUTH_REQUIRED",
-      message: `${label} uses a string invoker ("${invoker}"), but no Auth service is configured.`,
-      suggestion: `Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: ${JSON.stringify(invoker)} }, or configure an Auth service.`,
-      context: { invoker, ...definitionContext(definition) },
-    });
+    throw locatedCLIError(
+      { file: definition.file },
+      {
+        code: "INVOKER_AUTH_REQUIRED",
+        message: `${label} uses a string invoker ("${invoker}"), but no Auth service is configured.`,
+        suggestion: `Name the Auth service that defines the machine user: invoker: { namespace: "<auth>", machineUserName: ${JSON.stringify(invoker)} }, or configure an Auth service.`,
+        context: { invoker, ...definitionContext(definition) },
+      },
+    );
   }
   if (others.length === 0) return { namespace: only, machineUserName: invoker };
   if (!machineUsers) {
@@ -100,27 +103,33 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
     const names = [
       ...new Set(authNamespaces.flatMap((name) => [...(machineUsers.get(name) ?? [])])),
     ].toSorted();
-    throw locatedCLIError(definition.file, {
-      code: "INVOKER_MACHINE_USER_NOT_FOUND",
-      message: `${label} uses invoker "${invoker}", but none of the Auth services ${authNamespaces.join(", ")} has a machine user with that name.`,
-      suggestion: names.length
-        ? `Use one of the existing machine users: ${names.join(", ")}.`
-        : "Define the machine user in one of these Auth services before using it as invoker.",
-      context: {
-        invoker,
-        authNamespaces: [...authNamespaces],
-        machineUsers: names,
-        ...definitionContext(definition),
+    throw locatedCLIError(
+      { file: definition.file },
+      {
+        code: "INVOKER_MACHINE_USER_NOT_FOUND",
+        message: `${label} uses invoker "${invoker}", but none of the Auth services ${authNamespaces.join(", ")} has a machine user with that name.`,
+        suggestion: names.length
+          ? `Use one of the existing machine users: ${names.join(", ")}.`
+          : "Define the machine user in one of these Auth services before using it as invoker.",
+        context: {
+          invoker,
+          authNamespaces: [...authNamespaces],
+          machineUsers: names,
+          ...definitionContext(definition),
+        },
       },
-    });
+    );
   }
   if (alsoDefining.length > 0) {
-    throw locatedCLIError(definition.file, {
-      code: "INVOKER_MACHINE_USER_AMBIGUOUS",
-      message: `${label} uses invoker "${invoker}", which the Auth services ${defining.join(", ")} all define.`,
-      suggestion: `Name the Auth service, for example invoker: { namespace: "${namespace}", machineUserName: "${invoker}" }.`,
-      context: { invoker, authNamespaces: defining, ...definitionContext(definition) },
-    });
+    throw locatedCLIError(
+      { file: definition.file },
+      {
+        code: "INVOKER_MACHINE_USER_AMBIGUOUS",
+        message: `${label} uses invoker "${invoker}", which the Auth services ${defining.join(", ")} all define.`,
+        suggestion: `Name the Auth service, for example invoker: { namespace: "${namespace}", machineUserName: "${invoker}" }.`,
+        context: { invoker, authNamespaces: defining, ...definitionContext(definition) },
+      },
+    );
   }
   return { namespace, machineUserName: invoker };
 }
@@ -146,28 +155,34 @@ function assertInvokerMachineUser(params: AssertInvokerMachineUserParams): void 
     throw internalError(`Machine users of Auth namespace "${authNamespace}" were not listed`);
   }
   if (known === null) {
-    throw locatedCLIError(namespaceFile, {
-      code: "INVOKER_AUTH_NOT_FOUND",
-      message: `${label} uses invoker "${machineUserName}" of Auth service "${authNamespace}", but the workspace has no Auth service with that name.`,
-      suggestion: `Name an existing Auth service, or deploy the config that defines "${authNamespace}" first or in the same run.`,
-      context: { invoker: machineUserName, authNamespace, ...definitionContext(definition) },
-    });
+    throw locatedCLIError(
+      { file: namespaceFile },
+      {
+        code: "INVOKER_AUTH_NOT_FOUND",
+        message: `${label} uses invoker "${machineUserName}" of Auth service "${authNamespace}", but the workspace has no Auth service with that name.`,
+        suggestion: `Name an existing Auth service, or deploy the config that defines "${authNamespace}" first or in the same run.`,
+        context: { invoker: machineUserName, authNamespace, ...definitionContext(definition) },
+      },
+    );
   }
   if (known.has(machineUserName)) return;
   const names = [...known].toSorted();
-  throw locatedCLIError(definition.file, {
-    code: "INVOKER_MACHINE_USER_NOT_FOUND",
-    message: `${label} uses invoker "${machineUserName}", but Auth service "${authNamespace}" has no machine user with that name.`,
-    suggestion: names.length
-      ? `Use one of the existing machine users: ${names.join(", ")}.`
-      : `Define the machine user in Auth service "${authNamespace}" before using it as invoker.`,
-    context: {
-      invoker: machineUserName,
-      authNamespace,
-      machineUsers: names,
-      ...definitionContext(definition),
+  throw locatedCLIError(
+    { file: definition.file },
+    {
+      code: "INVOKER_MACHINE_USER_NOT_FOUND",
+      message: `${label} uses invoker "${machineUserName}", but Auth service "${authNamespace}" has no machine user with that name.`,
+      suggestion: names.length
+        ? `Use one of the existing machine users: ${names.join(", ")}.`
+        : `Define the machine user in Auth service "${authNamespace}" before using it as invoker.`,
+      context: {
+        invoker: machineUserName,
+        authNamespace,
+        machineUsers: names,
+        ...definitionContext(definition),
+      },
     },
-  });
+  );
 }
 
 type ListInvokerMachineUsersParams = {

@@ -161,18 +161,21 @@ function undetectableStartCallError(
   { importSource, importedName }: UndetectableImport,
 ): Error {
   const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
-  return locatedCLIError(currentFilePath, {
-    code: "WORKFLOW_START_TARGET_UNDETECTABLE",
-    message:
-      `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
-      `${exportLabel} is not a workflow or job the build can detect.`,
-    details:
-      `The build rewrites .start() on the file's default-exported workflow (including one ` +
-      `returned from a helper function) and on workflows and jobs created in that file with ` +
-      `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
-      `literal name; any other .start() would fail at runtime after deploy.`,
-    context: { callee: calleeText, importSource, importedName },
-  });
+  return locatedCLIError(
+    { file: currentFilePath },
+    {
+      code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+      message:
+        `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
+        `${exportLabel} is not a workflow or job the build can detect.`,
+      details:
+        `The build rewrites .start() on the file's default-exported workflow (including one ` +
+        `returned from a helper function) and on workflows and jobs created in that file with ` +
+        `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
+        `literal name; any other .start() would fail at runtime after deploy.`,
+      context: { callee: calleeText, importSource, importedName },
+    },
+  );
 }
 
 function assertNoUndetectableStartCalls(
@@ -352,12 +355,15 @@ type StartInvokerErrorParams = {
 
 function startInvokerError(params: StartInvokerErrorParams): Error {
   const { call, currentFilePath, code, message, suggestion } = params;
-  return locatedCLIError(currentFilePath, {
-    code,
-    message: `${call.calleeText}() ${message}`,
-    suggestion,
-    context: { workflow: call.targetName },
-  });
+  return locatedCLIError(
+    { file: currentFilePath },
+    {
+      code,
+      message: `${call.calleeText}() ${message}`,
+      suggestion,
+      context: { workflow: call.targetName },
+    },
+  );
 }
 
 function namedAuthInvoker(namespace = "<auth>", machineUserName = "<machine user>"): string {

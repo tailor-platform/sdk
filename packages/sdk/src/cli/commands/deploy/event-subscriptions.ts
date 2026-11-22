@@ -149,11 +149,14 @@ export function collectEventSubscriptions(
       }
       const [owner] = owners;
       if (!owner) {
-        throw locatedCLIError(file, {
-          code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
-          message: missingOwnerMessage(executor.name, lookup, subscriber),
-          context: { executor: executor.name },
-        });
+        throw locatedCLIError(
+          { file: file },
+          {
+            code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+            message: missingOwnerMessage(executor.name, lookup, subscriber),
+            context: { executor: executor.name },
+          },
+        );
       }
       subscriptions.push({
         ...entry,

@@ -65,14 +65,17 @@ export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
  */
 export function configIssuesError(params: ConfigIssuesErrorParams): CLIError {
   const { file, exportName, subject, service, issues, details, suggestion, cause } = params;
-  return locatedCLIError(file, {
-    code: "CONFIG_INVALID",
-    message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
-    details,
-    suggestion,
-    context: { exportName, ...service, issues },
-    cause,
-  });
+  return locatedCLIError(
+    { file: file },
+    {
+      code: "CONFIG_INVALID",
+      message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
+      details,
+      suggestion,
+      context: { exportName, ...service, issues },
+      cause,
+    },
+  );
 }
 
 const DEFINITION_LABELS = {
@@ -107,12 +110,15 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
   const { kind, file, exportName, error } = params;
   const issues = flattenZodIssues(error.issues);
   const exportLabel = exportName === "default" ? "" : ` \`${exportName}\``;
-  return locatedCLIError(file, {
-    code: "DEFINITION_INVALID",
-    message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
-    context: { kind, exportName, issues },
-    cause: error,
-  });
+  return locatedCLIError(
+    { file: file },
+    {
+      code: "DEFINITION_INVALID",
+      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
+      context: { kind, exportName, issues },
+      cause: error,
+    },
+  );
 }
 
 /**
@@ -134,11 +140,14 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
           message: `${subject} must not be a named export, but it is exported as \`${exportName}\`.`,
           suggestion: "Export it only as the default export.",
         };
-  return locatedCLIError(file, {
-    code: "DEFINITION_EXPORT_INVALID",
-    ...placement,
-    context: { kind, exportName },
-  });
+  return locatedCLIError(
+    { file: file },
+    {
+      code: "DEFINITION_EXPORT_INVALID",
+      ...placement,
+      context: { kind, exportName },
+    },
+  );
 }
 
 const DUPLICATE_NAME_LABELS = {

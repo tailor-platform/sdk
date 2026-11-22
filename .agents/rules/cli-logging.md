@@ -160,7 +160,8 @@ raise a `CLIError`, or an `internalError()` for an SDK invariant no user action 
 rejects a build with an error of its own, so a `CLIError` raised inside a rolldown hook is kept with
 `createHookFailures()` (`cli/services/hook-failures.ts`) and thrown after the build.
 
-A failure that points at a file carries it as its `location` (the `cli/shared/validation-errors.ts`
+A failure that points at a file carries it as its `location` (`locatedCLIError()` for a `CLIError`
+you raise, which also puts the file in `context.file`; the `cli/shared/validation-errors.ts`
 factories, `atUserModule()`, `withSourceLocation()`), and its `message` leaves the file out: the
 printers put `<file>[:<line>]: ` before the message through `locatedMessage()`.
 
