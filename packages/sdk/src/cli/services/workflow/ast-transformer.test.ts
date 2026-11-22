@@ -818,25 +818,18 @@ const workflowRunId = await orderWorkflow.start(
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
 
       expect(result).toContain('await globalThis.tailor.workflow.startWorkflow("order-processing"');
       expect(result).toContain('{ orderId: "123", customerId: "456" }');
       expect(result).toContain('{ invoker: "admin" }');
-    });
-
-    test("transforms workflow.start() with shorthand invoker", () => {
-      const source = `
-const invoker = "admin";
-const result = await myWorkflow.start({ id: 1 }, { invoker });
-`;
-      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
-      const jobNameMap = new Map<string, string>();
-
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
-
-      expect(result).toContain('tailor.workflow.startWorkflow("my-workflow"');
-      expect(result).toContain("{ invoker }");
     });
 
     test("transforms workflow.start() without options and omits the helper", () => {
@@ -1006,10 +999,9 @@ await myWorkflow.start({ id: 2 }, { invoker: "batch" });
       expect(matches).toHaveLength(1);
     });
 
-    test("maps an object invoker to authInvoker and leaves a string one when authNamespace is not provided", async () => {
+    test("maps an object invoker to authInvoker when authNamespace is not provided", async () => {
       const source = `
 await myWorkflow.start({ id: 1 }, { invoker: { namespace: "other-auth", machineUserName: "kiosk" } });
-await myWorkflow.start({ id: 2 }, { invoker: "kiosk" });
 `;
       const result = transformStartCalls(
         source,
@@ -1033,9 +1025,38 @@ await myWorkflow.start({ id: 2 }, { invoker: "kiosk" });
           { id: 1 },
           { authInvoker: { namespace: "other-auth", machineUserName: "kiosk" } },
         ],
-        ["my-workflow", { id: 2 }, { invoker: "kiosk" }],
       ]);
     });
+  });
+  describe("workflow start invokers in a config without an Auth service", () => {
+    const transform = (options: string) =>
+      transformStartCalls(
+        `await myWorkflow.start({ id: 1 }, ${options});`,
+        new Map([["myWorkflow", "my-workflow"]]),
+        new Map<string, string>(),
+      );
+
+    test("rejects a string literal invoker, naming the file", () => {
+      let thrown: unknown;
+      try {
+        transform('{ invoker: "kiosk" }');
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toMatchObject({ code: "WORKFLOW_START_INVOKER_AUTH_REQUIRED" });
+      expect(getErrorDiagnostics(thrown as Error).location).toEqual({
+        file: path.resolve("test.ts"),
+      });
+    });
+
+    test.for(["{ invoker: machineUser }", "options", "{ ...defaults }"])(
+      "rejects %s, whose invoker the build cannot read",
+      (options) => {
+        expect(() => transform(options)).toThrow(
+          expect.objectContaining({ code: "WORKFLOW_START_INVOKER_UNRESOLVED" }),
+        );
+      },
+    );
   });
   describe("workflow start invokers in a config with several Auth services", () => {
     const machineUserAuthNamespaces = new Map([
@@ -1209,7 +1230,14 @@ const unknown = await randomThing.start({ id: 3 });
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchData", "fetch-data"]]);
 
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
 
       // Known workflow transformed
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
@@ -1475,7 +1503,14 @@ async function processOrder(orderId: string) {
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
 
       expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer"');
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
@@ -1522,7 +1557,14 @@ const executionId = await orderWorkflow.start({ orderId: "123" }, { invoker });
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
 
       expect(result).toContain('await globalThis.tailor.workflow.startWorkflow("order-processing"');
       expect(result).not.toContain("(async () => globalThis.tailor.workflow.startWorkflow");
