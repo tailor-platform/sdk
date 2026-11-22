@@ -1,5 +1,5 @@
 import { assertDefined } from "#/utils/assert";
-import { MAX_PAGE_SIZE } from "./client";
+import { isNotFoundError, MAX_PAGE_SIZE } from "./client";
 import { CLIError } from "./errors";
 
 type ListTailorDBTypesClient = {
@@ -23,7 +23,8 @@ type ResolveTableNamespacesArgs = {
 
 /**
  * Find every namespace that has each TailorDB table. A table name matches with the same case
- * when any namespace has it so; otherwise it matches case-insensitively.
+ * when any namespace has it so; otherwise it matches case-insensitively. A namespace that is not
+ * deployed has no tables, unless no namespace is deployed.
  * @param args - Resolution inputs
  * @returns Namespaces of each found table, in the given namespace order; tables no namespace has are left out
  */
@@ -49,7 +50,8 @@ export async function resolveTableNamespaces(
     matches.set(tableName, namespaces);
   };
 
-  for (const namespace of args.namespaces) {
+  const listNamespace = async (namespace: string): Promise<Array<{ name: string }>> => {
+    const types: Array<{ name: string }> = [];
     const unfound = new Set(args.tableNames);
     let pageToken = "";
     do {
@@ -59,20 +61,36 @@ export async function resolveTableNamespaces(
         pageToken,
         pageSize: MAX_PAGE_SIZE,
       });
-
-      for (const type of tailordbTypes) {
-        for (const requestedTableName of requestedTablesByLowercase.get(type.name.toLowerCase()) ??
-          []) {
-          add(caseInsensitive, requestedTableName, namespace);
-          if (type.name === requestedTableName) {
-            add(exact, requestedTableName, namespace);
-            unfound.delete(requestedTableName);
-          }
-        }
-      }
-
+      types.push(...tailordbTypes);
+      for (const type of tailordbTypes) unfound.delete(type.name);
       pageToken = nextPageToken;
     } while (pageToken && unfound.size > 0);
+    return types;
+  };
+
+  const listed = await Promise.all(
+    args.namespaces.map(async (namespace) => {
+      try {
+        return { namespace, types: await listNamespace(namespace), notFound: undefined };
+      } catch (error) {
+        if (isNotFoundError(error)) return { namespace, types: [], notFound: error };
+        throw error;
+      }
+    }),
+  );
+  const [firstListed] = listed;
+  if (firstListed && listed.every((result) => result.notFound !== undefined)) {
+    throw firstListed.notFound;
+  }
+
+  for (const result of listed) {
+    for (const type of result.types) {
+      for (const requestedTableName of requestedTablesByLowercase.get(type.name.toLowerCase()) ??
+        []) {
+        add(caseInsensitive, requestedTableName, result.namespace);
+        if (type.name === requestedTableName) add(exact, requestedTableName, result.namespace);
+      }
+    }
   }
 
   return new Map(

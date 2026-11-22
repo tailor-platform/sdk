@@ -76,12 +76,13 @@ describe("resolveTableNamespaces", () => {
     });
   });
 
-  test("propagates a failure to list a namespace's tables, including NotFound", async () => {
-    const listError = new ConnectError("workspace not found", Code.NotFound);
+  test("propagates a failure to list a namespace's tables", async () => {
+    const listError = new ConnectError("transient failure", Code.Unavailable);
     const client = listingClient();
-    client.listTailorDBTypes
-      .mockRejectedValueOnce(listError)
-      .mockResolvedValueOnce(namesResult("User"));
+    client.listTailorDBTypes.mockImplementation(async ({ namespaceName }) => {
+      if (namespaceName === "main") throw listError;
+      return namesResult("User");
+    });
 
     await expect(
       resolveTableNamespaces({
@@ -91,7 +92,21 @@ describe("resolveTableNamespaces", () => {
         client,
       }),
     ).rejects.toBe(listError);
-    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+  });
+
+  test("propagates NotFound when no namespace can be listed", async () => {
+    const listError = new ConnectError("workspace not found", Code.NotFound);
+    const client = listingClient();
+    client.listTailorDBTypes.mockRejectedValue(listError);
+
+    await expect(
+      resolveTableNamespaces({
+        workspaceId: "workspace-id",
+        namespaces: ["main", "analytics"],
+        tableNames: ["User"],
+        client,
+      }),
+    ).rejects.toBe(listError);
   });
 
   test("stops paging a namespace once every table is resolved", async () => {
@@ -109,6 +124,25 @@ describe("resolveTableNamespaces", () => {
 
     expect(result.get("User")).toEqual(["main"]);
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
+  });
+
+  test("treats a namespace that is not deployed as having no tables", async () => {
+    const client = listingClient();
+    client.listTailorDBTypes.mockImplementation(async ({ namespaceName }) => {
+      if (namespaceName === "new-db") {
+        throw new ConnectError("TailorDB service does not exist", Code.NotFound);
+      }
+      return namesResult("User");
+    });
+
+    const result = await resolveTableNamespaces({
+      workspaceId: "workspace-id",
+      namespaces: ["main", "new-db"],
+      tableNames: ["User"],
+      client,
+    });
+
+    expect(result.get("User")).toEqual(["main"]);
   });
 
   test("prefers the namespaces whose table name matches with the same case", async () => {
