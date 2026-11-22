@@ -14,8 +14,7 @@ import {
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
 import { soleAuthService } from "./auth-namespace";
-import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError } from "./errors";
+import { type CLIError, locatedCLIError } from "./errors";
 import { loadApplicationNamespaces } from "./tailordb-namespaces";
 import { configIssuesError } from "./validation-errors";
 import type { LoadedConfig } from "./config-loader";
@@ -87,16 +86,12 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   const pluginOptions = resolvePluginConfig(plugins, SeedGeneratorID);
   if (!pluginOptions) {
-    throw withErrorDiagnostics(
-      CLIError({
-        code: "SEED_PLUGIN_NOT_CONFIGURED",
-        message: "seedPlugin is not configured.",
-        suggestion:
-          'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
-        context: { file: config.path },
-      }),
-      { location: { file: config.path } },
-    );
+    throw locatedCLIError(config.path, {
+      code: "SEED_PLUGIN_NOT_CONFIGURED",
+      message: "seedPlugin is not configured.",
+      suggestion:
+        'Add seedPlugin({ distPath: "./seed" }) from "@tailor-platform/sdk/plugin/seed" to definePlugins().',
+    });
   }
   if (typeof pluginOptions.distPath !== "string" || pluginOptions.distPath === "") {
     throw seedOptionsError({

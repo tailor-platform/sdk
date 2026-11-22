@@ -1,7 +1,6 @@
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError } from "#/cli/shared/errors";
+import { locatedCLIError } from "#/cli/shared/errors";
 import { configInvalidError } from "#/cli/shared/validation-errors";
 import { ResolverPermissionSchema } from "#/parser/service/resolver/index";
 import { checkDefaultPermissionInputs } from "#/parser/service/resolver/permission-operands";
@@ -91,20 +90,17 @@ export function resolveResolverDefaultPermissionForFile(
 
   if (owners.length > 1) {
     const namespaces = owners.map((owner) => owner.namespace);
-    throw withErrorDiagnostics(
-      CLIError({
-        code: "RESOLVER_NAMESPACE_AMBIGUOUS",
-        message:
-          `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
-          `namespace: ${namespaces.map((namespace) => `"${namespace}"`).join(", ")}`,
-        details: "Each namespace applies its own `defaultPermission`.",
-        suggestion:
-          "Narrow the `files` patterns, for example with a `!` pattern, until exactly one " +
-          "namespace claims this file.",
-        context: { file: configPath, resolverFile: targetFile, namespaces },
-      }),
-      { location: { file: configPath } },
-    );
+    throw locatedCLIError(configPath, {
+      code: "RESOLVER_NAMESPACE_AMBIGUOUS",
+      message:
+        `Resolver ${path.relative(process.cwd(), targetFile)} matches more than one resolver ` +
+        `namespace: ${namespaces.map((namespace) => `"${namespace}"`).join(", ")}`,
+      details: "Each namespace applies its own `defaultPermission`.",
+      suggestion:
+        "Narrow the `files` patterns, for example with a `!` pattern, until exactly one " +
+        "namespace claims this file.",
+      context: { resolverFile: targetFile, namespaces },
+    });
   }
 
   const [owner] = owners;

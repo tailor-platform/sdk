@@ -1,8 +1,7 @@
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { walkBindingAware } from "#/cli/shared/binding-aware-walk";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError } from "#/cli/shared/errors";
+import { locatedCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
@@ -162,21 +161,18 @@ function undetectableStartCallError(
   { importSource, importedName }: UndetectableImport,
 ): Error {
   const exportLabel = importedName === "default" ? "default export" : `export "${importedName}"`;
-  return withErrorDiagnostics(
-    CLIError({
-      code: "WORKFLOW_START_TARGET_UNDETECTABLE",
-      message:
-        `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
-        `${exportLabel} is not a workflow or job the build can detect.`,
-      details:
-        `The build rewrites .start() on the file's default-exported workflow (including one ` +
-        `returned from a helper function) and on workflows and jobs created in that file with ` +
-        `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
-        `literal name; any other .start() would fail at runtime after deploy.`,
-      context: { file: currentFilePath, callee: calleeText, importSource, importedName },
-    }),
-    { location: { file: currentFilePath } },
-  );
+  return locatedCLIError(currentFilePath, {
+    code: "WORKFLOW_START_TARGET_UNDETECTABLE",
+    message:
+      `${calleeText}() cannot be rewritten: "${importSource}" is a workflow file, but its ` +
+      `${exportLabel} is not a workflow or job the build can detect.`,
+    details:
+      `The build rewrites .start() on the file's default-exported workflow (including one ` +
+      `returned from a helper function) and on workflows and jobs created in that file with ` +
+      `createWorkflow({ name: "..." }) or createWorkflowJob({ name: "...", body }) using a ` +
+      `literal name; any other .start() would fail at runtime after deploy.`,
+    context: { callee: calleeText, importSource, importedName },
+  });
 }
 
 function assertNoUndetectableStartCalls(
@@ -356,15 +352,12 @@ type StartInvokerErrorParams = {
 
 function startInvokerError(params: StartInvokerErrorParams): Error {
   const { call, currentFilePath, code, message, suggestion } = params;
-  return withErrorDiagnostics(
-    CLIError({
-      code,
-      message: `${call.calleeText}() ${message}`,
-      suggestion,
-      context: { file: currentFilePath, workflow: call.targetName },
-    }),
-    { location: { file: currentFilePath } },
-  );
+  return locatedCLIError(currentFilePath, {
+    code,
+    message: `${call.calleeText}() ${message}`,
+    suggestion,
+    context: { workflow: call.targetName },
+  });
 }
 
 function namedAuthInvoker(namespace = "<auth>", machineUserName = "<machine user>"): string {

@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, internalError } from "./errors";
+import { CLIError, internalError, locatedCLIError } from "./errors";
 import { flattenZodIssues, formatIssueList, type FlatIssue } from "./zod-issues";
 import type { AppConfig } from "#/configure/config/types";
 import type { SdkBrandKind } from "#/utils/brand";
@@ -65,17 +65,14 @@ export function configInvalidError(params: ConfigInvalidErrorParams): CLIError {
  */
 export function configIssuesError(params: ConfigIssuesErrorParams): CLIError {
   const { file, exportName, subject, service, issues, details, suggestion, cause } = params;
-  return withErrorDiagnostics(
-    CLIError({
-      code: "CONFIG_INVALID",
-      message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
-      details,
-      suggestion,
-      context: { file, exportName, ...service, issues },
-      cause,
-    }),
-    { location: { file } },
-  );
+  return locatedCLIError(file, {
+    code: "CONFIG_INVALID",
+    message: `Invalid ${subject}:\n${formatIssueList(issues)}`,
+    details,
+    suggestion,
+    context: { exportName, ...service, issues },
+    cause,
+  });
 }
 
 const DEFINITION_LABELS = {
@@ -110,15 +107,12 @@ export function definitionInvalidError(params: DefinitionInvalidErrorParams): CL
   const { kind, file, exportName, error } = params;
   const issues = flattenZodIssues(error.issues);
   const exportLabel = exportName === "default" ? "" : ` \`${exportName}\``;
-  return withErrorDiagnostics(
-    CLIError({
-      code: "DEFINITION_INVALID",
-      message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
-      context: { kind, file, exportName, issues },
-      cause: error,
-    }),
-    { location: { file } },
-  );
+  return locatedCLIError(file, {
+    code: "DEFINITION_INVALID",
+    message: `Invalid ${DEFINITION_LABELS[kind]}${exportLabel}:\n${formatIssueList(issues)}`,
+    context: { kind, exportName, issues },
+    cause: error,
+  });
 }
 
 /**
@@ -140,14 +134,11 @@ export function definitionExportError(params: DefinitionErrorParams): CLIError {
           message: `${subject} must not be a named export, but it is exported as \`${exportName}\`.`,
           suggestion: "Export it only as the default export.",
         };
-  return withErrorDiagnostics(
-    CLIError({
-      code: "DEFINITION_EXPORT_INVALID",
-      ...placement,
-      context: { kind, file, exportName },
-    }),
-    { location: { file } },
-  );
+  return locatedCLIError(file, {
+    code: "DEFINITION_EXPORT_INVALID",
+    ...placement,
+    context: { kind, exportName },
+  });
 }
 
 const DUPLICATE_NAME_LABELS = {
