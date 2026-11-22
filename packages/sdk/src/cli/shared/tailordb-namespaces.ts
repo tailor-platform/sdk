@@ -38,6 +38,14 @@ export interface LoadConfigNamespacesOptions {
 }
 
 /**
+ * Options for {@link loadWorkspaceNamespaces}.
+ */
+export interface LoadWorkspaceNamespacesOptions extends LoadConfigNamespacesOptions {
+  /** Namespaces to load. Omit to load every namespace of the workspace. */
+  namespaces?: string[];
+}
+
+/**
  * Result of {@link loadTailorDBNamespaces}.
  */
 export interface LoadedTailorDBNamespaces {
@@ -122,20 +130,25 @@ export async function loadConfigNamespaces(
  * lists, without writing any generated file.
  * @param workspace - Loaded workspace config.
  * @param plugins - Plugins exported by the config.
- * @param options - Loading options.
+ * @param options - Loading options, and the namespaces to load.
  * @returns The loaded TailorDB namespace data, in config order.
  */
 export async function loadWorkspaceNamespaces(
   workspace: LoadedWorkspaceConfig,
   plugins: Plugin[],
-  options: LoadConfigNamespacesOptions = {},
+  options: LoadWorkspaceNamespacesOptions = {},
 ): Promise<TailorDBNamespaceData[]> {
   const { tailorDBServices } = defineWorkspaceServices({
     workspace,
     pluginManager: plugins.length > 0 ? new PluginManager(plugins) : undefined,
     precompileTailorDBScripts: options.precompileScripts,
   });
-  return loadNamespaceData(tailorDBServices);
+  const { namespaces } = options;
+  return loadNamespaceData(
+    namespaces === undefined
+      ? tailorDBServices
+      : tailorDBServices.filter((service) => namespaces.includes(service.namespace)),
+  );
 }
 
 async function loadNamespaceData(

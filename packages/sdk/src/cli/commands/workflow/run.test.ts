@@ -6,7 +6,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { commonArgs } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -22,7 +22,10 @@ import { detectFunctionType } from "../function/detect";
 import { assertJobSource, outcomeBundle, runCommand } from "./run";
 import { bundleWorkflowRunJobs } from "./run-jobs";
 
-vi.mock("#/cli/shared/config-loader", () => ({ loadConfig: vi.fn() }));
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadConfigFile: vi.fn(),
+}));
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
@@ -96,13 +99,14 @@ describe("workflow run", () => {
     scriptPath = path.join(tmpDir, "jobs.ts");
     fs.writeFileSync(scriptPath, "export const greet = {};");
 
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
         auth: { name: "auth", machineUsers: { admin: {} } },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
     vi.mocked(initOperatorClient).mockResolvedValue(
       mockOperatorClient({ getAuthMachineUser: { machineUser: { id: "mu-1" } } }),
