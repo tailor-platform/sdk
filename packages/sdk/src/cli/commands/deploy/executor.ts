@@ -13,8 +13,8 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
-import { requireAuthNamespace } from "#/cli/shared/auth-namespace";
 import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
+import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
@@ -485,7 +485,19 @@ function resolveAuthAccessTokenNamespace(
 ): string {
   const available = configAuthNamespaces(context);
   const [only, ...others] = available;
-  if (only === undefined) return requireAuthNamespace(undefined);
+  if (only === undefined) {
+    const file = context.config.path;
+    throw withErrorDiagnostics(
+      CLIError({
+        code: "AUTH_CONFIG_REQUIRED",
+        message: `Executor "${executorName}" uses an authAccessToken trigger, but its config uses no Auth service.`,
+        suggestion:
+          'Add defineAuth() to this config, or reference an existing Auth service with auth: { name: "<auth-name>", external: true }.',
+        context: { executor: executorName, file },
+      }),
+      { location: { file } },
+    );
+  }
   const uses = others.length === 0 ? `Auth "${only}"` : `the Auth services ${available.join(", ")}`;
   if (auth !== undefined) {
     if (available.includes(auth)) return auth;

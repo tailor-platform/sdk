@@ -1,6 +1,7 @@
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
@@ -1479,7 +1480,7 @@ describe("planExecutor", () => {
     });
 
     test.for([undefined, "my-auth"])(
-      "authAccessTokenIssued with auth %s throws when no Auth service configured",
+      "authAccessTokenIssued with auth %s names the executor and its config when no Auth service configured",
       async (auth) => {
         const executor: Executor = {
           name: "on-auth-token-issued",
@@ -1490,10 +1491,17 @@ describe("planExecutor", () => {
         };
         const application = createMockApplication([executor]);
 
-        await expect(planExecutor(buildPlanContext(application))).rejects.toMatchObject({
+        const error = await planExecutor(buildPlanContext(application)).catch(
+          (error: unknown) => error,
+        );
+
+        expect(error).toMatchObject({
           code: "AUTH_CONFIG_REQUIRED",
-          message: "No Auth service configured",
+          message:
+            'Executor "on-auth-token-issued" uses an authAccessToken trigger, but its config uses no Auth service.',
+          context: { executor: "on-auth-token-issued", file: mockConfig.path },
         });
+        expect(getErrorDiagnostics(error as Error).location).toEqual({ file: mockConfig.path });
       },
     );
 
@@ -1743,18 +1751,6 @@ describe("planExecutor", () => {
         } satisfies Executor,
         appOptions: { idpNames: ["idp-a", "idp-b"] },
         errorPattern: /no IdP with that name is configured/,
-      },
-      {
-        name: "authAccessTokenIssued throws when no Auth service configured",
-        executor: {
-          name: "on-auth-token-issued",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: undefined,
-        errorPattern: "No Auth service configured",
       },
     ])("$name", async ({ executor, appOptions, errorPattern }) => {
       const application = createMockApplication([executor], appOptions);
