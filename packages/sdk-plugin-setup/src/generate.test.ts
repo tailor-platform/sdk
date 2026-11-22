@@ -4327,6 +4327,40 @@ export default defineConfig({
       expect(lock?.targets[0]?.inputs).not.toHaveProperty("apps");
     });
 
+    test("keeps the recorded workspace configs and version 3 when it sets up a defineConfig() target", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+
+      await setupTarget(baseOptions({ workspaceName: "legacy" }));
+
+      expect(readLock(testDir)).toMatchObject({
+        version: 3,
+        workspaces: [`${dir}/tailor.config.ts`],
+      });
+      expect(Object.keys(readLock(testDir)?.appIds ?? {})).toEqual(["tailor.config.ts"]);
+    });
+
+    test("checks migration drift once when a namespace of the workspace has migrations", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(
+        dir,
+        "workspace-config",
+        `{
+          db: {
+            "main-db": { files: [] },
+            "ledger-db": { files: [], migration: { directory: "./migrations/ledger" } },
+          },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+      );
+
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+
+      const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-shop.yml"), "utf-8");
+      expect(wf.match(/id: tailor-migration-drift-check$/gm)).toHaveLength(1);
+    });
+
     test("requires --name for a defineWorkspace() config, which names no workspace", async () => {
       const dir = nextAppDir();
       writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
@@ -4353,6 +4387,21 @@ export default defineConfig({
         version: 3,
         workspaces: [`${dir}/tailor.config.ts`],
       });
+    });
+
+    test.each([
+      { flag: "--erd-preview", options: { erdPreview: true } },
+      { flag: "--migration-test", options: { migrationTest: true } },
+    ])("rejects $flag for a workspace config", async ({ flag, options }) => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+
+      await expect(
+        setupTarget(baseOptions({ ...configLoaders, ...options, workspaceName: "shop", dir })),
+      ).rejects.toThrow(
+        new RegExp(`${flag} does not support a defineWorkspace\\(\\) or defineApp\\(\\) config`),
+      );
+      expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
     });
 
     test("rejects a workspace config deployed together with another --dir", async () => {

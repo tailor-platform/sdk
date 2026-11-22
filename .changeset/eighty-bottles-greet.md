@@ -2,4 +2,6 @@
 "@tailor-platform/sdk": minor
 ---
 
-**Beta:** `@tailor-platform/sdk/cli` exports `loadConfigFile()`, which loads a `tailor.config.ts` of any kind, and `lockVersionFor()` and `parseLockWorkspaces()` for `.github/tailor.lock`. `TAILOR_LOCK_VERSION` is now 3, the newest lock version the SDK reads; a lock without workspace configs is still written as version 2.
+`@tailor-platform/sdk/cli` exports `lockVersionFor()` and `parseLockWorkspaces()` for `.github/tailor.lock`, and the beta `loadConfigFile()`, which loads `tailor.config.ts` and its plugins for SDK plugins that read the config themselves.
+
+`TAILOR_LOCK_VERSION` is now 3, the newest lock version the SDK reads. A lock that records no workspace config is still written as version 2, so older SDKs keep reading it.

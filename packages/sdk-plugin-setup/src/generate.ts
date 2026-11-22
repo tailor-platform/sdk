@@ -632,6 +632,23 @@ async function findWorkspaceConfig(
 }
 
 /**
+ * Reject the options whose jobs run commands that do not load a workspace config yet.
+ * @param options - Setup options
+ */
+function assertWorkspaceConfigOptions(options: SetupTargetOptions): void {
+  if (options.kind !== "branch") return;
+  const unsupported = [
+    ...(options.erdPreview ? ["--erd-preview"] : []),
+    ...(options.migrationTest ? ["--migration-test"] : []),
+  ];
+  if (unsupported.length > 0) {
+    throw new Error(
+      `${unsupported.join(" and ")} does not support a defineWorkspace() or defineApp() config yet.`,
+    );
+  }
+}
+
+/**
  * Resolve all derived values and render the workflow content.
  * @param options - Setup options
  * @returns Resolved target metadata and rendered content
@@ -653,6 +670,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
   const workspaceConfigPath = await findWorkspaceConfig(options, dirs, configPaths);
+  if (workspaceConfigPath !== undefined) assertWorkspaceConfigOptions(options);
   await assertSeedable(options, configPath, multi);
 
   const packageManager = resolvePackageManager(options.outputDir, options.packageManager);
