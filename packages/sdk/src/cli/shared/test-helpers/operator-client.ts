@@ -31,7 +31,8 @@ type MethodMock<K extends OperatorMethod> =
 /** Mocks of the methods `K`, as {@link mockOperatorClient} takes them. */
 export type OperatorClientMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
 
-type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
+/** A client whose methods `K` are `vi.fn` spies, as {@link mockOperatorClient} returns it. */
+export type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
   [P in K]: Mock<MethodImpl<P>>;
 };
 

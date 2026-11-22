@@ -1287,6 +1287,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       ],
     });
     const client = createMockClient();
+    client.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [{ name: tableName }] });
     const order: string[] = [];
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, _namespace, number, historyId) => {

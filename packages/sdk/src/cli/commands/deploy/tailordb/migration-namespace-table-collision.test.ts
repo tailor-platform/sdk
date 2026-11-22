@@ -149,6 +149,15 @@ function createMockClient() {
           : { "sdk-migration": `m${String(checkpoint).padStart(4, "0")}` };
       return { metadata: { labels } };
     },
+    listTailorDBTypes: async (request) => {
+      const namespace = request.namespaceName ?? "";
+      const checkpoint = state.checkpoints.get(namespace);
+      const tables = state.tablesByDir[migrationsDirOf(namespace)];
+      if (checkpoint === undefined || !tables) return { tailordbTypes: [] };
+      return {
+        tailordbTypes: Object.keys(snapshotAt(tables, checkpoint).tables).map((name) => ({ name })),
+      };
+    },
   });
 }
 

@@ -9,7 +9,7 @@ import {
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { assert, describe, test, expect, vi, aroundEach } from "vitest";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
@@ -40,6 +40,7 @@ import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import { logMigrationPlanNotices } from "./migration-validation";
 import {
   gqlPermissionDeletion,
+  trackRemoteTables,
   typeDeletion,
   typeMetaRequest,
 } from "./test-helpers/migration-apply";
@@ -2702,27 +2703,29 @@ describe("applyTailorDB migration label reconciliation", () => {
     remoteLabels: Record<string, string>,
     options: MigrationClientOptions<K> = {},
   ) {
-    const client = withOperatorClientMocks(
+    const client = trackRemoteTables(
       withOperatorClientMocks(
-        mockOperatorClient({
-          getMetadata: { metadata: { labels: remoteLabels } },
-          setMetadata: {},
-          createTailorDBService: {},
-          createTailorDBType: {},
-          updateTailorDBType: {},
-          createTailorDBGQLPermission: {},
-          updateTailorDBGQLPermission: {},
-          deleteTailorDBGQLPermission: {},
-          deleteTailorDBType: {},
-        }),
-        options.includeRemoteSchema
-          ? {
-              listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
-              listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
-            }
-          : undefined,
+        withOperatorClientMocks(
+          mockOperatorClient({
+            getMetadata: { metadata: { labels: remoteLabels } },
+            setMetadata: {},
+            createTailorDBService: {},
+            createTailorDBType: {},
+            updateTailorDBType: {},
+            createTailorDBGQLPermission: {},
+            updateTailorDBGQLPermission: {},
+            deleteTailorDBGQLPermission: {},
+            deleteTailorDBType: {},
+          }),
+          options.includeRemoteSchema
+            ? {
+                listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
+                listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+              }
+            : undefined,
+        ),
+        options.overrides,
       ),
-      options.overrides,
     );
     return { client, getMetadata: client.getMetadata, setMetadata: client.setMetadata };
   }
@@ -3215,46 +3218,48 @@ describe("applyTailorDB migration label reconciliation", () => {
   function schemaVerificationClient(
     remoteSettings: MessageInitShape<typeof TailorDBType_TypeSettingSchema>,
   ) {
-    return mockOperatorClient({
-      getMetadata: {
-        metadata: { labels: { "sdk-migration": "m0000" } },
-      },
-      setMetadata: {},
-      listTailorDBTypes: {
-        tailordbTypes: [
-          {
-            name: "User",
-            schema: {
-              fields: {
-                id: {
-                  type: "uuid",
-                  required: true,
-                  allowedValues: [],
-                  validate: [],
-                  fields: {},
+    return trackRemoteTables(
+      mockOperatorClient({
+        getMetadata: {
+          metadata: { labels: { "sdk-migration": "m0000" } },
+        },
+        setMetadata: {},
+        listTailorDBTypes: {
+          tailordbTypes: [
+            {
+              name: "User",
+              schema: {
+                fields: {
+                  id: {
+                    type: "uuid",
+                    required: true,
+                    allowedValues: [],
+                    validate: [],
+                    fields: {},
+                  },
                 },
+                settings: remoteSettings,
+                relationships: {},
+                indexes: {},
+                files: {},
               },
-              settings: remoteSettings,
-              relationships: {},
-              indexes: {},
-              files: {},
             },
-          },
-        ],
-        nextPageToken: "",
-      },
-      listTailorDBGQLPermissions: {
-        permissions: [],
-        nextPageToken: "",
-      },
-      createTailorDBService: {},
-      createTailorDBType: {},
-      updateTailorDBType: {},
-      createTailorDBGQLPermission: {},
-      updateTailorDBGQLPermission: {},
-      deleteTailorDBGQLPermission: {},
-      deleteTailorDBType: {},
-    });
+          ],
+          nextPageToken: "",
+        },
+        listTailorDBGQLPermissions: {
+          permissions: [],
+          nextPageToken: "",
+        },
+        createTailorDBService: {},
+        createTailorDBType: {},
+        updateTailorDBType: {},
+        createTailorDBGQLPermission: {},
+        updateTailorDBGQLPermission: {},
+        deleteTailorDBGQLPermission: {},
+        deleteTailorDBType: {},
+      }),
+    );
   }
 
   type VerificationClient = ReturnType<typeof schemaVerificationClient>;
@@ -3998,10 +4003,13 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   function dropUserOnceDeleted(client: VerificationClient): void {
     const listUser = client.listTailorDBTypes.getMockImplementation();
+    const deleteType = client.deleteTailorDBType.getMockImplementation();
+    assert(deleteType);
     let userDeleted = false;
-    client.deleteTailorDBType.mockImplementation(async () => {
+    client.deleteTailorDBType.mockImplementation(async (request, options) => {
+      const response = await deleteType(request, options);
       userDeleted = true;
-      return {};
+      return response;
     });
     client.listTailorDBTypes.mockImplementation(async (request) =>
       listUser && request.namespaceName === "test-tailordb" && !userDeleted

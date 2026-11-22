@@ -6,7 +6,7 @@
  */
 
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { assert, describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   preconditionFailureError,
@@ -143,23 +143,19 @@ describe("migration flow: local definitions that no pending migration includes",
     });
   }
 
-  function refuseWritesToDeletedTables(
+  function delayTableDeletions(
     client: MockClient,
     refusedDeletion?: { tableName: string; error: Error },
   ) {
-    const deleted = new Set<string>();
-    client.deleteTailorDBType.mockImplementation(async (request) => {
-      const tableName = request.tailordbTypeName ?? "";
-      if (refusedDeletion && tableName === refusedDeletion.tableName) throw refusedDeletion.error;
-      deleted.add(tableName);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      return {};
-    });
-    client.updateTailorDBType.mockImplementation(async (request) => {
-      if (deleted.has(request.tailordbType?.name ?? "")) {
-        throw new ConnectError("table not found", Code.NotFound);
+    const deleteType = client.deleteTailorDBType.getMockImplementation();
+    assert(deleteType);
+    client.deleteTailorDBType.mockImplementation(async (request, options) => {
+      if (refusedDeletion && request.tailordbTypeName === refusedDeletion.tableName) {
+        throw refusedDeletion.error;
       }
-      return {};
+      const response = await deleteType(request, options);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return response;
     });
   }
 
@@ -583,7 +579,7 @@ describe("migration flow: local definitions that no pending migration includes",
 
   test('"deploy" deletes the tables the local definitions dropped before the held release, which leaves them alone', async () => {
     const client = createMockClient(["User", "Post", "Comment", "Archive"]);
-    refuseWritesToDeletedTables(client);
+    delayTableDeletions(client);
     const planResult = planTablesDroppedWithoutMigration();
 
     const releases: MaintenanceModeRelease[] = [];
@@ -603,7 +599,7 @@ describe("migration flow: local definitions that no pending migration includes",
   test('"deploy" reports a failed deletion once the other deletions finish, and the held release lifts the table it left', async () => {
     const client = createMockClient(["User", "Post", "Comment", "Archive"]);
     const deletionFailure = new ConnectError("delete refused", Code.Internal);
-    refuseWritesToDeletedTables(client, { tableName: "Comment", error: deletionFailure });
+    delayTableDeletions(client, { tableName: "Comment", error: deletionFailure });
     const planResult = planTablesDroppedWithoutMigration();
 
     const releases: MaintenanceModeRelease[] = [];
