@@ -6,7 +6,7 @@ import { confirmationArgs } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, toSentence } from "#/cli/shared/errors";
 import { formatTimestamp } from "#/cli/shared/format";
 import { logger } from "#/cli/shared/logger";
 import { profileNameSchema } from "#/cli/shared/profile-name";
@@ -448,7 +448,7 @@ export const pruneCommand = defineAppCommand({
       }
       for (const { workspace, reason } of partition.unreadable) {
         result.skipped.unreadableExpiry.push(workspace.name);
-        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}.`);
+        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${toSentence(reason)}`);
       }
       logger.info(
         `${partition.pending.length} workspace(s) have not expired and ${partition.unset.length} record no expiry; both were kept.`,

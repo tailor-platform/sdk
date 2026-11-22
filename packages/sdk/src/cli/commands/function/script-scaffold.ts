@@ -28,7 +28,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { formatConfigArg } from "#/cli/shared/args";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
-import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, internalError, toSentence } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
@@ -160,7 +160,7 @@ export function loadScriptSchemaSnapshot(scriptPath: string): ScriptSchemaSnapsh
   } catch (error) {
     throw CLIError({
       code: "SCRIPT_SNAPSHOT_INVALID",
-      message: `Failed to parse schema snapshot ${snapshotPath}: ${error instanceof Error ? error.message : error}.`,
+      message: `Failed to parse schema snapshot ${snapshotPath}: ${toSentence(error instanceof Error ? error.message : String(error))}`,
       suggestion: "Re-run `tailor function script` to regenerate it.",
       cause: error,
     });

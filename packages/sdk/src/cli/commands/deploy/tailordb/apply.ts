@@ -46,7 +46,7 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError, toSentence } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
@@ -444,7 +444,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   } catch (error) {
     logger.warn(
       `Could not return migration ${migration.namespace}/${formatMigrationNumber(migration.number)} to its pre-migration schema: ` +
-        `${error instanceof Error ? error.message : String(error)}. The original migration error is reported below.`,
+        `${toSentence(error instanceof Error ? error.message : String(error))} The original migration error is reported below.`,
     );
   }
 }
@@ -495,7 +495,7 @@ async function clearRolledBackRecord(
     if (state === "cleared") return state;
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
-        `${error instanceof Error ? error.message : String(error)}. ` +
+        `${toSentence(error instanceof Error ? error.message : String(error))} ` +
         "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
         (kind === "main"
           ? "settle it with 'tailor tailordb migration resolve'."
@@ -599,7 +599,7 @@ async function clearRecordAfterRelease(
     await clearMaintenanceModeRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}. A later deploy removes it.`,
+      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toSentence(toError(error).message)} A later deploy removes it.`,
     );
   }
 }
@@ -643,7 +643,7 @@ async function findUnownedMigrationCheckpoints(
           code: "MIGRATION_CHECKPOINT_UNVERIFIED",
           message:
             `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
-            `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ${outcome}`,
+            `${toSentence(checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError))} ${outcome}`,
         }),
       );
     }
@@ -1546,7 +1546,7 @@ function readRollbackScope(
   } catch (error) {
     logger.warn(
       `Could not read migration ${migration.namespace}/${formatMigrationNumber(migration.number)} or its prior checkpoint: ` +
-        `${error instanceof Error ? error.message : String(error)}. Only what this deploy wrote is rolled back.`,
+        `${toSentence(error instanceof Error ? error.message : String(error))} Only what this deploy wrote is rolled back.`,
     );
     return new Set();
   }
@@ -1700,7 +1700,7 @@ async function clearCleanupRecord(
     await clearMigrationCleanupRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toError(error).message}. A later deploy removes it.`,
+      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toSentence(toError(error).message)} A later deploy removes it.`,
     );
   }
 }
@@ -1732,7 +1732,7 @@ async function confirmCheckpointAfterUpdateFailure(
   } catch (readbackError) {
     logger.warn(
       `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
-        `${readbackError instanceof Error ? readbackError.message : String(readbackError)}. ` +
+        `${toSentence(readbackError instanceof Error ? readbackError.message : String(readbackError))} ` +
         "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
     );
     throw updateError;
@@ -1856,7 +1856,7 @@ async function checkRestorationCheckpoint(
       code: "MIGRATION_CHECKPOINT_UNVERIFIED",
       message:
         `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
-        `${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}. ` +
+        `${toSentence(checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError))} ` +
         "Skipping restoration for this namespace and aborting this deployment.",
       suggestion:
         (restricted
@@ -1983,7 +1983,9 @@ async function releaseHeldMaintenanceMode(
     await restoreTables(flow, restoration, runLog, releaseClient);
   } catch (restorationError) {
     if (!ownershipError) throw restorationError;
-    logger.warn(`Could not restore every TailorDB table: ${toError(restorationError).message}.`);
+    logger.warn(
+      `Could not restore every TailorDB table: ${toSentence(toError(restorationError).message)}`,
+    );
   }
   if (ownershipError) throw ownershipError;
   return finishMaintenance(flow);
@@ -2001,7 +2003,7 @@ async function restoreAfterMigrations(
   } catch (restorationError) {
     if (!outcome.failure) throw restorationError;
     const unrestored = readUnrestoredTables(restorationError);
-    const reason = `Could not restore every TailorDB table after the migration failed: ${toError(restorationError).message}.`;
+    const reason = `Could not restore every TailorDB table after the migration failed: ${toSentence(toError(restorationError).message)}`;
     if (flow.phaseSettings.restricted) {
       warnTablesLeftRestricted(reason, unrestored, {
         namesUnknown: unrestored.every((entry) => entry.tables.length === 0),

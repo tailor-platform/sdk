@@ -4,7 +4,7 @@ import { ttlArg, ttlLimit } from "#/cli/commands/workspace/age";
 import { deploymentArgs, durationArg, locationIds, parseDuration } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toSentence } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -102,7 +102,7 @@ export async function runMigrationTest(
       expiryRecorded = true;
     } catch (expiryError) {
       logger.warn(
-        `Failed to record an expiry on temporary workspace ${workspace.id}: ${expiryError instanceof Error ? expiryError.message : String(expiryError)}. Record one with ${formatCommandHint(
+        `Failed to record an expiry on temporary workspace ${workspace.id}: ${toSentence(expiryError instanceof Error ? expiryError.message : String(expiryError))} Record one with ${formatCommandHint(
           {
             command: "tailor",
             args: [

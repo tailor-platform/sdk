@@ -22,7 +22,7 @@ import {
 } from "#/cli/commands/deploy/label";
 import { isWorkflowExecutionFailureStatus } from "#/cli/commands/workflow/status";
 import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, internalError, toSentence } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -180,7 +180,7 @@ export async function teardownTemporaryWorkflow(
       removedAll = false;
       warn(
         `Could not remove the temporary ${subject} ${label} '${resource}': ` +
-          `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
+          `${toSentence(error instanceof Error ? error.message : String(error))} ${leftoverNote}`,
       );
     }
   }

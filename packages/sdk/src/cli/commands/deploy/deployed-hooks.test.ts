@@ -207,28 +207,34 @@ describe("deployed hooks", () => {
       }),
     ).toEqual([{ application: "app", pluginId: "hook", outputs }]);
   });
-  test("stops after a failed hook and identifies unapplied hooks in the error", async () => {
-    const client = clientMock();
-    const later = vi.fn();
-    await expect(
-      runDeployedHooks({
-        client,
-        workspaceId: "ws",
-        targets: [
-          target([
-            plugin(() => {
-              throw new Error("build failed");
-            }),
-            plugin(later, "later"),
-          ]),
-        ],
-      }),
-    ).rejects.toMatchObject({
-      code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*hook.*app.*build failed.*later/s),
-    });
-    expect(later).not.toHaveBeenCalled();
-  });
+  test.each([
+    ["build failed", "build failed. Hooks not run: later (app: app)"],
+    ["Build failed.", "Build failed. Hooks not run: later (app: app)"],
+  ])(
+    "stops after a hook fails with %j and identifies unapplied hooks in the error",
+    async (reason, ending) => {
+      const client = clientMock();
+      const later = vi.fn();
+      await expect(
+        runDeployedHooks({
+          client,
+          workspaceId: "ws",
+          targets: [
+            target([
+              plugin(() => {
+                throw new Error(reason);
+              }),
+              plugin(later, "later"),
+            ]),
+          ],
+        }),
+      ).rejects.toMatchObject({
+        code: "DEPLOYED_HOOK_FAILED",
+        message: `Platform resources were applied successfully, but the onDeployed hook of plugin "hook" failed for app "app": ${ending}`,
+      });
+      expect(later).not.toHaveBeenCalled();
+    },
+  );
   test("resolves public OAuth clients for an external Auth namespace", async () => {
     const client = clientMock();
     const hook = vi.fn();

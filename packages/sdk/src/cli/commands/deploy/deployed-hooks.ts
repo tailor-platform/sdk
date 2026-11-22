@@ -3,7 +3,7 @@ import { stat } from "node:fs/promises";
 import * as path from "pathe";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, toSentence } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
 import { withSpan } from "#/cli/telemetry/index";
@@ -185,7 +185,7 @@ function deployedHookFailure(what: string, error: unknown, notRun: readonly stri
   const reason = error instanceof Error ? error.message : String(error);
   return CLIError({
     code: "DEPLOYED_HOOK_FAILED",
-    message: `Platform resources were applied successfully, but ${what}: ${reason}${notRun.length ? `. Hooks not run: ${notRun.join(", ")}` : ""}`,
+    message: `Platform resources were applied successfully, but ${what}: ${notRun.length ? `${toSentence(reason)} Hooks not run: ${notRun.join(", ")}` : reason}`,
     suggestion:
       "Fix the error and run `tailor deploy` again. Unchanged resources are not re-applied.",
     cause: error,
