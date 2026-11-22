@@ -40,7 +40,11 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 /** Loaded configuration with resolved path. */
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
-/** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
+/**
+ * A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> &
   Pick<WorkspaceExport, "definedBy"> & { path: string };
 
@@ -66,7 +70,11 @@ export function tailorDBTypeNameScopeOf(
   return isLoadedWorkspaceConfig(config) ? "workspace" : "application";
 }
 
-/** A loaded config file, told apart by the function that defined its default export. */
+/**
+ * A loaded config file, told apart by the function that defined its default export.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export type LoadedConfigFile =
   | { kind: "config"; config: LoadedConfig; plugins: Plugin[] }
   | { kind: "workspace"; workspace: LoadedWorkspaceConfig; plugins: Plugin[] };
@@ -127,6 +135,8 @@ function resolveEnv(env: Record<string, EnvEntry>): Record<string, EnvValue> {
 
 /**
  * Load a Tailor configuration file of any kind and its plugins.
+ *
+ * **Beta:** This API may change in future releases.
  * @param configPath - Optional explicit config path
  * @param options - Optional module import behavior.
  * @returns The `defineConfig()` config, or the workspace a `defineWorkspace()` or `defineApp()` config describes, with its plugins

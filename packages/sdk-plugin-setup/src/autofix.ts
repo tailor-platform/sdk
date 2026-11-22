@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { logger } from "@tailor-platform/sdk/cli";
+import { lockVersionFor, logger } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { agentRequirements } from "./env";
 import {
@@ -12,7 +12,7 @@ import {
   resolvePackageManager,
   type SetupOutput,
 } from "./generate";
-import { LOCK_VERSION, readLock, writeLock } from "./lock";
+import { readLock, writeLock } from "./lock";
 import {
   AGENT_BOT,
   AUTOFIX_WORKFLOW_FILE,
@@ -150,7 +150,7 @@ export async function setupAutofix(options: AutofixSetupOptions): Promise<Autofi
   fs.writeFileSync(absFile, content, "utf-8");
   writeLock(outputDir, {
     ...lock,
-    version: LOCK_VERSION,
+    version: lockVersionFor({ workspaces: lock?.workspaces }),
     targets: lock?.targets ?? [],
     autofix: {
       file: AUTOFIX_WORKFLOW_FILE,

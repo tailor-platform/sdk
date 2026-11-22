@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { loadConfig } from "@tailor-platform/sdk/cli";
+import { loadConfigFile } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 
 /** The seedPlugin settings a seeding workflow depends on. */
@@ -20,7 +20,7 @@ export const SEED_DATASET_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * @returns The settings, or null when the config does not use seedPlugin
  */
 export async function defaultLoadSeedSettings(configPath: string): Promise<SeedSettings | null> {
-  const { plugins } = await loadConfig(configPath);
+  const { plugins } = await loadConfigFile(configPath);
   const seedPlugin = plugins.find((p) => p.id === "@tailor-platform/seed");
   if (!seedPlugin) return null;
   const options = (seedPlugin.pluginConfig ?? {}) as {

@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import {
+  appIdLockKey,
   findAppIdLock,
+  lockVersionFor,
   logger,
   planAppIds,
   removeAdoptedConfigIds,
@@ -11,7 +13,9 @@ import {
 } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import {
+  type ConfigKind,
   defaultLoadConfigId,
+  defaultLoadConfigKind,
   defaultLoadConfigName,
   defaultLoadErdNamespaces,
   defaultLoadHasMigrations,
@@ -20,7 +24,6 @@ import {
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
   findTarget,
-  LOCK_VERSION,
   planEnvironmentCollisions,
   readLock,
   targetJobEnvironments,
@@ -87,6 +90,8 @@ export type SetupRun = SetupOutput & {
   loadConfigName?: (configPath: string) => Promise<string | undefined>;
   /** Injectable config-id loader, for testing. Defaults to loading the config. */
   loadConfigId?: (configPath: string) => Promise<string | undefined>;
+  /** Injectable config-kind loader, for testing. Defaults to loading the config. */
+  loadConfigKind?: (configPath: string) => Promise<ConfigKind>;
   /** Injectable TailorDB namespace loader, for testing. Defaults to loading the config. */
   loadErdNamespaces?: (configPath: string) => Promise<string[]>;
   /** Injectable migration config detector, for testing. Defaults to loading the config. */
@@ -411,6 +416,8 @@ type Resolved = {
   /** For `preview` kind: the workflow that deletes the workspace of a closed pull request. */
   cleanup?: { file: string; render: RenderResult };
   configPaths: string[];
+  /** The config, when it is a `defineWorkspace()` or `defineApp()` config, which is the only one. */
+  workspaceConfigPath?: string;
 };
 
 /**
@@ -599,6 +606,32 @@ function resolveMigrationTest(
 }
 
 /**
+ * Find the `defineWorkspace()` or `defineApp()` config among the configs, which deploys the whole
+ * workspace and so must be the only one.
+ * @param options - Setup options
+ * @param dirs - App directories
+ * @param configPaths - Config path of each app directory
+ * @returns The workspace config's path, or undefined when every config is a `defineConfig()` one
+ */
+async function findWorkspaceConfig(
+  options: SetupTargetOptions,
+  dirs: readonly string[],
+  configPaths: readonly string[],
+): Promise<string | undefined> {
+  const loadKind = options.loadConfigKind ?? defaultLoadConfigKind;
+  const kinds = await Promise.all(configPaths.map(loadKind));
+  const index = kinds.indexOf("workspace");
+  if (index === -1) return undefined;
+  if (configPaths.length > 1) {
+    throw new Error(
+      `${dirs[index] ?? "."}/tailor.config.ts is a defineWorkspace() or defineApp() config, which ` +
+        "deploys the whole workspace, so its directory must be the only --dir.",
+    );
+  }
+  return configPaths[index];
+}
+
+/**
  * Resolve all derived values and render the workflow content.
  * @param options - Setup options
  * @returns Resolved target metadata and rendered content
@@ -619,6 +652,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const configPaths = dirs.map((d) => resolveConfigPath(options.outputDir, d));
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
+  const workspaceConfigPath = await findWorkspaceConfig(options, dirs, configPaths);
   await assertSeedable(options, configPath, multi);
 
   const packageManager = resolvePackageManager(options.outputDir, options.packageManager);
@@ -627,8 +661,9 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   const workspaceName = options.workspaceName ?? (await loadName(configPath));
   if (!workspaceName) {
     throw new Error(
-      "Could not determine the workspace name. " +
-        "Pass --name, or set 'name' in tailor.config.ts.",
+      workspaceConfigPath === undefined
+        ? "Could not determine the workspace name. Pass --name, or set 'name' in tailor.config.ts."
+        : "Could not determine the workspace name. Pass --name: a defineWorkspace() config names no workspace.",
     );
   }
   validateWorkspaceName(workspaceName);
@@ -838,6 +873,7 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
     file,
     cleanup,
     configPaths,
+    workspaceConfigPath,
   };
 }
 
@@ -1207,13 +1243,23 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   const appIdPlan = await planAppIds({
     lock: { root: options.outputDir, appIds: lock?.appIds ?? {} },
     entries: await Promise.all(
-      resolved.configPaths.map(async (configPath) => ({
-        configPath,
-        configId: await loadConfigId(configPath),
-      })),
+      resolved.configPaths
+        .filter((configPath) => configPath !== resolved.workspaceConfigPath)
+        .map(async (configPath) => ({
+          configPath,
+          configId: await loadConfigId(configPath),
+        })),
     ),
     mode: "write",
   });
+  const workspaces = [
+    ...new Set([
+      ...(lock?.workspaces ?? []),
+      ...(resolved.workspaceConfigPath === undefined
+        ? []
+        : [appIdLockKey(options.outputDir, resolved.workspaceConfigPath)]),
+    ]),
+  ].toSorted();
 
   const main = { ...mainPlan, ...reconcileContent(mainPlan) };
   const cleanup = cleanupPlan && { ...cleanupPlan, ...reconcileContent(cleanupPlan) };
@@ -1257,9 +1303,10 @@ export async function setupTarget(options: SetupTargetOptions): Promise<SetupTar
   }
   writeLock(options.outputDir, {
     ...lock,
-    version: LOCK_VERSION,
+    version: lockVersionFor({ workspaces }),
     targets,
     appIds: appIdPlan.appIds,
+    ...(workspaces.length > 0 ? { workspaces } : {}),
   });
   const { configEdited } = await removeAdoptedConfigIds(appIdPlan);
   const knownCollisions = new Set(planEnvironmentCollisions(lock?.targets ?? []));

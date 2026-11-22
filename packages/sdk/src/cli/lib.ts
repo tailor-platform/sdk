@@ -34,7 +34,9 @@ export {
   TAILOR_LOCK_VERSION,
   appIdLockKey,
   findAppIdLock,
+  lockVersionFor,
   parseAppIds,
+  parseLockWorkspaces,
   planAppIds,
   removeAdoptedConfigIds,
   resolveAppId,
@@ -44,13 +46,20 @@ export {
   type AppIdPlan,
   type AppIdPlanMode,
   type AppIds,
+  type LockVersionInput,
   type PlanAppIdsParams,
   type RemoveAdoptedConfigIdsResult,
   type ResolveAppIdParams,
 } from "./commands/deploy/app-id-lock";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
-export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export {
+  loadConfig,
+  loadConfigFile,
+  type LoadedConfig,
+  type LoadedConfigFile,
+  type LoadedWorkspaceConfig,
+} from "./shared/config-loader";
 export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { annotateTerminalError, withSourceLocation } from "./shared/github-actions";
