@@ -92,6 +92,7 @@ export {
   type AIGatewayInfo,
   type ShowStaticWebsiteInfo,
   type ShowOAuth2ClientInfo,
+  type ShowSubgraphInfo,
 } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";

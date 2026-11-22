@@ -1,13 +1,18 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { runCommand } from "@politty/zod";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import * as path from "pathe";
+import { afterEach, describe, test, expect, vi, beforeEach } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
 import { cloneCommand } from "./clone";
+import type * as ConfigLoader from "#/cli/shared/config-loader";
 
-const configLoader = vi.hoisted(() => ({ loadConfig: vi.fn() }));
+const configLoader = vi.hoisted(() => ({ loadConfigFile: vi.fn() }));
 
 const client = mockOperatorClient({
   getApplication: {},
@@ -15,14 +20,18 @@ const client = mockOperatorClient({
   getCloneApplicationDataOperation: {},
 });
 
-vi.mock("#/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", async (importOriginal) => ({
+  ...(await importOriginal()),
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
 }));
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: vi.fn() }));
 vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockImplementation(async () => client),
 }));
-vi.mock("#/cli/shared/config-loader", () => configLoader);
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...configLoader,
+}));
 vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn().mockResolvedValue(true) },
 }));
@@ -32,7 +41,11 @@ const baseArgs = ["--from", "src", "--to", "dst", "--name", "my-app", "--yes"];
 describe("data clone", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    configLoader.loadConfig.mockResolvedValue({ config: { name: "config-app" } });
+    configLoader.loadConfigFile.mockResolvedValue({
+      kind: "config",
+      config: { name: "config-app", path: "/project/tailor.config.ts" },
+      plugins: [],
+    });
     client.getApplication.mockResolvedValue({});
     client.cloneApplicationData.mockResolvedValue({ operationId: "op-1" });
     client.getCloneApplicationDataOperation.mockResolvedValue({
@@ -70,11 +83,11 @@ describe("data clone", () => {
   test("does not load the config when --name is given", async () => {
     await runCommand(cloneCommand, baseArgs);
 
-    expect(configLoader.loadConfig).not.toHaveBeenCalled();
+    expect(configLoader.loadConfigFile).not.toHaveBeenCalled();
   });
 
   test("fails without calling the API when --name is omitted and the config cannot be loaded", async () => {
-    configLoader.loadConfig.mockRejectedValue(new Error("Configuration file not found"));
+    configLoader.loadConfigFile.mockRejectedValue(new Error("Configuration file not found"));
 
     const result = await runCommand(cloneCommand, ["--from", "src", "--to", "dst", "--yes"]);
 
@@ -311,5 +324,105 @@ describe("data clone", () => {
 
     expect(result.exitCode).not.toBe(0);
     expect(client.cloneApplicationData).not.toHaveBeenCalled();
+  });
+
+  describe("workspace config", () => {
+    const tempDirs: string[] = [];
+
+    afterEach(() => {
+      for (const dir of tempDirs.splice(0)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    async function writeWorkspaceConfig(apps: string): Promise<string> {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-clone-"));
+      tempDirs.push(dir);
+      const configPath = path.join(dir, "tailor.config.ts");
+      fs.writeFileSync(
+        configPath,
+        brandedDefault(
+          "workspace-config",
+          `{
+            db: {
+              "customer-db": { files: [] },
+              "order-db": { files: [] },
+              "ledger-db": { files: [] },
+            },
+            apps: ${apps},
+          }`,
+        ),
+      );
+      const actual = await vi.importActual<typeof ConfigLoader>("#/cli/shared/config-loader");
+      configLoader.loadConfigFile.mockImplementation(actual.loadConfigFile);
+      return configPath;
+    }
+
+    test("asks for --name without calling the API when the config defines several applications", async () => {
+      const configPath = await writeWorkspaceConfig(
+        `{ shop: { db: ["customer-db"] }, backoffice: { db: ["order-db"] } }`,
+      );
+
+      const result = await runCommand(cloneCommand, [
+        "--from",
+        "src",
+        "--to",
+        "dst",
+        "--yes",
+        "--config",
+        configPath,
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "CONFIG_APP_REQUIRED",
+        suggestion: expect.stringContaining("--name"),
+      });
+      expect(client.getApplication).not.toHaveBeenCalled();
+      expect(client.cloneApplicationData).not.toHaveBeenCalled();
+    });
+
+    test("clones the only application of the config when --name is omitted", async () => {
+      const configPath = await writeWorkspaceConfig(`{ shop: { db: ["customer-db"] } }`);
+
+      const result = await runCommand(cloneCommand, [
+        "--from",
+        "src",
+        "--to",
+        "dst",
+        "--yes",
+        "--config",
+        configPath,
+      ]);
+
+      expect(result.exitCode).toBe(0);
+      expect(client.cloneApplicationData).toHaveBeenCalledWith(
+        expect.objectContaining({ sourceApplicationName: "shop", targetApplicationName: "shop" }),
+      );
+    });
+
+    test("suggests truncating only the namespaces the application exposes", async () => {
+      const configPath = await writeWorkspaceConfig(
+        `{ shop: { db: ["customer-db", "order-db"] } }`,
+      );
+      client.cloneApplicationData.mockRejectedValue(
+        new ConnectError("target is not empty", Code.FailedPrecondition),
+      );
+
+      const result = await runCommand(cloneCommand, [
+        "--from",
+        "src",
+        "--to",
+        "dst",
+        "--yes",
+        "--config",
+        configPath,
+      ]);
+
+      const suggestion = (result.error as { suggestion?: string }).suggestion;
+      expect(suggestion).toContain("tailordb truncate --namespace=customer-db");
+      expect(suggestion).toContain("tailordb truncate --namespace=order-db");
+      expect(suggestion).not.toContain("--all");
+      expect(suggestion).not.toContain("ledger-db");
+    });
   });
 });

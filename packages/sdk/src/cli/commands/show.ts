@@ -1,21 +1,32 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
+import {
+  type Application,
+  Subgraph_ServiceType,
+} from "@tailor-platform/tailor-proto/application_resource_pb";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import { appArg, deploymentArgs } from "#/cli/shared/args";
 import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { type LoadedConfig, loadConfig } from "#/cli/shared/config-loader";
+import {
+  type ConfigApplication,
+  type ConfigApplications,
+  loadConfigApplications,
+  requireApplication,
+  selectApplication,
+} from "#/cli/shared/config-applications";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
-import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 import type { AuthOAuth2ClientSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;
   profile?: string;
   configPath?: string;
+  /** Application to show when the config defines several. Defaults to the only application. */
+  app?: string;
 }
 
 interface WorkspaceInfo {
@@ -25,11 +36,18 @@ interface WorkspaceInfo {
   workspaceRegion?: string;
 }
 
+/** A service the application's GraphQL API exposes. */
+export interface ShowSubgraphInfo {
+  type: string;
+  namespace: string;
+}
+
 export interface ApplicationInfo {
   name: string;
   domain: string;
   url: string;
   auth: string;
+  subgraphs: ShowSubgraphInfo[];
   cors: string[];
   allowedIpAddresses: string[];
   disableIntrospection: boolean;
@@ -53,12 +71,28 @@ export interface ShowOAuth2ClientInfo {
   clientId: string;
 }
 
-export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {
+interface ShowApplicationInfo extends ApplicationInfo {
   aiGateways: AIGatewayInfo[];
   staticWebsites: ShowStaticWebsiteInfo[];
   /** `null` when the current credentials cannot list OAuth2 clients. */
   oauth2Clients: ShowOAuth2ClientInfo[] | null;
 }
+
+export interface ShowInfo extends ShowApplicationInfo, WorkspaceInfo {}
+
+interface WorkspaceShowInfo extends WorkspaceInfo {
+  applications: ShowApplicationInfo[];
+}
+
+const SUBGRAPH_TYPES = {
+  [Subgraph_ServiceType.UNSPECIFIED]: "unspecified",
+  [Subgraph_ServiceType.PIPELINE]: "pipeline",
+  [Subgraph_ServiceType.STATEFLOW]: "stateflow",
+  [Subgraph_ServiceType.TAILORDB]: "tailordb",
+  [Subgraph_ServiceType.AUTH]: "auth",
+  [Subgraph_ServiceType.AI]: "ai",
+  [Subgraph_ServiceType.IDP]: "idp",
+} as const satisfies Record<Subgraph_ServiceType, string>;
 
 function applicationInfo(app: Application): ApplicationInfo {
   return {
@@ -66,6 +100,10 @@ function applicationInfo(app: Application): ApplicationInfo {
     domain: app.domain,
     url: app.url,
     auth: app.authNamespace,
+    subgraphs: app.subgraphs.map((subgraph) => ({
+      type: SUBGRAPH_TYPES[subgraph.serviceType],
+      namespace: subgraph.serviceNamespace,
+    })),
     cors: app.cors,
     allowedIpAddresses: app.allowedIpAddresses,
     disableIntrospection: app.disableIntrospection,
@@ -103,13 +141,6 @@ async function fetchStaticWebsites(
     }),
   );
   return websites.filter((website): website is ShowStaticWebsiteInfo => website !== undefined);
-}
-
-function oauth2ClientNames(auth: LoadedConfig["auth"]): string[] {
-  if (!auth || "external" in auth) {
-    return [];
-  }
-  return Object.keys(auth.oauth2Clients ?? {});
 }
 
 async function fetchOAuth2Clients(
@@ -151,85 +182,132 @@ async function fetchOAuth2Clients(
   });
 }
 
+interface ShowTarget {
+  client: OperatorClient;
+  workspaceId: string;
+  config: ConfigApplications;
+}
+
+async function loadShowTarget(options?: ShowOptions): Promise<ShowTarget> {
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: options?.profile,
+    workspaceId: options?.workspaceId,
+  });
+  const config = await loadConfigApplications(options?.configPath);
+  return { client, workspaceId, config };
+}
+
+async function fetchWorkspaceInfo(
+  client: OperatorClient,
+  workspaceId: string,
+): Promise<WorkspaceInfo> {
+  const { workspace } = await client.getWorkspace({ workspaceId });
+  const workspaceFolderName = workspace ? await resolveWorkspaceFolderName(client, workspace) : "";
+  return {
+    workspaceId,
+    workspaceName: workspace?.name ?? "",
+    ...(workspaceFolderName ? { workspaceFolderName } : {}),
+    workspaceRegion: workspace?.region ?? "",
+  };
+}
+
+type SharedServices = Pick<ShowApplicationInfo, "aiGateways" | "staticWebsites">;
+
+async function fetchSharedServices(target: ShowTarget): Promise<SharedServices> {
+  const { client, workspaceId, config } = target;
+  const [aiGateways, staticWebsites] = await Promise.all([
+    fetchAIGateways(client, workspaceId, config.aiGatewayNames),
+    fetchStaticWebsites(client, workspaceId, config.staticWebsiteNames),
+  ]);
+  return { aiGateways, staticWebsites };
+}
+
+async function fetchApplication(
+  target: ShowTarget,
+  application: ConfigApplication,
+  sharedServices: Promise<SharedServices>,
+): Promise<ShowApplicationInfo> {
+  const { client, workspaceId } = target;
+  const resp = await client.getApplication({ workspaceId, applicationName: application.name });
+  const deployed = assertDefined(
+    resp.application,
+    `application "${application.name}" not found in workspace`,
+  );
+  const [shared, oauth2Clients] = await Promise.all([
+    sharedServices,
+    fetchOAuth2Clients(client, workspaceId, deployed.authNamespace, application.oauth2ClientNames),
+  ]);
+  return { ...applicationInfo(deployed), ...shared, oauth2Clients };
+}
+
+async function showApplication(
+  target: ShowTarget,
+  application: ConfigApplication,
+): Promise<ShowInfo> {
+  const [workspace, { name, ...appInfo }] = await Promise.all([
+    fetchWorkspaceInfo(target.client, target.workspaceId),
+    fetchApplication(target, application, fetchSharedServices(target)),
+  ]);
+  return { name, ...workspace, ...appInfo };
+}
+
+async function showWorkspace(target: ShowTarget): Promise<WorkspaceShowInfo> {
+  const sharedServices = fetchSharedServices(target);
+  const [workspace, applications] = await Promise.all([
+    fetchWorkspaceInfo(target.client, target.workspaceId),
+    Promise.all(
+      target.config.applications.map((application) =>
+        fetchApplication(target, application, sharedServices),
+      ),
+    ),
+  ]);
+  return { ...workspace, applications };
+}
+
 /**
  * Show applied application information for the current workspace.
  * @param options - Show options
  * @returns Deployed application, workspace, AI Gateway, static website, and OAuth2 client information
  */
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
-  // Load and validate options
-  const { client, workspaceId } = await loadOperatorWorkspaceContext({
-    profile: options?.profile,
-    workspaceId: options?.workspaceId,
-  });
-
-  const { config } = await loadConfig(options?.configPath);
-  const aiGatewayNames = config.aiGateways?.length
-    ? [...new Set(config.aiGateways.map((gateway) => gateway.name))]
-    : [];
-  const staticWebsiteNames = config.staticWebsites?.length
-    ? [...new Set(config.staticWebsites.map((website) => website.name))]
-    : [];
-  const applicationRequest = client.getApplication({
-    workspaceId,
-    applicationName: config.name,
-  });
-  const [workspaceResp, resp, aiGateways, staticWebsites, oauth2Clients] = await Promise.all([
-    client.getWorkspace({
-      workspaceId,
-    }),
-    applicationRequest,
-    fetchAIGateways(client, workspaceId, aiGatewayNames),
-    fetchStaticWebsites(client, workspaceId, staticWebsiteNames),
-    applicationRequest.then(({ application }) =>
-      fetchOAuth2Clients(
-        client,
-        workspaceId,
-        application?.authNamespace ?? "",
-        oauth2ClientNames(config.auth),
-      ),
-    ),
-  ]);
-  const { name, ...appInfo } = applicationInfo(
-    assertDefined(resp.application, `application "${config.name}" not found in workspace`),
-  );
-  const workspace = workspaceResp.workspace;
-  const workspaceFolderName = workspace ? await resolveWorkspaceFolderName(client, workspace) : "";
-
-  return {
-    name,
-    workspaceId,
-    workspaceName: workspace?.name ?? "",
-    ...(workspaceFolderName ? { workspaceFolderName } : {}),
-    workspaceRegion: workspace?.region ?? "",
-    ...appInfo,
-    aiGateways,
-    staticWebsites,
-    oauth2Clients,
-  };
+  const target = await loadShowTarget(options);
+  return showApplication(target, requireApplication(target.config, options?.app, "the app option"));
 }
 
 const showWorkspaceNameTransformer = createWorkspaceNameTransformer(
   "workspaceName",
   "workspaceFolderName",
 );
+const workspaceDisplay = { workspaceName: showWorkspaceNameTransformer, workspaceFolderName: null };
 
 export const showCommand = defineAppCommand({
   name: "show",
   description: "Show information about the deployed application.",
   args: z.strictObject({
     ...deploymentArgs,
+    ...appArg,
   }),
   run: async (args) => {
-    // Execute show logic
-    const appInfo = await show({
+    const target = await loadShowTarget({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
     });
+    const application = selectApplication(target.config, args.app);
+    if (application) {
+      logger.out(await showApplication(target, application), { display: workspaceDisplay });
+      return;
+    }
 
-    logger.out(appInfo, {
-      display: { workspaceName: showWorkspaceNameTransformer, workspaceFolderName: null },
-    });
+    const info = await showWorkspace(target);
+    if (logger.jsonMode) {
+      logger.out(info);
+      return;
+    }
+    const { applications, ...workspace } = info;
+    logger.out(workspace, { display: workspaceDisplay });
+    for (const app of applications) {
+      logger.out(app);
+    }
   },
 });

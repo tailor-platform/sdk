@@ -393,6 +393,7 @@ tailor show [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--app <APP>`                   | -     | Application of the config to act on (default: the only application the config defines)                  | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -413,6 +414,7 @@ tailor open [options]
 | `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
 | `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
+| `--app <APP>`                   | -     | Application of the config to act on (default: the only application the config defines)                  | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

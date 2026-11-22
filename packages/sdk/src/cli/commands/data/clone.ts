@@ -10,7 +10,7 @@ import {
 } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigApplications, requireApplication } from "#/cli/shared/config-applications";
 import { loadAccessToken } from "#/cli/shared/context";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -31,10 +31,34 @@ interface CloneOptions {
   name: string;
   config?: string;
   nameFromConfig?: boolean;
+  /** TailorDB namespaces the application exposes, when the config is a workspace config. */
+  tailordbNamespaces?: string[];
   copyFiles?: boolean;
   copyIdpUsers?: boolean;
   noWait?: boolean;
   profile?: string;
+}
+
+function truncateScopes(options: CloneOptions): string[] {
+  return options.tailordbNamespaces === undefined
+    ? ["--all"]
+    : options.tailordbNamespaces.map((namespace) => `--namespace=${namespace}`);
+}
+
+type CloneTarget = Pick<CloneOptions, "name" | "nameFromConfig" | "tailordbNamespaces">;
+
+async function cloneTarget(name: string | undefined, configPath: string | undefined) {
+  if (name !== undefined) return { name, nameFromConfig: false } satisfies CloneTarget;
+  const application = requireApplication(
+    await loadConfigApplications(configPath),
+    undefined,
+    "--name <application>",
+  );
+  return {
+    name: application.name,
+    nameFromConfig: true,
+    tailordbNamespaces: application.tailordbNamespaces,
+  } satisfies CloneTarget;
 }
 
 async function $clone(options: CloneOptions & { yes?: boolean }) {
@@ -120,19 +144,23 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
         message: error.rawMessage,
         suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${
           options.nameFromConfig
-            ? `To empty the target's TailorDB records, run ${formatCommandHint({
-                command: "tailor",
-                args: [
-                  "tailordb",
-                  "truncate",
-                  "--all",
-                  ...recoveryContextArgs({
-                    workspaceId: options.targetWorkspaceId,
-                    profile: options.profile,
+            ? `To empty the target's TailorDB records, run ${truncateScopes(options)
+                .map((scope) =>
+                  formatCommandHint({
+                    command: "tailor",
+                    args: [
+                      "tailordb",
+                      "truncate",
+                      scope,
+                      ...recoveryContextArgs({
+                        workspaceId: options.targetWorkspaceId,
+                        profile: options.profile,
+                      }),
+                      ...configArgs,
+                    ],
                   }),
-                  ...configArgs,
-                ],
-              })}.`
+                )
+                .join(" and ")}.`
             : "To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help)."
         } That does not remove IdP users or files: with --copy-idp-users or --copy-files, remove those from the target separately.`,
         command: "data clone",
@@ -209,7 +237,7 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
     name: arg(z.string().optional(), {
       alias: "n",
       description:
-        "Application name, the same in the source and the target workspace (default: the name in the config file)",
+        "Application name, the same in the source and the target workspace (default: the only application in the config file)",
       completion: { type: "none" },
     }),
     ...configArg,
@@ -225,13 +253,11 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const name = args.name ?? (await loadConfig(args.config)).config.name;
     const { operationId, status } = await $clone({
+      ...(await cloneTarget(args.name, args.config)),
       sourceWorkspaceId: args.from,
       targetWorkspaceId: args.to,
-      name,
       config: args.config,
-      nameFromConfig: args.name === undefined,
       copyFiles: args["copy-files"],
       copyIdpUsers: args["copy-idp-users"],
       noWait: args["no-wait"],
