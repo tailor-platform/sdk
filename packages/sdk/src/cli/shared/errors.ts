@@ -217,16 +217,6 @@ export function toError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value), { cause: value });
 }
 
-/**
- * End a message, such as a caught error's, as a sentence
- * @param message - Message to end
- * @returns The message, with a period appended unless it already ends with sentence-ending
- * punctuation (`.`, `!`, `?`, or their full-width forms `。`, `！`, `？`)
- */
-export function toSentence(message: string): string {
-  return /[.!?。！？]$/.test(message) ? message : `${message}.`;
-}
-
 const MISSING_NAMED_EXPORT_PATTERN = /does not provide an export named '(?!default')([^']+)'/;
 
 /**

@@ -13,7 +13,6 @@ import {
   isCLIError,
   locatedMessage,
   toError,
-  toSentence,
   typeOnlyImportHint,
 } from "./errors";
 import { CIPromptError, logger, resetSecretRegistry } from "./logger";
@@ -444,20 +443,6 @@ describe("toError", () => {
     const error = toError({ status: 500 });
     expect(error.message).toBe("[object Object]");
     expect(error.cause).toEqual({ status: 500 });
-  });
-});
-
-describe("toSentence", () => {
-  test.each([
-    ["build failed", "build failed."],
-    ["Build failed.", "Build failed."],
-    ["Build failed!", "Build failed!"],
-    ["Ready?", "Ready?"],
-    ["ビルドに失敗しました。", "ビルドに失敗しました。"],
-    ["失敗！", "失敗！"],
-    ["完了？", "完了？"],
-  ])("ends %j as %j", (message, sentence) => {
-    expect(toSentence(message)).toBe(sentence);
   });
 });
 

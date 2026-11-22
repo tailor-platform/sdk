@@ -650,23 +650,24 @@ export function mergeUserContent(params: {
   assertNeedsResolve(renderedRoot);
 
   if (currentDoc.comment) renderedDoc.comment = currentDoc.comment;
-  const mergeFailed = (detail: string) =>
+  const mergeFailed = (reason?: string) =>
     new ManagedMergeError(
-      `Your edits could not be merged into the regenerated file automatically${detail}. ` +
-        "Move your changes out, delete the file, and re-run setup.",
+      "Your edits could not be merged into the regenerated file automatically. " +
+        "Move your changes out, delete the file, and re-run setup." +
+        (reason === undefined ? "" : ` Reason: ${reason}`),
     );
   let content: string;
   try {
     content = renderedDoc.toString(STRINGIFY_OPTIONS);
   } catch (error) {
-    throw mergeFailed(`: ${error instanceof Error ? error.message : String(error)}`);
+    throw mergeFailed(error instanceof Error ? error.message : String(error));
   }
   const expected = computeManagedHash(params.rendered, params.renderedIds);
   const roundTripped =
     canonicalJson(toPlain(renderedDoc, "The merged file")) ===
     canonicalJson(toPlain(parse(content, "The merged file"), "The merged file"));
   if (!roundTripped || computeManagedHash(content, params.renderedIds) !== expected) {
-    throw mergeFailed("");
+    throw mergeFailed();
   }
   return { content, dropped: ctx.dropped };
 }

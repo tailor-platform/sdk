@@ -73,7 +73,7 @@ import {
 import { soleAuthService } from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, isCLIError, toSentence } from "#/cli/shared/errors";
+import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { spinner } from "#/cli/shared/spinner";
@@ -644,8 +644,9 @@ export async function removeRunResources(
   } catch (error) {
     logger.warn(
       `Could not remove the temporary resources of migration ${namespace}/${formatMigrationNumber(migrationNumber)}: ` +
-        `${toSentence(error instanceof Error ? error.message : String(error))} A later deploy removes them.`,
+        (error instanceof Error ? error.message : String(error)),
     );
+    logger.log("A later deploy removes them.");
   }
 }
 
@@ -1164,7 +1165,7 @@ async function releaseMigrationInProgress(
     notify(
       "warn",
       `Could not clear the in-progress record of migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
-        toSentence(error instanceof Error ? error.message : String(error)),
+        (error instanceof Error ? error.message : String(error)),
     );
     return unreleasedRecordError(
       migration,

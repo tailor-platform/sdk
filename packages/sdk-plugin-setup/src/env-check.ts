@@ -155,10 +155,10 @@ export function checkEnv(options: {
     if (result.status !== 0) {
       throw new Error(
         httpStatus(result) === 403
-          ? `GitHub denied listing the ${what} of ${fullName}: ${ghMessage(result)}. The token gh ` +
-              "uses needs read access to the repository's secrets and variables: the repo scope " +
-              "for a classic token, or the Secrets, Variables, and Environments permissions for " +
-              "a fine-grained one."
+          ? `GitHub denied listing the ${what} of ${fullName}. The token gh uses needs read ` +
+              "access to the repository's secrets and variables: the repo scope for a classic " +
+              "token, or the Secrets, Variables, and Environments permissions for a fine-grained " +
+              `one. Reason: ${ghMessage(result)}`
           : `Could not list the ${what} of ${fullName}: ${ghMessage(result)}`,
       );
     }
@@ -242,8 +242,8 @@ function resolveRepository(gh: (args: string[]) => GhOutput): Repository {
         ? `gh named a repository that cannot be embedded in commands (${result.stdout.trim()})`
         : ghMessage(result);
     throw new Error(
-      `Could not tell which GitHub repository to check from the current directory: ${reason}. ` +
-        "Run the check in a clone of the repository whose remote points at GitHub.",
+      "Could not tell which GitHub repository to check from the current directory. " +
+        `Run the check in a clone of the repository whose remote points at GitHub. Reason: ${reason}`,
     );
   }
   return repository;

@@ -207,34 +207,30 @@ describe("deployed hooks", () => {
       }),
     ).toEqual([{ application: "app", pluginId: "hook", outputs }]);
   });
-  test.each([
-    ["build failed", "build failed. Hooks not run: later (app: app)"],
-    ["Build failed.", "Build failed. Hooks not run: later (app: app)"],
-  ])(
-    "stops after a hook fails with %j and identifies unapplied hooks in the error",
-    async (reason, ending) => {
-      const client = clientMock();
-      const later = vi.fn();
-      await expect(
-        runDeployedHooks({
-          client,
-          workspaceId: "ws",
-          targets: [
-            target([
-              plugin(() => {
-                throw new Error(reason);
-              }),
-              plugin(later, "later"),
-            ]),
-          ],
-        }),
-      ).rejects.toMatchObject({
-        code: "DEPLOYED_HOOK_FAILED",
-        message: `Platform resources were applied successfully, but the onDeployed hook of plugin "hook" failed for app "app": ${ending}`,
-      });
-      expect(later).not.toHaveBeenCalled();
-    },
-  );
+  test("stops after a failed hook and identifies unapplied hooks in the error", async () => {
+    const client = clientMock();
+    const later = vi.fn();
+    await expect(
+      runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          target([
+            plugin(() => {
+              throw new Error("Build failed.");
+            }),
+            plugin(later, "later"),
+          ]),
+        ],
+      }),
+    ).rejects.toMatchObject({
+      code: "DEPLOYED_HOOK_FAILED",
+      message:
+        'Platform resources were applied successfully, but the onDeployed hook of plugin "hook" failed for app "app": Build failed.',
+      details: "Hooks not run: later (app: app)",
+    });
+    expect(later).not.toHaveBeenCalled();
+  });
   test("resolves public OAuth clients for an external Auth namespace", async () => {
     const client = clientMock();
     const hook = vi.fn();
@@ -258,7 +254,8 @@ describe("deployed hooks", () => {
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
     ).rejects.toMatchObject({
       code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*network down.*Hooks not run: hook/s),
+      message: expect.stringMatching(/applied successfully.*network down$/s),
+      details: "Hooks not run: hook (app: app)",
     });
     expect(hook).not.toHaveBeenCalled();
   });
@@ -412,7 +409,7 @@ describe("deployed hooks", () => {
         ],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: admin)",
     });
   });
   test("names the application of each hook not run when loading the hook context fails", async () => {
@@ -425,7 +422,7 @@ describe("deployed hooks", () => {
         targets: [target([plugin(vi.fn())], "web"), target([plugin(vi.fn())], "admin")],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: web\), hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: web), hook (app: admin)",
     });
   });
   test("fails before running hooks when a static website has no URL assigned yet", async () => {

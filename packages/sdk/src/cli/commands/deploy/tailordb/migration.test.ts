@@ -1247,6 +1247,9 @@ describe("migration", () => {
           "tailor tailordb migration resolve --rollback --namespace tailordb",
         ),
       });
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Could not clear the in-progress record of migration tailordb/0003: [unavailable] unavailable",
+      );
     });
 
     test("asks to check the record when it can be neither cleared nor read", async () => {

@@ -46,7 +46,7 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, formatCommandHint, toError, toSentence } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
@@ -444,8 +444,9 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   } catch (error) {
     logger.warn(
       `Could not return migration ${migration.namespace}/${formatMigrationNumber(migration.number)} to its pre-migration schema: ` +
-        `${toSentence(error instanceof Error ? error.message : String(error))} The original migration error is reported below.`,
+        (error instanceof Error ? error.message : String(error)),
     );
+    logger.log("The original migration error is reported below.");
   }
 }
 
@@ -495,8 +496,10 @@ async function clearRolledBackRecord(
     if (state === "cleared") return state;
     logger.warn(
       `Could not clear the in-progress record of migration ${namespace}/${formatMigrationNumber(migration.number)}: ` +
-        `${toSentence(error instanceof Error ? error.message : String(error))} ` +
-        "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
+        (error instanceof Error ? error.message : String(error)),
+    );
+    logger.log(
+      "Its schema is left as it is, the migration stays in progress, and its tables stay in maintenance mode; " +
         (kind === "main"
           ? "settle it with 'tailor tailordb migration resolve'."
           : "deploy again to resume it."),
@@ -599,8 +602,9 @@ async function clearRecordAfterRelease(
     await clearMaintenanceModeRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toSentence(toError(error).message)} A later deploy removes it.`,
+      `Namespace '${namespaceName}' left maintenance mode, but its record could not be removed: ${toError(error).message}`,
     );
+    logger.log("A later deploy removes it.");
   }
 }
 
@@ -611,7 +615,7 @@ async function clearRecordAfterRelease(
  * @param client - Operator client instance
  * @param workspaceId - Target workspace ID
  * @param expectedCheckpoints - Checkpoint this deploy expects in each namespace
- * @param outcome - What the deploy does about such a namespace, appended to its error
+ * @param outcome - What the deploy does about such a namespace, stated after what failed in its error
  * @returns The error to report for each namespace whose checkpoint changed or could not be read
  */
 async function findUnownedMigrationCheckpoints(
@@ -642,8 +646,8 @@ async function findUnownedMigrationCheckpoints(
         CLIError({
           code: "MIGRATION_CHECKPOINT_UNVERIFIED",
           message:
-            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
-            `${toSentence(checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError))} ${outcome}`,
+            `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings. ` +
+            `${outcome} Reason: ${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}`,
         }),
       );
     }
@@ -1546,8 +1550,9 @@ function readRollbackScope(
   } catch (error) {
     logger.warn(
       `Could not read migration ${migration.namespace}/${formatMigrationNumber(migration.number)} or its prior checkpoint: ` +
-        `${toSentence(error instanceof Error ? error.message : String(error))} Only what this deploy wrote is rolled back.`,
+        (error instanceof Error ? error.message : String(error)),
     );
+    logger.log("Only what this deploy wrote is rolled back.");
     return new Set();
   }
 }
@@ -1700,8 +1705,9 @@ async function clearCleanupRecord(
     await clearMigrationCleanupRecord(client, workspaceId, namespaceName);
   } catch (error) {
     logger.warn(
-      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toSentence(toError(error).message)} A later deploy removes it.`,
+      `The tables of namespace '${namespaceName}' that were pending deletion have been deleted, but the record of the pending deletion could not be removed: ${toError(error).message}`,
     );
+    logger.log("A later deploy removes it.");
   }
 }
 
@@ -1732,8 +1738,10 @@ async function confirmCheckpointAfterUpdateFailure(
   } catch (readbackError) {
     logger.warn(
       `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
-        `${toSentence(readbackError instanceof Error ? readbackError.message : String(readbackError))} ` +
-        "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
+        (readbackError instanceof Error ? readbackError.message : String(readbackError)),
+    );
+    logger.log(
+      "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
     );
     throw updateError;
   }
@@ -1821,8 +1829,9 @@ async function verifyRestorationCheckpoints(
     );
     if (!error) continue;
     if (failure) {
-      logger.warn(`${error.message} The original migration error is reported below.`);
+      logger.warn(error.message);
       if (error.suggestion) logger.log(error.suggestion);
+      logger.log("The original migration error is reported below.");
       restorationFailures[`restorationSkipped:${namespaceName}`] = error;
     } else {
       failure = { error };
@@ -1855,9 +1864,9 @@ async function checkRestorationCheckpoint(
     return CLIError({
       code: "MIGRATION_CHECKPOINT_UNVERIFIED",
       message:
-        `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings: ` +
-        `${toSentence(checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError))} ` +
-        "Skipping restoration for this namespace and aborting this deployment.",
+        `Could not verify ownership of migration checkpoint ${namespaceName}/${describeMigrationCheckpoint(expectedCheckpoint.number)} before restoring table settings. ` +
+        "Skipping restoration for this namespace and aborting this deployment. " +
+        `Reason: ${checkpointReadError instanceof Error ? checkpointReadError.message : String(checkpointReadError)}`,
       suggestion:
         (restricted
           ? `The tables of namespace '${namespaceName}' keep the restrictions this deploy set (${RESTRICTION_EFFECT}). `
@@ -1983,9 +1992,7 @@ async function releaseHeldMaintenanceMode(
     await restoreTables(flow, restoration, runLog, releaseClient);
   } catch (restorationError) {
     if (!ownershipError) throw restorationError;
-    logger.warn(
-      `Could not restore every TailorDB table: ${toSentence(toError(restorationError).message)}`,
-    );
+    logger.warn(`Could not restore every TailorDB table: ${toError(restorationError).message}`);
   }
   if (ownershipError) throw ownershipError;
   return finishMaintenance(flow);
@@ -2003,13 +2010,19 @@ async function restoreAfterMigrations(
   } catch (restorationError) {
     if (!outcome.failure) throw restorationError;
     const unrestored = readUnrestoredTables(restorationError);
-    const reason = `Could not restore every TailorDB table after the migration failed: ${toSentence(toError(restorationError).message)}`;
     if (flow.phaseSettings.restricted) {
-      warnTablesLeftRestricted(reason, unrestored, {
-        namesUnknown: unrestored.every((entry) => entry.tables.length === 0),
-      });
+      warnTablesLeftRestricted(
+        "Could not restore every TailorDB table after the migration failed.",
+        unrestored,
+        {
+          namesUnknown: unrestored.every((entry) => entry.tables.length === 0),
+          cause: restorationError,
+        },
+      );
     } else {
-      logger.warn(reason);
+      logger.warn(
+        `Could not restore every TailorDB table after the migration failed: ${toError(restorationError).message}`,
+      );
     }
     logger.log("The original migration error is reported below.");
     if (restorationError instanceof Error) {

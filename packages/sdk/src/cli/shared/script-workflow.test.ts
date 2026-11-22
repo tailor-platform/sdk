@@ -281,12 +281,12 @@ describe("withScriptWorkflow", () => {
 
   test("tells how a resource that could not be removed gets removed", async () => {
     const { client } = createMockClient();
-    client.deleteWorkflow.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    client.deleteWorkflow.mockRejectedValue(new ConnectError("Build failed.", Code.Unavailable));
 
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
     expect(vi.mocked(logger.warn).mock.calls.map(([message]) => message)).toEqual([
-      expect.stringContaining("It is removed by the next run."),
+      "Could not remove the temporary script workflow 'tailordb-seed--tailordb'. It is removed by the next run. Reason: [unavailable] Build failed.",
     ]);
   });
 

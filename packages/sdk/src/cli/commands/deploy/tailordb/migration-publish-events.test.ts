@@ -721,7 +721,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /Could not verify ownership.*ownership read failed/i,
+      /^Could not verify ownership of migration checkpoint .+ before restoring table settings\. Skipping restoration for this namespace and aborting this deployment\. Reason: ownership read failed$/,
     );
     expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
       ["Order", false],
@@ -1545,7 +1545,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         (client: OperatorClient) => {
           vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
         },
-        /Could not verify ownership.*ownership read failed/i,
+        /^Could not verify ownership of migration checkpoint .+ before restoring table settings\. Leaving its table settings unchanged\. Reason: ownership read failed$/,
       ],
     ] as const)(
       '"deploy" keeps a namespace restricted when its checkpoint %s while held',
