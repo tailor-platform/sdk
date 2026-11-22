@@ -1,5 +1,8 @@
+import * as fs from "node:fs";
+import { loadConfigFile } from "@tailor-platform/sdk/cli";
+import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { createProject, runOnProject } from "./test-helpers/project";
+import { createProject, runOnProject, type TestProject } from "./test-helpers/project";
 
 const CODEMODS = ["v3/config-to-app", "v3/config-to-workspace"];
 const TAKEOVER_WARNING =
@@ -17,6 +20,43 @@ function findingsOf(result: Awaited<ReturnType<typeof runOnProject>>) {
 }
 
 const SDK_IMPORT = 'import { defineConfig } from "@tailor-platform/sdk";';
+
+function deployedTogether(...configs: string[]): string {
+  return `${JSON.stringify({ scripts: { deploy: `tailor deploy -c ${configs.join(",")}` } })}\n`;
+}
+
+const SDK_PACKAGE = path.resolve(__dirname, "../../sdk");
+
+/**
+ * Load a converted workspace config the way the CLI does. `defineWorkspace()` and `defineApp()` are
+ * not exported yet, so the config imports them from a shim that marks the config as they do.
+ */
+async function loadConverted(project: TestProject, configPath = "tailor.config.ts") {
+  fs.mkdirSync(path.join(project.dir, "node_modules/@tailor-platform"), { recursive: true });
+  fs.symlinkSync(SDK_PACKAGE, path.join(project.dir, "node_modules/@tailor-platform/sdk"));
+  fs.writeFileSync(
+    path.join(project.dir, "sdk-shim.ts"),
+    lines(
+      'export * from "@tailor-platform/sdk";',
+      "const mark = (kind: string) => (config: object) =>",
+      '  Object.defineProperty({ ...config }, Symbol.for("tailor-platform/sdk"), { value: kind });',
+      'export const defineWorkspace = mark("workspace-config");',
+      'export const defineApp = mark("app-config");',
+    ),
+  );
+  const file = path.join(project.dir, configPath);
+  const shim = path.relative(path.dirname(file), path.join(project.dir, "sdk-shim.ts"));
+  fs.writeFileSync(
+    file,
+    fs
+      .readFileSync(file, "utf-8")
+      .replaceAll(
+        '"@tailor-platform/sdk"',
+        JSON.stringify(shim.startsWith(".") ? shim : `./${shim}`),
+      ),
+  );
+  return loadConfigFile(file);
+}
 
 const multiApplication = {
   "package.json": `${JSON.stringify(
@@ -314,5 +354,294 @@ describe("v3/config-to-workspace", () => {
     expect(result.warnings).toContain(
       ".github/tailor.lock: the branch shop workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
     );
+  });
+
+  test("warns about setup targets the conversion cannot retarget, and retargets the autofix workflow", async () => {
+    const project = createProject({
+      ...multiApplication,
+      ".github/tailor.lock": `${JSON.stringify({
+        version: 2,
+        targets: [
+          {
+            kind: "preview",
+            workspaceName: "user",
+            inputs: { dir: "apps/user", environment: "user" },
+          },
+          {
+            kind: "branch",
+            workspaceName: "shop",
+            inputs: {
+              dir: ".",
+              erdPreview: true,
+              apps: [{ dir: "apps/user" }, { dir: "apps/admin" }],
+            },
+          },
+        ],
+        autofix: { inputs: { dirs: ["apps/user", "apps/admin"] } },
+      })}\n`,
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const lock = JSON.parse(project.read(".github/tailor.lock")!);
+    expect(lock.targets[1].inputs.apps).toHaveLength(2);
+    expect(lock.autofix.inputs.dirs).toEqual(["."]);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        ".github/tailor.lock: the preview user workflow deploys only apps/user, whose config was merged into tailor.config.ts. Run `tailor setup ci preview` again for the workspace config, or delete the workflow.",
+        ".github/tailor.lock: the branch shop workflow previews ERDs or runs migration tests, which a workspace config does not support yet, so it still deploys the deleted configs. Run `tailor setup ci branch` again without --erd-preview and --migration-test.",
+        ".github/tailor.lock: the autofix workflow now deploys tailor.config.ts. Run `tailor setup ci update` to regenerate it.",
+      ]),
+    );
+  });
+
+  test("names the IdP, Auth service, and application of a merged config's triggers and GraphQL operations", async () => {
+    const config = (name: string) =>
+      lines(
+        'import { defineAuth, defineConfig, defineIdp } from "@tailor-platform/sdk";',
+        "",
+        `const ${name}Idp = defineIdp("${name}-idp", { clients: ["web"] });`,
+        `const ${name}Auth = defineAuth("${name}-auth", { idProvider: ${name}Idp.provider("web", "web") });`,
+        "",
+        "export default defineConfig({",
+        `  name: "${name}",`,
+        `  auth: ${name}Auth,`,
+        `  idp: ${name}Idp,`,
+        '  executor: { files: ["./executors/*.ts"] },',
+        "});",
+      );
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": config("a"),
+      "b/tailor.config.ts": config("b"),
+      "a/executors/on-user.ts": lines(
+        "export default createExecutor({",
+        "  trigger: idpUserCreatedTrigger(),",
+        '  operation: { kind: "graphql", query: "query { x }" },',
+        "});",
+      ),
+      "b/executors/on-token.ts": lines(
+        "export default createExecutor({",
+        "  trigger: authAccessTokenIssuedTrigger({}),",
+        '  operation: { kind: "graphql", appName: "a", query: "query { x }" },',
+        "});",
+      ),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("a/executors/on-user.ts")).toBe(
+      lines(
+        "export default createExecutor({",
+        '  trigger: idpUserCreatedTrigger({ idp: "a-idp" }),',
+        '  operation: { kind: "graphql", query: "query { x }", appName: "a" },',
+        "});",
+      ),
+    );
+    expect(project.read("b/executors/on-token.ts")).toBe(
+      lines(
+        "export default createExecutor({",
+        '  trigger: authAccessTokenIssuedTrigger({ auth: "b-auth" }),',
+        '  operation: { kind: "graphql", appName: "a", query: "query { x }" },',
+        "});",
+      ),
+    );
+  });
+
+  test("merges the plugins and rewrites their output paths", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        'import { defineConfig, definePlugins } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        "",
+        'export default defineConfig({ name: "a", db: { a: { files: ["./db/*.ts"] } } });',
+        "",
+        'export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated" }));',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";',
+        "",
+        'export default defineConfig({ name: "b", db: { b: { files: ["./db/*.ts"] } } });',
+        "",
+        'export const plugins = [kyselyTypePlugin({ distPath: "./generated" }), seedPlugin({ distPath: "./seed" })];',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    expect(output).toContain(
+      lines(
+        'import { defineWorkspace, definePlugins } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";',
+      ),
+    );
+    expect(output).toContain(
+      lines(
+        "export const plugins = definePlugins(",
+        '  kyselyTypePlugin({ distPath: "./a/generated" }),',
+        '  kyselyTypePlugin({ distPath: "./b/generated" }),',
+        '  seedPlugin({ distPath: "./b/seed" }),',
+        ");",
+      ),
+    );
+    expect(findingsOf(result).filter(({ file }) => file === "tailor.config.ts")).toEqual([
+      {
+        file: "tailor.config.ts",
+        line: output.split("\n").indexOf('  kyselyTypePlugin({ distPath: "./b/generated" }),') + 1,
+        message:
+          "Two configs registered kyselyTypePlugin; keep one, since a workspace config runs each plugin once for every namespace.",
+        excerpt: "kyselyTypePlugin",
+      },
+    ]);
+  });
+
+  test("keeps the plugins export of the only config that has one as written", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        'import { defineConfig, definePlugins } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        "",
+        'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+        "",
+        'export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated" }));',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toMatch(
+      /\n\nexport const plugins = definePlugins\(kyselyTypePlugin\(\{ distPath: "\.\/a\/generated" \}\)\);\n$/u,
+    );
+  });
+
+  test("reports a TailorDB type name two merged namespaces define", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "a", db: { a: { files: ["./db/*.ts"] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: ["./db/*.ts"] } } });',
+      ),
+      "a/db/user.ts": 'export const user = db.table("User", {});\n',
+      "b/db/user.ts": 'export const user = db.table("User", {});\n',
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(
+      findingsOf(result).map(({ file, line, message }) => ({ file, line, message })),
+    ).toContainEqual({
+      file: "b/db/user.ts",
+      line: 1,
+      message:
+        "Namespaces a and b both define User, and a workspace config needs TailorDB type names to be unique across its namespaces. Rename one of them.",
+    });
+  });
+
+  test.each([
+    [
+      "they set maintenanceMode differently",
+      'maintenanceMode: "deploy", ',
+      "",
+      'The configs set `maintenanceMode` differently (a/tailor.config.ts: "deploy", b/tailor.config.ts: "migration"); a workspace config has one.',
+    ],
+    [
+      "httpAdapter would serve several applications",
+      'httpAdapter: { files: ["./http/*.ts"] }, ',
+      "",
+      "`httpAdapter` serves one application, and the merged workspace has several.",
+    ],
+  ])("leaves the configs when %s", async (_, aExtra, bExtra, message) => {
+    const files = {
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        `export default defineConfig({ name: "a", ${aExtra}db: { a: { files: [] } } });`,
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        `export default defineConfig({ name: "b", ${bExtra}db: { b: { files: [] } } });`,
+      ),
+    };
+    const project = createProject(files);
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.files()).toEqual(Object.keys(files).toSorted());
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([message]);
+    expect(result.warnings).toEqual([
+      "a/tailor.config.ts: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.",
+      "b/tailor.config.ts: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.",
+    ]);
+  });
+
+  test("leaves the configs when seedPlugin would seed several built-in IdPs", async () => {
+    const config = (name: string, plugins: string) =>
+      lines(
+        'import { defineAuth, defineConfig, defineIdp } from "@tailor-platform/sdk";',
+        'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";',
+        "",
+        `const idp = defineIdp("${name}-idp", { clients: ["web"] });`,
+        `const auth = defineAuth("${name}-auth", { userProfile: { type: user }, idProvider: idp.provider("web", "web") });`,
+        "",
+        `export default defineConfig({ name: "${name}", auth, idp, db: { ${name}: { files: [] } } });`,
+        plugins,
+      );
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": config(
+        "a",
+        'export const plugins = [seedPlugin({ distPath: "./seed" })];',
+      ),
+      "b/tailor.config.ts": config("b", ""),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toBeUndefined();
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([
+      "seedPlugin seeds the users of one built-in IdP, and the merged workspace would have several Auth services with one (a-auth, b-auth).",
+    ]);
+  });
+
+  test("leaves the configs when the workspace config's path is taken", async () => {
+    const project = createProject({
+      ...multiApplication,
+      "tailor.config.ts": lines(
+        'import { defineApp } from "@tailor-platform/sdk";',
+        'export default defineApp({ name: "root" });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("apps/user/tailor.config.ts")).toBe(
+      multiApplication["apps/user/tailor.config.ts"],
+    );
+    expect(findingsOf(result).map((finding) => finding.message)).toContain(
+      "tailor.config.ts already exists in the project directory, so the configs deployed together with this one were not merged into it.",
+    );
+  });
+
+  test("writes a config the SDK loads as a workspace", async () => {
+    const project = createProject(multiApplication);
+    await runOnProject(CODEMODS, project);
+
+    const loaded = await loadConverted(project);
+
+    expect(loaded.kind).toBe("workspace");
   });
 });

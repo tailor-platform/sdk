@@ -514,6 +514,7 @@ snapshots:
 				"zod": "4.6.7",
 			},
 			"devDependencies": {
+				"@tailor-platform/sdk": "workspace:^",
 				"@tailor-platform/shared": "workspace:^",
 				"@types/node": "26.6.6",
 				"@types/picomatch": "4.0.3",

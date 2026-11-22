@@ -52,6 +52,9 @@ class Conversion {
     findings: [],
   };
 
+  /** Paths of the configs this conversion merged. */
+  readonly converted = new Set<string>();
+
   constructor(
     readonly project: ProjectFiles,
     readonly cache: ModuleCache,
@@ -164,6 +167,7 @@ class Conversion {
       ...(pluginsText === null ? [] : [pluginsText]),
     ].join("\n\n");
     this.changes.writes[outputPath] = `${text}\n`;
+    for (const member of members) this.converted.add(member.path);
     Object.assign(this.changes.writes, rewrites.writes, references.writes);
     this.changes.deletes.push(...merged, ...references.deletes);
 
@@ -238,6 +242,19 @@ export function convertConfigs(project: ProjectFiles, kind: ConversionKind): Pro
     }
     if (kind === "app") conversion.convertApp(group);
     else conversion.convertWorkspace(group, uses);
+  }
+  if (kind === "workspace") {
+    const remaining = [
+      ...scan.configs
+        .map((config) => config.path)
+        .filter((configPath) => !conversion.converted.has(configPath)),
+      ...scan.unconvertible.map((report) => report.file),
+    ].toSorted();
+    for (const configPath of remaining) {
+      conversion.changes.warnings.push(
+        `${configPath}: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.`,
+      );
+    }
   }
   return conversion.result();
 }
