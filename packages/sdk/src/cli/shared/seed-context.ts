@@ -4,19 +4,21 @@ import {
   generateIdpListUsersScriptCode,
   generateIdpSeedScriptCode,
   generateIdpTruncateScriptCode,
-  processIdpUser,
 } from "#/plugin/builtin/seed/idp-user-processor";
-import { SeedGeneratorID } from "#/plugin/builtin/seed/index";
+import { SeedGeneratorID, soleIdpUser, type SeedPluginOptions } from "#/plugin/builtin/seed/index";
 import {
   buildSeedNamespaceConfigs,
   type SeedNamespaceConfig,
 } from "#/plugin/builtin/seed/seed-type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
-import { soleAuthService } from "./auth-namespace";
+import { configOf, machineUserAuths } from "./config-file";
+import { tailorDBTypeNameScopeOf } from "./config-loader";
 import { type CLIError, locatedCLIError } from "./errors";
-import { loadApplicationNamespaces } from "./tailordb-namespaces";
+import { resolveMachineUser } from "./machine-user";
+import { loadConfigFileNamespaces } from "./tailordb-namespaces";
 import { configIssuesError } from "./validation-errors";
+import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { LoadedConfig } from "./config-loader";
 import type { FlatIssue } from "./zod-issues";
 
@@ -42,11 +44,14 @@ export interface SeedIdpUserContext {
  * per-namespace seeding order, and IdP user context.
  */
 export interface SeedContext {
-  /** The loaded Tailor config. */
+  /**
+   * The loaded Tailor config. For a `defineWorkspace()` or `defineApp()` config, it holds the
+   * workspace's settings: read only its path and build settings.
+   */
   config: LoadedConfig;
   /** Absolute path to the seedPlugin output directory. */
   distPath: string;
-  /** Default machine user name from seedPlugin options, if configured. */
+  /** Default machine user from seedPlugin options, if configured, as `<name>` or `<auth>/<name>`. */
   machineUserName?: string | undefined;
   /**
    * Named combinations of dataset directory names from seedPlugin options.
@@ -57,6 +62,16 @@ export interface SeedContext {
   namespaces: SeedNamespaceConfig[];
   /** IdP `_User` seeding context, or null when not applicable. */
   idpUser: SeedIdpUserContext | null;
+  /**
+   * Application the seed's temporary resources are labeled with: the `defineConfig()` config's
+   * application, or undefined for a workspace config, which owns them itself.
+   */
+  appName?: string | undefined;
+  /**
+   * Resolve a machine user given as `<name>` or `<auth>/<name>` to the Auth service it belongs to
+   * among the config's Auth services. Always set by {@link loadSeedContext}.
+   */
+  resolveMachineUser?: (machineUser: string) => AuthInvokerObject;
 }
 
 /**
@@ -76,15 +91,19 @@ export interface LoadSeedContextOptions {
  * @returns The seed context computed from the local config.
  */
 export async function loadSeedContext(options: LoadSeedContextOptions = {}): Promise<SeedContext> {
-  const { config, plugins, application, namespaces } = await loadApplicationNamespaces({
+  const { loaded, services, namespaces } = await loadConfigFileNamespaces({
     configPath: options.configPath,
   });
+  const config = configOf(loaded);
 
   // Seed files and type filters identify types by bare name, so enforce the
   // same cross-namespace uniqueness that generation and deploy enforce.
-  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: services.tailorDBServices,
+    scope: tailorDBTypeNameScopeOf(config),
+  });
 
-  const pluginOptions = resolvePluginConfig(plugins, SeedGeneratorID);
+  const pluginOptions = resolvePluginConfig(loaded.plugins, SeedGeneratorID);
   if (!pluginOptions) {
     throw locatedCLIError(
       { file: config.path },
@@ -106,10 +125,15 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   // userProfile is only populated once auth namespaces are resolved (the
   // generate flow does the same after loading TailorDB namespaces).
-  const authService = soleAuthService(application);
-  await authService?.resolveNamespaces();
-  const authInput = authService && getAuthInput(authService);
-  const idpUserMeta = authInput ? processIdpUser(authInput) : undefined;
+  await Promise.all(services.authServices.map((authService) => authService.resolveNamespaces()));
+  const idpUserMeta = soleIdpUser(
+    Object.fromEntries(
+      services.authServices.map((authService) => [
+        authService.config.name,
+        getAuthInput(authService),
+      ]),
+    ),
+  );
   const idpUser: SeedIdpUserContext | null = idpUserMeta
     ? {
         idpNamespace: idpUserMeta.idpNamespace,
@@ -119,14 +143,23 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
       }
     : null;
 
+  const auths = machineUserAuths(loaded);
   return {
-    config,
+    config: loaded.kind === "config" ? loaded.config : (config as unknown as LoadedConfig),
     distPath: path.resolve(path.dirname(config.path), pluginOptions.distPath),
-    machineUserName: pluginOptions.machineUserName,
+    machineUserName: machineUserValue(pluginOptions.machineUserName),
     datasets: parseDatasets(pluginOptions.datasets, config.path),
     namespaces: buildSeedNamespaceConfigs(namespaces),
     idpUser,
+    appName: loaded.kind === "config" ? loaded.config.name : undefined,
+    resolveMachineUser: (value) => resolveMachineUser({ value, auths }),
   };
+}
+
+function machineUserValue(machineUser: SeedPluginOptions["machineUserName"]): string | undefined {
+  return typeof machineUser === "object"
+    ? `${machineUser.namespace}/${machineUser.machineUserName}`
+    : machineUser;
 }
 
 interface SeedOptionsErrorParams {

@@ -7,7 +7,6 @@ import {
   loadAccessToken,
   loadSeedContext,
   loadWorkspaceId,
-  show,
   truncate,
   withScriptWorkflow,
   deploymentArgs,
@@ -30,6 +29,7 @@ import {
 } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
+import { resolveSeedInvoker } from "./invoker";
 import {
   assertSeedDataDirectory,
   loadLocatedSeedRows,
@@ -54,7 +54,7 @@ interface SeedExecutionContext {
   workspaceId: string;
   authNamespace: string;
   machineUserName: string;
-  appName: string;
+  appName: string | undefined;
   profile: string | undefined;
 }
 
@@ -572,7 +572,7 @@ export const seedApplyCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Machine user name for authentication (required unless machineUserName is configured in seedPlugin options)",
+        "Machine user name for authentication, or <auth>/<name> to name its Auth service (required unless machineUserName is configured in seedPlugin options)",
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
@@ -675,7 +675,9 @@ export const seedApplyCommand = defineAppCommand({
       : [];
     assertUniqueIdpUserNames(idpUserRows);
 
-    const appInfo = await show({
+    const { invoker, appName } = await resolveSeedInvoker({
+      context,
+      machineUser: machineUserName,
       configPath: args.config,
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -686,9 +688,9 @@ export const seedApplyCommand = defineAppCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
       }),
-      authNamespace: appInfo.auth,
-      machineUserName,
-      appName: appInfo.name,
+      authNamespace: invoker.namespace,
+      machineUserName: invoker.machineUserName,
+      appName,
       profile: args.profile,
     };
 

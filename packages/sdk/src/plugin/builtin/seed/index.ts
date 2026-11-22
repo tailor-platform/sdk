@@ -12,6 +12,7 @@ import {
   generateLinesDbSchemaFileWithPluginAPI,
   type PluginSchemaParams,
 } from "./lines-db-processor";
+import type { MachineUserInvoker } from "#/configure/services/auth/types";
 import type {
   GeneratorAuthInput,
   GeneratorResult,
@@ -43,7 +44,8 @@ type DisableIdpUserSyncDirections = {
 
 export type SeedPluginOptions = {
   distPath: string;
-  machineUserName?: string;
+  /** Machine user the seed runs as, by name or with its Auth service as `{ namespace, machineUserName }`. */
+  machineUserName?: MachineUserInvoker;
   /**
    * Disable individual `_User <-> userProfile` foreign keys emitted into
    * the generated seed schema. Both directions are emitted by default.
@@ -77,7 +79,14 @@ function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]):
     emitIdpToUserFK: !(option?.idpToUser ?? false),
   };
 }
-function soleIdpUser(auths: Readonly<Record<string, GeneratorAuthInput>>): IdpUserMetadata | null {
+/**
+ * Find the one Auth service whose built-in IdP users the seed holds.
+ * @param auths - Auth services by name
+ * @returns The IdP user metadata of that Auth service, or null when none has a built-in IdP with a userProfile
+ */
+export function soleIdpUser(
+  auths: Readonly<Record<string, GeneratorAuthInput>>,
+): IdpUserMetadata | null {
   const idpUsers = Object.entries(auths).flatMap(([name, auth]) => {
     const idpUser = processIdpUser(auth);
     return idpUser ? [{ name, idpUser }] : [];

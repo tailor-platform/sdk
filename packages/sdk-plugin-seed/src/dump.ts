@@ -6,7 +6,6 @@ import {
   loadAccessToken,
   loadSeedContext,
   loadWorkspaceId,
-  show,
   deploymentArgs,
   defineAppCommand,
   logger,
@@ -18,6 +17,7 @@ import { z } from "zod";
 import { datasetDumpDirectory } from "./datasets";
 import { selectEntities } from "./entities";
 import { parseExecutionResult } from "./execution-result";
+import { resolveSeedInvoker } from "./invoker";
 import {
   appendSeedDataRows,
   beginSeedDataWrite,
@@ -170,7 +170,7 @@ export const seedDumpCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Machine user name for authentication (required unless machineUserName is configured in seedPlugin options)",
+        "Machine user name for authentication, or <auth>/<name> to name its Auth service (required unless machineUserName is configured in seedPlugin options)",
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
@@ -286,7 +286,9 @@ export const seedDumpCommand = defineAppCommand({
       }
     }
 
-    const appInfo = await show({
+    const { invoker } = await resolveSeedInvoker({
+      context,
+      machineUser: machineUserName,
       configPath: args.config,
       profile: args.profile,
       workspaceId: args["workspace-id"],
@@ -297,8 +299,8 @@ export const seedDumpCommand = defineAppCommand({
         workspaceId: args["workspace-id"],
         profile: args.profile,
       }),
-      authNamespace: appInfo.auth,
-      machineUserName,
+      authNamespace: invoker.namespace,
+      machineUserName: invoker.machineUserName,
     };
 
     logger.info(`Dumping seed data to ${dataDir}...`);

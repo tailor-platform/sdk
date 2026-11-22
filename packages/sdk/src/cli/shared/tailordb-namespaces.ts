@@ -2,9 +2,16 @@ import {
   defineApplication,
   defineWorkspaceServices,
   type Application,
+  type ConfigServices,
 } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
-import { loadConfig, type LoadedConfig, type LoadedWorkspaceConfig } from "./config-loader";
+import {
+  loadConfig,
+  loadConfigFile,
+  type LoadedConfig,
+  type LoadedConfigFile,
+  type LoadedWorkspaceConfig,
+} from "./config-loader";
 import { CLIError } from "./errors";
 import { generateUserTypes } from "./type-generator";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -180,4 +187,39 @@ export async function loadTailorDBNamespaces(
 ): Promise<LoadedTailorDBNamespaces> {
   const { config, plugins, namespaces } = await loadApplicationNamespaces(options);
   return { config, plugins, namespaces };
+}
+
+/**
+ * Result of {@link loadConfigFileNamespaces}.
+ */
+export interface LoadedConfigFileNamespaces {
+  /** The loaded config file. */
+  loaded: LoadedConfigFile;
+  /** The services the config defines. */
+  services: ConfigServices;
+  /** Every TailorDB namespace the config owns, loaded, in config order. */
+  namespaces: TailorDBNamespaceData[];
+}
+
+/**
+ * Load a config file of either kind and every TailorDB namespace it owns. A `defineConfig()`
+ * config also writes its generated user types first, as {@link loadApplicationNamespaces} does.
+ * @param options - Config path to load.
+ * @returns The loaded config file, its services, and its TailorDB namespace data.
+ */
+export async function loadConfigFileNamespaces(
+  options: Pick<LoadTailorDBNamespacesOptions, "configPath"> = {},
+): Promise<LoadedConfigFileNamespaces> {
+  const loaded = await loadConfigFile(options.configPath);
+  if (loaded.kind === "config") {
+    const { config, plugins } = loaded;
+    await generateUserTypes({ config, configPath: config.path });
+    const { application, namespaces } = await loadConfigNamespaces(config, plugins);
+    return { loaded, services: application, namespaces };
+  }
+  const services = defineWorkspaceServices({
+    workspace: loaded.workspace,
+    pluginManager: loaded.plugins.length > 0 ? new PluginManager(loaded.plugins) : undefined,
+  });
+  return { loaded, services, namespaces: await loadNamespaceData(services.tailorDBServices) };
 }

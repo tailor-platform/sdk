@@ -5,13 +5,13 @@ import { loadSeedContext } from "./seed-context";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
-import type { LoadedApplicationNamespaces } from "./tailordb-namespaces";
+import type { LoadedConfigFileNamespaces } from "./tailordb-namespaces";
 
-const loadApplicationNamespaces = vi.hoisted(() =>
-  vi.fn<() => Promise<LoadedApplicationNamespaces>>(),
+const loadConfigFileNamespaces = vi.hoisted(() =>
+  vi.fn<() => Promise<LoadedConfigFileNamespaces>>(),
 );
 
-vi.mock("./tailordb-namespaces", () => ({ loadApplicationNamespaces }));
+vi.mock("./tailordb-namespaces", () => ({ loadConfigFileNamespaces }));
 
 function fakeType(name: string, fields: Record<string, object>): TailorDBType {
   return { name, fields } as unknown as TailorDBType;
@@ -38,12 +38,15 @@ type FakeLoadResult = {
 };
 
 function mockLoadResult(result: FakeLoadResult): void {
-  loadApplicationNamespaces.mockResolvedValue({
-    config: { path: "/proj/tailor.config.ts" },
-    plugins: result.plugins ?? [],
-    application: { tailorDBServices: [], authServices: [], ...result.application },
+  loadConfigFileNamespaces.mockResolvedValue({
+    loaded: {
+      kind: "config",
+      config: { name: "app", path: "/proj/tailor.config.ts" },
+      plugins: result.plugins ?? [],
+    },
+    services: { tailorDBServices: [], authServices: [], ...result.application },
     namespaces: result.namespaces ?? [],
-  } as LoadedApplicationNamespaces);
+  } as unknown as LoadedConfigFileNamespaces);
 }
 
 function fakeService(namespace: string, tableNames: string[]) {
