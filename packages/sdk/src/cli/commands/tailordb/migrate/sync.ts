@@ -9,7 +9,8 @@ import {
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf } from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
@@ -67,19 +68,21 @@ interface SyncOptions {
  * Returns the manifest generation options deploy would use for this
  * namespace (executor-driven publishRecordEvents and namespace
  * gqlOperations), so the synced manifests match what deploy produces.
- * @param loaded - Result of `loadConfig` (config and plugins)
+ * @param loaded - Loaded config file
  * @param target - Namespace whose migration history is being synced
  * @returns Options for `generateAllTypeManifestsFromSnapshot`
  */
 export async function assertMigrationsReproduceLocalTypes(
-  loaded: Awaited<ReturnType<typeof loadConfig>>,
+  loaded: LoadedConfigFile,
   target: NamespaceWithMigrations,
 ): Promise<GenerateAllManifestsOptions> {
-  const { config, plugins } = loaded;
-  const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const { defineApplication, generatePluginFilesIfNeeded } =
-    await import("#/cli/services/application");
-  const application = defineApplication({ config, pluginManager });
+  const config = configOf(loaded);
+  const pluginManager = loaded.plugins.length > 0 ? new PluginManager(loaded.plugins) : undefined;
+  const services = await import("#/cli/services/application");
+  const application =
+    loaded.kind === "workspace"
+      ? services.defineWorkspaceServices({ workspace: loaded.workspace, pluginManager })
+      : services.defineApplication({ config: loaded.config, pluginManager });
 
   const tailordbService = application.tailorDBServices.find(
     (s) => s.namespace === target.namespace,
@@ -100,7 +103,7 @@ export async function assertMigrationsReproduceLocalTypes(
   // Mirror loadApplication: plugin-generated executor files must be loaded
   // too, or publishRecordEvents would be applied as false for the tables
   // their record triggers depend on.
-  const pluginExecutorFiles = generatePluginFilesIfNeeded(
+  const pluginExecutorFiles = services.generatePluginFilesIfNeeded(
     pluginManager,
     application.tailorDBServices,
     config.path,
@@ -197,8 +200,8 @@ async function sync(options: SyncOptions): Promise<SyncResult> {
 
   const targetVersion = parseMigrationNumberArg(options.number);
 
-  const loaded = await loadConfig(options.configPath);
-  const { config } = loaded;
+  const loaded = await loadConfigFile(options.configPath);
+  const config = configOf(loaded);
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterAll, afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { canPrompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -31,7 +31,7 @@ import { snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures
 import type { MigrationDiff } from "./diff-calculator";
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/prompt", async (importOriginal) => ({
@@ -655,13 +655,14 @@ describe("script command with an existing migrate.ts", () => {
   beforeEach(() => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     testDir = makeTestDir("command");
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(path.dirname(testDir), "tailor.config.ts"),
         db: { tailordb: { migration: { directory: testDir } } },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
   });
 
   afterEach(() => {
@@ -742,13 +743,14 @@ describe("script command results", () => {
     vi.stubEnv("EDITOR", "");
     vi.stubEnv("VISUAL", "");
     testDir = makeTestDir("json");
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(path.dirname(testDir), "tailor.config.ts"),
         db: { tailordb: { migration: { directory: testDir } } },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
   });
 
   afterEach(() => {
