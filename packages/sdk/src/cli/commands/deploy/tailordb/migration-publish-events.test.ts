@@ -7,6 +7,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
+import { logger } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
 import {
@@ -1602,6 +1603,31 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       await releases[0]?.(client);
 
       expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
+    });
+
+    test("ends the warning with the error when the held release cannot remove its record", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "deploy",
+      });
+      planResult.context.pendingMigrations = mockAddedOrderMigration();
+
+      const releases: MaintenanceModeRelease[] = [];
+      await applyTailorDB(client, planResult, "create-update", {
+        holdMaintenanceMode: (release) => releases.push(release),
+      });
+      vi.mocked(client.setMetadata).mockRejectedValueOnce(new Error("Token expired."));
+      using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await releases[0]?.(client);
+
+      expect(warn).toHaveBeenCalledWith(
+        "Namespace 'test-ns' left maintenance mode, but its record could not be removed: Token expired.",
+      );
+      expect(log).toHaveBeenCalledWith("A later deploy removes it.");
     });
 
     test("records the maintenance mode with every checkpoint of a namespace", async () => {

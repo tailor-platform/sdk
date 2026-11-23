@@ -179,11 +179,16 @@ describe("loadScriptSchemaSnapshot", () => {
   test("rejects an unparseable snapshot with a regenerate hint", () => {
     using tmp = tempCwd("sdk-script-scaffold-");
     const scriptPath = path.join(tmp.dir, "fix.ts");
-    fs.writeFileSync(path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME), "{broken");
+    const snapshotPath = path.join(tmp.dir, SCRIPT_SNAPSHOT_FILE_NAME);
+    fs.writeFileSync(snapshotPath, "{broken");
+    using _parse = vi.spyOn(JSON, "parse").mockImplementationOnce(() => {
+      throw new SyntaxError("Snapshot is truncated.");
+    });
 
     expect(() => loadScriptSchemaSnapshot(scriptPath)).toThrow(
       expect.objectContaining({
         code: "SCRIPT_SNAPSHOT_INVALID",
+        message: `Failed to parse schema snapshot ${snapshotPath}: Snapshot is truncated.`,
         suggestion: expect.stringMatching(/tailor function script/),
       }),
     );
