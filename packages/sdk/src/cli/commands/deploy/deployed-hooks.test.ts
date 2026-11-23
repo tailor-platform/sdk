@@ -217,7 +217,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(() => {
-              throw new Error("build failed");
+              throw new Error("Build failed.");
             }),
             plugin(later, "later"),
           ]),
@@ -225,7 +225,9 @@ describe("deployed hooks", () => {
       }),
     ).rejects.toMatchObject({
       code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*hook.*app.*build failed.*later/s),
+      message:
+        'Platform resources were applied successfully, but the onDeployed hook of plugin "hook" failed for app "app": Build failed.',
+      details: "Hooks not run: later (app: app)",
     });
     expect(later).not.toHaveBeenCalled();
   });
@@ -252,7 +254,8 @@ describe("deployed hooks", () => {
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
     ).rejects.toMatchObject({
       code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*network down.*Hooks not run: hook/s),
+      message: expect.stringMatching(/applied successfully.*network down$/s),
+      details: "Hooks not run: hook (app: app)",
     });
     expect(hook).not.toHaveBeenCalled();
   });
@@ -406,7 +409,7 @@ describe("deployed hooks", () => {
         ],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: admin)",
     });
   });
   test("names the application of each hook not run when loading the hook context fails", async () => {
@@ -419,7 +422,7 @@ describe("deployed hooks", () => {
         targets: [target([plugin(vi.fn())], "web"), target([plugin(vi.fn())], "admin")],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: web\), hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: web), hook (app: admin)",
     });
   });
   test("fails before running hooks when a static website has no URL assigned yet", async () => {

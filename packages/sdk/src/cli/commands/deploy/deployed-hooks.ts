@@ -185,7 +185,8 @@ function deployedHookFailure(what: string, error: unknown, notRun: readonly stri
   const reason = error instanceof Error ? error.message : String(error);
   return CLIError({
     code: "DEPLOYED_HOOK_FAILED",
-    message: `Platform resources were applied successfully, but ${what}: ${reason}${notRun.length ? `. Hooks not run: ${notRun.join(", ")}` : ""}`,
+    message: `Platform resources were applied successfully, but ${what}: ${reason}`,
+    details: notRun.length ? `Hooks not run: ${notRun.join(", ")}` : undefined,
     suggestion:
       "Fix the error and run `tailor deploy` again. Unchanged resources are not re-applied.",
     cause: error,

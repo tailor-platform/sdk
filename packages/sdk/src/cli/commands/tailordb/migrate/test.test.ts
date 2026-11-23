@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { runCommand } from "@politty/zod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import {
   runMigrationTest,
@@ -444,6 +445,8 @@ describe("tailordb migration test", () => {
     vi.mocked(dependencies.recordWorkspaceExpiry).mockRejectedValue(
       new Error("label write failed"),
     );
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const log = vi.spyOn(logger, "log").mockImplementation(() => {});
 
     const result = await runMigrationTest(
       { data: "seed", keep: true, keepTtl: "24h" },
@@ -452,6 +455,14 @@ describe("tailordb migration test", () => {
 
     expect(result.deleted).toBe(false);
     expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(
+      "Failed to record an expiry on temporary workspace 44444444-4444-4444-8444-444444444444: label write failed",
+    );
+    expect(log).toHaveBeenCalledWith(
+      "Record one with `tailor workspace ttl set --ttl 24h --workspace-id=44444444-4444-4444-8444-444444444444`.",
+    );
+    warn.mockRestore();
+    log.mockRestore();
   });
 
   test("rejects --keep-ttl without --keep before creating anything", async () => {

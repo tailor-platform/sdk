@@ -179,8 +179,8 @@ export async function teardownTemporaryWorkflow(
       if (isNotFoundError(error)) continue;
       removedAll = false;
       warn(
-        `Could not remove the temporary ${subject} ${label} '${resource}': ` +
-          `${error instanceof Error ? error.message : String(error)}. ${leftoverNote}`,
+        `Could not remove the temporary ${subject} ${label} '${resource}'. ${leftoverNote} ` +
+          `Reason: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }

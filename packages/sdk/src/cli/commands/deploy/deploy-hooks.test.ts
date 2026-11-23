@@ -598,9 +598,8 @@ test("reports skipped hooks when loading their context in JSON mode fails", asyn
   client.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
   await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOYED_HOOK_FAILED",
-    message: expect.stringMatching(
-      /loading the deployed information.*application lookup failed.*Hooks not run: hook \(app: app\)/s,
-    ),
+    message: expect.stringMatching(/loading the deployed information.*application lookup failed$/s),
+    details: "Hooks not run: hook (app: app)",
   });
 });
 

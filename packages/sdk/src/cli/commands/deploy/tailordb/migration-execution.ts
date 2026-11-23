@@ -789,29 +789,34 @@ interface LeftRestrictedOptions {
   recovery?: string;
   /** Whether tables stay restricted although none of them can be named. */
   namesUnknown?: boolean;
+  /** Failure that left them restricted, whose message is printed last. */
+  cause?: unknown;
 }
 
 /**
  * Warn about tables that keep their migration restrictions, and how they are released.
  * @param reason - What left the tables restricted
  * @param restricted - The tables, by namespace
- * @param options - How the tables are released, and whether their names are unknown
+ * @param options - How the tables are released, whether their names are unknown, and the
+ * failure behind them
  */
 export function warnTablesLeftRestricted(
   reason: string,
   restricted: readonly RestrictedTables[],
   options: LeftRestrictedOptions = {},
 ): void {
-  const { recovery = RESTRICTED_TABLES_RECOVERY, namesUnknown = false } = options;
+  const { recovery = RESTRICTED_TABLES_RECOVERY, namesUnknown = false, cause } = options;
+  const causeSuffix = cause === undefined ? "" : ` Reason: ${toError(cause).message}`;
   const tables = restricted.filter((entry) => entry.tables.length > 0);
   if (tables.length === 0) {
-    logger.warn(reason);
+    logger.warn(`${reason}${causeSuffix}`);
     if (namesUnknown) logger.log(recovery);
     return;
   }
   logger.warn(
     `${reason} Still restricted (${RESTRICTION_EFFECT}): ` +
-      `${tables.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.`,
+      `${tables.map((entry) => `namespace '${entry.namespace}': ${entry.tables.join(", ")}`).join("; ")}.` +
+      causeSuffix,
   );
   logger.log(recovery);
 }

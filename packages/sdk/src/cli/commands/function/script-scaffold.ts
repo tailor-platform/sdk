@@ -160,7 +160,7 @@ export function loadScriptSchemaSnapshot(scriptPath: string): ScriptSchemaSnapsh
   } catch (error) {
     throw CLIError({
       code: "SCRIPT_SNAPSHOT_INVALID",
-      message: `Failed to parse schema snapshot ${snapshotPath}: ${error instanceof Error ? error.message : error}.`,
+      message: `Failed to parse schema snapshot ${snapshotPath}: ${error instanceof Error ? error.message : String(error)}`,
       suggestion: "Re-run `tailor function script` to regenerate it.",
       cause: error,
     });
