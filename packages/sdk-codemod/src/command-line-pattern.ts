@@ -37,7 +37,7 @@ function globalOptions(separator: string, valuesMayBeOmitted: boolean): string {
   const option = [
     `(?:${alternation(longFlags(GLOBAL_BOOLEAN_FLAGS))})(?:=${ARG_VALUE})?(?![\\w-])`,
     `(?:${alternation(longFlags(GLOBAL_VALUE_FLAGS))})(?:=${ARG_VALUE}|${separator}${separatedValue})${optionalValue}`,
-    `-[${BOOLEAN_ALIASES}]+(?![\\w-])`,
+    `-[${BOOLEAN_ALIASES}]+(?:=${ARG_VALUE})?(?![\\w-])`,
     `-[${BOOLEAN_ALIASES}]*[${VALUE_ALIASES}](?:=?${ARG_VALUE}|${separator}${separatedValue})${optionalValue}`,
   ].join("|");
   return `(?:${separator}(?:${option}))*`;

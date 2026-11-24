@@ -196,7 +196,12 @@ describe("tailorCommandPrefix", () => {
     ["tailor --no-json=false function test-run"],
     ['tailor --verbose="true" --json=false function test-run'],
     ['tailor --json=\\"false\\" function test-run'],
-  ])("reads a quoted value assigned to a flag in %j", (commandLine) => {
+    ["tailor -j=false function test-run"],
+    ["tailor -j=true function test-run"],
+    ['tailor -j="false" function test-run'],
+    ["tailor function -j=false test-run"],
+    ["tailor -j=false -e .env function test-run"],
+  ])("reads a value assigned to a flag in %j", (commandLine) => {
     expect(matches(commandLine, ["function"], "test-run")).toBe(true);
   });
 
