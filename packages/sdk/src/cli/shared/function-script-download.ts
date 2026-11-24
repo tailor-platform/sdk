@@ -7,7 +7,7 @@
 
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { logger } from "#/cli/shared/logger";
-import { isWorkflowRunResourceName } from "#/cli/shared/workflow-run-labels";
+import { isFunctionRunResourceName } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 
 /**
@@ -42,7 +42,7 @@ export function scriptNameToRegistryName(
   // unconstrained, so dots must be preserved.
   if (executionType === FunctionExecution_Type.JOB) {
     // A run registers its temporary function under the name it starts, without the prefix.
-    return isWorkflowRunResourceName(scriptName) ? scriptName : `workflow--${scriptName}`;
+    return isFunctionRunResourceName(scriptName) ? scriptName : `workflow--${scriptName}`;
   }
 
   // Resolver: `<namespace>.<name>.body.js`

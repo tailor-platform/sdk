@@ -3,6 +3,7 @@ import {
   createRunId,
   readWorkflowRunMarker,
   runIdStartedAt,
+  isFunctionRunResourceName,
   isWorkflowRunResourceName,
   workflowRunJobFunctionName,
   workflowRunLabels,
@@ -122,5 +123,22 @@ describe("runIdStartedAt", () => {
 
   test("returns nothing for an id this module did not create", () => {
     expect(runIdStartedAt("nightly")).toBeUndefined();
+  });
+});
+
+describe("isFunctionRunResourceName", () => {
+  test("is true for the name `function run --async` gives its function", () => {
+    expect(
+      isFunctionRunResourceName(workflowRunResourceName(createRunId(new Date(), "c0a100"))),
+    ).toBe(true);
+  });
+
+  test("is false for the function of a workflow job a run registers", () => {
+    const runId = createRunId(new Date(), "c0a100");
+    expect(isFunctionRunResourceName(workflowRunJobFunctionName(runId, "cleanup"))).toBe(false);
+  });
+
+  test("is false for a deployed job that only starts with the prefix", () => {
+    expect(isFunctionRunResourceName("tmp-run-cleanup")).toBe(false);
   });
 });

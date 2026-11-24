@@ -91,6 +91,16 @@ export function isWorkflowRunResourceName(name: string): boolean {
 }
 
 /**
+ * Tell whether a name is the function `function run --async` registers, as opposed to the
+ * function of a workflow job a run registers (`<name>-<job>`) or a deployed job.
+ * @param name - Resource or script name
+ * @returns True for exactly the name of a run's own function
+ */
+export function isFunctionRunResourceName(name: string): boolean {
+  return /^tmp-run-r[0-9a-z]{8}-[0-9a-z]{6}$/.test(name);
+}
+
+/**
  * Read the start time out of a run id.
  * @param runId - Id created by {@link createRunId}
  * @returns Start time truncated to the second, or undefined for any other id
