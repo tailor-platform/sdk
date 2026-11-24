@@ -211,7 +211,7 @@ snapshots:
 				"@bufbuild/protobuf": "2.17.0",
 				"@connectrpc/connect": "2.3.0",
 				"@connectrpc/connect-node": "2.3.0",
-				"@electric-sql/pglite": "0.5.16",
+				"@electric-sql/pglite": "0.5.17",
 				"@tailor-platform/sdk-plugin-seed": "workspace:^",
 				"@tailor-platform/sdk-plugin-tailordb-erd": "workspace:^",
 				"@types/node": "26.6.6",
@@ -466,7 +466,7 @@ snapshots:
 			},
 			"devDependencies": {
 				"@ark/attest": "0.58.0",
-				"@electric-sql/pglite": "0.5.16",
+				"@electric-sql/pglite": "0.5.17",
 				"@tailor-platform/shared": "workspace:^",
 				"@tailor-platform/tailor-proto": "workspace:^",
 				"@types/mime-types": "3.0.1",
@@ -1117,8 +1117,8 @@ snapshots:
 			"engines": {"node": ">=14.17.0"},
 		},
 
-		"@electric-sql/pglite@0.5.16": {
-			"integrity": "sha512-Nj8KcIsJL748W408U2N8q4+9IlONdpRIU8MJypIAAINMJ5nqKyqpX7Mgg/5XKkXiAib3AoZGR6hnJFlrlLBrcg==",
+		"@electric-sql/pglite@0.5.17": {
+			"integrity": "sha512-8SvKjiUjaU+0O0dbxjOfN+jXz14TEqDWbwDkYOW1aQ11y/ph2JvFVI27ABBo5nfw+ZfSqy4hKCNlbnbB1TDE+g==",
 		},
 
 		"@emnapi/core@1.11.2": {
