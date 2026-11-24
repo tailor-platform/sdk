@@ -1,0 +1,4 @@
+steps:
+  - run: >-
+      tailor-sdk --json
+      crashreport list --machine-user x

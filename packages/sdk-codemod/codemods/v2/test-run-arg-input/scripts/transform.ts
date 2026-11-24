@@ -3,7 +3,7 @@ import { TAILOR_SDK_BINARY, tailorCommandPrefix } from "../../../../src/command-
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 const COMMAND_PATTERN = new RegExp(
-  `${tailorCommandPrefix(TAILOR_SDK_BINARY, ["function"])}test-run\\b`,
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, ["function"], { crossLines: true })}test-run\\b`,
 );
 
 // Sentinel used to fold `\<newline>` continuations into a single logical line

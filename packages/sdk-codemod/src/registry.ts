@@ -44,7 +44,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
   ].join(""),
 );
 const FUNCTION_TEST_RUN_PATTERN = new RegExp(
-  `${tailorCommandPrefix("\\bfunction", [])}test-run(?![\\w.-])`,
+  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true })}test-run(?![\\w.-])`,
 );
 
 const V2_NEXT_1 = "2.0.0-next.1";

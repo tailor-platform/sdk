@@ -9,7 +9,7 @@ const OPTION_RENAMES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const COMMAND_PATTERN = new RegExp(
-  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [])}(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [], { crossLines: true })}(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
 const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_SDK_BINARY, "g");

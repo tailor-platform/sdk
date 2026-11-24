@@ -9,7 +9,7 @@ import { transformPackageScripts } from "../../../../src/package-json-scripts";
 // `(?![-\w])` excludes both word continuation (`applyConfig`) and dash-suffixed
 // names (`apply-foo`) so a hypothetical sibling subcommand is not rewritten.
 const APPLY_PATTERN = new RegExp(
-  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [])}apply(?![-\\w])`,
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [], { crossLines: true })}apply(?![-\\w])`,
   "g",
 );
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);

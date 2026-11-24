@@ -1,8 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { TAILOR_BINARY, tailorCommandPrefix } from "./command-line-pattern";
 
-function matches(commandLine: string, path: readonly string[], last: string): boolean {
-  const pattern = new RegExp(`^${tailorCommandPrefix(TAILOR_BINARY, path)}${last}$`);
+function matches(
+  commandLine: string,
+  path: readonly string[],
+  last: string,
+  options?: { crossLines?: boolean },
+): boolean {
+  const pattern = new RegExp(`^${tailorCommandPrefix(TAILOR_BINARY, path, options)}${last}$`);
   return pattern.test(commandLine);
 }
 
@@ -68,5 +73,35 @@ describe("tailorCommandPrefix", () => {
     ["tailor function && tailor --json test-run", "a second command"],
   ])("does not reach the subcommand of %j: %s", (commandLine) => {
     expect(matches(commandLine, ["function"], "test-run")).toBe(false);
+  });
+
+  test.each([
+    ["tailor --env-file .env\\ local function test-run"],
+    ["tailor --env-file=.env\\ local function test-run"],
+    ["tailor -e .env\\ local function test-run"],
+    ["tailor -e=.env\\ local function test-run"],
+    ["tailor --env-file C:\\env\\.env function test-run"],
+  ])("reads a backslash escape inside a value in %j as part of the value", (commandLine) => {
+    expect(matches(commandLine, ["function"], "test-run")).toBe(true);
+  });
+
+  describe("with crossLines", () => {
+    test.each([
+      ["tailor\nfunction\ntest-run"],
+      ["tailor --json\n  function\n  test-run"],
+      ["tailor -e .env\n  function test-run"],
+      ["tailor --env-file\n  .env function test-run"],
+      ["tailor \\\n  function test-run"],
+    ])("reaches the subcommand across the line breaks of %j", (commandLine) => {
+      expect(matches(commandLine, ["function"], "test-run", { crossLines: true })).toBe(true);
+    });
+
+    test("still stops at a second command", () => {
+      expect(
+        matches("tailor function && tailor --json test-run", ["function"], "test-run", {
+          crossLines: true,
+        }),
+      ).toBe(false);
+    });
   });
 });

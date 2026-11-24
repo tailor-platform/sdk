@@ -1,0 +1,4 @@
+steps:
+  - run: >-
+      tailor-sdk --env-file .env
+      apply --profile prod
