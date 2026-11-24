@@ -100,6 +100,11 @@ function transformShellLine(line: string): string {
       i++;
       continue;
     }
+    if (ch === "\\" && i + 1 < N) {
+      segBuf += line.slice(i, i + 2);
+      i += 2;
+      continue;
+    }
     if (ch === '"' || ch === "'" || ch === "`") {
       quoteChar = ch;
       segBuf += ch;
