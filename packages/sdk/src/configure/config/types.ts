@@ -384,7 +384,7 @@ type WorkspaceEnvOverride<Env> = [keyof Env] extends [never]
   : { [Key in keyof Env]?: EnvEntry };
 
 /** An application of `defineWorkspace()`: the workspace services it exposes, by name, and its own settings. */
-interface WorkspaceApplicationConfig<
+export interface WorkspaceApplicationConfig<
   Db extends string,
   Resolver extends string,
   Auth extends string,

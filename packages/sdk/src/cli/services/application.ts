@@ -112,7 +112,7 @@ export type ServiceSettings = Pick<
 >;
 
 /** `env` values each service uses in place of the root values with the same keys. */
-type EnvOverrides = LoadedWorkspaceConfig["envOverrides"];
+export type EnvOverrides = LoadedWorkspaceConfig["envOverrides"];
 
 /** The services a config defines, with the `env` they share. */
 export type ConfigServices = {
