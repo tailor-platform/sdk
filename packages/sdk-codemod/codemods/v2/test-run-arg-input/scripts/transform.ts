@@ -1,7 +1,10 @@
 import * as path from "pathe";
+import { TAILOR_SDK_BINARY, tailorCommandPrefix } from "../../../../src/command-line-pattern";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
-const COMMAND_PATTERN = /\btailor-sdk\s+function\s+test-run\b/;
+const COMMAND_PATTERN = new RegExp(
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, ["function"])}test-run\\b`,
+);
 
 // Sentinel used to fold `\<newline>` continuations into a single logical line
 // before splitting on `\n`. Plain ASCII so the SHELL_ARG_PATTERN can reference
@@ -16,6 +19,10 @@ const SHELL_ARG_PATTERN = new RegExp(
   `(--arg|-a)(\\s*=\\s*|(?:\\s|${JOIN_MARKER})+)(['"\`])((?:\\\\.|(?!\\3)[^\\\\])*)\\3`,
   "g",
 );
+
+function invokesTestRun(text: string): boolean {
+  return COMMAND_PATTERN.test(text.split(JOIN_MARKER).join("\\\n"));
+}
 
 function isInputWrapper(parsed: unknown): parsed is { input: unknown } {
   return (
@@ -63,7 +70,7 @@ function applyUnwrapToSegment(segment: string): string {
  * would have the unrelated `other-cli` argument unwrapped too.
  */
 function transformShellLine(line: string): string {
-  if (!COMMAND_PATTERN.test(line)) return line;
+  if (!invokesTestRun(line)) return line;
 
   let result = "";
   let segBuf = "";
@@ -72,7 +79,7 @@ function transformShellLine(line: string): string {
   const N = line.length;
 
   const flushSegment = () => {
-    if (COMMAND_PATTERN.test(segBuf)) {
+    if (invokesTestRun(segBuf)) {
       result += applyUnwrapToSegment(segBuf);
     } else {
       result += segBuf;

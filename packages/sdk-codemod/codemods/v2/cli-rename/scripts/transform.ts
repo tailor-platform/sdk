@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { GLOBAL_ARG_PATTERN, TAILOR_SDK_BINARY } from "../../../../src/command-line-pattern";
+import { TAILOR_SDK_BINARY, tailorCommandPrefix } from "../../../../src/command-line-pattern";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Map of v1 multi-word command names to their v2 single-word replacements.
@@ -9,7 +9,7 @@ const OPTION_RENAMES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const COMMAND_PATTERN = new RegExp(
-  `${TAILOR_SDK_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [])}(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
 const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_SDK_BINARY, "g");
@@ -476,8 +476,7 @@ function replaceAll(
 ): string {
   const updated = value.replace(
     COMMAND_PATTERN,
-    (match, _prefix: string, cmd: string) =>
-      `${match.slice(0, -cmd.length)}${COMMAND_MAP.get(cmd) ?? cmd}`,
+    (match, cmd: string) => `${match.slice(0, -cmd.length)}${COMMAND_MAP.get(cmd) ?? cmd}`,
   );
   const foldedYamlRanges = parseFoldedYaml ? findFoldedYamlRanges(updated) : undefined;
   const markdownFencedCodeRanges = parseMarkdownFencedCode

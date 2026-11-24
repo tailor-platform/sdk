@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { GLOBAL_ARG_PATTERN, TAILOR_SDK_BINARY } from "../../../../src/command-line-pattern";
+import { TAILOR_SDK_BINARY, tailorCommandPrefix } from "../../../../src/command-line-pattern";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Match `tailor-sdk apply` plus the optional `@version` suffix that
@@ -9,7 +9,7 @@ import { transformPackageScripts } from "../../../../src/package-json-scripts";
 // `(?![-\w])` excludes both word continuation (`applyConfig`) and dash-suffixed
 // names (`apply-foo`) so a hypothetical sibling subcommand is not rewritten.
 const APPLY_PATTERN = new RegExp(
-  `${TAILOR_SDK_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`,
+  `${tailorCommandPrefix(TAILOR_SDK_BINARY, [])}apply(?![-\\w])`,
   "g",
 );
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);

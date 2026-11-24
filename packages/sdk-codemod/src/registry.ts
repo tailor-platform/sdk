@@ -1,6 +1,7 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
+import { tailorCommandPrefix } from "./command-line-pattern";
 import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
 import type { CodemodPackage } from "./types";
 
@@ -42,6 +43,10 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
+const FUNCTION_TEST_RUN_PATTERN = new RegExp(
+  `${tailorCommandPrefix("\\bfunction", [])}test-run(?![\\w.-])`,
+);
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -1729,8 +1734,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    legacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
-    sourceStringLegacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    legacyPatterns: [FUNCTION_TEST_RUN_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_TEST_RUN_PATTERN],
     examples: [
       {
         lang: "sh",
