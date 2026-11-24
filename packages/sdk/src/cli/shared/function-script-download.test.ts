@@ -140,6 +140,12 @@ describe("scriptNameToRegistryName", () => {
     );
   });
 
+  test("keeps the name of a temporary function registered directly by a run", () => {
+    expect(scriptNameToRegistryName("tmp-run-r00tozxm8-c0a100", FunctionExecution_Type.JOB)).toBe(
+      "tmp-run-r00tozxm8-c0a100",
+    );
+  });
+
   test("translates workflow job scriptName that contains dots under JOB type", () => {
     // WorkflowJobSchema.name is an unconstrained string, so job names
     // may legitimately contain dots. The JOB type discriminator must

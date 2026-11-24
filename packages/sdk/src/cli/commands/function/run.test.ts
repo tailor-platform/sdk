@@ -267,7 +267,7 @@ describe("function run --json", () => {
       const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
       expect(suggestion).toContain("tailor function run");
       expect(suggestion).toContain("--async");
-      expect(suggestion).toContain(`--arg '{"a":1}'`);
+      expect(suggestion).toContain(`'--arg={"a":1}'`);
       expect(suggestion).toContain("--machine-user=admin");
       expect(suggestion).toContain("--profile=dev");
       expect(suggestion).not.toMatch(/\d+ seconds/);
@@ -288,6 +288,27 @@ describe("function run --json", () => {
 
       const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
       expect(suggestion).toContain("function run ./-backfill.js --async");
+    });
+
+    test("keeps an argument file that starts with a hyphen bound to --arg-file", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const argFile = path.join(path.dirname(scriptPath), "-args.json");
+      fs.writeFileSync(argFile, '{"a":1}');
+      vi.spyOn(process, "cwd").mockReturnValue(path.dirname(scriptPath));
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        `--arg-file=${argFile}`,
+        "--machine-user",
+        "admin",
+      ]);
+
+      const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
+      expect(suggestion).toContain(`--arg-file=${argFile}`);
     });
 
     test("carries the env files it was given, in the order they are loaded", async () => {
