@@ -30,7 +30,7 @@ export interface StartContext {
    */
   authNamespace?: string | undefined;
   /** Name of the job function a job is started under (default: the job's own name) */
-  jobFunctionName?: (jobName: string) => string | undefined;
+  jobFunctionName?: ((jobName: string) => string) | undefined;
   /**
    * Auth namespaces that define each machine user, for a config with several Auth services, whose
    * string-literal invokers are resolved by name.
