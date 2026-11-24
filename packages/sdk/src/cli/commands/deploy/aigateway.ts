@@ -149,7 +149,7 @@ export async function planAIGateway(context: PlanContext) {
     desired.push({
       name,
       request,
-      comparableRequest: omitUndefined({ ...request, cors: resolvedCors }),
+      comparableRequest: { ...request, cors: resolvedCors },
       metaRequest,
     });
   }

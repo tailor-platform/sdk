@@ -67,6 +67,9 @@ describe("listFunctionRegistries", () => {
           ...(pageDirection !== undefined && { pageDirection }),
         }),
       );
+      expect(
+        Object.hasOwn(client.listFunctionRegistries.mock.lastCall?.[0] ?? {}, "pageDirection"),
+      ).toBe(pageDirection !== undefined);
     },
   );
 

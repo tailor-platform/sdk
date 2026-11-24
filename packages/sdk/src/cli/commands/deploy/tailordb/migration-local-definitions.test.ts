@@ -218,6 +218,9 @@ describe("migration flow: local definitions that no pending migration includes",
       expect(postWrites.at(-1)?.tailordbType.schema?.settings).toEqual(
         expect.objectContaining({ publishRecordEvents: false }),
       );
+      expect(postWrites.at(-1)?.tailordbType.schema?.settings).not.toHaveProperty(
+        "disableGqlOperations",
+      );
       const localWrites = postWrites.filter((write) => fieldNames(write).includes("body"));
       for (const write of localWrites) expect(write.order).toBeGreaterThan(lastLabelOrder());
       expect(fieldNames(writesOf(client, "User").at(-1))).toEqual(["name", "nickname"]);

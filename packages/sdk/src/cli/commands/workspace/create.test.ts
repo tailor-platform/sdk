@@ -91,6 +91,11 @@ function stubClient(
   return client;
 }
 
+function createWorkspaceReceivedFolderId(client: ReturnType<typeof stubClient>): boolean {
+  const request = vi.mocked(client.createWorkspace).mock.lastCall?.[0];
+  return request !== undefined && Object.hasOwn(request, "folderId");
+}
+
 aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
   await runSuite();
@@ -723,6 +728,7 @@ describe("workspace create with user defaults", () => {
     expect(client.createWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: defaultOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each(["invalid region", "missing login"])(
@@ -786,6 +792,7 @@ describe("workspace create with user defaults", () => {
     expect(client.createWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: otherOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each([
@@ -861,6 +868,7 @@ describe("workspace create with user defaults", () => {
       expect(client.createWorkspace).toHaveBeenCalledWith(
         expect.objectContaining(omitUndefined({ organizationId, folderId })),
       );
+      expect(createWorkspaceReceivedFolderId(client)).toBe(folderId !== undefined);
     });
 
     test("rejects a folder-only --env-file before creating a workspace", async () => {
@@ -917,6 +925,7 @@ describe("workspace create with user defaults", () => {
       expect(client.createWorkspace).toHaveBeenCalledWith(
         expect.objectContaining(omitUndefined(expected)),
       );
+      expect(createWorkspaceReceivedFolderId(client)).toBe(expected.folderId !== undefined);
     },
   );
 
@@ -951,6 +960,7 @@ describe("workspace create with user defaults", () => {
     expect(client.createWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: profileOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each([
@@ -1025,6 +1035,7 @@ describe("workspace create with user defaults", () => {
     expect(client.createWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: otherOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test("ignores user defaults for an environment-authenticated programmatic call", async () => {

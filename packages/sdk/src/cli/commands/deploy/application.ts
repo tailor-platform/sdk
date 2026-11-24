@@ -420,7 +420,7 @@ export async function planApplication(
       return {
         name: app.name,
         request,
-        comparableRequest: omitUndefined({ ...request, cors: resolvedCors }),
+        comparableRequest: { ...request, cors: resolvedCors },
         metaRequest,
         metadata,
         existingLabels,

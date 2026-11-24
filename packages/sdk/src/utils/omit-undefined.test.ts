@@ -14,16 +14,6 @@ describe("omitUndefined", () => {
     expect(result).toEqual({ dryRun: false, limit: 0, name: "", token: null });
   });
 
-  test("returns a type whose undefined-able keys are optional", () => {
-    const input: { profile: string | undefined; workspaceId: string } = {
-      profile: undefined,
-      workspaceId: "ws-1",
-    };
-
-    const result: { profile?: string; workspaceId: string } = omitUndefined(input);
-
-    expect(result).toEqual({ workspaceId: "ws-1" });
-  });
   test("removes undefined keys inside nested objects and array elements", () => {
     const result = omitUndefined({
       policy: { mfaIssuer: undefined, lang: "en" },

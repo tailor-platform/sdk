@@ -79,6 +79,7 @@ describe("fillSeedData", () => {
         const result = await fillSeedData({ path });
 
         expect(fillFields).toHaveBeenLastCalledWith(expect.objectContaining({ path }));
+        expect(fillFields.mock.lastCall?.[0]).not.toHaveProperty("schemaDir");
         expect(result.output).toContain("run `tailor seed fill --dataset cogs`");
       }
     });
@@ -90,6 +91,7 @@ describe("fillSeedData", () => {
       await fillSeedData({ path: dir });
 
       expect(fillFields).toHaveBeenCalledWith(expect.objectContaining({ path: dir }));
+      expect(fillFields.mock.lastCall?.[0]).not.toHaveProperty("schemaDir");
     });
   });
 });

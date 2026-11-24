@@ -7,7 +7,6 @@ import { partition } from "es-toolkit";
 import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
-import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -156,7 +155,7 @@ export async function planAuthConnections(
       const { metadata } = await client.getMetadata({
         trn: resourceTrn(workspaceId, "auth_connection", resource.name),
       });
-      existingConnections[resource.name] = omitUndefined({ resource, allLabels: metadata?.labels });
+      existingConnections[resource.name] = { resource, allLabels: metadata?.labels };
     }),
   );
 

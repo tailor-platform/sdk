@@ -480,7 +480,7 @@ async function planServices(
       namespaceName,
       authorization,
       lang,
-      userAuthPolicy: userAuthPolicy && omitUndefined(userAuthPolicy),
+      userAuthPolicy,
       publishUserEvents: publishEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
       emailConfig,
@@ -582,7 +582,7 @@ async function planClients(
       update: (name) => ({ name, workspaceId, namespaceName }),
       unchanged: (name) => ({ name }),
       delete: (name) => {
-        const request = omitUndefined({ workspaceId, namespaceName, name });
+        const request = { workspaceId, namespaceName, name };
         if (isDeletableName(name)) return { name, request };
         if (deleted) return { name, request, vaultOnly: true };
         logger.warn(

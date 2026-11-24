@@ -8,7 +8,6 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { omitUndefined } from "#/utils/omit-undefined";
 import { getExecutorWaitFailure, printDownstreamExecution, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "#/types/executor.generated";
@@ -124,14 +123,12 @@ async function triggerExecutorByName(
   });
 
   try {
-    const response = await client.triggerExecutor(
-      omitUndefined({
-        workspaceId,
-        executorName: options.executorName,
-        payload: options.payload,
-        headers: options.headers,
-      }),
-    );
+    const response = await client.triggerExecutor({
+      workspaceId,
+      executorName: options.executorName,
+      ...(options.payload !== undefined && { payload: options.payload }),
+      ...(options.headers !== undefined && { headers: options.headers }),
+    });
 
     return { jobId: response.jobId };
   } catch (error) {

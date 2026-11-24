@@ -867,7 +867,6 @@ function protoUserProfileConfig(
           namespace: userProfile.namespace,
           type: userProfile.type.name,
           usernameField: userProfile.usernameField,
-          tenantIdField: undefined,
           attributesFields: userProfile.attributeList,
           attributeMap,
         }),

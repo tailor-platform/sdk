@@ -579,6 +579,12 @@ describe("planApplication", () => {
         }),
       },
     ]);
+    const [shopUpdate] = result.updates;
+    expect(shopUpdate?.request).not.toHaveProperty("disableIntrospection");
+    const [backofficeCreate] = result.creates;
+    for (const key of ["authNamespace", "authIdpConfigName", "cors"]) {
+      expect(backofficeCreate?.request).not.toHaveProperty(key);
+    }
     expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
   });
 
