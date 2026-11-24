@@ -32,6 +32,10 @@ function dbConfig(name: string, extra = ""): string {
   );
 }
 
+function handBackWarning(configPath: string): string {
+  return `${configPath}: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.`;
+}
+
 function tsconfig(compilerOptions: object): string {
   return `${JSON.stringify({ compilerOptions })}\n`;
 }
@@ -667,14 +671,8 @@ describe("v3/config-to-workspace", () => {
   ])("leaves the configs when %s", async (_, aExtra, bExtra, message) => {
     const files = {
       "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": lines(
-        SDK_IMPORT,
-        `export default defineConfig({ name: "a", ${aExtra}db: { a: { files: [] } } });`,
-      ),
-      "b/tailor.config.ts": lines(
-        SDK_IMPORT,
-        `export default defineConfig({ name: "b", ${bExtra}db: { b: { files: [] } } });`,
-      ),
+      "a/tailor.config.ts": dbConfig("a", aExtra),
+      "b/tailor.config.ts": dbConfig("b", bExtra),
     };
     const project = createProject(files);
 
@@ -683,8 +681,25 @@ describe("v3/config-to-workspace", () => {
     expect(project.files()).toEqual(Object.keys(files).toSorted());
     expect(findingsOf(result).map((finding) => finding.message)).toEqual([message]);
     expect(result.warnings).toEqual([
-      "a/tailor.config.ts: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.",
-      "b/tailor.config.ts: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.",
+      "a/tailor.config.ts: still defineConfig(), which v3 removes.",
+      "b/tailor.config.ts: still defineConfig(), which v3 removes.",
+    ]);
+  });
+
+  test("warns that deploying a config left as defineConfig() to the workspace of one converted to defineApp() hands its resources back", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": dbConfig("a", 'maintenanceMode: "deploy", '),
+      "b/tailor.config.ts": dbConfig("b"),
+      "c/tailor.config.ts": dbConfig("c"),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("c/tailor.config.ts")).toContain("export default defineApp(");
+    expect(result.warnings.filter((warning) => warning.includes("still defineConfig()"))).toEqual([
+      handBackWarning("a/tailor.config.ts"),
+      handBackWarning("b/tailor.config.ts"),
     ]);
   });
 
@@ -841,11 +856,6 @@ describe("v3/config-to-workspace", () => {
   });
 
   test("leaves a second group of configs that would take the same workspace config path", async () => {
-    const config = (name: string) =>
-      lines(
-        SDK_IMPORT,
-        `export default defineConfig({ name: "${name}", db: { ${name}: { files: [] } } });`,
-      );
     const project = createProject({
       "package.json": `${JSON.stringify({
         scripts: {
@@ -853,20 +863,21 @@ describe("v3/config-to-workspace", () => {
           blog: "tailor deploy -c c/tailor.config.ts,d/tailor.config.ts",
         },
       })}\n`,
-      "a/tailor.config.ts": config("a"),
-      "b/tailor.config.ts": config("b"),
-      "c/tailor.config.ts": config("c"),
-      "d/tailor.config.ts": config("d"),
+      "a/tailor.config.ts": dbConfig("a"),
+      "b/tailor.config.ts": dbConfig("b"),
+      "c/tailor.config.ts": dbConfig("c"),
+      "d/tailor.config.ts": dbConfig("d"),
     });
 
     const result = await runOnProject(CODEMODS, project);
 
-    expect(project.read("c/tailor.config.ts")).toBe(config("c"));
+    expect(project.read("c/tailor.config.ts")).toBe(dbConfig("c"));
     expect(findingsOf(result).map(({ file, message }) => ({ file, message }))).toContainEqual({
       file: "c/tailor.config.ts",
       message:
         "Another group of configs was merged into tailor.config.ts, so the configs deployed together with this one were not merged. Run the upgrade from a directory that holds only this group's configs, or merge them by hand.",
     });
+    expect(result.warnings).toContain(handBackWarning("c/tailor.config.ts"));
   });
 
   test("leaves the workflows tailor setup ci generated to `tailor setup update`, and reports the others", async () => {

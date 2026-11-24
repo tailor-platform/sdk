@@ -76,6 +76,8 @@ export type ConfigScan = {
   configs: ConfigModule[];
   /** Configs that call `defineConfig()` in a form the codemods cannot convert. */
   unconvertible: Report[];
+  /** Project-relative paths of the configs that use `defineApp()` or `defineWorkspace()`. */
+  v3Configs: string[];
 };
 
 /**
@@ -413,14 +415,14 @@ export function parseConfigModule(
 }
 
 /**
- * Find the `defineConfig()` configs of a project: its `tailor.config.*` files and the files that
- * scripts, workflows, and the lock name as configs.
+ * Find the configs of a project: its `tailor.config.*` files and the files that scripts,
+ * workflows, and the lock name as configs.
  * @param cache - Module cache of the project
  * @param named - Project-relative paths that scripts, workflows, and the lock name as configs
- * @returns The convertible configs and the reports for the others
+ * @returns The convertible `defineConfig()` configs, the reports for the others, and the configs that already use what replaces `defineConfig()`
  */
 export function scanConfigs(cache: ModuleCache, named: readonly string[] = []): ConfigScan {
-  const scan: ConfigScan = { configs: [], unconvertible: [] };
+  const scan: ConfigScan = { configs: [], unconvertible: [], v3Configs: [] };
   const paths = new Set(cache.project.paths);
   const candidates = new Set([
     ...cache.project.paths.filter((file) => isTailorConfigPath(file)),
@@ -430,7 +432,12 @@ export function scanConfigs(cache: ModuleCache, named: readonly string[] = []): 
     const source = cache.project.read(file);
     if (source === undefined) continue;
     const config = parseConfigModule(cache, file, source);
-    if (config === null) continue;
+    if (config === null) {
+      if (source.includes(SDK_MODULE) && /\bdefine(?:App|Workspace)\b/u.test(source)) {
+        scan.v3Configs.push(file);
+      }
+      continue;
+    }
     if ("message" in config) scan.unconvertible.push(config);
     else scan.configs.push(config);
   }

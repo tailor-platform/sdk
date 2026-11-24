@@ -316,9 +316,13 @@ export function convertConfigs(project: ProjectFiles, kind: ConversionKind): Pro
         .filter((configPath) => !conversion.converted.has(configPath)),
       ...scan.unconvertible.map((report) => report.file),
     ].toSorted();
+    const handBack =
+      conversion.converted.size > 0 || scan.v3Configs.length > 0
+        ? " Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config."
+        : "";
     for (const configPath of remaining) {
       conversion.changes.warnings.push(
-        `${configPath}: still defineConfig(), which v3 removes. Deploying it to the workspace of a converted config hands that workspace's resources back to it after a confirmation; deploy each workspace from one config.`,
+        `${configPath}: still defineConfig(), which v3 removes.${handBack}`,
       );
     }
   }
