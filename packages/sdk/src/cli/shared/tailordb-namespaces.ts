@@ -79,7 +79,7 @@ export interface LoadedApplicationNamespaces extends LoadedTailorDBNamespaces {
  * @param options - Namespace loading options.
  * @returns The loaded config, plugins, application, and TailorDB namespace data.
  */
-export async function loadApplicationNamespaces(
+async function loadApplicationNamespaces(
   options: LoadTailorDBNamespacesOptions = {},
 ): Promise<LoadedApplicationNamespaces> {
   const { config, plugins } = await loadConfig(options.configPath);
