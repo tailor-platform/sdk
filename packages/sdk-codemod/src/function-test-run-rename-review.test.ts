@@ -53,4 +53,23 @@ describe("function test-run rename", () => {
       expect.stringContaining("was not migrated automatically (rule: v3/function-test-run-rename)"),
     ]);
   });
+
+  test.each([
+    [
+      "a short option and its value",
+      "spawn('tailor', ['function', '-e', '.env', 'test-run', 'a.ts']);\n",
+    ],
+    [
+      "a long option and its value",
+      "spawn('tailor', ['function', '--env-file', '.env', 'test-run', 'a.ts']);\n",
+    ],
+    ["a flag", "spawn('tailor', ['function', '--json', 'test-run', 'a.ts']);\n"],
+  ])("warns about an argv array with %s before test-run", async (_name, source) => {
+    const { result, output } = await run("run.ts", source);
+
+    expect(output).toBe(source);
+    expect(result.warnings).toEqual([
+      expect.stringContaining("was not migrated automatically (rule: v3/function-test-run-rename)"),
+    ]);
+  });
 });

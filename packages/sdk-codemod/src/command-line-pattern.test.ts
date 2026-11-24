@@ -5,7 +5,7 @@ function matches(
   commandLine: string,
   path: readonly string[],
   last: string,
-  options?: { crossLines?: boolean },
+  options?: { crossLines?: boolean; valuesMayBeOmitted?: boolean },
 ): boolean {
   const pattern = new RegExp(`^${tailorCommandPrefix(TAILOR_BINARY, path, options)}${last}$`);
   return pattern.test(commandLine);
@@ -102,6 +102,80 @@ describe("tailorCommandPrefix", () => {
           crossLines: true,
         }),
       ).toBe(false);
+    });
+  });
+
+  test.each([
+    ['tailor --env-file \\".env local\\" function test-run'],
+    ["tailor --env-file=\\'.env local\\' function test-run"],
+    ['tailor -e \\".env local\\" function test-run'],
+    ['tailor --env-file \\"a\\" --env-file \\"b c\\" function test-run'],
+  ])("reads the quotes of a command written inside a quoted string in %j", (commandLine) => {
+    expect(matches(commandLine, ["function"], "test-run")).toBe(true);
+  });
+
+  describe("with valuesMayBeOmitted", () => {
+    test.each([
+      ["function -e test-run"],
+      ["function --env-file test-run"],
+      ["function -je test-run"],
+    ])("takes %j to have lost the value of its option", (commandLine) => {
+      expect(matches(commandLine, [], "test-run", { valuesMayBeOmitted: true })).toBe(false);
+      expect(
+        new RegExp(
+          `^${tailorCommandPrefix("function", [], { valuesMayBeOmitted: true })}test-run$`,
+        ).test(commandLine),
+      ).toBe(true);
+    });
+
+    test("still reads a value that is there", () => {
+      const pattern = new RegExp(
+        `^${tailorCommandPrefix("function", [], { valuesMayBeOmitted: true })}test-run$`,
+      );
+
+      expect(pattern.test("function -e .env test-run")).toBe(true);
+    });
+
+    test("does not skip an option that is not global", () => {
+      const pattern = new RegExp(
+        `^${tailorCommandPrefix("function", [], { valuesMayBeOmitted: true })}test-run$`,
+      );
+
+      expect(pattern.test("function --profile test-run")).toBe(false);
+    });
+  });
+
+  test("does not let a value be omitted by default", () => {
+    const pattern = new RegExp(`^${tailorCommandPrefix("function", [])}test-run$`);
+
+    expect(pattern.test("function -e test-run")).toBe(false);
+  });
+
+  describe("on a long run of options that take a value", () => {
+    const elapsedMs = (
+      head: string,
+      options: { valuesMayBeOmitted?: boolean },
+      commandLine: string,
+    ) => {
+      const pattern = new RegExp(`^${tailorCommandPrefix(head, [], options)}test-run$`);
+      const start = performance.now();
+      pattern.test(commandLine);
+      return performance.now() - start;
+    };
+
+    test.each([["-e"], ["--env-file"], ["-je"]])(
+      "does not take longer for every %s that follows another when values may be omitted",
+      (flag) => {
+        const commandLine = `function${` ${flag}`.repeat(30)} nope`;
+
+        expect(elapsedMs("function", { valuesMayBeOmitted: true }, commandLine)).toBeLessThan(50);
+      },
+    );
+
+    test.each([["-e"], ["--env-file"]])("stays quick for %s by default", (flag) => {
+      const commandLine = `function${` ${flag}`.repeat(2000)} nope`;
+
+      expect(elapsedMs("function", {}, commandLine)).toBeLessThan(50);
     });
   });
 });

@@ -44,7 +44,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
   ].join(""),
 );
 const FUNCTION_TEST_RUN_PATTERN = new RegExp(
-  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true })}test-run(?![\\w.-])`,
+  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true, valuesMayBeOmitted: true })}test-run(?![\\w.-])`,
 );
 
 const SHELL_ARGUMENT_UNIT = String.raw`(?:"(?:[^"\\\n\0]|\\[^\0])*"|'[^'\n\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
