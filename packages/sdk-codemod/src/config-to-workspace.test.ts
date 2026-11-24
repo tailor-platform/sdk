@@ -25,6 +25,13 @@ function deployedTogether(...configs: string[]): string {
   return `${JSON.stringify({ scripts: { deploy: `tailor deploy -c ${configs.join(",")}` } })}\n`;
 }
 
+function dbConfig(name: string, extra = ""): string {
+  return lines(
+    SDK_IMPORT,
+    `export default defineConfig({ name: "${name}", ${extra}db: { ${name}: { files: [] } } });`,
+  );
+}
+
 function tsconfig(compilerOptions: object): string {
   return `${JSON.stringify({ compilerOptions })}\n`;
 }
@@ -999,6 +1006,59 @@ describe("v3/config-to-workspace", () => {
 
     expect(result.filesDeleted).toEqual(["a/tailor.config.ts", "b/tailor.config.ts"]);
   });
+
+  const continuedStep = [
+    "      - run: |",
+    "          pnpm tailor deploy \\",
+    "            --config a/tailor.config.ts,b/tailor.config.ts",
+  ];
+  test.each([
+    ["continues a line", continuedStep, "\n"],
+    ["continues a CRLF line", continuedStep, "\r\n"],
+    [
+      "is single-quoted",
+      ["      - run: 'tailor deploy -c a/tailor.config.ts,b/tailor.config.ts'"],
+      "\n",
+    ],
+    [
+      "sets TAILOR_CONFIG_PATH",
+      [
+        "      - run: tailor deploy",
+        "        env:",
+        "          TAILOR_CONFIG_PATH: a/tailor.config.ts,b/tailor.config.ts",
+      ],
+      "\n",
+    ],
+  ])(
+    "merges the configs a workflow step deploys together, and reports the step, when it %s",
+    async (_, step, newline) => {
+      const project = createProject({
+        ".github/workflows/deploy.yml": lines(
+          "jobs:",
+          "  deploy:",
+          "    steps:",
+          "      # - run: tailor deploy -c a/tailor.config.ts,c/tailor.config.ts",
+          ...step,
+        ).replaceAll("\n", newline),
+        "a/tailor.config.ts": dbConfig("a"),
+        "b/tailor.config.ts": dbConfig("b"),
+        "c/tailor.config.ts": dbConfig("c"),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      expect(result.filesDeleted).toEqual(["a/tailor.config.ts", "b/tailor.config.ts"]);
+      expect(findingsOf(result)).toEqual([
+        {
+          file: ".github/workflows/deploy.yml",
+          line: 4 + step.length,
+          excerpt: step.at(-1)!.trim(),
+          message:
+            "This workflow names a/tailor.config.ts, b/tailor.config.ts, which the conversion merged into tailor.config.ts. Point it at tailor.config.ts, or generate a workflow for the workspace config with `tailor setup ci`.",
+        },
+      ]);
+    },
+  );
 
   test("imports what configs import through their own tsconfig paths from the files the aliases name", async () => {
     const app = (name: string) => ({

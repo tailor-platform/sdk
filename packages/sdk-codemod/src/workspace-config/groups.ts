@@ -11,9 +11,11 @@ export type ConfigGroup = {
 };
 
 const DEPLOY_COMMAND =
-  /(?:^|[\s;&|("])(?:(?:npx|bunx|pnpm(?:\s+exec)?|yarn)\s+)?(?:[^\s;&|("'=]*\/)?tailor\s+deploy\b([^;&|]*)/gu;
+  /(?:^|[\s;&|("'])(?:(?:npx|bunx|pnpm(?:\s+exec)?|yarn)\s+)?(?:[^\s;&|("'=]*\/)?tailor\s+deploy\b([^;&|]*)/gu;
 const CONFIG_OPTION = /(?:^|\s)(?:-c|--config)(?:=|\s+)(["']?)([^\s"']+)\1/gu;
 const CONFIG_PATH_ENV = /\bTAILOR_CONFIG_PATH\s*[:=]\s*(["']?)([^\s"'#]+)\1/gu;
+/** A line, joined with the lines a trailing `\` continues it onto. */
+const SHELL_LINE = /^(?:.*\\\r?\n)*.*$/gmu;
 
 /** A use of config paths in a script or workflow, with where it is. */
 export type ConfigPathUse = {
@@ -45,8 +47,34 @@ function splitPaths(value: string, baseDir: string): string[] {
 }
 
 /**
- * Find the scripts and workflows that name config paths: `-c`/`--config` and `TAILOR_CONFIG_PATH`
- * in package.json scripts, and `TAILOR_CONFIG_PATH` in workflows and `.env` files.
+ * The `-c`/`--config` options of the `tailor` commands in a command line.
+ * @param file - Project-relative path of the file that holds the command line
+ * @param source - The file's contents
+ * @param range - Where the command line is in `source`
+ * @param range.start - Its start index
+ * @param range.end - Its end index
+ * @param baseDir - Project-relative directory the command runs in
+ * @returns Each option, located at its own line
+ */
+function configOptionUses(
+  file: string,
+  source: string,
+  range: { start: number; end: number },
+  baseDir: string,
+): ConfigPathUse[] {
+  const text = source.slice(range.start, range.end);
+  const deploys = [...text.matchAll(DEPLOY_COMMAND)];
+  return [...text.matchAll(CONFIG_OPTION)].map((option) => ({
+    file,
+    ...lineAt(source, range.start + option.index + option[0].search(/\S/u)),
+    paths: splitPaths(option[2]!, baseDir),
+    deploysTogether: deploys.some((match) => match[1]!.includes(option[0].trim())),
+  }));
+}
+
+/**
+ * Find the scripts and workflows that name config paths: `-c`/`--config` in package.json scripts
+ * and workflow steps, and `TAILOR_CONFIG_PATH` in package.json scripts, workflows, and `.env` files.
  * @param cache - Module cache of the project
  * @returns Each use
  */
@@ -59,21 +87,15 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
       for (const command of source.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
         const text = command[0];
         if (!/\btailor\b/u.test(text)) continue;
-        const deploys = [...text.matchAll(DEPLOY_COMMAND)];
-        for (const option of text.matchAll(CONFIG_OPTION)) {
-          uses.push({
-            file,
-            ...lineAt(source, command.index),
-            paths: splitPaths(option[2]!, path.dirname(file)),
-            deploysTogether: deploys.some((match) => match[1]!.includes(option[0].trim())),
-          });
-        }
+        const range = { start: command.index, end: command.index + text.length };
+        uses.push(...configOptionUses(file, source, range, path.dirname(file)));
+        const deploys = text.search(DEPLOY_COMMAND) !== -1;
         for (const match of text.matchAll(CONFIG_PATH_ENV)) {
           uses.push({
             file,
             ...lineAt(source, command.index),
             paths: splitPaths(match[2]!, path.dirname(file)),
-            deploysTogether: deploys.length > 0,
+            deploysTogether: deploys,
           });
         }
       }
@@ -83,13 +105,20 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
     if (!isWorkflow && !/^\.env(?:\.|$)/u.test(name)) continue;
     const source = cache.project.read(file) ?? "";
     const baseDir = isWorkflow ? path.join(path.dirname(file), "../..") : path.dirname(file);
-    for (const match of source.matchAll(CONFIG_PATH_ENV)) {
-      uses.push({
-        file,
-        ...lineAt(source, match.index),
-        paths: splitPaths(match[2]!, baseDir),
-        deploysTogether: true,
-      });
+    for (const line of source.matchAll(SHELL_LINE)) {
+      if (/^\s*#/u.test(line[0])) continue;
+      const range = { start: line.index, end: line.index + line[0].length };
+      if (isWorkflow && /\btailor\b/u.test(line[0])) {
+        uses.push(...configOptionUses(file, source, range, baseDir));
+      }
+      for (const match of line[0].matchAll(CONFIG_PATH_ENV)) {
+        uses.push({
+          file,
+          ...lineAt(source, range.start + match.index),
+          paths: splitPaths(match[2]!, baseDir),
+          deploysTogether: true,
+        });
+      }
     }
   }
   return uses;
