@@ -505,6 +505,47 @@ describe("startFunctionRunWatch", () => {
     );
   });
 
+  describe("a workflow job", () => {
+    const skippedWarning = "the jobs it starts with `.start()` do not";
+
+    async function runTwice(
+      stderr: { output: string },
+      overrides: Partial<FunctionRunTarget> = {},
+    ): Promise<void> {
+      vi.mocked(detectFunctionType).mockResolvedValue({
+        type: "workflow-job",
+        name: "validate-order",
+        exportName: "validateOrder",
+      });
+      running = await startFunctionRunWatch({
+        target: { ...target(), ...overrides },
+        argFile: undefined,
+        initialArg: undefined,
+      });
+      await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
+      const argFile = argFileFrom(stderr.output);
+      fs.writeFileSync(argFile, '{"b":2}');
+      watcher.emit("change", argFile);
+      await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(2));
+    }
+
+    test("warns once that started jobs are skipped, however many times it runs", async () => {
+      using stderr = captureStderr();
+
+      await runTwice(stderr);
+
+      expect(stderr.output.split(skippedWarning)).toHaveLength(2);
+    });
+
+    test("does not warn when --name selected the job, since its deprecation warning came first", async () => {
+      using stderr = captureStderr();
+
+      await runTwice(stderr, { jobName: "validate-order" });
+
+      expect(stderr.output).not.toContain(skippedWarning);
+    });
+  });
+
   test("re-reads a pre-bundled .js file on each run", async () => {
     using _stderr = captureStderr();
     const jsPath = path.join(cwd, "fn.js");

@@ -40,6 +40,7 @@ import {
   prepareFunction,
   printExecutionDetails,
   readFunctionArgFile,
+  warnStartedJobsSkipped,
 } from "./run-function";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
@@ -222,11 +223,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 
     // 5. Bundle and execute
     const prepared = await prepareFunction({ target, progress: (message) => logger.info(message) });
-    if (prepared.functionType === "workflow-job" && args.name === undefined) {
-      logger.warn(
-        `Only the body of workflow job "${prepared.functionName}" runs, and the jobs it starts with \`.start()\` do not. Use \`tailor workflow run <file> --job <name>\` to run them too.`,
-      );
-    }
+    warnStartedJobsSkipped(target, prepared);
     const argValue = argumentToSend(prepared, functionArg);
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
     const result = await executeFunction({ target, prepared, arg: argValue });
