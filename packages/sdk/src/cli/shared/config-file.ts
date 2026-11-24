@@ -106,61 +106,6 @@ export function machineUserConfig(
   ];
 }
 
-/** An application a config file deploys, with its Auth service. */
-export interface ConfigApplication {
-  name: string;
-  authNamespace: string | undefined;
-}
-
-/**
- * Applications a config file deploys.
- * @param loaded - Loaded config file
- * @returns One application for `defineConfig()`; each `apps` entry for a workspace config
- */
-export function configApplications(loaded: LoadedConfigFile): ConfigApplication[] {
-  if (loaded.kind === "config") {
-    return [{ name: loaded.config.name, authNamespace: loaded.config.auth?.name }];
-  }
-  return Object.entries(loaded.workspace.apps).map(([name, app]) => ({
-    name,
-    authNamespace: app.auth,
-  }));
-}
-
-/**
- * Choose the application a command works on: the one named, or the only one.
- * @param loaded - Loaded config file
- * @param name - Application name from `--app`
- * @returns The application
- */
-export function selectApplication(
-  loaded: LoadedConfigFile,
-  name: string | undefined,
-): ConfigApplication {
-  const applications = configApplications(loaded);
-  const names = applications.map((application) => application.name);
-  if (name !== undefined) {
-    const application = applications.find((candidate) => candidate.name === name);
-    if (application) return application;
-    throw CLIError({
-      code: "APP_NOT_FOUND",
-      message: `Application "${name}" is not defined in the config.`,
-      suggestion: `Pass one of the applications to --app: ${names.join(", ")}.`,
-      context: { app: name, apps: names },
-    });
-  }
-  const [only, ...others] = applications;
-  if (only && others.length === 0) return only;
-  throw CLIError({
-    code: "APP_REQUIRED",
-    message: only
-      ? `The config deploys several applications: ${names.join(", ")}.`
-      : "The config deploys no application.",
-    suggestion: only ? "Pass the application to --app." : "Add an application under apps.",
-    context: { apps: names },
-  });
-}
-
 /**
  * Define the services of a config file of either kind, without loading or bundling them.
  * @param loaded - Loaded config file

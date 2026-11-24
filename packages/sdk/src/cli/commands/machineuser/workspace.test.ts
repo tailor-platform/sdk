@@ -222,7 +222,10 @@ ${brandedDefault(
 
       await expect(
         getMachineUserToken({ configPath: opsConfigPath, name: "robot" }),
-      ).rejects.toMatchObject({ code: "MACHINE_USER_TOKEN_APP_NOT_FOUND" });
+      ).rejects.toMatchObject({
+        code: "MACHINE_USER_TOKEN_APP_NOT_FOUND",
+        context: { applications: ["shop"] },
+      });
       expect(fetchMachineUserToken).not.toHaveBeenCalled();
     });
   });

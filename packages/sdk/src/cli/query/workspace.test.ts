@@ -148,7 +148,11 @@ describe("query with a workspace config", () => {
       query({ configPath, engine: "gql", query: "{ __typename }", ...options });
 
     test("needs --app when the workspace has several applications", async () => {
-      await expect(gql({ machineUser: "seeder" })).rejects.toMatchObject({ code: "APP_REQUIRED" });
+      await expect(gql({ machineUser: "seeder" })).rejects.toMatchObject({
+        code: "CONFIG_APP_REQUIRED",
+        suggestion: "Choose the application with --app.",
+        context: { applications: ["shop", "backoffice", "partner"] },
+      });
     });
 
     test("queries the application --app names, as its Auth service's machine user", async () => {
@@ -169,7 +173,8 @@ describe("query with a workspace config", () => {
 
     test("rejects an application the config does not define", async () => {
       await expect(gql({ machineUser: "admin", app: "missing" })).rejects.toMatchObject({
-        code: "APP_NOT_FOUND",
+        code: "CONFIG_APP_NOT_FOUND",
+        context: { app: "missing", applications: ["shop", "backoffice", "partner"] },
       });
     });
   });

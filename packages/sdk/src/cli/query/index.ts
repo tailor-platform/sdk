@@ -14,16 +14,16 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
+import { appArg, deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
 import { loadAuthApplication } from "../shared/auth-applications";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
+import { configApplications, requireApplication } from "../shared/config-applications";
 import {
   assertDeclaredNamespace,
   configOf,
   declaredNamespaces,
   machineUserAuths,
-  selectApplication,
 } from "../shared/config-file";
 import {
   loadConfigFile,
@@ -232,7 +232,11 @@ async function loadOptions(options: QueryBaseOptions) {
       ? await loadAuthApplication({
           client,
           workspaceId,
-          name: selectApplication(loaded, validated.app).name,
+          name: requireApplication({
+            config: configApplications(loaded),
+            name: validated.app,
+            option: "--app",
+          }).name,
         })
       : undefined;
   const invoker = resolveQueryInvoker({ loaded, application, machineUser });
@@ -882,9 +886,7 @@ export const queryCommand = defineAppCommand({
         description:
           "TailorDB namespace a SQL query runs in; omit to infer it from the tables the query references",
       }),
-      app: arg(z.string().optional(), {
-        description: "Application a GraphQL query runs against (default: the config's application)",
-      }),
+      ...appArg("required", "Application a GraphQL query runs against"),
       "newline-on-enter": arg(z.boolean().optional(), {
         description:
           "REPL: when true, Enter inserts a newline and Shift+Enter submits. Use --no-newline-on-enter to swap.",

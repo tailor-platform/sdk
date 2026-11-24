@@ -1068,11 +1068,18 @@ describe("migrationTestCloneApplication", () => {
   });
 
   test.each([
-    ["several applications", { shop: { db: ["ledger-db"] }, admin: { db: ["ledger-db"] } }],
-    ["a pending namespace no application lists", { shop: { db: ["order-db"] } }],
-  ])("rejects a workspace config with %s", (_, apps) => {
+    [
+      "several applications",
+      { shop: { db: ["ledger-db"] }, admin: { db: ["ledger-db"] } },
+      ["shop", "admin"],
+    ],
+    ["a pending namespace no application lists", { shop: { db: ["order-db"] } }, ["shop"]],
+  ])("rejects a workspace config with %s", (_, apps, applications) => {
     expect(() => migrationTestCloneApplication(workspaceFile(apps), ["ledger-db"])).toThrow(
-      expect.objectContaining({ code: "MIGRATION_TEST_CLONE_UNSUPPORTED" }),
+      expect.objectContaining({
+        code: "MIGRATION_TEST_CLONE_UNSUPPORTED",
+        context: { applications, pendingNamespaces: ["ledger-db"] },
+      }),
     );
   });
 });

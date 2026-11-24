@@ -776,7 +776,10 @@ export function migrationTestCloneApplication(
         ? `--data clone copies the data of application ${only[0]}, which does not list ${unlisted.join(", ")}.`
         : "--data clone copies the data of one application, but the workspace config deploys several.",
     suggestion: "Use --data seed.",
-    context: { apps: apps.map(([name]) => name), pendingNamespaces: [...pendingNamespaces] },
+    context: {
+      applications: apps.map(([name]) => name),
+      pendingNamespaces: [...pendingNamespaces],
+    },
   });
 }
 

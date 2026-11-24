@@ -8,7 +8,8 @@ import {
 import { loadAuthApplication } from "#/cli/shared/auth-applications";
 import { fetchMachineUserToken, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { configApplications, machineUserAuths } from "#/cli/shared/config-file";
+import { configApplications } from "#/cli/shared/config-applications";
+import { machineUserAuths } from "#/cli/shared/config-file";
 import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
@@ -65,7 +66,7 @@ async function resolveTokenTarget(params: ResolveTokenTargetParams): Promise<Tok
   }
 
   const invoker = resolveMachineUser({ value: machineUser, auths: machineUserAuths(loaded) });
-  const applications = configApplications(loaded);
+  const { applications } = configApplications(loaded);
   const issuer = applications.find(({ authNamespace }) => authNamespace === invoker.namespace);
   if (!issuer) {
     throw CLIError({
@@ -77,7 +78,7 @@ async function resolveTokenTarget(params: ResolveTokenTargetParams): Promise<Tok
       context: {
         machineUser: invoker.machineUserName,
         authNamespace: invoker.namespace,
-        apps: applications.map(({ name }) => name),
+        applications: applications.map(({ name }) => name),
       },
     });
   }
