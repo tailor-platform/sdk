@@ -42,6 +42,9 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
+const FUNCTION_RUN_NAME_PATTERN =
+  /\bfunction(?:[^\n&|;\\]|\\\r?\n)*?\s(?:run|test-run)(?![\w-])(?:[^\n&|;\\]|\\\r?\n)*?\s(?:--name|-n)(?:[\s=]|$)/;
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -2243,9 +2246,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    suspiciousPatterns: [
-      /\bfunction[\s\\]{1,16}(?:run|test-run)\b[^\n]*\s(?:--name|-n)(?:[\s=]|$)/,
-    ],
+    suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
     examples: [
       {
         before: "tailor function run workflows/sample.ts --name validate-order",
@@ -2266,8 +2268,8 @@ export const allCodemods: CodemodPackage[] = [
       "- `workflow run` accepts only a JSON object or `null` as its `--arg` /",
       "  `--arg-file`. A number, string, boolean, or array is refused; wrap it in an",
       "  object and read it from the job's input.",
-      "- `workflow run` has no `--watch`. Keep `function run --name` out of watch",
-      "  scripts by running `workflow run` again after each change.",
+      "- `workflow run` has no `--watch`. Replace a `function run --watch --name`",
+      "  call with a file watcher that runs `workflow run` after each change.",
       "- Leave `--name` of other commands unchanged (`function logs`, `workspace`,",
       "  and so on).",
     ].join("\n"),
