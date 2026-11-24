@@ -1280,6 +1280,25 @@ describe("runCodemods", () => {
       expect(result.warnings[0]).toContain("rule: test/rename-bin");
     });
 
+    test.each([
+      [
+        "a runner and a subcommand substitution before static arguments",
+        "`${runner} tailor-sdk ${subcommand} --json`",
+      ],
+      ["a subcommand substitution before static arguments", "`tailor-sdk ${subcommand} --json`"],
+    ])("warns for rename-bin residuals with %s", async (_name, template) => {
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: `const command = ${template};`,
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
     test("warns for dynamic package flag rename-bin residuals", async () => {
       const { result } = await runWarningCase({
         fileName: "commands.ts",

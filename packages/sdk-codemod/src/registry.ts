@@ -24,14 +24,14 @@ const RENAME_BIN_SOURCE_LEGACY_PATTERN = new RegExp(
     "(?<!\\\\[\"'])",
     RENAME_BIN_SOURCE_VALUE_GUARDS,
     RENAME_BIN_SOURCE_COMMAND_TOKEN,
-    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+    `(?=\\s*(?:$|\\x01|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
 const RENAME_BIN_QUOTED_SOURCE_LEGACY_PATTERN = new RegExp(
   [
     "(?:^|[\\s;&|\\x00])(?:sh|bash|zsh)\\s+-\\w*c\\w*\\s+\\\\?[\"']",
     RENAME_BIN_SOURCE_COMMAND_TOKEN,
-    `(?=\\s*(?:$|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
+    `(?=\\s*(?:$|\\x01|${RENAME_BIN_SOURCE_COMMAND_OR_FLAG}\\b))`,
   ].join(""),
 );
 const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
