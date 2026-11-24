@@ -478,9 +478,7 @@ function mergeAttributeLists(
  * @param workspace - Workspace loaded from a `defineWorkspace()` or `defineApp()` config
  * @returns Extracted names and attributes of every service the workspace declares
  */
-export function extractAttributesFromWorkspace(
-  workspace: LoadedWorkspaceConfig,
-): ExtractedAttributes {
+function extractAttributesFromWorkspace(workspace: LoadedWorkspaceConfig): ExtractedAttributes {
   const auths = Object.values(workspace.auth).map((auth) => collectAuthAttributes(auth));
   return {
     ...collectServiceNames(
