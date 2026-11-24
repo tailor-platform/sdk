@@ -2015,6 +2015,33 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test.each([
+      ["an escape sequence", 'run("tailor deploy C:\\\\proj\\\\a.ts --flag x");\n'],
+      ["a tab escape", 'run("tailor deploy\\ta.ts --flag x");\n'],
+      ["a template substitution", "run(`tailor deploy ${file} --flag x`);\n"],
+      ["a nested template substitution", "run(`tailor deploy ${`${dir}/a.ts`} --flag x`);\n"],
+    ])("keeps a string command whole across %s", async (_name, source) => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), source);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              sourceStringSuspiciousPatterns: [/\btailor deploy[^\0]*? --flag\b/],
+              prompt: "Review by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
+    });
+
     test("keeps LLM review patterns after regex literals with escaped slashes", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
       tmpDir = dir;
