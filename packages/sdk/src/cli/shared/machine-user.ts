@@ -92,7 +92,7 @@ export interface ResolveMachineUserParams {
 }
 
 /** An Auth service with the members of one kind it defines; `undefined` when they are not known. */
-export interface AuthMembers {
+interface AuthMembers {
   name: string;
   members: ReadonlyArray<string> | undefined;
 }
