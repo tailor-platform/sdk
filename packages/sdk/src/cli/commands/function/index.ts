@@ -13,7 +13,7 @@ export const functionCommand = defineCommand({
     list: listCommand,
     logs: logsCommand,
     run: runFunctionCommand,
-    script: scaffoldCommand,
+    scaffold: scaffoldCommand,
   },
   defaultSubCommand: "list",
 });

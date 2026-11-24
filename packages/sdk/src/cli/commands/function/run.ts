@@ -86,7 +86,7 @@ export const runFunctionCommand = defineAppCommand({
   notes: `You can pass either a source file (\`.ts\`) or a pre-bundled file (\`.js\`).
 When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
 
-A script scaffolded by \`function script\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before execution and refused on schema drift; pass \`--allow-schema-drift\` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
+A script scaffolded by \`function scaffold\` with a generated \`db.ts\` is checked against its \`db.snapshot.json\` before execution and refused on schema drift; pass \`--allow-schema-drift\` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
 
 \`--arg-file\` reads the argument from a JSON file instead of \`--arg\`; the two cannot be combined.
 
