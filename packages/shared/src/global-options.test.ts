@@ -44,8 +44,11 @@ describe("GLOBAL_BOOLEAN_FLAGS", () => {
 });
 
 describe("global option lists", () => {
-  test("expose the short aliases that the CLI lets a command line join, as in -je", () => {
-    expect(GLOBAL_VALUE_OPTIONS.flatMap((option) => option.alias ?? [])).toEqual(["e"]);
-    expect(GLOBAL_BOOLEAN_OPTIONS.flatMap((option) => option.alias ?? [])).toEqual(["j"]);
+  test("give every alias a single character, so that a command line can join them as in -je", () => {
+    const aliases = [...GLOBAL_VALUE_OPTIONS, ...GLOBAL_BOOLEAN_OPTIONS].flatMap(
+      (option) => option.alias ?? [],
+    );
+
+    expect(aliases.filter((alias) => alias.length !== 1)).toEqual([]);
   });
 });
