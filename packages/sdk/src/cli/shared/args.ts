@@ -392,7 +392,7 @@ interface NamedOption {
  * @param option - Option field as `extractFields` describes it
  * @returns `-x` for each one-letter name, and the kebab-case and camelCase forms of each longer one
  */
-export function flagTokensOf(option: NamedOption): string[] {
+function flagTokensOf(option: NamedOption): string[] {
   return [option.cliName, ...(option.alias ?? [])].flatMap((name) =>
     name.length === 1 ? [`-${name}`] : [`--${name}`, `--${toCamelCase(name)}`],
   );
