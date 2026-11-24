@@ -3,6 +3,8 @@ import {
   type DeployOwner,
   deployedByApplication,
   isOwnedBy,
+  isWorkspaceManaged,
+  appIdOfLabelValue,
   sdkAppIdLabelKey,
   sdkNameLabelKey,
   type WithLabel,
@@ -109,7 +111,13 @@ export function createOwnershipTracker(owner: DeployOwner): OwnershipTracker {
     action: WorkspaceTakeover["action"],
   ) => {
     const currentOwner = labels[sdkNameLabelKey];
-    result.takeovers.push({ ...describe(resource), action, ...(currentOwner && { currentOwner }) });
+    const appIdLabel = labels[sdkAppIdLabelKey];
+    result.takeovers.push({
+      ...describe(resource),
+      action,
+      ...(currentOwner && { currentOwner }),
+      ...(appIdLabel && { currentAppId: appIdOfLabelValue(appIdLabel) }),
+    });
   };
   return {
     result,
@@ -121,7 +129,10 @@ export function createOwnershipTracker(owner: DeployOwner): OwnershipTracker {
       } else if (owner.kind === "application" && currentOwner) {
         result.conflicts.push({ ...describe(resource), currentOwner });
       } else {
-        result.unmanaged.push(describe(resource));
+        result.unmanaged.push({
+          ...describe(resource),
+          ...(isWorkspaceManaged(labels) && { managedBy: "workspace" as const }),
+        });
       }
       return false;
     },

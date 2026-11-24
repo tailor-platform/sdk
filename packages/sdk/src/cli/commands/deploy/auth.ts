@@ -72,6 +72,7 @@ import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { applicationsListing } from "./deploy-application";
 import { authHookFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -102,6 +103,7 @@ import type {
   SCIMResource,
   TenantProvider as TenantProviderConfig,
 } from "#/types/auth.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type AuthApplyPhase =
   | Exclude<ApplyPhase, "delete">
@@ -400,7 +402,7 @@ export async function planAuth(context: PlanContext) {
     takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(client, workspaceId, owner, auths, forceApplyAll);
+  } = await planServices(client, workspaceId, owner, context.applications, auths, forceApplyAll);
   const namespaces: AuthNamespace[] = [
     ...auths.map((auth) => ({ namespaceName: auth.config.name, auth })),
     ...serviceChangeSet.deletes.map((del) => ({ namespaceName: del.name, auth: undefined })),
@@ -482,6 +484,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {
@@ -514,6 +517,7 @@ async function planServices(
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "auth", config.name),
         owner,
+        onApps: applicationsListing(applications, "auth", config.name),
       }),
     });
   }

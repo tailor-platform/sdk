@@ -27,7 +27,7 @@ import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { configAuthNamespace } from "./deploy-application";
+import { applicationsListing, configAuthNamespaces } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -54,6 +54,7 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type ExistingPipelineServices = WithLabel<
   Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
@@ -181,16 +182,23 @@ export async function planPipeline(
     takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
+  } = await planServices(
+    client,
+    workspaceId,
+    context.owner,
+    context.applications,
+    pipelines,
+    previous?.existingServices,
+  );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const authNamespace = configAuthNamespace(context);
+  const authNamespaces = configAuthNamespaces(context);
   const invokerMachineUsers = await listInvokerMachineUsers({
     client,
     workspaceId,
     invokers: pipelines.flatMap((pipeline) =>
       Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
     ),
-    authNamespace,
+    authNamespaces,
     plannedMachineUsers: context.plannedMachineUsers,
   });
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
@@ -200,8 +208,8 @@ export async function planPipeline(
     executors,
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
-    application.env,
-    authNamespace,
+    (namespace) => ({ ...application.env, ...context.envOverrides?.resolver[namespace] }),
+    authNamespaces,
     invokerMachineUsers,
     forceApplyAll,
     {
@@ -260,6 +268,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   previousExisting?: ExistingPipelineServices,
 ) {
@@ -291,6 +300,7 @@ async function planServices(
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
         owner,
+        onApps: applicationsListing(applications, "pipeline", pipeline.namespace),
       }),
     });
   }
@@ -364,8 +374,8 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
-  env: ApplicationEnv,
-  authNamespace: string | undefined,
+  envOf: (namespace: string) => ApplicationEnv,
+  authNamespaces: ReadonlyArray<string>,
   invokerMachineUsers: InvokerMachineUsers | undefined,
   forceApplyAll = false,
   records: ResolverRecordInputs,
@@ -478,8 +488,8 @@ async function planResolvers(
             namespaceName,
             resolver,
             executorUsedResolvers,
-            env,
-            authNamespace,
+            envOf(namespaceName),
+            authNamespaces,
             invokerMachineUsers,
           ),
         },
@@ -555,7 +565,7 @@ function processResolver(
   resolver: Resolver,
   executorUsedResolvers: ReadonlySet<string>,
   env: ApplicationEnv,
-  authNamespace: string | undefined,
+  authNamespaces: ReadonlyArray<string>,
   invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
@@ -571,7 +581,7 @@ function processResolver(
       postScript: `args.body`,
       invoker: normalizeInvoker(
         resolver.invoker,
-        authNamespace,
+        authNamespaces,
         `Resolver "${resolver.name}"`,
         invokerMachineUsers,
       ),

@@ -19,7 +19,7 @@ import {
   builtinIdPClientSecret,
 } from "./auth";
 import { idpClientVaultName } from "./idp";
-import { sdkNameLabelKey } from "./label";
+import { isWorkspaceManaged, sdkNameLabelKey } from "./label";
 import { isRecreated } from "./tailordb/plan";
 import type { PlannedDeployment } from "./apply-phases";
 import type { ManagedResourceType } from "./managed-resource-type";
@@ -38,6 +38,7 @@ import type { SecretValueSchema } from "@tailor-platform/tailor-proto/secret_man
 
 type ResourceDeletePlan = Pick<
   PlannedDeployment,
+  | "owner"
   | "application"
   | "applications"
   | "app"
@@ -186,6 +187,8 @@ const USER_LABELS: Record<UserResourceType, (user: ResourceUser) => string> = {
 type ResourceUse = ResourceRef & {
   /** Application that uses the resource, absent for a user no application manages. */
   application?: string;
+  /** Set when a workspace config deploys the user. */
+  workspace?: true;
   /** Resource that uses it, absent when the application itself references it. */
   usedBy?: ResourceUser;
 };
@@ -204,6 +207,9 @@ const OWN_APPLICATION_SUGGESTION =
 
 const APPLICATION_IDP_CONFIG_SUGGESTION =
   "An application that references an Auth service as external authenticates with the IdP config that the Auth service's idProvider names, and switches to a renamed one only in a deploy that also includes the config defining that Auth service, so deploy them together or keep the idProvider name.";
+
+const WORKSPACE_USER_SUGGESTION =
+  "An executor, resolver, AI gateway, or Auth service listed as the workspace config's is deployed by that config, so remove its reference to the resource there.";
 
 const UNMANAGED_USER_SUGGESTION =
   "An OTLP exporter, or an executor, resolver, AI gateway, or Auth service listed without an application, is not deployed by the SDK, so change or delete it outside the SDK.";
@@ -230,7 +236,8 @@ function inUseSuggestion(
       : [IN_USE_SUGGESTIONS[command]]),
     ...(uses.some(usesOwnApplication) ? [OWN_APPLICATION_SUGGESTION] : []),
     ...(uses.some(authenticatesWithIdPConfig) ? [APPLICATION_IDP_CONFIG_SUGGESTION] : []),
-    ...(uses.every((use) => use.application) ? [] : [UNMANAGED_USER_SUGGESTION]),
+    ...(uses.some((use) => use.workspace) ? [WORKSPACE_USER_SUGGESTION] : []),
+    ...(uses.every((use) => use.application || use.workspace) ? [] : [UNMANAGED_USER_SUGGESTION]),
   ].join(" ");
 }
 
@@ -308,13 +315,27 @@ function applicationUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resour
   return [...writtenUses, ...recordedUses];
 }
 
+/** Who deploys a user: the application of a `defineConfig()` config, a workspace config, or neither. */
+type UserOwner = { application: string | undefined; workspace?: true };
+
 /** A resource that uses others, in the version the workspace has after the run. */
-type FinalUser<T> = {
+type FinalUser<T> = UserOwner & {
   resource: T;
   name: string;
   namespace?: string;
-  application: string | undefined;
 };
+
+function deploymentUserOwner(deployment: Pick<ResourceDeletePlan, "owner">): UserOwner {
+  return deployment.owner.kind === "workspace"
+    ? { application: undefined, workspace: true }
+    : { application: deployment.owner.name };
+}
+
+function labelledUserOwner(labels: Record<string, string> | undefined): UserOwner {
+  return isWorkspaceManaged(labels)
+    ? { application: undefined, workspace: true }
+    : { application: labels?.[sdkNameLabelKey] };
+}
 
 type UserName = Pick<FinalUser<unknown>, "namespace" | "name">;
 
@@ -338,9 +359,7 @@ function labelledUsers<T>(
   records: ReadonlyArray<[string, { resource: T; allLabels?: Record<string, string> } | undefined]>,
 ): FinalUser<T>[] {
   return records.flatMap(([name, entry]) =>
-    entry
-      ? [{ resource: entry.resource, name, application: entry.allLabels?.[sdkNameLabelKey] }]
-      : [],
+    entry ? [{ resource: entry.resource, name, ...labelledUserOwner(entry.allLabels) }] : [],
   );
 }
 
@@ -351,14 +370,14 @@ function namespacedName(entry: NamespacedEntry): UserName {
 }
 
 function plannedUsers<E extends NamespacedEntry, T>(
-  application: string,
+  owner: UserOwner,
   entries: ReadonlyArray<E>,
   resourceOf: (entry: E) => T,
 ): FinalUser<T>[] {
   return entries.map((entry) => ({
     ...namespacedName(entry),
     resource: resourceOf(entry),
-    application,
+    ...owner,
   }));
 }
 
@@ -375,7 +394,7 @@ async function recordedUsers<T>(
       (await fetchResources(namespace)).map((user) => ({
         ...user,
         namespace,
-        application: service?.allLabels?.[sdkNameLabelKey],
+        ...labelledUserOwner(service?.allLabels),
       })),
     ),
   );
@@ -391,6 +410,7 @@ function usesOf<T>(
     refsOf(user.resource).map((ref) => ({
       ...ref,
       ...(user.application ? { application: user.application } : {}),
+      ...(user.workspace ? { workspace: user.workspace } : {}),
       usedBy: {
         resourceType,
         ...(user.namespace === undefined ? {} : { namespace: user.namespace }),
@@ -477,12 +497,14 @@ function executorRefs(executor: MessageInitShape<typeof ExecutorExecutorSchema>)
 }
 
 function executorUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceUse[] {
-  const planned = deployments.flatMap(({ application, executor }) =>
-    [...executor.changeSet.creates, ...executor.changeSet.updates].map((entry) => ({
-      resource: entry.request.executor ?? {},
-      name: entry.name,
-      application: application.name,
-    })),
+  const planned = deployments.flatMap((deployment) =>
+    [...deployment.executor.changeSet.creates, ...deployment.executor.changeSet.updates].map(
+      (entry) => ({
+        resource: entry.request.executor ?? {},
+        name: entry.name,
+        ...deploymentUserOwner(deployment),
+      }),
+    ),
   );
   const executors = finalUsers<MessageInitShape<typeof ExecutorExecutorSchema>>(
     planned,
@@ -495,12 +517,14 @@ function executorUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceU
 }
 
 function aiGatewayUses(deployments: ReadonlyArray<ResourceDeletePlan>): ResourceUse[] {
-  const planned = deployments.flatMap(({ application, aiGateway }) =>
-    [...aiGateway.changeSet.creates, ...aiGateway.changeSet.updates].map((entry) => ({
-      resource: { authNamespace: entry.request.authNamespace },
-      name: entry.name,
-      application: application.name,
-    })),
+  const planned = deployments.flatMap((deployment) =>
+    [...deployment.aiGateway.changeSet.creates, ...deployment.aiGateway.changeSet.updates].map(
+      (entry) => ({
+        resource: { authNamespace: entry.request.authNamespace },
+        name: entry.name,
+        ...deploymentUserOwner(deployment),
+      }),
+    ),
   );
   const gateways = finalUsers<{ authNamespace?: string }>(
     planned,
@@ -522,10 +546,13 @@ type WorkspaceUsesParams = {
 
 async function resolverUses(params: WorkspaceUsesParams): Promise<ResourceUse[]> {
   const { deployments, client, workspaceId } = params;
-  const planned = deployments.flatMap(({ application, pipeline }) =>
+  const planned = deployments.flatMap((deployment) =>
     plannedUsers(
-      application.name,
-      [...pipeline.changeSet.resolver.creates, ...pipeline.changeSet.resolver.updates],
+      deploymentUserOwner(deployment),
+      [
+        ...deployment.pipeline.changeSet.resolver.creates,
+        ...deployment.pipeline.changeSet.resolver.updates,
+      ],
       (entry) => entry.request.pipelineResolver ?? {},
     ),
   );
@@ -534,12 +561,12 @@ async function resolverUses(params: WorkspaceUsesParams): Promise<ResourceUse[]>
       pipeline.changeSet.service.deletes.map(({ name }) => name),
     ),
   );
-  const runResolvers = deployments.flatMap(({ application, pipeline }) =>
-    [...pipeline.existingResolvers].flatMap(([namespace, { existingResolverDetails }]) =>
+  const runResolvers = deployments.flatMap((deployment) =>
+    [...deployment.pipeline.existingResolvers].flatMap(([namespace, { existingResolverDetails }]) =>
       deletedNamespaces.has(namespace)
         ? []
         : [...existingResolverDetails].flatMap(([name, resource]) =>
-            resource ? [{ resource, name, namespace, application: application.name }] : [],
+            resource ? [{ resource, name, namespace, ...deploymentUserOwner(deployment) }] : [],
           ),
     ),
   );
@@ -600,9 +627,9 @@ function finalAuthUsers<C extends NamespacedEntry, U extends NamespacedEntry, T>
   recorded: ReadonlyArray<FinalUser<T>>,
 ): FinalUser<T>[] {
   return finalUsers(
-    deployments.flatMap(({ application, auth }) => {
-      const { creates, updates } = changeSetOf(auth.changeSet);
-      return plannedUsers(application.name, [...creates, ...updates], resourceOf);
+    deployments.flatMap((deployment) => {
+      const { creates, updates } = changeSetOf(deployment.auth.changeSet);
+      return plannedUsers(deploymentUserOwner(deployment), [...creates, ...updates], resourceOf);
     }),
     deployments.flatMap(({ auth }) => changeSetOf(auth.changeSet).deletes.map(namespacedName)),
     recorded,
@@ -749,9 +776,14 @@ async function otlpExporterUses(params: WorkspaceUsesParams): Promise<ResourceUs
   );
 }
 
+function useOwner(use: ResourceUse): string {
+  if (use.workspace) return " of the workspace config";
+  return use.application ? ` of application "${use.application}"` : "";
+}
+
 function describeUse(use: ResourceUse): string {
   const user = use.usedBy
-    ? `${USER_LABELS[use.usedBy.resourceType](use.usedBy)}${use.application ? ` of application "${use.application}"` : ""}`
+    ? `${USER_LABELS[use.usedBy.resourceType](use.usedBy)}${useOwner(use)}`
     : `application "${use.application}"`;
   return `${CHECKED_RESOURCES[use.resourceType].label(use)} cannot be deleted: ${user} still uses it.`;
 }

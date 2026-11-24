@@ -528,7 +528,7 @@ export default async (input) => flow.start(
         tmp.dir,
         `const flow = { start: () => "UNTRANSFORMED" };\n` +
           `export default async () => {\n` +
-          `  await flow.start({}, { invoker: "admin" });\n` +
+          `  await flow.start({}, { invoker: { namespace: "auth", machineUserName: "admin" } });\n` +
           `  throw new Error("AFTER_START");\n` +
           `};\n`,
       );

@@ -21,7 +21,7 @@ import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { configAuthNamespace } from "./deploy-application";
+import { configAuthNamespaces } from "./deploy-application";
 import { executorFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -174,7 +174,7 @@ export async function planExecutor(
     invokers: Object.values(executors).map((executor) =>
       "invoker" in executor.operation ? executor.operation.invoker : undefined,
     ),
-    authNamespace: configAuthNamespace(context),
+    authNamespaces: configAuthNamespaces(context),
     plannedMachineUsers: context.plannedMachineUsers,
   });
   const cachedDetails = previousExisting?.existingExecutorDetails;
@@ -199,7 +199,12 @@ export async function planExecutor(
       name: executor.name,
       request: {
         workspaceId,
-        executor: protoExecutor(context, executor, application.env, invokerMachineUsers),
+        executor: protoExecutor(
+          context,
+          executor,
+          { ...application.env, ...context.envOverrides?.executor },
+          invokerMachineUsers,
+        ),
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "executor", executor.name),
@@ -458,14 +463,19 @@ function resolveIdpNamespace(
   return assertDefined([...localIdpNames][0], "idp service missing");
 }
 
-function soleApplicationName(context: PlanContext): string {
-  const [application, ...others] = context.applications;
-  if (!application || others.length > 0) {
-    throw internalError(
-      `A config deploys one application, but ${context.applications.length} were planned`,
-    );
-  }
-  return application.name;
+function defaultGraphQLAppName(context: PlanContext, executorName: string): string {
+  const available = context.applications.map(({ name }) => name);
+  const [only, ...others] = available;
+  if (only !== undefined && others.length === 0) return only;
+  throw CLIError({
+    code: available.length === 0 ? "EXECUTOR_APP_NAME_REQUIRED" : "EXECUTOR_APP_NAME_AMBIGUOUS",
+    message: `Executor "${executorName}" runs a GraphQL operation without appName, but its config deploys ${available.length === 0 ? "no applications" : `the applications ${available.join(", ")}`}.`,
+    suggestion:
+      available.length === 0
+        ? "Add an application to the config's apps, or remove the operation."
+        : `Set appName on the operation to one of ${available.join(", ")}.`,
+    context: { executor: executorName, available },
+  });
 }
 
 function resolveAuthAccessTokenNamespace(
@@ -473,16 +483,31 @@ function resolveAuthAccessTokenNamespace(
   executorName: string,
   auth: string | undefined,
 ): string {
-  const configAuth = requireAuthNamespace(configAuthNamespace(context));
-  if (auth !== undefined && auth !== configAuth) {
+  const available = configAuthNamespaces(context);
+  const [only, ...others] = available;
+  if (only === undefined) return requireAuthNamespace(undefined);
+  const uses = others.length === 0 ? `Auth "${only}"` : `the Auth services ${available.join(", ")}`;
+  if (auth !== undefined) {
+    if (available.includes(auth)) return auth;
     throw CLIError({
       code: "EXECUTOR_AUTH_NOT_FOUND",
-      message: `Executor "${executorName}" names Auth "${auth}" in its authAccessToken trigger, but its config uses Auth "${configAuth}".`,
-      suggestion: `Set the trigger's "auth" to "${configAuth}", or omit it.`,
-      context: { executor: executorName, auth, available: [configAuth] },
+      message: `Executor "${executorName}" names Auth "${auth}" in its authAccessToken trigger, but its config uses ${uses}.`,
+      suggestion:
+        others.length === 0
+          ? `Set the trigger's "auth" to "${only}", or omit it.`
+          : `Set the trigger's "auth" to one of ${available.join(", ")}.`,
+      context: { executor: executorName, auth, available },
     });
   }
-  return configAuth;
+  if (others.length > 0) {
+    throw CLIError({
+      code: "EXECUTOR_AUTH_AMBIGUOUS",
+      message: `Executor "${executorName}" uses an authAccessToken trigger, but its config uses ${uses}.`,
+      suggestion: `Set the trigger's "auth" to the Auth service it subscribes to.`,
+      context: { executor: executorName, available },
+    });
+  }
+  return only;
 }
 
 function protoExecutor(
@@ -619,7 +644,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = configAuthNamespace(context);
+  const authNamespaces = configAuthNamespaces(context);
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
@@ -668,7 +693,7 @@ function protoExecutor(
         config: {
           case: "tailorGraphql",
           value: {
-            appName: target.appName ?? soleApplicationName(context),
+            appName: target.appName ?? defaultGraphQLAppName(context, executor.name),
             query: target.query,
             variables: target.variables
               ? {
@@ -677,7 +702,7 @@ function protoExecutor(
               : undefined,
             invoker: normalizeInvoker(
               target.invoker,
-              authNamespace,
+              authNamespaces,
               invokerContext,
               invokerMachineUsers,
             ),
@@ -705,7 +730,7 @@ function protoExecutor(
             },
             invoker: normalizeInvoker(
               target.invoker,
-              authNamespace,
+              authNamespaces,
               invokerContext,
               invokerMachineUsers,
             ),
@@ -729,7 +754,7 @@ function protoExecutor(
                 : undefined,
             invoker: normalizeInvoker(
               target.invoker,
-              authNamespace,
+              authNamespaces,
               invokerContext,
               invokerMachineUsers,
             ),

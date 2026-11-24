@@ -5,11 +5,11 @@ import { listInvokerMachineUsers, normalizeInvoker } from "./invoker";
 
 describe("normalizeInvoker", () => {
   test("returns undefined when invoker is undefined", () => {
-    expect(normalizeInvoker(undefined, "my-auth", "ctx", undefined)).toBeUndefined();
+    expect(normalizeInvoker(undefined, ["my-auth"], "ctx", undefined)).toBeUndefined();
   });
 
   test("expands a string to the object form using authNamespace", () => {
-    expect(normalizeInvoker("kiosk", "my-auth", "ctx", undefined)).toEqual({
+    expect(normalizeInvoker("kiosk", ["my-auth"], "ctx", undefined)).toEqual({
       namespace: "my-auth",
       machineUserName: "kiosk",
     });
@@ -19,7 +19,7 @@ describe("normalizeInvoker", () => {
     expect(
       normalizeInvoker(
         { namespace: "other-auth", machineUserName: "kiosk" },
-        "my-auth",
+        ["my-auth"],
         "ctx",
         undefined,
       ),
@@ -30,7 +30,7 @@ describe("normalizeInvoker", () => {
   });
 
   test("throws when string invoker is given without an authNamespace", () => {
-    expect(() => normalizeInvoker("kiosk", undefined, 'Resolver "foo"', undefined)).toThrow(
+    expect(() => normalizeInvoker("kiosk", [], 'Resolver "foo"', undefined)).toThrow(
       expect.objectContaining({
         code: "INVOKER_AUTH_REQUIRED",
         message: expect.stringContaining('Resolver "foo"'),
@@ -47,7 +47,7 @@ describe("normalizeInvoker", () => {
     ]);
 
     test("expands a string invoker that exists in the auth namespace", () => {
-      expect(normalizeInvoker("kiosk", "my-auth", "ctx", machineUsers)).toEqual({
+      expect(normalizeInvoker("kiosk", ["my-auth"], "ctx", machineUsers)).toEqual({
         namespace: "my-auth",
         machineUserName: "kiosk",
       });
@@ -55,7 +55,7 @@ describe("normalizeInvoker", () => {
 
     test("throws when a string invoker does not exist in the auth namespace", () => {
       expect(() =>
-        normalizeInvoker("kiosk-typo", "my-auth", 'Resolver "foo"', machineUsers),
+        normalizeInvoker("kiosk-typo", ["my-auth"], 'Resolver "foo"', machineUsers),
       ).toThrow(
         expect.objectContaining({
           code: "INVOKER_MACHINE_USER_NOT_FOUND",
@@ -73,7 +73,7 @@ describe("normalizeInvoker", () => {
       expect(
         normalizeInvoker(
           { namespace: "other-auth", machineUserName: "portal" },
-          "my-auth",
+          ["my-auth"],
           "ctx",
           machineUsers,
         ),
@@ -84,7 +84,7 @@ describe("normalizeInvoker", () => {
       expect(() =>
         normalizeInvoker(
           { namespace: "other-auth", machineUserName: "kiosk" },
-          "my-auth",
+          ["my-auth"],
           'Resolver "foo"',
           machineUsers,
         ),
@@ -97,15 +97,15 @@ describe("normalizeInvoker", () => {
     });
 
     test.for([
-      { label: "a string invoker", invoker: "kiosk", authNamespace: "gone-auth" },
+      { label: "a string invoker", invoker: "kiosk", authNamespaces: ["gone-auth"] },
       {
         label: "an object invoker",
         invoker: { namespace: "gone-auth", machineUserName: "kiosk" },
-        authNamespace: "my-auth",
+        authNamespaces: ["my-auth"],
       },
-    ])("throws when the Auth namespace of $label does not exist", ({ invoker, authNamespace }) => {
+    ])("throws when the Auth namespace of $label does not exist", ({ invoker, authNamespaces }) => {
       expect(() =>
-        normalizeInvoker(invoker, authNamespace, 'Resolver "foo"', machineUsers),
+        normalizeInvoker(invoker, authNamespaces, 'Resolver "foo"', machineUsers),
       ).toThrow(
         expect.objectContaining({
           code: "INVOKER_AUTH_NOT_FOUND",
@@ -114,6 +114,49 @@ describe("normalizeInvoker", () => {
         }),
       );
     });
+  });
+});
+
+describe("normalizeInvoker with several Auth namespaces", () => {
+  const authNamespaces = ["shop-auth", "admin-auth"];
+  const machineUsers = new Map([
+    ["shop-auth", new Set(["kiosk", "seeder"])],
+    ["admin-auth", new Set(["batch", "seeder"])],
+  ]);
+
+  test.for([
+    { invoker: "kiosk", namespace: "shop-auth" },
+    { invoker: "batch", namespace: "admin-auth" },
+  ])("expands $invoker to the Auth namespace that defines it", ({ invoker, namespace }) => {
+    expect(normalizeInvoker(invoker, authNamespaces, "ctx", machineUsers)).toEqual({
+      namespace,
+      machineUserName: invoker,
+    });
+  });
+
+  test("rejects a machine user that two Auth namespaces define", () => {
+    expect(() =>
+      normalizeInvoker("seeder", authNamespaces, 'Resolver "foo"', machineUsers),
+    ).toThrow(
+      expect.objectContaining({
+        code: "INVOKER_MACHINE_USER_AMBIGUOUS",
+        message: expect.stringContaining('Resolver "foo"'),
+        suggestion: expect.stringContaining(
+          'invoker: { namespace: "shop-auth", machineUserName: "seeder" }',
+        ),
+        context: { invoker: "seeder", authNamespaces },
+      }),
+    );
+  });
+
+  test("rejects a machine user that no Auth namespace defines", () => {
+    expect(() => normalizeInvoker("ghost", authNamespaces, 'Resolver "foo"', machineUsers)).toThrow(
+      expect.objectContaining({
+        code: "INVOKER_MACHINE_USER_NOT_FOUND",
+        suggestion: "Use one of the existing machine users: batch, kiosk, seeder.",
+        context: { invoker: "ghost", authNamespaces, machineUsers: ["batch", "kiosk", "seeder"] },
+      }),
+    );
   });
 });
 
@@ -136,13 +179,31 @@ describe("listInvokerMachineUsers", () => {
       client,
       workspaceId: "ws",
       invokers: ["kiosk", { namespace: "other-auth", machineUserName: "portal" }, undefined],
-      authNamespace: "my-auth",
+      authNamespaces: ["my-auth"],
     });
 
     expect(machineUsers).toEqual(
       new Map([
         ["my-auth", new Set(["kiosk"])],
         ["other-auth", new Set(["portal"])],
+      ]),
+    );
+  });
+
+  test("lists every Auth namespace for a string invoker when the config has several", async () => {
+    const client = clientWithMachineUsers({ "shop-auth": ["kiosk"], "admin-auth": ["batch"] });
+
+    const machineUsers = await listInvokerMachineUsers({
+      client,
+      workspaceId: "ws",
+      invokers: ["kiosk"],
+      authNamespaces: ["shop-auth", "admin-auth"],
+    });
+
+    expect(machineUsers).toEqual(
+      new Map([
+        ["shop-auth", new Set(["kiosk"])],
+        ["admin-auth", new Set(["batch"])],
       ]),
     );
   });
@@ -154,7 +215,7 @@ describe("listInvokerMachineUsers", () => {
       client,
       workspaceId: "ws",
       invokers: ["admin"],
-      authNamespace: "my-auth",
+      authNamespaces: ["my-auth"],
       plannedMachineUsers: new Map([["my-auth", new Set(["admin"])]]),
     });
 
@@ -169,7 +230,7 @@ describe("listInvokerMachineUsers", () => {
       client,
       workspaceId: "ws",
       invokers: [{ namespace: "gone-auth", machineUserName: "kiosk" }],
-      authNamespace: undefined,
+      authNamespaces: [],
     });
 
     expect(machineUsers).toEqual(new Map([["gone-auth", null]]));
@@ -183,7 +244,7 @@ describe("listInvokerMachineUsers", () => {
         client,
         workspaceId: "ws",
         invokers: [undefined, "kiosk"],
-        authNamespace: undefined,
+        authNamespaces: [],
       }),
     ).resolves.toBeUndefined();
     expect(client.listAuthMachineUsers).not.toHaveBeenCalled();

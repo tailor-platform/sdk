@@ -2176,6 +2176,51 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/plugin-context-application",
+    name: "onDeployed context application → applications / staticWebsites",
+    description:
+      "The `application` field of the context that `onDeployed` receives is removed in v3. Read the static websites of the registering config, which the plugin can publish, from `staticWebsites`, and the deployed applications from `applications`. `application` keeps returning the registering application until then, but reading it fails when the config deploys several applications. Plugins that read `application` are reported for a manual change.",
+    since: "2.25.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      "onDeployed",
+      "DeployedContext",
+      "frontendPlugin",
+      "FrontendEnvContext",
+      "FrontendBuildContext",
+    ],
+    examples: [
+      {
+        before: [
+          "async onDeployed(ctx) {",
+          '  await ctx.application.staticWebsites["web"]?.publish(dir);',
+          "  return { outputs: { url: ctx.application.url } };",
+          "}",
+        ].join("\n"),
+        after: [
+          "async onDeployed(ctx) {",
+          '  await ctx.staticWebsites["web"]?.publish(dir);',
+          "  const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);",
+          "  return { outputs: { url: app?.url } };",
+          "}",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `application` field of the context passed to the plugin hook",
+      "`onDeployed` (type `DeployedContext`) is removed; `application` in the context of",
+      "`frontendPlugin`'s `env` and `build` callbacks (`FrontendEnvContext`,",
+      "`FrontendBuildContext`) is deprecated as well. For each flagged file that reads",
+      "`application` from such a context, including through destructuring: read a static website of the registering",
+      "config, including one to `publish` to, from `staticWebsites` keyed by its name; read",
+      "an application's `url`, `domain`, `id`, `auth`, or `aiGateways` from its `applications`",
+      "entry: the registering config's own applications are those whose `configPath` equals",
+      "the context's `configPath`, or pick one by `name`. Leave files that only define these hooks",
+      "without reading `application` unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v3/idp-array-to-single",
     name: "defineConfig idp array → single IdP",
     description:

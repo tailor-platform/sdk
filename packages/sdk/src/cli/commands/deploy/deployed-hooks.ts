@@ -1,18 +1,25 @@
 import * as nodeFs from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import * as path from "pathe";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchPaged, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withTimeout } from "#/cli/shared/progress";
+import { defineUnambiguousContextField } from "#/cli/shared/unambiguous-context-field";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
 import { deployStaticWebsite, staticWebsiteDeployTimeoutError } from "../staticwebsite/deploy";
+import { sourceApplicationName, type BuiltDeploymentTarget } from "./deployment-target";
 import { execPluginCommand } from "./plugin-exec";
-import type { DeployedApplication, DeployedOAuth2Client, Plugin } from "#/plugin/types";
+import type {
+  DeployedApplication,
+  DeployedContext,
+  DeployedOAuth2Client,
+  DeployedStaticWebsite,
+  Plugin,
+  PublishableStaticWebsite,
+} from "#/plugin/types";
 import type { JsonValue } from "#/types/helpers";
-import type { BuiltDeploymentTarget } from "./deployment-target";
 
 interface LoadDeployedApplicationsParams {
   client: OperatorClient;
@@ -20,18 +27,21 @@ interface LoadDeployedApplicationsParams {
   targets: readonly BuiltDeploymentTarget[];
 }
 interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
-  applications?: readonly DeployedApplication[];
+  deployed?: readonly DeployedTarget[];
   profile?: string;
 }
 
-interface DeployedHookOutput {
-  application: string;
-  pluginId: string;
-  outputs: Record<string, JsonValue>;
+/** Deployed information of one target: its static websites and the applications it deploys. */
+export interface DeployedTarget {
+  staticWebsites: Record<string, DeployedStaticWebsite>;
+  applications: DeployedApplication[];
 }
 
-interface LoadedTarget {
-  application: DeployedApplication;
+interface DeployedHookOutput {
+  /** Application whose defineConfig() config registers the hook; absent for a workspace config. */
+  application?: string;
+  pluginId: string;
+  outputs: Record<string, JsonValue>;
 }
 
 async function loadSiteUrl(
@@ -86,16 +96,8 @@ async function loadDeployedTarget(
   workspaceId: string,
   target: BuiltDeploymentTarget,
   loadOAuth2Clients: LoadOAuth2Clients,
-): Promise<LoadedTarget> {
-  const name = target.application.name;
-  const namespace = getApplicationAuthNamespace({
-    authServices: target.application.authServices,
-    config: target.config,
-  });
-  const [response, sites, gateways, oauth2Clients] = await Promise.all([
-    target.application.subgraphs.length
-      ? client.getApplication({ workspaceId, applicationName: name })
-      : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
+): Promise<DeployedTarget> {
+  const [sites, gateways] = await Promise.all([
     Promise.all(
       target.application.staticWebsiteServices.map(async (site) => ({
         name: site.name,
@@ -103,7 +105,7 @@ async function loadDeployedTarget(
       })),
     ),
     Promise.all(
-      (target.config.aiGateways ?? []).map(async (gateway) => {
+      target.application.aiGatewayServices.map(async (gateway) => {
         const response = await getOrNull(() =>
           client.getAIGateway({ workspaceId, aigatewayName: gateway.name }),
         );
@@ -114,45 +116,47 @@ async function loadDeployedTarget(
         return { name: gateway.name, url: deployed.url };
       }),
     ),
-    namespace ? loadOAuth2Clients(namespace) : [],
   ]);
-  const application = target.application.subgraphs.length
-    ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
-    : response?.application;
-  return {
-    application: {
-      ...(target.application.id ? { id: target.application.id } : {}),
-      name,
-      configPath: target.config.path,
-      ...(application ? { url: application.url, domain: application.domain } : {}),
-      aiGateways: gateways,
-      staticWebsites: byName(sites),
-      ...(namespace
-        ? {
-            auth: {
-              namespace,
-              oauth2Clients,
-            },
-          }
-        : {}),
-    },
-  };
+  const id = target.owner.kind === "application" ? target.owner.id : undefined;
+  const staticWebsites = byName(sites);
+  const applications = await Promise.all(
+    target.applications.map(async ({ name, subgraphs, authNamespace }) => {
+      const [response, oauth2Clients] = await Promise.all([
+        subgraphs.length
+          ? client.getApplication({ workspaceId, applicationName: name })
+          : getOrNull(() => client.getApplication({ workspaceId, applicationName: name })),
+        authNamespace ? loadOAuth2Clients(authNamespace) : [],
+      ]);
+      const application = subgraphs.length
+        ? assertDefined(response?.application, `Application "${name}" not found after deploy`)
+        : response?.application;
+      return {
+        ...(id ? { id } : {}),
+        name,
+        configPath: target.config.path,
+        ...(application ? { url: application.url, domain: application.domain } : {}),
+        aiGateways: gateways,
+        staticWebsites,
+        ...(authNamespace ? { auth: { namespace: authNamespace, oauth2Clients } } : {}),
+      };
+    }),
+  );
+  return { staticWebsites, applications };
 }
 
 /**
- * Load deployed URLs and public OAuth client IDs for each application in config order.
+ * Load deployed URLs and public OAuth client IDs for each target and its applications in config order.
  * @param params - Deployed targets and workspace client
- * @returns Deployed application information without publish methods or client secrets
+ * @returns Deployed information per target, without publish methods or client secrets
  */
-export async function loadDeployedApplications(
+export function loadDeployedTargets(
   params: LoadDeployedApplicationsParams,
-): Promise<DeployedApplication[]> {
+): Promise<DeployedTarget[]> {
   const { client, workspaceId, targets } = params;
   const loadOAuth2Clients = oauth2ClientLoader(client, workspaceId);
-  const loaded = await Promise.all(
+  return Promise.all(
     targets.map((target) => loadDeployedTarget(client, workspaceId, target, loadOAuth2Clients)),
   );
-  return loaded.map(({ application }) => application);
 }
 
 function ignoreMissingPath(error: unknown): undefined {
@@ -235,13 +239,34 @@ function toJsonValue(value: unknown, path: string, ancestors: Set<object>): Json
   }
 }
 
-interface HookOwner {
-  target: BuiltDeploymentTarget;
-  plugin: Plugin;
+/** An onDeployed hook, named by its plugin and, for a defineConfig() config, its application. */
+export interface DeployedHookRef {
+  /** Application whose defineConfig() config registers the hook; absent for a workspace config. */
+  application?: string;
+  pluginId: string;
 }
 
-function hookLabel(hook: HookOwner): string {
-  return `${hook.plugin.id} (app: ${hook.target.application.name})`;
+/**
+ * Reference to an onDeployed hook of a target's plugin.
+ * @param target - Target whose config registers the plugin
+ * @param plugin - Plugin with the hook
+ * @returns The plugin id, with the application for a defineConfig() config
+ */
+export function deployedHookRef(
+  target: Pick<BuiltDeploymentTarget, "source">,
+  plugin: Pick<Plugin, "id">,
+): DeployedHookRef {
+  const application = sourceApplicationName(target.source);
+  return { ...(application !== undefined && { application }), pluginId: plugin.id };
+}
+
+/**
+ * Label of an onDeployed hook for messages.
+ * @param hook - The hook
+ * @returns The plugin id with the application, or with "workspace config"
+ */
+export function deployedHookLabel(hook: DeployedHookRef): string {
+  return `${hook.pluginId} (${hook.application === undefined ? "workspace config" : `app: ${hook.application}`})`;
 }
 
 function copyJsonOutputs(outputs: unknown): Record<string, JsonValue> {
@@ -264,20 +289,26 @@ export async function runDeployedHooks(
   const { client, workspaceId, targets } = params;
   const hooks = targets.flatMap((target, index) =>
     target.plugins.flatMap((plugin) =>
-      plugin.onDeployed ? [{ target, index, plugin, hook: plugin.onDeployed }] : [],
+      plugin.onDeployed
+        ? [{ target, index, plugin, hook: plugin.onDeployed, ref: deployedHookRef(target, plugin) }]
+        : [],
     ),
   );
   if (hooks.length === 0) return [];
 
-  const applications =
-    params.applications ??
-    (await loadDeployedApplications(params).catch((error: unknown) => {
-      throw deployedHookLoadFailure(error, hooks.map(hookLabel));
+  const deployed =
+    params.deployed ??
+    (await loadDeployedTargets(params).catch((error: unknown) => {
+      throw deployedHookLoadFailure(
+        error,
+        hooks.map(({ ref }) => deployedHookLabel(ref)),
+      );
     }));
-  const publishable = (application: DeployedApplication) => ({
-    ...application,
-    staticWebsites: byName(
-      Object.values(application.staticWebsites).map((site) => {
+  const publishableSites = (
+    sites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>,
+  ): Record<string, PublishableStaticWebsite> =>
+    byName(
+      Object.values(sites).map((site) => {
         const { name, url } = assertDefined(site, "Deployed static website missing");
         return {
           name,
@@ -285,42 +316,52 @@ export async function runDeployedHooks(
           publish: (dir: string) => publishStaticWebsite(client, workspaceId, name, dir),
         };
       }),
-    ),
-  });
+    );
+  const applications = deployed.flatMap((entry) => entry.applications);
   const outputs: DeployedHookOutput[] = [];
   for (const [position, entry] of hooks.entries()) {
-    const { target, index, plugin, hook } = entry;
+    const { target, index, plugin, hook, ref } = entry;
+    const deployedTarget = assertDefined(deployed[index], "Deployed target missing");
     try {
       const result = await withSpan("deploy.onDeployed", async (span) => {
         span.setAttribute("plugin.id", plugin.id);
-        span.setAttribute("app.name", target.application.name);
-        return hook.call(plugin, {
-          workspaceId,
-          ...(params.profile !== undefined && { profile: params.profile }),
-          application: publishable(
-            assertDefined(applications[index], "Deployed application missing"),
-          ),
-          applications,
-          configPath: target.config.path,
-          pluginConfig: plugin.pluginConfig,
-          logger: { info: logger.info, warn: logger.warn, success: logger.success },
-          exec: execPluginCommand,
-          node: { fs: nodeFs, path },
-        });
+        if (ref.application !== undefined) span.setAttribute("app.name", ref.application);
+        const context: DeployedContext = defineUnambiguousContextField(
+          {
+            workspaceId,
+            ...(params.profile !== undefined && { profile: params.profile }),
+            applications,
+            staticWebsites: publishableSites(deployedTarget.staticWebsites),
+            configPath: target.config.path,
+            pluginConfig: plugin.pluginConfig,
+            logger: { info: logger.info, warn: logger.warn, success: logger.success },
+            exec: execPluginCommand,
+            node: { fs: nodeFs, path },
+          },
+          {
+            key: "application",
+            candidates: byName(
+              deployedTarget.applications.map((application) => ({
+                ...application,
+                staticWebsites: publishableSites(application.staticWebsites),
+              })),
+            ),
+            candidatesLabel: "applications",
+            replacement: ["applications", "staticWebsites"],
+            required: true,
+          },
+        );
+        return hook.call(plugin, context);
       });
       const hookOutputs = result?.outputs;
       if (hookOutputs !== undefined) {
-        outputs.push({
-          application: target.application.name,
-          pluginId: plugin.id,
-          outputs: copyJsonOutputs(hookOutputs),
-        });
+        outputs.push({ ...ref, outputs: copyJsonOutputs(hookOutputs) });
       }
     } catch (error) {
       throw deployedHookFailure(
-        `the onDeployed hook of plugin "${plugin.id}" failed for app "${target.application.name}"`,
+        `the onDeployed hook of plugin "${plugin.id}" failed for ${ref.application === undefined ? "the workspace config" : `app "${ref.application}"`}`,
         error,
-        hooks.slice(position + 1).map(hookLabel),
+        hooks.slice(position + 1).map((next) => deployedHookLabel(next.ref)),
       );
     }
   }

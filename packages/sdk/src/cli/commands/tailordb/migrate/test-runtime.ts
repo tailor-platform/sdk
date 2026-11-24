@@ -937,13 +937,10 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     );
     assertion = {
       namespace,
-      invoker: {
-        namespace: machineUsers.authNamespace,
-        machineUserName: assertDefined(
-          machineUsers.byNamespace.get(namespace),
-          "assertion machine user missing",
-        ),
-      },
+      invoker: assertDefined(
+        machineUsers.byNamespace.get(namespace),
+        "assertion machine user missing",
+      ),
     };
   }
 
@@ -1030,7 +1027,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
       const state = stateOrThrow(runtimeState);
       for (const { namespace, data, order, selfRefTypes, typesWithData } of state.seeds) {
         const machineUsers = assertDefined(state.seedMachineUsers, "seed machine users missing");
-        const machineUserName = assertDefined(
+        const invoker = assertDefined(
           machineUsers.byNamespace.get(namespace),
           `seed machine user missing for namespace "${namespace}"`,
         );
@@ -1052,10 +1049,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
             name: `migration-test-seed-${namespace}.ts`,
             code: bundled.bundledCode,
             arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert: false },
-            invoker: {
-              namespace: machineUsers.authNamespace,
-              machineUserName,
-            },
+            invoker,
           });
           if (!execution.success) {
             throw CLIError({

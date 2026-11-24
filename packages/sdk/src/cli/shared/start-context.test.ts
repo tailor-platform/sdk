@@ -29,6 +29,17 @@ describe("serializeStartContext", () => {
     expect(serializeStartContext(emptyContext())).toBe("[]");
   });
 
+  test("changes with the Auth namespaces of the machine users", () => {
+    const context = (namespace: string) => ({
+      ...emptyContext(),
+      machineUserAuthNamespaces: new Map([["batch", [namespace]]]),
+    });
+
+    expect(serializeStartContext(context("shop-auth"))).not.toBe(
+      serializeStartContext(context("admin-auth")),
+    );
+  });
+
   test("returns same output regardless of map insertion order", () => {
     const first = emptyContext();
     first.modules.set(

@@ -362,6 +362,30 @@ describe("planPipeline (resolver service level)", () => {
           ?.operationHook?.expr;
       expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
     });
+
+    test("embeds the root env with the override of the resolver's namespace", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { region: "jp", tier: "root" },
+      });
+
+      const result = await planPipeline(
+        buildCtx({
+          application,
+          envOverrides: {
+            resolver: { "my-resolver": { tier: "resolver" }, other: { tier: "other" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"region":"jp"');
+      expect(hookExpr).toContain('"tier":"resolver"');
+      expect(hookExpr).not.toMatch(/"tier":"(root|other|jobs)"/);
+    });
   });
 
   describe("invoker", () => {
@@ -516,6 +540,37 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.unchanged).toEqual([
         { name: "resolver-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
       ]);
+    });
+
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      await planPipeline({
+        ...buildCtx({ client: createMockClient([]), application }),
+        owner: { kind: "workspace" },
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:pipeline:resolver-a$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
     });
 
     test("service update taking over ownership is not forced by the SDK version", async () => {
