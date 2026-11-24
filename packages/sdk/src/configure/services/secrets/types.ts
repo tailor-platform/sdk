@@ -7,7 +7,7 @@ export type SecretsDefinitionBrand = { readonly [secretsDefinitionBrand]: true }
 export type SecretsConfig = SecretsInput & SecretsDefinitionBrand;
 
 /** A secret value that `tailor deploy` writes only when the secret does not exist yet. */
-export type CreateOnlySecret<V extends string | null | undefined = string> = {
+type CreateOnlySecret<V extends string | null | undefined = string> = {
   readonly create: V;
 };
 
@@ -17,7 +17,7 @@ export type SecretsVaultsInputNullish = Record<
   Record<string, string | null | undefined | CreateOnlySecret<string | null | undefined>>
 >;
 
-export type SecretsOptions = {
+type SecretsOptions = {
   readonly ignoreNullishValues: boolean;
 };
 

@@ -379,12 +379,12 @@ export type WorkspaceSettings = Pick<
  * Values that a service namespace's functions receive in place of the root `env` values with the
  * same keys. Only keys of the root `env` can be overridden.
  */
-export type WorkspaceEnvOverride<Env> = [keyof Env] extends [never]
+type WorkspaceEnvOverride<Env> = [keyof Env] extends [never]
   ? Record<string, never>
   : { [Key in keyof Env]?: EnvEntry };
 
 /** An application of `defineWorkspace()`: the workspace services it exposes, by name, and its own settings. */
-export interface WorkspaceApplicationConfig<
+interface WorkspaceApplicationConfig<
   Db extends string,
   Resolver extends string,
   Auth extends string,
