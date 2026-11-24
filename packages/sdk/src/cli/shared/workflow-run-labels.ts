@@ -65,6 +65,9 @@ export function readWorkflowRunMarker(
 
 const RESOURCE_PREFIX = "tmp-run-";
 
+/** Prefix of the function `function run --async` registers, which has no workflow around it */
+const FUNCTION_RUN_PREFIX = "tmp-fn-";
+
 /** A whole run id: what {@link createRunId} builds, as {@link createRunIdSuffix} makes it */
 const FUNCTION_RUN_ID = new RegExp(
   `^r[0-9a-z]{${RUN_ID_SECONDS_LENGTH}}-[0-9a-f]{${RUN_ID_RANDOM_LENGTH}}$`,
@@ -101,23 +104,33 @@ export function workflowRunJobFunctionName(runId: string, jobName: string): stri
 }
 
 /**
- * Whether a resource name is in the namespace `workflow run` creates its resources in.
- * @param name - Resource name
- * @returns True for a name that starts with the prefix of the temporary resources
+ * Name of the function `function run --async` registers for one run.
+ * @param runId - Id of the run
+ * @returns Resource name
  */
-export function isWorkflowRunResourceName(name: string): boolean {
-  return name.startsWith(RESOURCE_PREFIX);
+export function functionRunResourceName(runId: string): string {
+  return `${FUNCTION_RUN_PREFIX}${runId}`;
 }
 
 /**
- * Tell whether a name is the function `function run --async` registers, as opposed to the
- * function of a workflow job a run registers (`<name>-<job>`) or a deployed job.
+ * Whether a resource name is in the namespace the temporary resources of a run are created in.
+ * @param name - Resource name
+ * @returns True for a name that starts with the prefix of `workflow run` or `function run --async`
+ */
+export function isTemporaryRunResourceName(name: string): boolean {
+  return name.startsWith(RESOURCE_PREFIX) || name.startsWith(FUNCTION_RUN_PREFIX);
+}
+
+/**
+ * Tell whether a name is the function `function run --async` registers, as opposed to a
+ * resource of a `workflow run` or a deployed job.
  * @param name - Resource or script name
  * @returns True for exactly the name of a run's own function
  */
 export function isFunctionRunResourceName(name: string): boolean {
   return (
-    name.startsWith(RESOURCE_PREFIX) && FUNCTION_RUN_ID.test(name.slice(RESOURCE_PREFIX.length))
+    name.startsWith(FUNCTION_RUN_PREFIX) &&
+    FUNCTION_RUN_ID.test(name.slice(FUNCTION_RUN_PREFIX.length))
   );
 }
 

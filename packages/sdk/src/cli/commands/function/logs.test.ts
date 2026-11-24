@@ -26,7 +26,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
-import { createRunId, workflowRunResourceName } from "#/cli/shared/workflow-run-labels";
+import { createRunId, functionRunResourceName } from "#/cli/shared/workflow-run-labels";
 import {
   composeExecutionErrorString,
   downloadScriptForMapping,
@@ -340,12 +340,12 @@ describe("formatExecutionError with a deployed bundle", () => {
 
 describe("bundleDirFor", () => {
   test("is the project for the function `function run --async` registers, whose bundle is project-relative", () => {
-    const name = workflowRunResourceName(createRunId(new Date(), "c0a100"));
+    const name = functionRunResourceName(createRunId(new Date(), "c0a100"));
     expect(bundleDirFor(name)).toBe(process.cwd());
   });
 
   test("is the dist folder for any other script, whose deployed bundle is dist-relative", () => {
-    expect(bundleDirFor("tmp-run-cleanup")).toBe(path.join(process.cwd(), "dist"));
+    expect(bundleDirFor("tmp-fn-cleanup")).toBe(path.join(process.cwd(), "dist"));
     expect(bundleDirFor("my-resolver.run.body.js")).toBe(path.join(process.cwd(), "dist"));
   });
 });

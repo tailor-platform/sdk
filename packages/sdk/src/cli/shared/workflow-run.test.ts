@@ -934,14 +934,14 @@ describe("reclaimWorkflowRuns", () => {
         labels: run(runId),
         executions: [WorkflowExecution_Status.SUCCESS],
       },
-      { kind: "function", name: `tmp-run-${runId}`, labels: run(runId) },
+      { kind: "function", name: `tmp-run-${runId}-main`, labels: run(runId) },
     ]);
     await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
 
     expect(client.deleteWorkflow.mock.calls[0]?.[0].workflowId).toBe("wf-0");
     expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
       workspaceId: "ws",
-      name: `tmp-run-${runId}`,
+      name: `tmp-run-${runId}-main`,
     });
   });
 
@@ -1012,7 +1012,7 @@ describe("reclaimWorkflowRuns", () => {
       createSweepClient([
         {
           kind: "function",
-          name: `tmp-run-${runId}`,
+          name: `tmp-fn-${runId}`,
           labels: run(runId),
           functionExecutions,
           ...(finishedAt === undefined ? {} : { finishedAt }),
@@ -1055,8 +1055,15 @@ describe("reclaimWorkflowRuns", () => {
 
       expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
         workspaceId: "ws",
-        name: `tmp-run-${runId}`,
+        name: `tmp-fn-${runId}`,
       });
+    });
+
+    test("reports the removed run by the name of its function", async () => {
+      const client = directFunction([FunctionExecution_Status.FAILED], now);
+      const { removed } = await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+      expect(removed).toEqual([`tmp-fn-${runId}`]);
     });
 
     test("removes the function of a finished execution at once when asked to", async () => {
@@ -1477,7 +1484,7 @@ describe("reclaimWorkflowRuns with resources that carry no run label", () => {
   test("leaves the function of an async run that is still executing alone even with the flag", async () => {
     const client = createSweepClient([
       orphan("function", {
-        name: `tmp-run-${runId}`,
+        name: `tmp-fn-${runId}`,
         functionExecutions: [FunctionExecution_Status.RUNNING],
       }),
     ]);

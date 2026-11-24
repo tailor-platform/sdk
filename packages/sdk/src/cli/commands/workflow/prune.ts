@@ -15,17 +15,17 @@ export const pruneCommand = defineAppCommand({
     ...workspaceArgs,
     "include-unlabeled": arg(z.boolean().default(false), {
       description:
-        "Also remove resources named `tmp-run-…` that carry no run label (a run that was cut off before it labeled them)",
+        "Also remove resources named `tmp-run-…` or `tmp-fn-…` that carry no run label (a run that was cut off before it labeled them)",
     }),
   }),
   notes: `Removes the workflow, job functions and functions of every \`workflow run\`, and the function of every \`function run --async\`, that has finished, at once. A run that is still executing is left alone.
 
-A resource whose name starts with \`tmp-run-\` but that carries no run label is reported and left in place, because the name alone does not prove \`workflow run\` or \`function run --async\` created it. When it is a leftover of an interrupted run, \`--include-unlabeled\` removes it.`,
+A resource whose name starts with \`tmp-run-\` or \`tmp-fn-\` but that carries no run label is reported and left in place, because the name alone does not prove \`workflow run\` or \`function run --async\` created it. When it is a leftover of an interrupted run, \`--include-unlabeled\` removes it.`,
   examples: [
     { cmd: "", desc: "Remove the resources of finished runs" },
     {
       cmd: "--include-unlabeled",
-      desc: "Also remove `tmp-run-…` resources that have no label",
+      desc: "Also remove `tmp-run-…` and `tmp-fn-…` resources that have no label",
     },
   ],
   run: async (args) => {
@@ -58,7 +58,7 @@ A resource whose name starts with \`tmp-run-\` but that carries no run label is 
     }
     if (result.keptUnlabeled.length > 0) {
       logger.warn(
-        `Left ${result.keptUnlabeled.length} resource(s) named \`tmp-run-…\` that carry no \`workflow run\` label, ` +
+        `Left ${result.keptUnlabeled.length} resource(s) named \`tmp-run-…\` or \`tmp-fn-…\` that carry no run label, ` +
           "so they may not belong to `workflow run`:",
       );
       for (const { kind, name } of result.keptUnlabeled) {

@@ -46,8 +46,9 @@ import {
   type CreatedTemporaryWorkflow,
 } from "#/cli/shared/temporary-workflow";
 import {
+  functionRunResourceName,
   isFunctionRunResourceName,
-  isWorkflowRunResourceName,
+  isTemporaryRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
   workflowRunJobFunctionName,
@@ -518,7 +519,7 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
       name: item.name,
       createdMs: item.createdAt ? timestampMs(item.createdAt) : undefined,
     })),
-  ].filter((item) => isWorkflowRunResourceName(item.name));
+  ].filter((item) => isTemporaryRunResourceName(item.name));
 
   return Promise.all(
     listed.map(async (item): Promise<RunResource> => {
@@ -533,6 +534,7 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
 function belongsToRun(resource: RunResource, runId: string): boolean {
   const runName = workflowRunResourceName(runId);
   if (resource.kind === "workflow") return resource.name === runName;
+  if (resource.name === functionRunResourceName(runId)) return resource.kind === "function";
   return resource.name === runName || resource.name.startsWith(`${runName}-`);
 }
 
@@ -588,7 +590,9 @@ export async function reclaimWorkflowRuns(
     const functionExecutions = await listFunctionRunExecutions(
       client,
       workspaceId,
-      run.functions.filter((item) => item.name === name).map((item) => item.name),
+      run.functions
+        .filter((item) => item.name === functionRunResourceName(runId))
+        .map((item) => item.name),
     );
     if (
       executions.some(isExecutionActive) ||
@@ -635,7 +639,9 @@ export async function reclaimWorkflowRuns(
       leftoverNote: LEFTOVER_NOTE,
       ...(warn ? { warn } : {}),
     });
-    if (gone) result.removed.push(name);
+    const asyncName = functionRunResourceName(runId);
+    const isAsyncRun = !run.workflow && run.functions.some((item) => item.name === asyncName);
+    if (gone) result.removed.push(isAsyncRun ? asyncName : name);
     if (stray) {
       unlabeled.splice(unlabeled.indexOf(stray), 1);
       if (gone) result.removedUnlabeled.push({ kind: stray.kind, name: stray.name });

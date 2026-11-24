@@ -30,7 +30,7 @@ beforeEach(() => {
 
 const invoker = { namespace: "auth", machineUserName: "runner" } as ScriptInvoker;
 const runId = createRunId(new Date("2026-11-18T13:00:00Z"), "aaaaaa");
-const name = `tmp-run-${runId}`;
+const name = `tmp-fn-${runId}`;
 
 interface ClientOptions {
   status?: FunctionExecution_Status;

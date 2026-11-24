@@ -78,7 +78,7 @@ vi.mock("./script-scaffold", async (importActual) => {
   };
 });
 
-const asyncRun = { runId: "r00abc-xyz", name: "tmp-run-r00abc-xyz", executionId: "exec-1" };
+const asyncRun = { runId: "r00abc-xyz", name: "tmp-fn-r00abc-xyz", executionId: "exec-1" };
 
 function createClient() {
   return mockOperatorClient({

@@ -226,11 +226,11 @@ tailor workflow prune [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                                     | Required | Default | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                    | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                               | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--include-unlabeled`           | -     | Also remove resources named `tmp-run-…` that carry no run label (a run that was cut off before it labeled them) | No       | `false` | -                              |
+| Option                          | Alias | Description                                                                                                                   | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                  | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                             | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--include-unlabeled`           | -     | Also remove resources named `tmp-run-…` or `tmp-fn-…` that carry no run label (a run that was cut off before it labeled them) | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -242,7 +242,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 $ tailor workflow prune
 ```
 
-**Also remove `tmp-run-…` resources that have no label**
+**Also remove `tmp-run-…` and `tmp-fn-…` resources that have no label**
 
 ```bash
 $ tailor workflow prune --include-unlabeled
@@ -252,7 +252,7 @@ $ tailor workflow prune --include-unlabeled
 
 Removes the workflow, job functions and functions of every `workflow run`, and the function of every `function run --async`, that has finished, at once. A run that is still executing is left alone.
 
-A resource whose name starts with `tmp-run-` but that carries no run label is reported and left in place, because the name alone does not prove `workflow run` or `function run --async` created it. When it is a leftover of an interrupted run, `--include-unlabeled` removes it.
+A resource whose name starts with `tmp-run-` or `tmp-fn-` but that carries no run label is reported and left in place, because the name alone does not prove `workflow run` or `function run --async` created it. When it is a leftover of an interrupted run, `--include-unlabeled` removes it.
 
 ### workflow wait
 

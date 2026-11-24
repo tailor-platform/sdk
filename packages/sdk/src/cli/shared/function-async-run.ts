@@ -23,7 +23,7 @@ import {
   uploadTemporaryFunction,
 } from "#/cli/shared/temporary-workflow";
 import { formatWaitError } from "#/cli/shared/wait-error";
-import { workflowRunLabels, workflowRunResourceName } from "#/cli/shared/workflow-run-labels";
+import { functionRunResourceName, workflowRunLabels } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
 import type { Jsonifiable } from "type-fest";
@@ -62,7 +62,7 @@ export async function startFunctionAsyncRun(
 ): Promise<StartedFunctionAsyncRun> {
   const { client, workspaceId, runId, invoker } = params;
   await assertMachineUserExists({ client, workspaceId, invoker });
-  const name = workflowRunResourceName(runId);
+  const name = functionRunResourceName(runId);
   let registered = false;
   let startSent = false;
   try {

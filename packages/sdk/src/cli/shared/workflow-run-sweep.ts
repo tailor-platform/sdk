@@ -18,7 +18,7 @@ export async function sweepBeforeRun(params: SweepBeforeRunParams): Promise<void
   const swept = await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
   if (swept && swept.keptUnlabeled.length > 0) {
     logger.warn(
-      `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
+      `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` or \`tmp-fn-…\` carry no run label and were left in place. ` +
         `If they are leftovers of an interrupted run, ${pruneHint({ workspaceId, profile, includeUnlabeled: true })} removes them.`,
     );
   }
