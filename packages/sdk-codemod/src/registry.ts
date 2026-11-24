@@ -42,6 +42,9 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
+const FUNCTION_SCRIPT_COMMAND_PATTERN =
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -1745,6 +1748,39 @@ export const allCodemods: CodemodPackage[] = [
       "through a package runner such as `npx @tailor-platform/sdk`) with",
       "`function run`. Leave prose that merely mentions the old subcommand name",
       "unchanged unless it documents a command to type.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/function-script-rename",
+    name: "function script → function scaffold",
+    description:
+      "Rename `tailor function script` invocations to `tailor function scaffold`. `script` remains as a deprecated alias until it is removed in v3.",
+    since: "2.5.0",
+    until: "3.0.0",
+    scriptPath: "v3/function-script-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor function script scripts/fix-prices.ts --namespace tailordb",
+        after: "tailor function scaffold scripts/fix-prices.ts --namespace tailordb",
+      },
+    ],
+    prompt: [
+      "The `tailor function script` subcommand is renamed to `tailor function scaffold`;",
+      "the old name is removed in v3. Replace any remaining `function script`",
+      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
+      "through a package runner such as `npx @tailor-platform/sdk`) with",
+      "`function scaffold`. Leave prose that merely mentions the old subcommand name",
+      "unchanged unless it documents a command to type, and leave `tailordb migrate",
+      "script` and other commands named `script` as they are.",
     ].join("\n"),
   },
   {

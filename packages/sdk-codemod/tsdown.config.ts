@@ -64,6 +64,8 @@ export default defineConfig([
         "codemods/v2/idp-publish-events-rename/scripts/transform.ts",
       "v3/function-test-run-rename/scripts/transform":
         "codemods/v3/function-test-run-rename/scripts/transform.ts",
+      "v3/function-script-rename/scripts/transform":
+        "codemods/v3/function-script-rename/scripts/transform.ts",
       "v3/relation-toward-table/scripts/transform":
         "codemods/v3/relation-toward-table/scripts/transform.ts",
       "v3/define-config-build-options/scripts/transform":
