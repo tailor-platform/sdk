@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { GLOBAL_ARG_PATTERN, TAILOR_SDK_BINARY } from "../../../../src/command-line-pattern";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Map of v1 multi-word command names to their v2 single-word replacements.
@@ -7,16 +8,11 @@ const OPTION_RENAMES: ReadonlyArray<readonly [string, string]> = [
   ["--machineuser", "--machine-user"],
 ];
 
-const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
-const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
-const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
-const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
-const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
 const COMMAND_PATTERN = new RegExp(
-  `${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
+  `${TAILOR_SDK_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)(${COMMAND_RENAMES.map(([from]) => from).join("|")})\\b`,
   "g",
 );
-const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_BINARY, "g");
+const TAILOR_BINARY_PATTERN = new RegExp(TAILOR_SDK_BINARY, "g");
 
 const COMMAND_MAP = new Map(COMMAND_RENAMES);
 
