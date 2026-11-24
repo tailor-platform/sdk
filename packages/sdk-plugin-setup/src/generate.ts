@@ -648,18 +648,19 @@ async function assertWorkspaceConfigOptions(
     );
   }
   if (!options.migrationTest) return;
+  // Keep in step with migrationTestCloneApplication() in @tailor-platform/sdk, which this plugin cannot import.
   const applications = Object.entries(await loadUnlistedMigrationNamespaces(configPath));
   const [only] = applications;
   if (only === undefined || applications.length > 1) {
     throw new Error(
-      "--migration-test copies the data of one application, but the workspace config deploys " +
+      "The --migration-test job copies the data of one application, but the workspace config deploys " +
         `${String(applications.length)} applications. Generate the target without --migration-test.`,
     );
   }
   const [name, unlisted] = only;
   if (unlisted.length > 0) {
     throw new Error(
-      `--migration-test copies the data of application ${name}, which does not list ` +
+      `The --migration-test job copies the data of application ${name}, which does not list ` +
         `${unlisted.join(", ")}. Generate the target without --migration-test.`,
     );
   }

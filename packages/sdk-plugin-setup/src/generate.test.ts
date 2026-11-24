@@ -4302,6 +4302,7 @@ export default defineConfig({
       db: { "main-db": { files: [] } },
       apps: { shop: { db: ["main-db"] }, admin: { db: ["main-db"] } },
     }`;
+    const MIGRATED_DB = `{ files: [], migration: { directory: "./migrations/main" } }`;
     const configLoaders = { loadConfigName: undefined, loadConfigId: undefined };
     // Config modules are cached by path, so each test writes its config to a directory of its own.
     let appDirCount = 0;
@@ -4403,8 +4404,6 @@ export default defineConfig({
       expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
     });
 
-    const MIGRATED_DB = `{ files: [], migration: { directory: "./migrations/main" } }`;
-
     test.each([
       {
         name: "a defineApp() config",
@@ -4442,7 +4441,7 @@ export default defineConfig({
           apps: { shop: { db: ["main-db"] }, admin: { db: ["main-db"] } },
         }`,
         message:
-          "--migration-test copies the data of one application, but the workspace config deploys 2 applications. " +
+          "The --migration-test job copies the data of one application, but the workspace config deploys 2 applications. " +
           "Generate the target without --migration-test.",
       },
       {
@@ -4452,7 +4451,7 @@ export default defineConfig({
           apps: { shop: { db: ["main-db"] } },
         }`,
         message:
-          "--migration-test copies the data of application shop, which does not list ledger-db. " +
+          "The --migration-test job copies the data of application shop, which does not list ledger-db. " +
           "Generate the target without --migration-test.",
       },
     ])(

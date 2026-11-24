@@ -76,13 +76,13 @@ export async function loadUnlistedMigrationNamespaces(
   const loaded = await loadConfigFile(configPath);
   if (loaded.kind === "config") return { [loaded.config.name]: [] };
   const { workspace } = loaded;
-  const migrated = getNamespacesWithMigrations(workspace, path.dirname(configPath)).map(
+  const withMigrations = getNamespacesWithMigrations(workspace, path.dirname(configPath)).map(
     (entry) => entry.namespace,
   );
   return Object.fromEntries(
     Object.entries(workspace.apps).map(([name, app]) => [
       name,
-      migrated.filter((namespace) => !app.db.includes(namespace)),
+      withMigrations.filter((namespace) => !app.db.includes(namespace)),
     ]),
   );
 }
