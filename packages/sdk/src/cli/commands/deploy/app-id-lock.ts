@@ -12,10 +12,25 @@ import { removeConfigId, uuidRegex } from "./config-id-injector";
 export const TAILOR_LOCK_FILENAME = ".github/tailor.lock";
 
 /**
- * Current lock schema version. Version 2 added `appIds`; a lock carrying it
- * must not be rewritten by a tool that would drop the section.
+ * Newest lock schema version this SDK reads. Version 2 added `appIds`, and version 3 added
+ * `workspaces`; a lock carrying either must not be rewritten by a tool that would drop it.
  */
-export const TAILOR_LOCK_VERSION = 2;
+export const TAILOR_LOCK_VERSION = 3;
+
+/** The part of a lock that decides the version it is written with. */
+export type LockVersionInput = {
+  workspaces?: readonly string[];
+};
+
+/**
+ * The version to write a lock with: 3 when it records workspace configs, so an SDK that cannot
+ * read them refuses the lock, and 2 otherwise, so such an SDK still reads it.
+ * @param lock - The lock about to be written
+ * @returns The lock version
+ */
+export function lockVersionFor(lock: LockVersionInput): number {
+  return lock.workspaces !== undefined && lock.workspaces.length > 0 ? 3 : 2;
+}
 
 const restoreHint =
   "The lock file is machine-owned; restore it from git " +
@@ -56,6 +71,28 @@ function assertSafeLockPath(root: string): void {
       throw error;
     }
   }
+}
+
+/**
+ * Validate the `workspaces` section of a lock file: the workspace configs `tailor setup`
+ * recorded, as repository-relative config paths.
+ * @param value - The raw `workspaces` value, or undefined when the lock has none
+ * @returns The validated section (empty when absent)
+ */
+export function parseLockWorkspaces(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (
+    !Array.isArray(value) ||
+    !value.every((key) => typeof key === "string" && isRepositoryRelativeKey(key)) ||
+    new Set(value).size !== value.length
+  ) {
+    throw CLIError({
+      code: "APP_ID_LOCK_INVALID",
+      message: `${TAILOR_LOCK_FILENAME} has an invalid 'workspaces' section: expected distinct repository-relative config paths (no absolute paths, "..", or backslashes).`,
+      suggestion: restoreHint,
+    });
+  }
+  return value as string[];
 }
 
 /**
@@ -551,7 +588,11 @@ export function writeAppIds(params: WriteAppIdsParams): void {
   for (const [key, id] of Object.entries(appIds)) {
     if (lock.appIds[key] !== id) merged[key] = id;
   }
-  const next = { ...raw, version: TAILOR_LOCK_VERSION, appIds: merged };
+  const next = {
+    ...raw,
+    version: lockVersionFor({ workspaces: parseLockWorkspaces(raw.workspaces) }),
+    appIds: merged,
+  };
   fs.writeFileSync(
     path.join(lock.root, TAILOR_LOCK_FILENAME),
     `${JSON.stringify(next, null, 2)}\n`,
