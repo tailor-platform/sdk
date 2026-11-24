@@ -92,6 +92,30 @@ describe("function run --name review", () => {
       "run.ts",
       'const argv = ["tailor", "function", "run", "a.ts", "--name", "x"];\n',
     ],
+    ["a double-quoted --name", "run.sh", 'tailor function run a.ts "--name" x\n'],
+    ["a single-quoted --name", "run.sh", "tailor function run a.ts '--name' x\n"],
+    ["a double-quoted -n", "run.sh", 'tailor function run a.ts "-n" x\n'],
+    ["a quoted --name with a value joined by =", "run.sh", 'tailor function run a.ts "--name=x"\n'],
+    [
+      "a quoted --name in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { job: 'tailor function run a.ts "--name" x' } }),
+    ],
+    [
+      "a quoted --name in a string of a TypeScript file",
+      "run.ts",
+      "execSync('tailor function run a.ts \"--name\" x');\n",
+    ],
+    [
+      "an escaped backslash before --name in a string of a TypeScript file",
+      "run.ts",
+      'execSync("tailor function run C:\\\\proj\\\\a.ts --name x");\n',
+    ],
+    [
+      "a template substitution before --name in a string of a TypeScript file",
+      "run.ts",
+      "execSync(`tailor function run ${file} --name x`);\n",
+    ],
   ])("reports %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([relativePath]);
   });
@@ -165,6 +189,14 @@ describe("function run --name review", () => {
       "--name of another command in an argv array next to a function run array",
       "run.ts",
       'spawnSync("tailor", ["function", "run", "a.ts"]); spawnSync("tailor", ["workspace", "create", "--name", "app"]);\n',
+    ],
+    ["--name of function registry get", "run.sh", "tailor function registry get --name x\n"],
+    ["--name of workflow registry list", "run.sh", "tailor workflow registry list --name x\n"],
+    ["a quoted --name of another command", "run.sh", 'tailor workspace create "--name" app\n'],
+    [
+      "a quoted --name of another command in a template string",
+      "run.ts",
+      "execSync(`tailor workspace create ${a} '--name' app`);\n",
     ],
   ])("does not report %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([]);
