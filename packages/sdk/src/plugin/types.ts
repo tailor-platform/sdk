@@ -515,7 +515,8 @@ export interface DeployedContext<PluginConfig = unknown> {
   /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
   profile?: string;
   /**
-   * Application whose config registers this plugin.
+   * Application whose config registers this plugin. Reading it throws when a `defineWorkspace()`
+   * config registers the plugin and deploys no application or several.
    * @deprecated since 2.48.0 — use `applications`, or `staticWebsites` to publish, instead. codemod: v3/plugin-context-application
    */
   application: DeployedApplication<PublishableStaticWebsite>;

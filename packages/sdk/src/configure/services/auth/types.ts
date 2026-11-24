@@ -53,7 +53,8 @@ export type AuthMachineUser = {
 
 /**
  * Machine user to run as: its name in the config's Auth service, or an {@link AuthMachineUser}
- * that names the Auth service too.
+ * that names the Auth service too. In a `defineWorkspace()` config with several Auth services,
+ * a name resolves to the Auth service that defines it; use the object form when two define it.
  */
 export type MachineUserInvoker = MachineUserName | AuthMachineUser;
 
