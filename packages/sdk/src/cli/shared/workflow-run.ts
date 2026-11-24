@@ -6,15 +6,25 @@
  * deploy never claims them while a run is going.
  */
 
+import { create } from "@bufbuild/protobuf";
 import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import {
+  Condition_Operator,
+  ConditionSchema,
+  FilterSchema,
+  PageDirection,
+} from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
-import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
+import {
+  isFunctionExecutionTerminalStatus,
+  joinFunctionLogMessages,
+} from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
 import {
   assertMachineUserExists,
@@ -45,6 +55,7 @@ import {
 } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptInvoker } from "#/cli/shared/script-executor";
+import type { FunctionExecutionSummary } from "@tailor-platform/tailor-proto/function_resource_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -577,11 +588,19 @@ export async function reclaimWorkflowRuns(
     const name = workflowRunResourceName(runId);
     // The workflow may have lost its label while the functions kept theirs, so ask by name.
     const executions = await listAllTemporaryWorkflowExecutions(client, workspaceId, name);
-    if (executions.some(isExecutionActive)) {
+    const functionExecutions = await listFunctionRunExecutions(
+      client,
+      workspaceId,
+      run.functions.map((item) => item.name),
+    );
+    if (
+      executions.some(isExecutionActive) ||
+      functionExecutions.some((execution) => !isFunctionExecutionTerminalStatus(execution.status))
+    ) {
       keep(name);
       continue;
     }
-    if (executions.length === 0) {
+    if (executions.length === 0 && functionExecutions.length === 0) {
       const createdMs = latestCreatedMs([
         ...(run.workflow ? [run.workflow] : []),
         ...run.jobFunctions,
@@ -593,7 +612,10 @@ export async function reclaimWorkflowRuns(
         continue;
       }
     }
-    if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) {
+    if (
+      !params.ignoreFinishedGrace &&
+      finishedWithin([...executions, ...functionExecutions], now, FINISHED_GRACE_MS)
+    ) {
       keep(name);
       continue;
     }
@@ -675,7 +697,46 @@ function latestCreatedMs(resources: readonly RunResource[]): number | undefined 
   return times.length === 0 ? undefined : Math.max(...times);
 }
 
-function finishedWithin(executions: WorkflowExecution[], now: Date, graceMs: number): boolean {
+/**
+ * List the executions started directly on the functions of a run, which have no workflow to ask.
+ * @param client - Operator client
+ * @param workspaceId - Workspace ID
+ * @param functionNames - Functions the run registered
+ * @returns Every execution of those functions
+ */
+async function listFunctionRunExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  functionNames: readonly string[],
+): Promise<FunctionExecutionSummary[]> {
+  const lists = await Promise.all(
+    functionNames.map((name) =>
+      fetchPaged(async (pageToken, pageSize) => {
+        const { executions, nextPageToken } = await client.listFunctionExecutions({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection: PageDirection.DESC,
+          filter: create(FilterSchema, {
+            condition: create(ConditionSchema, {
+              field: "script_name",
+              operator: Condition_Operator.EQ,
+              value: { kind: { case: "stringValue", value: name } },
+            }),
+          }),
+        });
+        return [executions, nextPageToken];
+      }, {}),
+    ),
+  );
+  return lists.flat();
+}
+
+function finishedWithin(
+  executions: readonly { finishedAt?: WorkflowExecution["finishedAt"] }[],
+  now: Date,
+  graceMs: number,
+): boolean {
   return executions.some(
     (execution) =>
       execution.finishedAt && now.getTime() - timestampMs(execution.finishedAt) < graceMs,
