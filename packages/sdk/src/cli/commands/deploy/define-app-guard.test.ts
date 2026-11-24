@@ -8,6 +8,13 @@ import type { DeploymentSource } from "./deployment-target";
 
 const SHOP_ID = "8d6f1e2a-4b3c-4d5e-9f60-7a8b9c0d1e2f";
 const ADMIN_ID = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+const MERGE_SUGGESTION =
+  "Merge every config deployed to this workspace into one defineWorkspace() config and deploy that instead: it takes over their resources.";
+const REMOVE_SUGGESTION =
+  "If a config whose resources would be taken over is no longer needed, delete its resources first with `tailor remove -c <that config>`.";
+const RECORD_ID_SUGGESTION = `If a listed application is this config's, set "tailor.config.ts" under 'appIds' in .github/tailor.lock to its id.`;
+const RENAME_SUGGESTION =
+  "If a listed application is this config's under an earlier name, deploy this config once as a defineWorkspace() config whose apps list the new name: it deletes every application in the workspace that it does not list.";
 
 function source(configPath: string, definedBy: "defineApp" | "defineWorkspace"): DeploymentSource {
   return { kind: "workspace", workspace: { path: configPath, definedBy } } as DeploymentSource;
@@ -75,7 +82,8 @@ describe("assertResourcesFromOwnConfig", () => {
     ).toThrow(
       expect.objectContaining({
         code: "DEPLOY_OTHER_CONFIG_RESOURCES",
-        message: expect.stringContaining(`"admin" (${ADMIN_ID})`),
+        message: `This defineApp() config would take over resources that another config deployed: "admin" (${ADMIN_ID}).`,
+        suggestion: [MERGE_SUGGESTION, REMOVE_SUGGESTION, RECORD_ID_SUGGESTION].join(" "),
         context: {
           configPath,
           takenOverApplications: [
@@ -91,7 +99,7 @@ describe("assertResourcesFromOwnConfig", () => {
     );
   });
 
-  test("without a lock entry, takes the only id it finds as its own", () => {
+  test("without a lock entry, takes the only id it finds as its own when it carries this config's name", () => {
     const { dir, configPath } = repository();
     using _dir = dir;
 
@@ -101,10 +109,120 @@ describe("assertResourcesFromOwnConfig", () => {
         plan([
           takeover("shop-api", "shop", SHOP_ID),
           takeover("shop-db", "shop", SHOP_ID),
-          takeover("legacy-api", "legacy"),
+          takeover("legacy-api", "shop"),
         ]),
       ),
     ).not.toThrow();
+  });
+
+  test("without a lock, stops at the only id it finds when it carries another name", () => {
+    const { dir, configPath } = repository();
+    using _dir = dir;
+
+    expect(() =>
+      assertResourcesFromOwnConfig(
+        source(configPath, "defineApp"),
+        plan(
+          [
+            takeover("billing-api", "billing", ADMIN_ID),
+            takeover("billing", "billing", ADMIN_ID, "application"),
+          ],
+          ["billing"],
+        ),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+        message: `This defineApp() config would take over resources that another config deployed: "billing" (${ADMIN_ID}).`,
+        suggestion: [MERGE_SUGGESTION, REMOVE_SUGGESTION, RENAME_SUGGESTION].join(" "),
+        context: {
+          configPath,
+          takenOverApplications: [
+            {
+              id: ADMIN_ID,
+              name: "billing",
+              resources: [
+                { resourceType: "pipeline.service", name: "billing-api" },
+                { resourceType: "application", name: "billing" },
+              ],
+            },
+          ],
+          deletedApplications: [],
+        },
+      }),
+    );
+  });
+
+  test("without a lock entry, suggests recording the id of the only one it finds under another name", () => {
+    const { dir, configPath } = repository({});
+    using _dir = dir;
+
+    expect(() =>
+      assertResourcesFromOwnConfig(
+        source(configPath, "defineApp"),
+        plan([takeover("billing-api", "billing", ADMIN_ID)]),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+        suggestion: [MERGE_SUGGESTION, REMOVE_SUGGESTION, RECORD_ID_SUGGESTION].join(" "),
+      }),
+    );
+  });
+
+  test("stops at resources without an id that another application's name marks", () => {
+    const { dir, configPath } = repository({ "tailor.config.ts": SHOP_ID });
+    using _dir = dir;
+
+    expect(() =>
+      assertResourcesFromOwnConfig(
+        source(configPath, "defineApp"),
+        plan([
+          takeover("shop-api", "shop", SHOP_ID),
+          takeover("shop-db", "shop"),
+          takeover("legacy-api", "legacy"),
+        ]),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+        message:
+          'This defineApp() config would take over resources that another config deployed: "legacy".',
+        suggestion: [MERGE_SUGGESTION, REMOVE_SUGGESTION, RENAME_SUGGESTION].join(" "),
+        context: {
+          configPath,
+          takenOverApplications: [
+            {
+              name: "legacy",
+              resources: [{ resourceType: "pipeline.service", name: "legacy-api" }],
+            },
+          ],
+          deletedApplications: [],
+        },
+      }),
+    );
+  });
+
+  test("lists resources with another id and without one, suggesting both remedies", () => {
+    const { dir, configPath } = repository({ "tailor.config.ts": SHOP_ID });
+    using _dir = dir;
+
+    expect(() =>
+      assertResourcesFromOwnConfig(
+        source(configPath, "defineApp"),
+        plan([takeover("admin-api", "admin", ADMIN_ID), takeover("legacy-api", "legacy")]),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message: `This defineApp() config would take over resources that several configs deployed: "admin" (${ADMIN_ID}), "legacy".`,
+        suggestion: [
+          MERGE_SUGGESTION,
+          REMOVE_SUGGESTION,
+          RECORD_ID_SUGGESTION,
+          RENAME_SUGGESTION,
+        ].join(" "),
+      }),
+    );
   });
 
   test("without a lock entry, stops when it finds two ids", () => {
@@ -119,6 +237,7 @@ describe("assertResourcesFromOwnConfig", () => {
     ).toThrow(
       expect.objectContaining({
         code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+        message: `This defineApp() config would take over resources that several configs deployed: "shop" (${SHOP_ID}), "admin" (${ADMIN_ID}).`,
         context: expect.objectContaining({
           takenOverApplications: [
             expect.objectContaining({ id: SHOP_ID }),
@@ -136,7 +255,7 @@ describe("assertResourcesFromOwnConfig", () => {
     expect(() =>
       assertResourcesFromOwnConfig(
         source(configPath, "defineApp"),
-        plan([takeover("billing", "legacy")], ["billing"]),
+        plan([takeover("billing", "shop")], ["billing"]),
       ),
     ).toThrow(
       expect.objectContaining({
