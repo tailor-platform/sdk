@@ -26,8 +26,13 @@ import {
   type PlatformClientConfig,
 } from "./client";
 import { type ConfigLockOptions, isConfigLockTimeout, withConfigLock } from "./config-lock";
-import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, formatCommandHint, profileNotFoundError, toError } from "./errors";
+import {
+  CLIError,
+  formatCommandHint,
+  locatedCLIError,
+  profileNotFoundError,
+  toError,
+} from "./errors";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
@@ -563,14 +568,14 @@ function platformConfigInvalidError(
   details: string,
   position?: PlatformConfigPosition,
 ): CLIError {
-  return withErrorDiagnostics(
-    CLIError({
+  return locatedCLIError(
+    { file: configPath, line: position?.line },
+    {
       code: "PLATFORM_CONFIG_INVALID",
       message: "Failed to parse config file.",
       details,
-      context: { file: configPath, ...position },
-    }),
-    { location: { file: configPath, line: position?.line } },
+      context: position && { column: position.column },
+    },
   );
 }
 

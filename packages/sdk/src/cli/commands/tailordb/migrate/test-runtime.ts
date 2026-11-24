@@ -32,8 +32,7 @@ import { buildOptionsOf } from "#/cli/shared/build-options";
 import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { chunkSeedData, type SeedData } from "#/cli/shared/seed-chunker";
@@ -373,10 +372,7 @@ function seedRowInvalidError(
   message: string,
   cause?: unknown,
 ): CLIError {
-  return withErrorDiagnostics(
-    CLIError({ code: "SEED_DATA_INVALID", message, context: { file, line }, cause }),
-    { location: { file, line } },
-  );
+  return locatedCLIError({ file, line }, { code: "SEED_DATA_INVALID", message, cause });
 }
 
 function projectSeedObject(

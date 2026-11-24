@@ -24,7 +24,7 @@ import {
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
@@ -334,6 +334,7 @@ describe("migration", () => {
             context: {
               authNamespaces: ["shop-auth", "admin-auth"],
               machineUsers: [{ namespace: "namespace-a", machineUser: "ghost" }],
+              file: "/project/tailor.config.ts",
             },
           }),
         );
@@ -359,9 +360,47 @@ describe("migration", () => {
                   authNamespaces: ["shop-auth", "admin-auth"],
                 },
               ],
+              file: "/project/tailor.config.ts",
             },
           }),
         );
+      });
+    });
+
+    test.for([
+      {
+        code: "AUTH_CONFIG_REQUIRED",
+        authServices: [],
+        context: { namespaces: ["namespace-a"] },
+      },
+      {
+        code: "MACHINE_USER_REQUIRED",
+        authServices: [{ config: { name: "auth", machineUsers: {} } }],
+        context: { namespaces: ["namespace-a"] },
+      },
+    ])("points $code at the config", ({ code, authServices, context }) => {
+      let error: unknown;
+      try {
+        resolveMigrationMachineUsers(
+          {
+            application: { authServices, env: {} } as unknown as Pick<
+              Application,
+              "authServices" | "env"
+            >,
+            config: { path: "/project/tailor.config.ts" },
+          },
+          [createMockMigration({ namespace: "namespace-a" })],
+        );
+      } catch (thrown) {
+        error = thrown;
+      }
+
+      expect(error).toMatchObject({
+        code,
+        context: { ...context, file: "/project/tailor.config.ts" },
+      });
+      expect(getErrorDiagnostics(error as Error).location).toEqual({
+        file: "/project/tailor.config.ts",
       });
     });
   });
