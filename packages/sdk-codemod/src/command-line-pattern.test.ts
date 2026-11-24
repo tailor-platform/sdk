@@ -178,4 +178,58 @@ describe("tailorCommandPrefix", () => {
       expect(elapsedMs("function", {}, commandLine)).toBeLessThan(50);
     });
   });
+
+  test.each([
+    ['tailor --env-file "$ENV_DIR"/.env function test-run'],
+    ['tailor --env-file="$ENV_DIR"/.env function test-run'],
+    ["tailor -e '$DIR'/.env function test-run"],
+    ['tailor --env-file "$DIR"/".env local" function test-run'],
+    ["tailor --env-file ~/'my env'/\"$NAME\".env function test-run"],
+    ['tailor --env-file \\"$DIR\\"/.env function test-run'],
+  ])("reads adjacent quoted and unquoted fragments of %j as one value", (commandLine) => {
+    expect(matches(commandLine, ["function"], "test-run")).toBe(true);
+  });
+
+  test.each([
+    ['tailor --json="false" function test-run'],
+    ["tailor --json='false' function test-run"],
+    ["tailor --no-json=false function test-run"],
+    ['tailor --verbose="true" --json=false function test-run'],
+    ['tailor --json=\\"false\\" function test-run'],
+  ])("reads a quoted value assigned to a flag in %j", (commandLine) => {
+    expect(matches(commandLine, ["function"], "test-run")).toBe(true);
+  });
+
+  test("keeps a value that ends at the space after its closing quote", () => {
+    expect(matches('tailor --env-file ".env" function test-run', ["function"], "test-run")).toBe(
+      true,
+    );
+    expect(matches('tailor --env-file ".env"function test-run', ["function"], "test-run")).toBe(
+      false,
+    );
+  });
+
+  describe("on a long value made of fragments", () => {
+    const elapsedMs = (commandLine: string) => {
+      const pattern = new RegExp(`^${tailorCommandPrefix("function", [])}test-run$`);
+      const start = performance.now();
+      pattern.test(commandLine);
+      return performance.now() - start;
+    };
+
+    test.each([
+      ["quoted fragments", '"a"'],
+      ["single-quoted fragments", "'a'"],
+      ["escaped quoted fragments", '\\"a\\"'],
+      ["fragments that mix quotes and words", '"a"b'],
+    ])("stays quick for %s that do not end the command line", (_name, fragment) => {
+      const commandLine = `function --env-file ${fragment.repeat(3000)} nope`;
+
+      expect(elapsedMs(commandLine)).toBeLessThan(50);
+    });
+
+    test("stays quick for an option followed by a long run of fragments that has no space", () => {
+      expect(elapsedMs(`function -e ${'"a"b\\c'.repeat(3000)}x`)).toBeLessThan(50);
+    });
+  });
 });

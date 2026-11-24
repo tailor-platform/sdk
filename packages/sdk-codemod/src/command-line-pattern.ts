@@ -5,10 +5,10 @@ import {
   GLOBAL_VALUE_OPTIONS,
 } from "@tailor-platform/shared/global-options";
 
-const UNQUOTED_WORD = `(?:\\\\.|[^\\s'"\`;&|\\\\])+`;
+const UNQUOTED_CHARACTER = `\\\\[^"'\\n\\r]|[^\\s'"\`;&|\\\\]`;
 const ESCAPED_DOUBLE_QUOTED = `\\\\"(?:[^\\\\\\n]|\\\\(?!"))*?\\\\"`;
 const ESCAPED_SINGLE_QUOTED = `\\\\'(?:[^\\\\\\n]|\\\\(?!'))*?\\\\'`;
-const ARG_VALUE = `(?:${ESCAPED_DOUBLE_QUOTED}|${ESCAPED_SINGLE_QUOTED}|${UNQUOTED_WORD}|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+const ARG_VALUE = `(?:${ESCAPED_DOUBLE_QUOTED}|${ESCAPED_SINGLE_QUOTED}|'[^']*'|"(?:\\\\.|[^"\\\\])*"|${UNQUOTED_CHARACTER})+`;
 
 const SAME_LINE_SEPARATOR = "(?:[ \\t]|\\\\\\r?\\n)+";
 const ANY_LINE_SEPARATOR = "(?:\\s|\\\\\\r?\\n)+";
@@ -35,7 +35,7 @@ function globalOptions(separator: string, valuesMayBeOmitted: boolean): string {
   const optionalValue = valuesMayBeOmitted ? "?" : "";
   const separatedValue = valuesMayBeOmitted ? `(?!-)${ARG_VALUE}` : ARG_VALUE;
   const option = [
-    `(?:${alternation(longFlags(GLOBAL_BOOLEAN_FLAGS))})(?:=[^\\s'"\`;&|]+)?(?![\\w-])`,
+    `(?:${alternation(longFlags(GLOBAL_BOOLEAN_FLAGS))})(?:=${ARG_VALUE})?(?![\\w-])`,
     `(?:${alternation(longFlags(GLOBAL_VALUE_FLAGS))})(?:=${ARG_VALUE}|${separator}${separatedValue})${optionalValue}`,
     `-[${BOOLEAN_ALIASES}]+(?![\\w-])`,
     `-[${BOOLEAN_ALIASES}]*[${VALUE_ALIASES}](?:=?${ARG_VALUE}|${separator}${separatedValue})${optionalValue}`,
