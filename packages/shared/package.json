@@ -7,6 +7,7 @@
   "type": "module",
   "exports": {
     "./color": "./src/color.ts",
+    "./global-options": "./src/global-options.ts",
     "./node-builtins": "./src/node-builtins.ts",
     "./resource-name": "./src/resource-name.ts",
     "./workflow-policy": "./src/workflow-policy.ts",
