@@ -5,7 +5,7 @@ import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { formatConfigArg } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -40,7 +40,7 @@ const client = mockOperatorClient({
 });
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -78,13 +78,14 @@ vi.mock("#/cli/services/application", () => ({
 }));
 
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: {
       path: configPath(),
       db: migrationDbConfig(namespaces, state.migrationsDir),
     },
     plugins: [],
-  } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 }
 
 function remoteType(name: string): MessageInitShape<typeof TailorDBTypeSchema> {

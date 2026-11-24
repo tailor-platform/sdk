@@ -50,7 +50,7 @@ tailor tailordb truncate [options] [tables]
 | `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`           |
 | `--yes`                         | `-y`  | Skip confirmation prompts                                                                               | No       | `false` | -                              |
 | `--all`                         | `-a`  | Truncate all tables in all owned namespaces (excludes external namespaces)                              | No       | `false` | -                              |
-| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace                                                              | No       | -       | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Truncate all tables in specified namespace, or with table names, look them up in this namespace only    | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -75,8 +75,8 @@ tailor tailordb truncate User Post --yes
 
 **Notes:**
 
-- You must specify exactly one of: `--all`, `--namespace`, or table names
-- When truncating specific tables, the namespace is automatically detected from your config
+- Specify `--all`, `--namespace`, or table names; `--namespace` may also come with table names to look them up in that namespace only
+- When truncating specific tables without `--namespace`, the namespace is found from the tables deployed in your config's namespaces; a table name that several namespaces have stops the command with `TAILORDB_TABLE_NAMESPACE_AMBIGUOUS`
 - Confirmation prompts vary based on the operation:
   - `--all`: requires typing `truncate all`
   - `--namespace`: requires typing `truncate <namespace-name>`

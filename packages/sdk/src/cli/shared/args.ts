@@ -422,7 +422,7 @@ const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
  * @param options - Per-plugin adjustments the common arguments were built with
  * @returns Every alias of a boolean flag in the common arguments
  */
-export function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
+function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
   return new Set(
     extractFields(z.strictObject(createCommonArgs(options)))
       .fields.filter((field) => field.type === "boolean")
@@ -443,7 +443,7 @@ interface OptionToken {
  * @param booleanAliases - Short aliases of the global boolean flags
  * @returns The flag, and its value when the token carries one
  */
-export function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
+function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
   if (
     token.startsWith("-") &&
     !token.startsWith("--") &&
@@ -588,6 +588,21 @@ export const configArg = {
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
+
+/**
+ * Arg for commands that act on one application of the config
+ * @param withSeveral - What happens without it when the config defines several applications
+ * @param subject - What the option names
+ * @returns The `--app` arg
+ */
+export function appArg(withSeveral: string, subject = "Application of the config") {
+  return {
+    app: arg(z.string().optional(), {
+      description: `${subject} (default: the only application the config defines; with several, ${withSeveral})`,
+      completion: { type: "none" },
+    }),
+  } satisfies ArgsShape;
+}
 
 /**
  * Shared config arg for commands that accept one or more comma-separated config file paths

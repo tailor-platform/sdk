@@ -48,7 +48,7 @@ describe("defineUnambiguousContextField", () => {
           suggestion: 'Change the code that reads "auth" to read "auths".',
           context: {
             field: "auth",
-            replacement: "auths",
+            replacement: ["auths"],
             candidates: ["corp-auth", "partner-auth"],
           },
         }),
@@ -67,5 +67,51 @@ describe("defineUnambiguousContextField", () => {
     test("leaves the field out of a spread copy instead of throwing", () => {
       expect({ ...create() }).toEqual({ baseDir: "out" });
     });
+
+    test("names every field that replaces it", () => {
+      const context = defineUnambiguousContextField(
+        {},
+        {
+          key: "application",
+          candidates: { shop: { name: "shop" }, admin: { name: "admin" } },
+          candidatesLabel: "applications",
+          replacement: ["applications", "staticWebsites"],
+        },
+      );
+
+      expect(() => context.application).toThrow(
+        expect.objectContaining({
+          suggestion:
+            'Change the code that reads "application" to read "applications" or "staticWebsites".',
+          context: {
+            field: "application",
+            replacement: ["applications", "staticWebsites"],
+            candidates: ["shop", "admin"],
+          },
+        }),
+      );
+    });
+  });
+
+  test("throws on read when a required field has no candidate", () => {
+    const context = defineUnambiguousContextField(
+      { baseDir: "out" },
+      {
+        key: "application",
+        candidates: {},
+        candidatesLabel: "applications",
+        replacement: "applications",
+        required: true,
+      },
+    );
+
+    expect(() => context.application).toThrow(
+      expect.objectContaining({
+        code: "PLUGIN_CONTEXT_FIELD_UNAVAILABLE",
+        message: '"application" cannot be read because the config has no applications.',
+        context: { field: "application", replacement: ["applications"], candidates: [] },
+      }),
+    );
+    expect({ ...context }).toEqual({ baseDir: "out" });
   });
 });

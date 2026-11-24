@@ -403,6 +403,8 @@ export interface WorkspaceApplicationConfig<
 /**
  * Workspace configuration for `defineWorkspace()`. The workspace owns every service, keyed by
  * name, and each entry of `apps` lists the services that application exposes.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export interface WorkspaceConfig<
   Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
@@ -451,6 +453,8 @@ export interface WorkspaceConfig<
 /**
  * Single-application configuration for `defineApp()`: the shape of `defineConfig()` without
  * `id`, without services marked `external`, and with a single IdP.
+ *
+ * **Beta:** This API may change in future releases.
  */
 export type AppDefinition = Omit<
   AppConfig,

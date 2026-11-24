@@ -90,7 +90,9 @@ describe("applyTailorDB: machine user that runs migration scripts", () => {
     );
 
     const [context] = vi.mocked(migrationModule.executeMigrations).mock.calls[0]!;
-    expect(context.machineUserByNamespace).toEqual(new Map([["test-ns", "admin"]]));
+    expect(context.invokerByNamespace).toEqual(
+      new Map([["test-ns", { namespace: "auth", machineUserName: "admin" }]]),
+    );
   });
 
   test("passes each namespace's local migration history ID to the script runs", async () => {

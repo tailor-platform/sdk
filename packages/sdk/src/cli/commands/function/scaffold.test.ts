@@ -9,7 +9,7 @@ import {
   type SchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -22,7 +22,7 @@ import { SCRIPT_DB_TYPES_FILE_NAME, SCRIPT_SNAPSHOT_FILE_NAME } from "./script-s
 import { functionCommand } from "./index";
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -85,13 +85,14 @@ function mockLocalNamespace(snapshot: SchemaSnapshot = makeSnapshot()): void {
 }
 
 function mockConfig(dir: string, options: { plugins?: unknown[]; db?: unknown } = {}): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: {
       path: path.join(dir, "tailor.config.ts"),
       db: options.db ?? { tailordb: {} },
     },
     plugins: options.plugins ?? [],
-  } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 }
 
 const kyselyPluginStub = {
@@ -105,7 +106,7 @@ describe("function scaffold", () => {
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", undefined);
-    vi.mocked(loadConfig).mockReset();
+    vi.mocked(loadConfigFile).mockReset();
     vi.mocked(fetchRemoteSchemaSnapshot).mockReset();
     vi.mocked(loadTailorDBNamespaces).mockReset();
     vi.mocked(loadAccessToken).mockClear();
@@ -134,13 +135,7 @@ describe("function scaffold", () => {
     using stderr = captureStderr();
     mockConfig(tmp.dir);
 
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "function", "script", "scripts/fix.ts"];
-    try {
-      await runCommand(functionCommand, ["script", "scripts/fix.ts", "--namespace", "tailordb"]);
-    } finally {
-      process.argv = originalArgv;
-    }
+    await runCommand(functionCommand, ["script", "scripts/fix.ts", "--namespace", "tailordb"]);
 
     expect(fs.existsSync(path.join(tmp.dir, "scripts/fix.ts"))).toBe(true);
     expect(stderr.output).toContain(
@@ -153,13 +148,7 @@ describe("function scaffold", () => {
     using stderr = captureStderr();
     mockConfig(tmp.dir);
 
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "function", "scaffold", "scripts/fix.ts"];
-    try {
-      await runCommand(functionCommand, ["scaffold", "scripts/fix.ts", "--namespace", "tailordb"]);
-    } finally {
-      process.argv = originalArgv;
-    }
+    await runCommand(functionCommand, ["scaffold", "scripts/fix.ts", "--namespace", "tailordb"]);
 
     expect(stderr.output).not.toContain("deprecated");
   });

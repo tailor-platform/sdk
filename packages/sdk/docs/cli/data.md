@@ -39,17 +39,17 @@ tailor data clone [options]
 
 **Options**
 
-| Option                | Alias | Description                                                                                              | Required | Default | Env                       |
-| --------------------- | ----- | -------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------- |
-| `--yes`               | `-y`  | Skip confirmation prompts                                                                                | No       | `false` | -                         |
-| `--profile <PROFILE>` | `-p`  | Workspace profile                                                                                        | No       | -       | `TAILOR_PLATFORM_PROFILE` |
-| `--from <FROM>`       | -     | Workspace ID to copy data from                                                                           | Yes      | -       | -                         |
-| `--to <TO>`           | -     | Workspace ID to copy data to                                                                             | Yes      | -       | -                         |
-| `--name <NAME>`       | `-n`  | Application name, the same in the source and the target workspace (default: the name in the config file) | No       | -       | -                         |
-| `--config <CONFIG>`   | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)  | No       | -       | `TAILOR_CONFIG_PATH`      |
-| `--copy-files`        | -     | Also copy TailorDB file content                                                                          | No       | `false` | -                         |
-| `--copy-idp-users`    | -     | Also copy IdP users, including their passwords                                                           | No       | `false` | -                         |
-| `--no-wait`           | -     | Start the clone and exit without waiting for it to finish                                                | No       | `false` | -                         |
+| Option                | Alias | Description                                                                                                          | Required | Default | Env                       |
+| --------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------- |
+| `--yes`               | `-y`  | Skip confirmation prompts                                                                                            | No       | `false` | -                         |
+| `--profile <PROFILE>` | `-p`  | Workspace profile                                                                                                    | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+| `--from <FROM>`       | -     | Workspace ID to copy data from                                                                                       | Yes      | -       | -                         |
+| `--to <TO>`           | -     | Workspace ID to copy data to                                                                                         | Yes      | -       | -                         |
+| `--name <NAME>`       | `-n`  | Application name, the same in the source and the target workspace (default: the only application in the config file) | No       | -       | -                         |
+| `--config <CONFIG>`   | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)              | No       | -       | `TAILOR_CONFIG_PATH`      |
+| `--copy-files`        | -     | Also copy TailorDB file content                                                                                      | No       | `false` | -                         |
+| `--copy-idp-users`    | -     | Also copy IdP users, including their passwords                                                                       | No       | `false` | -                         |
+| `--no-wait`           | -     | Start the clone and exit without waiting for it to finish                                                            | No       | `false` | -                         |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

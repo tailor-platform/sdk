@@ -72,13 +72,15 @@ const workspaceId = "ws-1";
 const appName = "my-app";
 const configPath = "/proj/app/tailor.config.ts";
 
-function ownerOfScope(scope: SecretsStateScope): DeployOwner {
+type ApplicationStateScope = Extract<SecretsStateScope, { applicationName: string }>;
+
+function ownerOfScope(scope: ApplicationStateScope): DeployOwner {
   return { kind: "application", name: scope.applicationName, id: scope.applicationId };
 }
 
 function connectionStateScope(
-  overrides: Partial<Pick<SecretsStateScope, "workspaceId" | "applicationId">> = {},
-): SecretsStateScope {
+  overrides: Partial<Pick<ApplicationStateScope, "workspaceId" | "applicationId">> = {},
+): ApplicationStateScope {
   return {
     workspaceId: overrides.workspaceId ?? workspaceId,
     applicationId: overrides.applicationId,

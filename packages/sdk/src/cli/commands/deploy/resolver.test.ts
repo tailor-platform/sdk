@@ -1,4 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
@@ -362,9 +363,35 @@ describe("planPipeline (resolver service level)", () => {
           ?.operationHook?.expr;
       expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
     });
+
+    test("embeds the root env with the override of the resolver's namespace", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { region: "jp", tier: "root" },
+      });
+
+      const result = await planPipeline(
+        buildCtx({
+          application,
+          envOverrides: {
+            resolver: { "my-resolver": { tier: "resolver" }, other: { tier: "other" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"region":"jp"');
+      expect(hookExpr).toContain('"tier":"resolver"');
+      expect(hookExpr).not.toMatch(/"tier":"(root|other|jobs)"/);
+    });
   });
 
   describe("invoker", () => {
+    const resolverFile = "/test/resolvers/test-resolver.ts";
+
     function createPipelineWithInvoker(
       invoker: string | { namespace: string; machineUserName: string },
     ): ResolverService {
@@ -372,7 +399,7 @@ describe("planPipeline (resolver service level)", () => {
         namespace: "my-resolver",
         config: {},
         resolvers: {
-          "test-resolver": {
+          [resolverFile]: {
             name: "test-resolver",
             operation: "query",
             output: { type: "string", metadata: {} },
@@ -403,17 +430,19 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
-      await expect(
-        planPipeline(
-          buildCtx({
-            client: createMockClient([], {}, {}, ["portal"]),
-            application: createExternalAuthApplication("portl"),
-          }),
-        ),
-      ).rejects.toMatchObject({
+      const error = (await planPipeline(
+        buildCtx({
+          client: createMockClient([], {}, {}, ["portal"]),
+          application: createExternalAuthApplication("portl"),
+        }),
+      ).catch((error: unknown) => error)) as Error;
+
+      expect(error).toMatchObject({
         code: "INVOKER_MACHINE_USER_NOT_FOUND",
         message: expect.stringContaining('Resolver "test-resolver"'),
+        context: { resolver: "test-resolver", file: resolverFile },
       });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: resolverFile });
     });
 
     test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
@@ -516,6 +545,37 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.unchanged).toEqual([
         { name: "resolver-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
       ]);
+    });
+
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      await planPipeline({
+        ...buildCtx({ client: createMockClient([]), application }),
+        owner: { kind: "workspace" },
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:pipeline:resolver-a$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
     });
 
     test("service update taking over ownership is not forced by the SDK version", async () => {
@@ -809,7 +869,7 @@ describe("processResolver invoker mapping", () => {
       namespace: "test-ns",
       config: {},
       resolvers: {
-        myResolver: {
+        "/test/resolvers/myResolver.ts": {
           name: "myResolver",
           operation: "query",
           body: () => "hello",
@@ -868,12 +928,26 @@ describe("processResolver invoker mapping", () => {
     });
   });
 
-  test("string invoker without auth service configured throws", async () => {
+  test("string invoker without auth service configured points at the resolver", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    await expect(planWithResolverService(resolverService)).rejects.toThrow(
-      /no Auth service is configured/,
-    );
+    const error = (await planWithResolverService(resolverService).catch(
+      (error: unknown) => error,
+    )) as Error;
+
+    expect(error).toMatchObject({
+      code: "INVOKER_AUTH_REQUIRED",
+      message: expect.stringMatching(/no Auth service is configured/),
+      suggestion: expect.stringContaining(
+        'invoker: { namespace: "<auth>", machineUserName: "batch-user" }',
+      ),
+      context: {
+        invoker: "batch-user",
+        resolver: "myResolver",
+        file: "/test/resolvers/myResolver.ts",
+      },
+    });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/test/resolvers/myResolver.ts" });
   });
 
   test("invoker is undefined when invoker is not set", async () => {

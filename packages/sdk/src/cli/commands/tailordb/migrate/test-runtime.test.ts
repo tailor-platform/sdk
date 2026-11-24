@@ -22,10 +22,11 @@ import {
   resolveAssertionNamespace,
   resolveTemporaryWorkspaceLocation,
   sortSeedTypesForSnapshot,
+  migrationTestCloneApplication,
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
+import type { LoadedConfigFile } from "#/cli/shared/config-loader";
 import type { PreparedMigrationTest } from "./test-types";
 import type { RemoteSchemaVerificationResult } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
@@ -519,7 +520,7 @@ describe("migration test runtime", () => {
           tailorDBServices: services,
           authServices: [{ config: { name: "auth-ns" } }],
         },
-      } as unknown as LoadedApplicationNamespaces,
+      } as unknown as Parameters<typeof assertSourceBaselineFresh>[0]["loaded"],
       options: { data: "seed" },
       seeds: [],
     };
@@ -1012,5 +1013,73 @@ describe("migration test runtime", () => {
     await deleteExistingUserProfileConfig(runtimeState(client), "target");
 
     expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
+  });
+
+  test("deletes the user profile config of every Auth service of a workspace config", async () => {
+    const client = mockOperatorClient({
+      getUserProfileConfig: { userProfileProviderConfig: {} },
+      deleteUserProfileConfig: {},
+    });
+    const state = runtimeState(client);
+    const withTwoAuths = {
+      ...state,
+      loaded: {
+        ...state.loaded,
+        application: {
+          ...state.loaded.application,
+          authServices: [{ config: { name: "corp-auth" } }, { config: { name: "partner-auth" } }],
+        },
+      },
+    } as unknown as typeof state;
+
+    await deleteExistingUserProfileConfig(withTwoAuths, "target");
+
+    expect(
+      client.deleteUserProfileConfig.mock.calls.map(([request]) => request.namespaceName),
+    ).toEqual(["corp-auth", "partner-auth"]);
+  });
+});
+
+describe("migrationTestCloneApplication", () => {
+  const workspaceFile = (apps: Record<string, { db: string[] }>) =>
+    ({
+      kind: "workspace",
+      workspace: {
+        apps: Object.fromEntries(Object.entries(apps).map(([n, a]) => [n, { ...a, resolver: [] }])),
+      },
+      plugins: [],
+    }) as unknown as LoadedConfigFile;
+
+  test("clones the application of a defineConfig() config", () => {
+    const file = {
+      kind: "config",
+      config: { name: "app" },
+      plugins: [],
+    } as unknown as LoadedConfigFile;
+    expect(migrationTestCloneApplication(file, ["main"])).toBe("app");
+  });
+
+  test("clones the only application of a workspace config when it lists every pending namespace", () => {
+    expect(
+      migrationTestCloneApplication(workspaceFile({ shop: { db: ["order-db", "ledger-db"] } }), [
+        "ledger-db",
+      ]),
+    ).toBe("shop");
+  });
+
+  test.each([
+    [
+      "several applications",
+      { shop: { db: ["ledger-db"] }, admin: { db: ["ledger-db"] } },
+      ["shop", "admin"],
+    ],
+    ["a pending namespace no application lists", { shop: { db: ["order-db"] } }, ["shop"]],
+  ])("rejects a workspace config with %s", (_, apps, applications) => {
+    expect(() => migrationTestCloneApplication(workspaceFile(apps), ["ledger-db"])).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_CLONE_UNSUPPORTED",
+        context: { applications, pendingNamespaces: ["ledger-db"] },
+      }),
+    );
   });
 });

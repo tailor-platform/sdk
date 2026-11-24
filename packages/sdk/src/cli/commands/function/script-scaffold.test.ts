@@ -245,7 +245,11 @@ describe("verifyScriptSchemaSnapshot", () => {
     return {
       client,
       workspaceId: "ws-1",
-      config: { path: "/proj/tailor.config.ts", ...config } as LoadedConfig,
+      loaded: {
+        kind: "config" as const,
+        config: { path: "/proj/tailor.config.ts", ...config } as LoadedConfig,
+        plugins: [],
+      },
       configArgValue,
       scriptArgValue: "scripts/fix.ts",
       sidecar: {
