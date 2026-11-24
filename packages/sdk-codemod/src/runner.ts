@@ -181,7 +181,13 @@ function sourceStringFragmentGapForResidualMatching(gap: string): string {
   return /^\s+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
 }
 
+function isRawTemplate(node: SgNode): boolean {
+  const parent = node.parent();
+  return parent?.kind() === "call_expression" && parent.field("function")?.text() === "String.raw";
+}
+
 function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const raw = isRawTemplate(node);
   const parts: string[] = [];
   let previousEnd: number | null = null;
   let pending = "";
@@ -205,7 +211,7 @@ function sourceStringNodeContentForResidualMatching(node: SgNode, content: strin
     }
     previousEnd = range.end.index;
 
-    if (kind === "string_fragment") {
+    if (kind === "string_fragment" || (raw && kind === "escape_sequence")) {
       if (hasFragment) parts.push(pending);
       pending = "";
       hasFragment = true;

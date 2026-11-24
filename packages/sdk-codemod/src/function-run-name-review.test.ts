@@ -112,6 +112,11 @@ describe("function run --name review", () => {
       'execSync("tailor function run C:\\\\proj\\\\a.ts --name x");\n',
     ],
     [
+      "a Windows path before --name in a String.raw template of a TypeScript file",
+      "run.ts",
+      "execSync(String.raw`tailor function run C:\\new\\test.ts --name x`);\n",
+    ],
+    [
       "a template substitution right after --name in a string of a TypeScript file",
       "run.ts",
       "execSync(`tailor function run a.ts --name${suffix} x`);\n",
