@@ -6,19 +6,18 @@
  */
 
 import * as fs from "node:fs";
-import { arg, extractFields } from "@politty/zod";
+import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import {
-  commonArgs,
   configArg,
   resolveMachineUserInputSource,
-  flagTokensOf,
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
+import { invokedViaSubcommand } from "#/cli/shared/command-alias";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
@@ -240,38 +239,13 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 });
 
 /**
- * Global option tokens that consume the following argv token as their value.
- * politty accepts both the kebab-case and camelCase spelling of every name.
- */
-const valueTakingGlobalFlags: ReadonlySet<string> = new Set(
-  extractFields(z.strictObject(commonArgs))
-    .fields.filter((field) => field.type !== "boolean")
-    .flatMap(flagTokensOf),
-);
-
-/**
  * Detect whether the command was invoked through the deprecated `test-run`
- * alias. politty resolves aliases before dispatch, so the invoked name is only
- * observable from the raw argv. Global options may sit anywhere before the
- * subcommand (`tailor function --json test-run`), so option tokens and any
- * values they consume are skipped; an option value is never read as a command
- * name.
+ * alias.
  * @param argv - Process argv tokens
  * @returns true when `test-run` was the subcommand name under `function`
  */
 function invokedViaTestRunAlias(argv: readonly string[]): boolean {
-  const names: string[] = [];
-  // argv[0] is the node binary and argv[1] the CLI entry point.
-  for (let i = 2; i < argv.length && names.length < 2; i++) {
-    const token = argv[i];
-    if (token === undefined || token === "--") break;
-    if (!token.startsWith("-")) {
-      names.push(token);
-      continue;
-    }
-    if (!token.includes("=") && valueTakingGlobalFlags.has(token)) i++;
-  }
-  return names[0] === "function" && names[1] === "test-run";
+  return invokedViaSubcommand(argv, "function", "test-run");
 }
 
 interface ArgOptions {
