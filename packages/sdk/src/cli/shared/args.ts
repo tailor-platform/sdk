@@ -591,13 +591,14 @@ export const configArg = {
 
 /**
  * Arg for commands that act on one application of the config
- * @param withSeveral - What the command acts on without it when the config defines several applications
+ * @param withSeveral - What happens without it when the config defines several applications
+ * @param subject - What the option names
  * @returns The `--app` arg
  */
-export function appArg(withSeveral: string) {
+export function appArg(withSeveral: string, subject = "Application of the config") {
   return {
     app: arg(z.string().optional(), {
-      description: `Application of the config (default: the only application the config defines; with several, ${withSeveral})`,
+      description: `${subject} (default: the only application the config defines; with several, ${withSeveral})`,
       completion: { type: "none" },
     }),
   } satisfies ArgsShape;

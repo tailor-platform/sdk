@@ -1,11 +1,13 @@
-import { loadConfigFile, type LoadedConfig } from "./config-loader";
 import { CLIError } from "./errors";
 import { atUserModule } from "./validation-errors";
 import type { AuthOwnConfig } from "#/configure/services/auth/types";
+import type { LoadedConfig, LoadedConfigFile } from "./config-loader";
 
 /** An application a config deploys, with what commands read about it. */
 export interface ConfigApplication {
   name: string;
+  /** Auth service the application uses; `undefined` when it uses none. */
+  authNamespace: string | undefined;
   /** OAuth2 clients the application's auth service defines, in config order. */
   oauth2ClientNames: string[];
   /** TailorDB namespaces the application exposes; `undefined` for a `defineConfig()` config. */
@@ -20,6 +22,8 @@ export interface ConfigApplications {
   staticWebsiteNames: string[];
 }
 
+const ADD_APPLICATION_SUGGESTION = "Add an application under apps.";
+
 function uniqueNames(entries: ReadonlyArray<{ name: string }> | undefined): string[] {
   return [...new Set((entries ?? []).map((entry) => entry.name))];
 }
@@ -30,12 +34,11 @@ function oauth2ClientNamesOf(auth: LoadedConfig["auth"] | AuthOwnConfig | undefi
 }
 
 /**
- * Load a config of any kind and list the applications it deploys.
- * @param configPath - Optional explicit config path
- * @returns The loaded config and its applications, in config order
+ * List the applications a loaded config file deploys.
+ * @param file - Loaded config file of either kind
+ * @returns The config's applications, in config order, and the services the workspace shares
  */
-export async function loadConfigApplications(configPath?: string): Promise<ConfigApplications> {
-  const file = await loadConfigFile(configPath);
+export function configApplications(file: LoadedConfigFile): ConfigApplications {
   if (file.kind === "config") {
     const { config } = file;
     return {
@@ -43,6 +46,7 @@ export async function loadConfigApplications(configPath?: string): Promise<Confi
       applications: [
         {
           name: config.name,
+          authNamespace: config.auth?.name,
           oauth2ClientNames: oauth2ClientNamesOf(config.auth),
           tailordbNamespaces: undefined,
         },
@@ -56,6 +60,7 @@ export async function loadConfigApplications(configPath?: string): Promise<Confi
     path: workspace.path,
     applications: Object.entries(workspace.apps).map(([name, app]) => ({
       name,
+      authNamespace: app.auth,
       oauth2ClientNames:
         app.auth === undefined ? [] : oauth2ClientNamesOf(workspace.auth[app.auth]),
       tailordbNamespaces: app.db,
@@ -91,7 +96,7 @@ export function selectApplication(
       message: `Application "${name}" is not defined in the config.`,
       suggestion:
         applications.length === 0
-          ? "The config defines no application."
+          ? ADD_APPLICATION_SUGGESTION
           : `Name one of the applications the config defines: ${applicationList(applications)}.`,
       context: { app: name, applications: applications.map((application) => application.name) },
     }),
@@ -126,7 +131,10 @@ export function requireApplication(params: RequireApplicationParams): ConfigAppl
         applications.length === 0
           ? "The config defines no application."
           : `The config defines several applications: ${applicationList(applications)}.`,
-      suggestion: `Choose the application with ${option}.`,
+      suggestion:
+        applications.length === 0
+          ? ADD_APPLICATION_SUGGESTION
+          : `Choose the application with ${option}.`,
       context: { applications: applications.map((application) => application.name) },
     }),
     config.path,

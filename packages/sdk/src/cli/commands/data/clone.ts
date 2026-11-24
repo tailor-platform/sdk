@@ -10,7 +10,8 @@ import {
 } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfigApplications, requireApplication } from "#/cli/shared/config-applications";
+import { configApplications, requireApplication } from "#/cli/shared/config-applications";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken } from "#/cli/shared/context";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -87,7 +88,7 @@ async function cloneTarget(params: CloneTargetParams): Promise<CloneTarget> {
   const { name, configPath } = params;
   if (name !== undefined) return { name, nameFromConfig: false };
   const application = requireApplication({
-    config: await loadConfigApplications(configPath),
+    config: configApplications(await loadConfigFile(configPath)),
     name: undefined,
     option: "--name <application>",
   });

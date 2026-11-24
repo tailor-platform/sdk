@@ -382,7 +382,7 @@ describe("data clone", () => {
       expect(client.cloneApplicationData).not.toHaveBeenCalled();
     });
 
-    test("asks for --name when the config defines no application", async () => {
+    test("asks for an application when the config defines none", async () => {
       const configPath = await writeWorkspaceConfig(`{}`);
 
       const result = await runCommand(cloneCommand, [
@@ -398,6 +398,7 @@ describe("data clone", () => {
       expect(result.error).toMatchObject({
         code: "CONFIG_APP_REQUIRED",
         message: "The config defines no application.",
+        suggestion: "Add an application under apps.",
       });
       expect(client.cloneApplicationData).not.toHaveBeenCalled();
     });

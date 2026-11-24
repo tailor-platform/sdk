@@ -2,7 +2,8 @@ import open from "open";
 import { z } from "zod";
 import { appArg, deploymentArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfigApplications, selectApplication } from "#/cli/shared/config-applications";
+import { configApplications, selectApplication } from "#/cli/shared/config-applications";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 
@@ -19,7 +20,7 @@ export const openCommand = defineAppCommand({
       profile: args.profile,
     });
     const applicationName = selectApplication(
-      await loadConfigApplications(args.config),
+      configApplications(await loadConfigFile(args.config)),
       args.app,
     )?.name;
     const applicationsPath = `/workspaces/${workspaceId}/services/applications`;

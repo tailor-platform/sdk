@@ -11,10 +11,11 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   type ConfigApplication,
   type ConfigApplications,
-  loadConfigApplications,
+  configApplications,
   requireApplication,
   selectApplication,
 } from "#/cli/shared/config-applications";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
@@ -223,7 +224,7 @@ async function loadShowTarget(options?: ShowOptions): Promise<ShowTarget> {
     profile: options?.profile,
     workspaceId: options?.workspaceId,
   });
-  const config = await loadConfigApplications(options?.configPath);
+  const config = configApplications(await loadConfigFile(options?.configPath));
   return { client, workspaceId, config };
 }
 
