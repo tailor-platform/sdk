@@ -1,7 +1,7 @@
 /**
  * Group self-referencing records into runs that can each be inserted in one statement:
  * every row's parents are in an earlier group. Rows that cannot be grouped (no
- * self-reference fields, duplicate IDs, cycles) get one group per row.
+ * self-reference fields, missing or duplicate IDs, cycles) get one group per row.
  * This function is embedded in generated scripts and must remain self-contained.
  */
 export function groupBySelfReference<RecordType extends Record<string, unknown>>(
@@ -21,7 +21,9 @@ export function groupBySelfReference<RecordType extends Record<string, unknown>>
 
   const byId = new Map<unknown, RecordType>();
   for (const record of records) byId.set(record.id, record);
-  if (byId.size !== records.length) return records.map((record) => [record]);
+  if (byId.size !== records.length || byId.has(undefined) || byId.has(null)) {
+    return records.map((record) => [record]);
+  }
 
   // Build one lookup map per distinct target key used by the self-reference
   // fields, mapping that key's value on a record to the record's own id.
@@ -69,8 +71,7 @@ export function groupBySelfReference<RecordType extends Record<string, unknown>>
   const groups: RecordType[][] = [];
   // A head index is used instead of `queue.shift()`, which would reindex the
   // remaining array on every dequeue and make this Kahn traversal O(n²) over
-  // a table's full record set. The queue yields ids in nondecreasing depth, so
-  // a row's group is the one at its depth.
+  // a table's full record set.
   let head = 0;
   while (head < queue.length) {
     const id = queue[head++];
@@ -95,7 +96,7 @@ export function groupBySelfReference<RecordType extends Record<string, unknown>>
 
 /**
  * Order self-referencing records before splitting or inserting a batch.
- * Cycles retain their input order; duplicate IDs leave the entire input unchanged.
+ * Cycles retain their input order; missing or duplicate IDs leave the entire input unchanged.
  * @param records - Records of one table
  * @param fields - Self-reference field paths
  * @param fieldKeys - Target key of each self-reference field when it is not `id`

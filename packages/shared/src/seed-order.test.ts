@@ -199,6 +199,15 @@ describe("groupBySelfReference", () => {
     expect(ids(groupBySelfReference(records, ["parentId"]))).toEqual([["dup"], ["dup"]]);
   });
 
+  test("returns one group per row, in input order, when a single row has no id", () => {
+    const records = [
+      { code: "parent", parentCode: null },
+      { id: "child", code: "child", parentCode: "parent" },
+    ];
+    const groups = groupBySelfReference(records, ["parentCode"], { parentCode: "code" });
+    expect(groups.map((group) => group.map((r) => r.code))).toEqual([["parent"], ["child"]]);
+  });
+
   test("returns a cycle as one group per row after the rows that can be grouped", () => {
     const records = [
       { id: "a", parentId: "b" },
