@@ -1,5 +1,6 @@
 import { fetchAll, isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { internalError, locatedCLIError } from "#/cli/shared/errors";
+import { authNamespacesDefining } from "#/cli/shared/machine-user";
 import { configAuthNamespaces } from "./deploy-application";
 import type { AuthInvoker } from "#/types/auth.generated";
 import type { PlanContext } from "./types";
@@ -97,7 +98,10 @@ function resolveInvoker(params: ResolveInvokerParams): AuthInvoker {
   if (!machineUsers) {
     throw internalError(`Machine users are needed to resolve invoker "${invoker}"`);
   }
-  const defining = authNamespaces.filter((namespace) => machineUsers.get(namespace)?.has(invoker));
+  const defining = authNamespacesDefining(
+    invoker,
+    authNamespaces.map((name) => ({ name, machineUsers: [...(machineUsers.get(name) ?? [])] })),
+  );
   const [namespace, ...alsoDefining] = defining;
   if (namespace === undefined) {
     const names = [

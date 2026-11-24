@@ -124,6 +124,23 @@ const baseOptions = {
 };
 
 describe("withScriptWorkflow", () => {
+  test("labels the resources as the workspace's when no application owns them", async () => {
+    const { buildMetaRequest } = await import("#/cli/commands/deploy/label");
+    vi.mocked(buildMetaRequest).mockClear();
+    const { client } = createMockClient({ result: '{"success":true}' });
+
+    await withScriptWorkflow({ ...baseOptions, appName: undefined, client }, async (run) => {
+      await run({});
+    });
+
+    expect(vi.mocked(buildMetaRequest).mock.calls.map(([params]) => params.owner)).toContainEqual({
+      kind: "workspace",
+    });
+    expect(
+      vi.mocked(buildMetaRequest).mock.calls.map(([params]) => params.owner),
+    ).not.toContainEqual(expect.objectContaining({ kind: "application" }));
+  });
+
   test("registers the script once and starts it once per argument with the argument as JSON", async () => {
     const { client } = createMockClient({ result: '{"success":true}' });
 

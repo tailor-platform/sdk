@@ -14,7 +14,7 @@ import {
   bundleSingleStepMigration,
 } from "#/cli/commands/tailordb/migrate/bundler";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -50,8 +50,9 @@ const client = mockOperatorClient({
   getFunctionExecution: {},
 });
 
-vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -91,13 +92,14 @@ vi.mock("#/cli/services/application", () => ({
 }));
 
 function mockConfig(migration: { machineUser?: string } = {}): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
       db: { tailordb: { migration: { directory: state.migrationsDir, ...migration } } },
     },
     plugins: [],
-  } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 }
 
 function writeMigrationFile(number: number, fileName: string, content: string): void {
@@ -1544,7 +1546,8 @@ describe("tailordb migration validate", () => {
       test("rejects a namespace that --namespace leaves out", async () => {
         const auditMigrationsDir = path.join(tmpDir, "audit-migrations");
         writeInitialSchema(auditMigrationsDir, {});
-        vi.mocked(loadConfig).mockResolvedValue({
+        vi.mocked(loadConfigFile).mockResolvedValue({
+          kind: "config",
           config: {
             path: path.join(tmpDir, "tailor.config.ts"),
             db: {
@@ -1553,7 +1556,7 @@ describe("tailordb migration validate", () => {
             },
           },
           plugins: [],
-        } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+        } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
         state.extraServices = [
           {
             namespace: "audit",

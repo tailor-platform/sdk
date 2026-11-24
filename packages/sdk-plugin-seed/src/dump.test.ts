@@ -143,6 +143,22 @@ async function runDump(args: string[]): Promise<void> {
 }
 
 describe("seedDumpCommand", () => {
+  test("runs as the machine user the seed context resolves", async () => {
+    const base = await sdk.loadSeedContext();
+    sdk.loadSeedContext.mockResolvedValue({
+      ...base,
+      resolveMachineUser: () => ({ namespace: "partner-auth", machineUserName: "admin" }),
+    });
+
+    const result = await runDumpCommand(["--machine-user", "partner-auth/admin"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ invoker: { namespace: "partner-auth", machineUserName: "admin" } }),
+    );
+  });
+
   test("writes every table in dependency order", async () => {
     sdk.executeScript.mockImplementation(
       dumpRows({

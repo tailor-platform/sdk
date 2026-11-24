@@ -226,6 +226,34 @@ describe("migration", () => {
       );
     }
 
+    test("runs as the Auth service an override names as <auth>/<name>", () => {
+      const resolved = resolveMigrationMachineUsers(
+        {
+          application: {
+            authServices: [
+              { config: { name: "corp-auth", machineUsers: { admin: {} } } },
+              { config: { name: "partner-auth", machineUsers: { admin: {} } } },
+            ],
+            env: {},
+          } as unknown as Pick<Application, "authServices" | "env">,
+          config: { path: "/project/tailor.config.ts", db: {} },
+          migrationMachineUserOverride: "partner-auth/admin",
+        },
+        [createMockMigration({ namespace: "namespace-a" })],
+      );
+
+      expect(resolved?.byNamespace.get("namespace-a")).toEqual({
+        namespace: "partner-auth",
+        machineUserName: "admin",
+      });
+    });
+
+    test("reads migration.machineUser as a bare machine user name", () => {
+      expect(() =>
+        resolve({ admin: {} }, { "namespace-a": { migration: { machineUser: "auth/admin" } } }),
+      ).toThrow(expect.objectContaining({ code: "MACHINE_USER_NOT_FOUND" }));
+    });
+
     test("resolves only the namespaces with a script to run", () => {
       expect(resolve({ migrator: {} })).toEqual({
         byNamespace: new Map([

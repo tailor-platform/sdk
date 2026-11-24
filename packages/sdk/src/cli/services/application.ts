@@ -1035,6 +1035,22 @@ function envOverrideServiceLabel(service: EnvOverrideService): string {
   }
 }
 
+/**
+ * How a config's workflow `.start()` calls resolve a string invoker: the config's only Auth
+ * service, or, with several, the Auth services that define each machine user.
+ * @param config - Loaded config of either kind
+ * @returns The start context's Auth namespace and machine user lookup
+ */
+export function startContextAuth(
+  config: LoadedConfig | LoadedWorkspaceConfig,
+): Pick<StartContext, "authNamespace" | "machineUserAuthNamespaces"> {
+  const source = loadSourceOf(config);
+  return {
+    authNamespace: startContextAuthNamespace(source),
+    ...startContextMachineUsers(source),
+  };
+}
+
 function startContextAuthNamespace(source: LoadSource): string | undefined {
   const [auth, ...others] = source.auths;
   return auth && others.length === 0 ? auth.config.name : undefined;
