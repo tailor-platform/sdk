@@ -60,7 +60,8 @@ export const runFunctionCommand = defineAppCommand({
     }),
     name: arg(z.string().optional(), {
       alias: "n",
-      description: "Workflow job name to run (matches the `name` field of createWorkflowJob)",
+      description:
+        "Deprecated: use `tailor workflow run --job`. Workflow job name to run (matches the `name` field of createWorkflowJob)",
     }),
     arg: arg(z.string().optional(), {
       alias: "a",
@@ -99,8 +100,10 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 
 \`test-run\` is a deprecated alias of this command and will be removed in v3.
 
+\`--name\` is deprecated and will be removed in v3. Use \`tailor workflow run <file> --job <name>\`, which also runs the jobs the job starts with \`.start()\`.
+
 > [!WARNING]
-> Workflow job \`.start()\` calls do not work in this mode.
+> Workflow job \`.start()\` calls do not work with \`--name\`.
 > Started jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
@@ -116,10 +119,6 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       desc: "Run a resolver again on every save, with its argument in a temporary file",
     },
     {
-      cmd: "workflows/sample.ts --name validate-order",
-      desc: "Run a specific workflow job by name",
-    },
-    {
       cmd: 'build/resolvers/add.js --arg \'{"a":1,"b":2}\'',
       desc: "Run a pre-bundled .js file directly",
     },
@@ -128,6 +127,12 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     if (invokedViaTestRunAlias(process.argv)) {
       logger.warn(
         "`tailor function test-run` is deprecated and will be removed in v3. Use `tailor function run` instead.",
+      );
+    }
+
+    if (args.name !== undefined) {
+      logger.warn(
+        "`tailor function run --name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>` instead.",
       );
     }
 

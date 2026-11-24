@@ -219,6 +219,34 @@ describe("function run --json", () => {
     expect(stderr.output).not.toContain("deprecated");
   });
 
+  test("warns that --name is deprecated and points to workflow run --job", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [
+      scriptPath,
+      "--name",
+      "validate-order",
+      "--machine-user",
+      "admin",
+    ]);
+
+    expect(stderr.output).toContain(
+      "`tailor function run --name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>` instead.",
+    );
+  });
+
+  test("does not warn about --name when it is not given", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+    expect(stderr.output).not.toContain("--name");
+  });
+
   test("dispatches the deprecated test-run alias to the run command", async () => {
     using stdout = captureStdout();
     using stderr = captureStderr();
