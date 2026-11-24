@@ -441,7 +441,7 @@ describe("function run --json", () => {
           code: "FUNCTION_RUN_OPTIONS_CONFLICT",
           message: expect.stringContaining(conflicting),
         });
-        expect(loadConfig).not.toHaveBeenCalled();
+        expect(loadConfigFile).not.toHaveBeenCalled();
         expect(startFunctionAsyncRun).not.toHaveBeenCalled();
       },
     );
@@ -466,7 +466,7 @@ describe("function run --json", () => {
         code: "FUNCTION_RUN_OPTIONS_CONFLICT",
         message: expect.stringContaining(option),
       });
-      expect(loadConfig).not.toHaveBeenCalled();
+      expect(loadConfigFile).not.toHaveBeenCalled();
     });
 
     test("starts the bundled script as an asynchronous run instead of executing it synchronously", async () => {
