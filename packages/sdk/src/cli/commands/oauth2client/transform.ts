@@ -18,6 +18,8 @@ const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string =>
 
 export interface OAuth2ClientInfo {
   name: string;
+  /** Auth service the OAuth2 client belongs to. */
+  authNamespace?: string;
   description: string;
   clientId: string;
   grantTypes: string[];
@@ -38,11 +40,16 @@ export interface OAuth2ClientCredentials {
 /**
  * Transform an AuthOAuth2ClientSummary into CLI-friendly OAuth2 client info.
  * @param client - OAuth2 client summary
+ * @param authNamespace - Auth service the OAuth2 client belongs to
  * @returns Flattened OAuth2 client info
  */
-export function toOAuth2ClientInfo(client: AuthOAuth2ClientSummary): OAuth2ClientInfo {
+export function toOAuth2ClientInfo(
+  client: AuthOAuth2ClientSummary,
+  authNamespace: string,
+): OAuth2ClientInfo {
   return {
     name: client.name,
+    authNamespace,
     description: client.description,
     clientId: client.clientId,
     grantTypes: client.grantTypes.map(grantTypeToString),

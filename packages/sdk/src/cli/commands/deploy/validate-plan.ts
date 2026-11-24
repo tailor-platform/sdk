@@ -415,7 +415,7 @@ function validatorFor(schema: DescMessage): Validator {
 const SDK_REPORTED_RULE_IDS: ReadonlySet<string> = new Set(["allowed_email_domains_required"]);
 
 type ValidateItemsParams = {
-  application: string;
+  application: string | undefined;
   results: PlanResults;
   resourceType: ManagedResourceType;
   action: Action;
@@ -450,8 +450,9 @@ function validateItems(params: ValidateItemsParams): void {
       }
     } else if (result.kind === "error") {
       // Evaluator failures must not block deploys; the platform stays the authoritative validator.
+      const owner = application === undefined ? "" : `Application "${application}": `;
       logger.warn(
-        `Application "${application}": Could not validate ${violationLabel(resourceType)} "${item.name}" (${action}): ${result.error.message}`,
+        `${owner}Could not validate ${violationLabel(resourceType)} "${item.name}" (${action}): ${result.error.message}`,
       );
     }
   }
@@ -475,11 +476,14 @@ function idpEmailDomainViolations(results: PlanResults): ViolationEntry[] {
 /**
  * Validate the requests that a deployment's plan sends against the buf.validate rules embedded
  * in the generated proto descriptors, and the SDK's own IdP email-domain rule.
- * @param application - Application the plan belongs to
+ * @param application - Application the plan belongs to, or undefined for a workspace config
  * @param results - Plan results of one deployment
  * @returns Violations found in the deployment's requests
  */
-function collectViolations(application: string, results: PlanResults): ViolationEntry[] {
+function collectViolations(
+  application: string | undefined,
+  results: PlanResults,
+): ViolationEntry[] {
   const violations: ViolationEntry[] = [];
   for (const resourceType of Object.keys(REQUEST_CHECKS) as ManagedResourceType[]) {
     const checks: Partial<Record<CheckedList, ReadonlyArray<RequestCheck<HasName>>>> =
@@ -505,7 +509,8 @@ function collectViolations(application: string, results: PlanResults): Violation
 
 /** A deployment's plan results, with the application they belong to. */
 export type PlanToValidate = {
-  application: string;
+  /** The application a `defineConfig()` config deploys; undefined for a workspace config. */
+  application: string | undefined;
   results: PlanResults;
 };
 

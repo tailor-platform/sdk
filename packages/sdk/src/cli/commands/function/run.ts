@@ -19,14 +19,19 @@ import {
 } from "#/cli/shared/args";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import {
+  configOf,
+  machineUserAuths,
+  machineUserConfig as machineUserConfigOf,
+} from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
-import { assertDefined } from "#/utils/assert";
 import { type ResolvedMachineUser } from "./bundle";
 import {
   argFileNotFoundError,
@@ -152,28 +157,23 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     });
 
     // 2. Load config (required)
-    const { config, plugins } = await loadConfig(args.config);
+    const loaded = await loadConfigFile(args.config);
+    const config = configOf(loaded);
+    const { plugins } = loaded;
 
-    // 3. Resolve auth, workspace, and machine user info (needed before bundling)
-    const authNamespace = resolveAuthNamespace(config.auth);
-    const machineUserName = await resolveMachineUserName({
-      cliMachineUser: args["machine-user"],
-      cliMachineUserSource: resolveMachineUserInputSource(args["machine-user"]),
-      profile: args.profile,
-      authConfig: config.auth,
-    });
-
+    // 3. Resolve workspace and machine user info (needed before bundling)
     const { client, workspaceId } = await loadOperatorWorkspaceContext({
       profile: args.profile,
       workspaceId: args["workspace-id"],
     });
 
-    const machineUser = await resolveMachineUser({
+    const { authNamespace, machineUser } = await resolveRunMachineUser({
       client,
       workspaceId,
-      authNamespace,
-      machineUserName,
-      authConfig: config.auth,
+      loaded,
+      cliMachineUser: args["machine-user"],
+      cliMachineUserSource: resolveMachineUserInputSource(args["machine-user"]),
+      profile: args.profile,
     });
 
     // 4. Check a scaffolded script's schema snapshot
@@ -189,7 +189,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
           await verifyScriptSchemaSnapshot({
             client,
             workspaceId,
-            config,
+            loaded,
             configArgValue: args.config,
             scriptArgValue: args.file,
             profileArgValue: args.profile,
@@ -332,115 +332,75 @@ export function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
   return { arg: undefined, argFile };
 }
 
-/**
- * Resolve auth namespace from config.
- * @param authConfig - Auth configuration from tailor.config.ts
- * @returns Resolved auth namespace
- */
-export function resolveAuthNamespace(
-  authConfig: { name: string; external?: boolean | undefined } | undefined,
-): string {
-  if (authConfig?.name) {
-    return authConfig.name;
-  }
-  throw CLIError({
-    code: "AUTH_CONFIG_REQUIRED",
-    message: "Auth namespace is required.",
-    suggestion: "Ensure tailor.config.ts has an auth config.",
-  });
-}
-
-type ResolveMachineUserNameOptions = {
+type ResolveRunMachineUserOptions = {
+  client: OperatorClient;
+  workspaceId: string;
+  loaded: LoadedConfigFile;
   cliMachineUser: string | undefined;
   cliMachineUserSource: MachineUserInputSource | undefined;
   profile: string | undefined;
-  authConfig:
-    | {
-        name: string;
-        external?: boolean | undefined;
-        machineUsers?: Record<string, unknown> | undefined;
-      }
-    | undefined;
 };
 
-/**
- * Resolve machine user name from CLI args, profile default, or config.
- * Priority: --machine-user / env > profile default > first key of config.auth.machineUsers > error
- * @param options - Resolution options
- * @returns Resolved machine user name
- */
-export async function resolveMachineUserName(
-  options: ResolveMachineUserNameOptions,
-): Promise<string> {
-  const { cliMachineUser, cliMachineUserSource, profile, authConfig } = options;
-
-  const resolved = await loadMachineUserName({
-    machineUser: cliMachineUser,
-    machineUserSource: cliMachineUserSource,
-    profile,
-  });
-  if (resolved) {
-    return resolved;
-  }
-
-  if (authConfig && !("external" in authConfig && authConfig.external)) {
-    const machineUsers = authConfig.machineUsers;
-    if (machineUsers) {
-      const keys = Object.keys(machineUsers);
-      if (keys.length > 0) {
-        return assertDefined(keys[0], "machine user key missing");
-      }
-    }
-  }
-  throw CLIError({
-    code: "MACHINE_USER_REQUIRED",
-    message: "Machine user is required.",
-    suggestion:
-      "Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
-  });
-}
-
-interface ResolveMachineUserOptions {
-  client: OperatorClient;
-  workspaceId: string;
+/** A machine user a function or workflow runs as, with its Auth service. */
+export interface RunMachineUser {
   authNamespace: string;
-  machineUserName: string;
-  authConfig:
-    | {
-        name: string;
-        external?: boolean | undefined;
-        machineUsers?: Record<string, unknown> | undefined;
-      }
-    | undefined;
+  machineUser: ResolvedMachineUser;
+}
+
+function defaultMachineUser(loaded: LoadedConfigFile): string | undefined {
+  const [only, ...others] = machineUserAuths(loaded);
+  return only && others.length === 0 ? only.machineUsers?.[0] : undefined;
 }
 
 /**
- * Resolve full machine user info: name, id (from API), and attributes (from config).
- * @param options - Options for resolving machine user
- * @returns Resolved machine user with id, attributes, and attributeList
+ * Resolve the machine user a function or workflow runs as: the one given by `--machine-user`, the
+ * environment, or the profile default, or else the first machine user of the config's only Auth
+ * service. Its id comes from the Platform and its attributes from the config.
+ * @param options - Machine user sources and the loaded config
+ * @returns The machine user with its Auth service
  */
-export async function resolveMachineUser(
-  options: ResolveMachineUserOptions,
-): Promise<ResolvedMachineUser> {
-  const { client, workspaceId, authNamespace, machineUserName, authConfig } = options;
+export async function resolveRunMachineUser(
+  options: ResolveRunMachineUserOptions,
+): Promise<RunMachineUser> {
+  const { client, workspaceId, loaded, cliMachineUser, cliMachineUserSource, profile } = options;
+  const value =
+    (await loadMachineUserName({
+      machineUser: cliMachineUser,
+      machineUserSource: cliMachineUserSource,
+      profile,
+    })) ?? defaultMachineUser(loaded);
+  if (!value) {
+    const sources =
+      "Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'";
+    throw CLIError({
+      code: "MACHINE_USER_REQUIRED",
+      message: "Machine user is required.",
+      suggestion:
+        machineUserAuths(loaded).length > 1
+          ? `${sources}: the config defines several Auth services, so none of their machine users runs by default.`
+          : `${sources}, or ensure tailor.config.ts has machine users configured.`,
+    });
+  }
+  const { namespace: authNamespace, machineUserName: name } = resolveMachineUser({
+    value,
+    auths: machineUserAuths(loaded),
+  });
 
-  // Get machine user ID from the server
   let id = "00000000-0000-0000-0000-000000000000";
   try {
     const { machineUser } = await client.getAuthMachineUser({
       workspaceId,
       authNamespace,
-      name: machineUserName,
+      name,
     });
     if (machineUser?.id) {
       id = machineUser.id;
     }
   } catch {
-    logger.debug(`Could not fetch machine user "${machineUserName}" from server, using nil UUID`);
+    logger.debug(`Could not fetch machine user "${name}" from server, using nil UUID`);
   }
 
-  // Get attributes from config
-  const machineUserConfig = authConfig?.machineUsers?.[machineUserName];
+  const machineUserConfig = machineUserConfigOf(loaded, authNamespace, name);
   let attributes: Record<string, unknown> | null = null;
   let attributeList: unknown[] = [];
   if (machineUserConfig && typeof machineUserConfig === "object") {
@@ -452,5 +412,5 @@ export async function resolveMachineUser(
     attributeList = cfg.attributeList ?? [];
   }
 
-  return { name: machineUserName, id, attributes, attributeList };
+  return { authNamespace, machineUser: { name, id, attributes, attributeList } };
 }

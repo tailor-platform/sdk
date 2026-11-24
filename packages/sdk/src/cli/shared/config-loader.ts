@@ -40,7 +40,11 @@ export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
 /** Loaded configuration with resolved path. */
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
-/** A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path. */
+/**
+ * A `defineWorkspace()` or `defineApp()` config with its `env` values resolved, and its path.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export type LoadedWorkspaceConfig = WorkspaceRepresentation<EnvValue> &
   Pick<WorkspaceExport, "definedBy"> & { path: string };
 
@@ -66,7 +70,11 @@ export function tailorDBTypeNameScopeOf(
   return isLoadedWorkspaceConfig(config) ? "workspace" : "application";
 }
 
-/** A loaded config file, told apart by the function that defined its default export. */
+/**
+ * A loaded config file, told apart by the function that defined its default export.
+ *
+ * **Beta:** This API may change in future releases.
+ */
 export type LoadedConfigFile =
   | { kind: "config"; config: LoadedConfig; plugins: Plugin[] }
   | { kind: "workspace"; workspace: LoadedWorkspaceConfig; plugins: Plugin[] };
@@ -77,6 +85,25 @@ const CONFIG_NOT_FOUND_SUGGESTION =
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
   importNonce?: string | undefined;
+}
+
+/** What a command that does not accept a workspace config says about it. */
+export interface ConfigKindUnsupportedOptions {
+  message: string;
+  suggestion: string;
+}
+
+/**
+ * The error a command throws for a `defineWorkspace()` or `defineApp()` config it does not accept.
+ * @param workspace - The loaded workspace config
+ * @param options - What the command says about the config
+ * @returns The error, located at the config file
+ */
+export function configKindUnsupportedError(
+  workspace: LoadedWorkspaceConfig,
+  options: ConfigKindUnsupportedOptions,
+): unknown {
+  return atUserModule(CLIError({ code: "CONFIG_KIND_UNSUPPORTED", ...options }), workspace.path);
 }
 
 /**
@@ -91,15 +118,11 @@ export async function loadConfig(
 ): Promise<{ config: LoadedConfig; plugins: Plugin[] }> {
   const loaded = await loadConfigFile(configPath, options);
   if (loaded.kind === "workspace") {
-    throw atUserModule(
-      CLIError({
-        code: "CONFIG_KIND_UNSUPPORTED",
-        message:
-          "This command does not support a config defined with defineWorkspace() or defineApp().",
-        suggestion: "Define the config with defineConfig() to use this command.",
-      }),
-      loaded.workspace.path,
-    );
+    throw configKindUnsupportedError(loaded.workspace, {
+      message:
+        "This command does not support a config defined with defineWorkspace() or defineApp().",
+      suggestion: "Define the config with defineConfig() to use this command.",
+    });
   }
   return { config: loaded.config, plugins: loaded.plugins };
 }
@@ -112,6 +135,8 @@ function resolveEnv(env: Record<string, EnvEntry>): Record<string, EnvValue> {
 
 /**
  * Load a Tailor configuration file of any kind and its plugins.
+ *
+ * **Beta:** This API may change in future releases.
  * @param configPath - Optional explicit config path
  * @param options - Optional module import behavior.
  * @returns The `defineConfig()` config, or the workspace a `defineWorkspace()` or `defineApp()` config describes, with its plugins

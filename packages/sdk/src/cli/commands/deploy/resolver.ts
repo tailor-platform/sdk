@@ -28,14 +28,14 @@ import { assertDefined } from "#/utils/assert";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
-import { configAuthNamespace } from "./deploy-application";
+import { applicationsListing } from "./deploy-application";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { type InvokerMachineUsers, listInvokerMachineUsers, normalizeInvoker } from "./invoker";
+import { type InvokerScope, normalizeInvoker, planInvokerScope } from "./invoker";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -55,6 +55,7 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type ExistingPipelineServices = WithLabel<
   Awaited<ReturnType<OperatorClient["listPipelineServices"]>>["pipelineServices"][number]
@@ -182,18 +183,21 @@ export async function planPipeline(
     takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(client, workspaceId, context.owner, pipelines, previous?.existingServices);
-  const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const authNamespace = configAuthNamespace(context);
-  const invokerMachineUsers = await listInvokerMachineUsers({
+  } = await planServices(
     client,
     workspaceId,
-    invokers: pipelines.flatMap((pipeline) =>
+    context.owner,
+    context.applications,
+    pipelines,
+    previous?.existingServices,
+  );
+  const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
+  const invokerScope = await planInvokerScope(
+    context,
+    pipelines.flatMap((pipeline) =>
       Object.values(pipeline.resolvers).map((resolver) => resolver.invoker),
     ),
-    authNamespace,
-    plannedMachineUsers: context.plannedMachineUsers,
-  });
+  );
   const { changeSet: resolverChangeSet, existingResolversByNamespace } = await planResolvers(
     client,
     workspaceId,
@@ -201,9 +205,8 @@ export async function planPipeline(
     executors,
     context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
-    application.env,
-    authNamespace,
-    invokerMachineUsers,
+    (namespace) => ({ ...application.env, ...context.envOverrides?.resolver[namespace] }),
+    invokerScope,
     forceApplyAll,
     {
       owner: context.owner,
@@ -261,6 +264,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   previousExisting?: ExistingPipelineServices,
 ) {
@@ -292,6 +296,7 @@ async function planServices(
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "pipeline", pipeline.namespace),
         owner,
+        onApps: applicationsListing(applications, "pipeline", pipeline.namespace),
       }),
     });
   }
@@ -365,9 +370,8 @@ async function planResolvers(
   executors: ReadonlyArray<Executor>,
   initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
-  env: ApplicationEnv,
-  authNamespace: string | undefined,
-  invokerMachineUsers: InvokerMachineUsers | undefined,
+  envOf: (namespace: string) => ApplicationEnv,
+  invokerScope: InvokerScope,
   forceApplyAll = false,
   records: ResolverRecordInputs,
   previousExisting?: PreviousPipelineResolvers,
@@ -444,7 +448,7 @@ async function planResolvers(
   const namespaces = [
     ...pipelines.map((pipeline) => ({
       namespaceName: pipeline.namespace,
-      resolvers: Object.values(pipeline.resolvers),
+      resolvers: Object.entries(pipeline.resolvers),
       deleted: false,
     })),
     ...deletedServices.map((namespaceName) => ({ namespaceName, resolvers: [], deleted: true })),
@@ -455,7 +459,7 @@ async function planResolvers(
     const existingResolverDetails = new Map<string, ExistingPipelineResolverDetail>();
     const existingNames = new Set(existingResolvers.map((resolver) => resolver.name));
     const desired: DesiredResolver[] = [];
-    for (const resolver of resolvers) {
+    for (const [file, resolver] of resolvers) {
       if (existingNames.has(resolver.name)) {
         existingResolverDetails.set(
           resolver.name,
@@ -478,10 +482,10 @@ async function planResolvers(
           pipelineResolver: processResolver(
             namespaceName,
             resolver,
+            file,
             executorUsedResolvers,
-            env,
-            authNamespace,
-            invokerMachineUsers,
+            envOf(namespaceName),
+            invokerScope,
           ),
         },
         metaRequest: await resolverMetaRequest(namespaceName, resolver),
@@ -554,10 +558,10 @@ export function formatResolverChangeEntries(
 function processResolver(
   namespace: string,
   resolver: Resolver,
+  file: string,
   executorUsedResolvers: ReadonlySet<string>,
   env: ApplicationEnv,
-  authNamespace: string | undefined,
-  invokerMachineUsers: InvokerMachineUsers | undefined,
+  invokerScope: InvokerScope,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     omitUndefined({
@@ -570,12 +574,11 @@ function processResolver(
         expr: buildResolverOperationHookExpr(env),
       },
       postScript: `args.body`,
-      invoker: normalizeInvoker(
-        resolver.invoker,
-        authNamespace,
-        `Resolver "${resolver.name}"`,
-        invokerMachineUsers,
-      ),
+      invoker: normalizeInvoker(resolver.invoker, invokerScope, {
+        kind: "resolver",
+        name: resolver.name,
+        file,
+      }),
     }),
   ];
 

@@ -28,6 +28,8 @@ export interface StartCallInfo {
   callRange: SourceRange;
   argsRange?: SourceRange | undefined;
   optionsRange?: SourceRange | undefined;
+  /** The options argument as written. */
+  options?: CallExpression["arguments"][number] | undefined;
 }
 
 export interface FoundProperty {
@@ -132,6 +134,7 @@ export function getStartCallInfo(node: ASTNode | null | undefined): StartCallInf
     callRange: { start: callExpr.start, end: callExpr.end },
     argsRange: argumentRange(callExpr.arguments[0]),
     optionsRange: argumentRange(callExpr.arguments[1]),
+    options: callExpr.arguments[1],
   };
 }
 
@@ -175,6 +178,7 @@ export function getNamespaceStartCallInfo(
     callRange: { start: callExpr.start, end: callExpr.end },
     argsRange: argumentRange(callExpr.arguments[0]),
     optionsRange: argumentRange(callExpr.arguments[1]),
+    options: callExpr.arguments[1],
   };
 }
 

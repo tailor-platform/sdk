@@ -30,20 +30,15 @@ import { formatResolverChangeEntries } from "./resolver";
 import { formatTailorDBResourceChangeEntries } from "./tailordb";
 import { formatWorkflowChangeEntries } from "./workflow";
 import type { MissingDependentApp, WorkspaceTakeover } from "./confirm";
+import type { DeployedHookRef } from "./deployed-hooks";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
   dryRun?: boolean | undefined;
 };
 
-/** Deploy hook that a dry run would run after applying resources. */
-interface PendingDeployedHook {
-  application: string;
-  pluginId: string;
-}
-
 export type PrintDeploymentPlansOptions = PrintPlanOptions & {
-  pendingDeployedHooks?: readonly PendingDeployedHook[] | undefined;
+  pendingDeployedHooks?: readonly DeployedHookRef[] | undefined;
   /** Applications recorded as dependencies but absent from this deploy. */
   missingDependentApps?: readonly MissingDependentApp[] | undefined;
 };
@@ -57,6 +52,8 @@ type JsonPlanPayload = {
     type: "unmanaged" | "skippedSecret";
     resourceType: ManagedResourceType;
     name: string;
+    /** Set on an unmanaged resource that a workspace config manages. */
+    managedBy?: "workspace";
   }>;
   conflicts: Array<{
     resourceType: ManagedResourceType;
@@ -92,7 +89,7 @@ type MissingDependentAppWarning = Pick<
 
 type JsonDeploymentPlansPayload = Omit<JsonPlanPayload, "warnings"> & {
   warnings: Array<JsonPlanPayload["warnings"][number] | MissingDependentAppWarning>;
-  pendingDeployedHooks?: readonly PendingDeployedHook[] | undefined;
+  pendingDeployedHooks?: readonly DeployedHookRef[] | undefined;
 };
 
 type PlanReport = {
@@ -256,10 +253,11 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...(forcedBySdkVersion && { forcedBySdkVersion }),
   }));
   const warnings = [
-    ...allUnmanaged.map(({ resourceType, resourceName }) => ({
+    ...allUnmanaged.map(({ resourceType, resourceName, managedBy }) => ({
       type: "unmanaged" as const,
       resourceType,
       name: resourceName,
+      ...(managedBy && { managedBy }),
     })),
     ...results.secretManager.skippedSecrets.map((name) => ({
       type: "skippedSecret" as const,

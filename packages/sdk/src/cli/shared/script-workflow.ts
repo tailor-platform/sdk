@@ -13,7 +13,7 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { applicationOwner } from "#/cli/commands/deploy/label";
+import { applicationOwner, type DeployOwner } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
@@ -63,8 +63,11 @@ export interface ScriptWorkflowOptions {
   code: string;
   /** Auth invoker for the script */
   invoker: ScriptInvoker;
-  /** Name of the owning application, recorded in the resources' labels */
-  appName: string;
+  /**
+   * Name of the owning application, recorded in the resources' labels. Omit it when a workspace
+   * config owns them.
+   */
+  appName: string | undefined;
   /** Sentence telling how a resource left behind after a failed removal gets removed */
   leftoverNote: string;
   /** Profile the run uses, carried into the hint of a refusal so the hinted command selects it too */
@@ -91,7 +94,10 @@ export async function withScriptWorkflow<T>(
   use: (run: RunScript) => Promise<T>,
 ): Promise<T> {
   const { client, workspaceId, name, appName, invoker, leftoverNote, profile } = options;
-  const owner = applicationOwner({ name: appName, id: undefined });
+  const owner: DeployOwner =
+    appName === undefined
+      ? { kind: "workspace" }
+      : applicationOwner({ name: appName, id: undefined });
   const pollInterval = options.pollIntervalMs ?? POLL_INTERVAL_MS;
 
   await assertMachineUserExists({ client, workspaceId, invoker });

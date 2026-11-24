@@ -1,5 +1,5 @@
 import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
-import type { ConfigServices, ServiceSettings } from "#/cli/services/application";
+import type { ConfigServices, EnvOverrides, ServiceSettings } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { DeployApplication } from "./deploy-application";
 import type { DeployOwner, DependentAppsByResource } from "./label";
@@ -26,6 +26,8 @@ export interface PlanContext {
   owner: DeployOwner;
   forRemoval: boolean;
   config: Readonly<ServiceSettings>;
+  /** `env` values each service uses in place of the root values; absent when the plan has none, as in `remove`. */
+  envOverrides?: EnvOverrides | undefined;
   noSchemaCheck?: boolean | undefined;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;

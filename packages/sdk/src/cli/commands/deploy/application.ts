@@ -362,17 +362,18 @@ export async function planApplication(
   const unplannedNames = new Set(
     applications.map((app) => app.name).filter((name) => !plannedNames.has(name)),
   );
-  const scansRenamedApps = owner.kind === "application" && Boolean(owner.id);
+  const scansOtherNames = owner.kind === "workspace" || Boolean(owner.id);
   // A same-named app in a shared workspace may belong to another user, so
   // never delete by name alone. Without an id only the same-name app can be
-  // ours; with an id, scan all apps to also clean up renamed-away ones.
+  // ours; with an id or the workspace mark, scan all apps to also clean up
+  // renamed-away ones and the ones a workspace config no longer lists.
   // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
   await scheduleOwnedAppDeletes(
     existingApplications.filter((app) =>
-      scansRenamedApps ? !plannedNames.has(app.name) : unplannedNames.has(app.name),
+      scansOtherNames ? !plannedNames.has(app.name) : unplannedNames.has(app.name),
     ),
     (labels, name) =>
-      forRemoval
+      forRemoval || owner.kind === "workspace"
         ? ownership.ownsRemaining(labels, { resourceType: "application", resourceName: name })
         : ownedByConfig(labels),
   );
@@ -390,7 +391,11 @@ export async function planApplication(
       const { cors, allowedIpAddresses, disableIntrospection, metadata } = app.settings;
       const [authIdpConfigName, metaRequest, existingLabels, resolvedCors] = await Promise.all([
         app.authNamespace ? authIdpConfigNameOf(context, app.authNamespace) : undefined,
-        buildMetaRequest({ trn: resourceTrn(workspaceId, "application", app.name), owner }),
+        buildMetaRequest({
+          trn: resourceTrn(workspaceId, "application", app.name),
+          owner,
+          onApps: [app.name],
+        }),
         // `previous.existingLabels` can legitimately hold `undefined` (no metadata
         // found on the first fetch), so branch on `has` -- `??` would treat that
         // cached `undefined` as a cache miss and re-fetch needlessly.

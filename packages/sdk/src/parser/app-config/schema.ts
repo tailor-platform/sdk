@@ -338,5 +338,15 @@ export const WorkspaceConfigSchema = appConfigObjectSchema
         });
       }
       checkListed("idp");
+      const listsService =
+        (app.db?.length ?? 0) + (app.resolver?.length ?? 0) + (app.idp?.length ?? 0) > 0 ||
+        app.auth !== undefined;
+      if (!listsService) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["apps", appName],
+          message: `'apps.${appName}' lists no db, resolver, idp, or auth, so it has no GraphQL API to deploy.`,
+        });
+      }
     }
   });

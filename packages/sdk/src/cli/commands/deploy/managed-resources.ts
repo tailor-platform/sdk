@@ -10,7 +10,7 @@ import type {
   WorkspaceTakeover,
 } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
-import type { UnchangedAnnotation } from "./label";
+import type { DeployOwner, UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
 
 /**
@@ -325,9 +325,13 @@ function deletesNeedingConfirmation(
 
 export function collectImportantResourceDeletions(
   results: PlanResults,
+  owner: DeployOwner,
 ): ImportantResourceDeletion[] {
   const { app } = results;
-  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
+  // A defineConfig() config that keeps its application deletes the others only when renamed.
+  const keepsApplication =
+    owner.kind === "application" &&
+    app.creates.length + app.updates.length + app.unchanged.length > 0;
   return [
     ...deletesNeedingConfirmation(results, "tailordb.type"),
     ...deletesNeedingConfirmation(results, "staticwebsite"),

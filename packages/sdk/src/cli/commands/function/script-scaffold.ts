@@ -27,9 +27,9 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { formatConfigArg } from "#/cli/shared/args";
-import { extractOwnedNamespaces } from "#/cli/shared/config";
+import { ownedNamespaces } from "#/cli/shared/config-file";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
-import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { loadTailorDBNamespaces, loadWorkspaceNamespaces } from "#/cli/shared/tailordb-namespaces";
 import {
   generateUnifiedKyselyTypes,
   processKyselyFields,
@@ -37,7 +37,7 @@ import {
 import { isFilledOnCreate } from "#/utils/field-column-type";
 import type { SnapshotFieldConfig } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { LoadedConfigFile } from "#/cli/shared/config-loader";
 
 /** File name of the script-scoped Kysely types written next to a scaffolded script. */
 export const SCRIPT_DB_TYPES_FILE_NAME = "db.ts";
@@ -207,8 +207,8 @@ export interface VerifyScriptSchemaSnapshotOptions {
   client: OperatorClient;
   /** Workspace ID */
   workspaceId: string;
-  /** Loaded config */
-  config: LoadedConfig;
+  /** Loaded config file */
+  loaded: LoadedConfigFile;
   /** Config path as passed on the command line (threaded into hints) */
   configArgValue: string | undefined;
   /** Script path as passed on the command line (threaded into hints) */
@@ -228,15 +228,18 @@ export interface VerifyScriptSchemaSnapshotOptions {
 export async function verifyScriptSchemaSnapshot(
   options: VerifyScriptSchemaSnapshotOptions,
 ): Promise<void> {
-  const { client, workspaceId, config, configArgValue, sidecar } = options;
+  const { client, workspaceId, loaded, configArgValue, sidecar } = options;
   const { snapshot } = sidecar;
   const namespace = snapshot.namespace;
 
-  if (extractOwnedNamespaces(config).includes(namespace)) {
-    const { namespaces } = await loadTailorDBNamespaces({
-      configPath: configArgValue,
-      namespaces: [namespace],
-    });
+  if (ownedNamespaces(loaded).includes(namespace)) {
+    const namespaces =
+      loaded.kind === "workspace"
+        ? await loadWorkspaceNamespaces(loaded.workspace, loaded.plugins, {
+            namespaces: [namespace],
+          })
+        : (await loadTailorDBNamespaces({ configPath: configArgValue, namespaces: [namespace] }))
+            .namespaces;
     const namespaceData = namespaces[0];
     if (namespaceData) {
       const localTables: Record<string, TailorDBSnapshotType> = Object.fromEntries(

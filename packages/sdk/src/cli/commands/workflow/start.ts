@@ -11,10 +11,12 @@ import {
 } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { machineUserAuths } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { nameArgs, waitArgs } from "./args";
@@ -25,7 +27,7 @@ import { waitForWorkflowExecution, type WorkflowWaitResult } from "./waiter";
 // Import from the public entry (not `@/types/auth`) so the `./cli` d.ts references
 // `@tailor-platform/sdk` externally instead of inlining the registry — a single
 // generated `declare module "@tailor-platform/sdk"` then narrows both entries.
-import type { MachineUserName } from "@tailor-platform/sdk";
+import type { MachineUserInvoker } from "@tailor-platform/sdk";
 import type { Jsonifiable } from "type-fest";
 
 type WorkflowLike = {
@@ -69,7 +71,8 @@ type StartWorkflowByNameOptions = {
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
-  invoker: MachineUserName;
+  /** Machine user to start the workflow as, by name or with its Auth service. */
+  invoker: MachineUserInvoker;
   workspaceId?: string | undefined;
   profile?: string | undefined;
   configPath?: string | undefined;
@@ -151,12 +154,23 @@ async function startWorkflowCore(
   }
 }
 
-async function resolveApplicationAuthNamespace(options: {
+type ResolveStartInvokerOptions = {
   client: Awaited<ReturnType<typeof initOperatorClient>>;
   workspaceId: string;
   configPath?: string | undefined;
-}): Promise<string> {
-  const { config } = await loadConfig(options.configPath);
+  invoker: MachineUserInvoker | string;
+};
+
+async function resolveStartInvoker(
+  options: ResolveStartInvokerOptions,
+): Promise<WorkflowInvoker<string>> {
+  const { invoker } = options;
+  if (typeof invoker !== "string") return invoker;
+  const loaded = await loadConfigFile(options.configPath);
+  if (loaded.kind === "workspace") {
+    return resolveMachineUser({ value: invoker, auths: machineUserAuths(loaded) });
+  }
+  const { config } = loaded;
   const { application } = await options.client.getApplication({
     workspaceId: options.workspaceId,
     applicationName: config.name,
@@ -168,7 +182,10 @@ async function resolveApplicationAuthNamespace(options: {
       message: `Application ${config.name} does not have an auth configuration.`,
     });
   }
-  return authNamespace;
+  return resolveMachineUser({
+    value: invoker,
+    auths: [{ name: authNamespace, machineUsers: undefined }],
+  });
 }
 
 /**
@@ -200,20 +217,16 @@ export async function startWorkflowByName(
     workspaceId: options.workspaceId,
   });
 
-  const authNamespace = await resolveApplicationAuthNamespace({
-    client,
-    workspaceId,
-    configPath: options.configPath,
-  });
-
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.name,
-    invoker: {
-      namespace: authNamespace,
-      machineUserName: machineUser,
-    },
+    invoker: await resolveStartInvoker({
+      client,
+      workspaceId,
+      configPath: options.configPath,
+      invoker: machineUser,
+    }),
     arg: options.arg,
     interval: options.interval,
   });
@@ -231,20 +244,16 @@ export async function startWorkflow<W extends WorkflowLike>(
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
-  const authNamespace = await resolveApplicationAuthNamespace({
-    client,
-    workspaceId,
-    configPath: options.configPath,
-  });
-
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.workflow.name,
-    invoker: {
-      namespace: authNamespace,
-      machineUserName: options.invoker,
-    },
+    invoker: await resolveStartInvoker({
+      client,
+      workspaceId,
+      configPath: options.configPath,
+      invoker: options.invoker,
+    }),
     arg: options.arg,
     interval: options.interval,
   });

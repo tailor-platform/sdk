@@ -5,7 +5,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -26,7 +26,7 @@ const state = vi.hoisted(() => ({
 const client = mockOperatorClient({ getMetadata: {} });
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -51,7 +51,8 @@ describe("tailordb migration status --json", () => {
     writeDiff(state.migrationsDir, 1, [], { description: "Add users" });
     writeDiff(state.migrationsDir, 2, [], { description: "Add orders" });
 
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
         db: {
@@ -62,7 +63,7 @@ describe("tailordb migration status --json", () => {
           },
         },
       },
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 
     client.getMetadata.mockResolvedValue({
       metadata: {
@@ -745,12 +746,13 @@ describe("tailordb migration status --json", () => {
   });
 
   test("keeps reporting healthy namespaces when another namespace fails", async () => {
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
         db: migrationDbConfig(["tailordb", "analyticsdb"], state.migrationsDir),
       },
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     client.getMetadata.mockImplementation((request) =>
       request.trn?.endsWith("analyticsdb")
         ? Promise.reject(new ConnectError("unavailable", Code.Unavailable))

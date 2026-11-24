@@ -45,6 +45,7 @@ import {
   unsetEmptyMessage,
   isRequestUnchanged,
 } from "./compare";
+import { applicationsListing } from "./deploy-application";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
@@ -66,6 +67,7 @@ import type {
   StandardIdPPermissionCondition,
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string | undefined;
@@ -273,6 +275,7 @@ export async function planIdP(context: PlanContext) {
     client,
     workspaceId,
     owner,
+    context.applications,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
@@ -370,6 +373,7 @@ async function planServices(
   client: OperatorClient,
   workspaceId: string,
   owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
@@ -405,7 +409,11 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const metaRequest = addDependencyRecords(
-      await buildMetaRequest({ trn: resourceTrn(workspaceId, "idp", namespaceName), owner }),
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "idp", namespaceName),
+        owner,
+        onApps: applicationsListing(applications, "idp", namespaceName),
+      }),
       {
         owner,
         key: eventSourceKey.idp(namespaceName),

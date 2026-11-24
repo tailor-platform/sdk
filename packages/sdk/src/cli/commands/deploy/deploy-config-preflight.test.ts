@@ -11,7 +11,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: mocks.loadConfig,
+  loadConfigFile: async (configPath: string) => ({
+    kind: "config",
+    ...(await mocks.loadConfig(configPath)),
+  }),
 }));
 
 vi.mock("./config-id-injector", () => ({
@@ -113,7 +116,7 @@ describe("multi-config deploy preflight", () => {
         buildOnly: false,
       });
 
-      expect(loaded?.config.id).toBe(lockedId);
+      expect(loaded).toMatchObject({ kind: "config", config: { id: lockedId } });
       expect(mocks.ensureConfigIdForDeploy).not.toHaveBeenCalled();
       expect(mocks.warnMissingAppId).not.toHaveBeenCalled();
     } finally {

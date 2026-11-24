@@ -33,7 +33,14 @@ interface ServiceEnvOverride<Value> {
   env: Record<string, Value>;
 }
 
-function listEnvOverrides<Value>(overrides: EnvOverrides<Value>): ServiceEnvOverride<Value>[] {
+/**
+ * List every `env` override of a workspace with the service it belongs to.
+ * @param overrides - The workspace's `env` overrides
+ * @returns One entry per service with an override
+ */
+export function listEnvOverrides<Value>(
+  overrides: EnvOverrides<Value>,
+): ServiceEnvOverride<Value>[] {
   const named = (
     kind: "resolver" | "auth",
     records: Record<string, Record<string, Value>>,

@@ -509,6 +509,14 @@ describe("loadMachineUserName", () => {
       expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
     });
 
+    test("rejects the pinned name qualified by an Auth service the pin does not name", async () => {
+      const err = await loadMachineUserName({
+        machineUser: "corp-auth/profile-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+    });
+
     test("shell-quotes the profile in the override suggestion", async () => {
       using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
       writeLockedProfile("locked$1");

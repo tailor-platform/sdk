@@ -16,12 +16,12 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { workspaceArgs, configArg, formatConfigArg } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { configOf, declaredNamespaces, ownedNamespaces } from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { loadTailorDBNamespaces, loadWorkspaceNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -94,7 +94,9 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       });
     }
 
-    const { config, plugins } = await loadConfig(args.config);
+    const loaded = await loadConfigFile(args.config);
+    const config = configOf(loaded);
+    const { plugins } = loaded;
     const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
     const hasSnapshotSidecar = fs.existsSync(snapshotPath);
     if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
@@ -119,7 +121,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       }
     }
     const namespace = resolveNamespace({
-      config,
+      loaded,
       explicit: args.namespace,
       sidecarNamespace: existingSidecarNamespace,
       remote: args.remote,
@@ -169,10 +171,11 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
         snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
       } else {
         logger.info(`Loading local definitions of namespace ${styles.bold(namespace)}...`);
-        const { namespaces } = await loadTailorDBNamespaces({
-          configPath: args.config,
-          namespaces: [namespace],
-        });
+        const namespaces =
+          loaded.kind === "workspace"
+            ? await loadWorkspaceNamespaces(loaded.workspace, plugins, { namespaces: [namespace] })
+            : (await loadTailorDBNamespaces({ configPath: args.config, namespaces: [namespace] }))
+                .namespaces;
         const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
         snapshot = createSnapshotFromLocalTypes(namespaceData.tables, namespace);
       }
@@ -258,7 +261,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
 });
 
 interface ResolveNamespaceOptions {
-  config: LoadedConfig;
+  loaded: LoadedConfigFile;
   explicit: string | undefined;
   sidecarNamespace: string | undefined;
   remote: boolean;
@@ -270,13 +273,13 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { config, explicit, sidecarNamespace, remote } = options;
-  const allNamespaces = extractAllNamespaces(config);
-  const ownedNamespaces = extractOwnedNamespaces(config);
-  const configured = remote ? allNamespaces : ownedNamespaces;
+  const { loaded, explicit, sidecarNamespace, remote } = options;
+  const allNamespaces = declaredNamespaces(loaded);
+  const owned = ownedNamespaces(loaded);
+  const configured = remote ? allNamespaces : owned;
 
   if (explicit) {
-    if (!remote && !ownedNamespaces.includes(explicit)) {
+    if (!remote && !owned.includes(explicit)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${explicit}" is not owned by the config and requires --remote.`,
@@ -287,7 +290,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
   }
 
   if (sidecarNamespace !== undefined) {
-    if (!remote && !ownedNamespaces.includes(sidecarNamespace)) {
+    if (!remote && !owned.includes(sidecarNamespace)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,

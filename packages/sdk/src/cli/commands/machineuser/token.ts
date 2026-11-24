@@ -5,13 +5,19 @@ import {
   resolveMachineUserInputSource,
   type MachineUserInputSource,
 } from "#/cli/shared/args";
-import { fetchMachineUserToken } from "#/cli/shared/client";
+import { loadAuthApplication } from "#/cli/shared/auth-applications";
+import { fetchMachineUserToken, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configApplications } from "#/cli/shared/config-applications";
+import { machineUserAuths } from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import type { AuthInvokerObject } from "#/types/auth.generated";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface GetMachineUserTokenOptions {
   name?: string | undefined;
@@ -28,6 +34,56 @@ export interface MachineUserTokenInfo {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
+}
+
+interface TokenTarget {
+  /** Application whose URL issues the token. */
+  application: Application;
+  invoker: AuthInvokerObject;
+}
+
+interface ResolveTokenTargetParams {
+  client: OperatorClient;
+  workspaceId: string;
+  loaded: LoadedConfigFile;
+  machineUser: string;
+}
+
+async function resolveTokenTarget(params: ResolveTokenTargetParams): Promise<TokenTarget> {
+  const { client, workspaceId, loaded, machineUser } = params;
+  if (loaded.kind === "config") {
+    const application = await loadAuthApplication({
+      client,
+      workspaceId,
+      name: loaded.config.name,
+    });
+    const auth = machineUserAuths(loaded).find(({ name }) => name === application.authNamespace);
+    const invoker = resolveMachineUser({
+      value: machineUser,
+      auths: [{ name: application.authNamespace, machineUsers: auth?.machineUsers }],
+    });
+    return { application, invoker };
+  }
+
+  const invoker = resolveMachineUser({ value: machineUser, auths: machineUserAuths(loaded) });
+  const { applications } = configApplications(loaded);
+  const issuer = applications.find(({ authNamespace }) => authNamespace === invoker.namespace);
+  if (!issuer) {
+    throw CLIError({
+      code: "MACHINE_USER_TOKEN_APP_NOT_FOUND",
+      message: `No application uses Auth service "${invoker.namespace}" of machine user "${invoker.machineUserName}".`,
+      details:
+        "A machine user's token is issued through an application that uses its Auth service.",
+      suggestion: `Set auth: "${invoker.namespace}" on an application under apps in tailor.config.ts, and deploy it.`,
+      context: {
+        machineUser: invoker.machineUserName,
+        authNamespace: invoker.namespace,
+        applications: applications.map(({ name }) => name),
+      },
+    });
+  }
+  const application = await loadAuthApplication({ client, workspaceId, name: issuer.name });
+  return { application, invoker };
 }
 
 async function getMachineUserTokenInternal(
@@ -53,28 +109,25 @@ async function getMachineUserTokenInternal(
     profile: options.profile,
     workspaceId: options.workspaceId,
   });
-
-  // Get application
-  const { config } = await loadConfig(options.configPath);
-  const { application } = await client.getApplication({
+  const loaded = await loadConfigFile(options.configPath);
+  const { application, invoker } = await resolveTokenTarget({
+    client,
     workspaceId,
-    applicationName: config.name,
+    loaded,
+    machineUser: name,
   });
-  if (!application?.authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: `Application ${config.name} does not have an auth configuration.`,
-    });
-  }
 
   // Get machine user
   const { machineUser } = await client.getAuthMachineUser({
     workspaceId,
-    authNamespace: application.authNamespace,
-    name,
+    authNamespace: invoker.namespace,
+    name: invoker.machineUserName,
   });
   if (!machineUser) {
-    throw CLIError({ code: "MACHINE_USER_NOT_FOUND", message: `Machine user ${name} not found.` });
+    throw CLIError({
+      code: "MACHINE_USER_NOT_FOUND",
+      message: `Machine user ${invoker.machineUserName} not found.`,
+    });
   }
 
   // Fetch machine user token

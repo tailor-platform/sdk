@@ -4,8 +4,7 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, internalError, isCLIError } from "#/cli/shared/errors";
+import { CLIError, internalError, isCLIError, locatedCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
@@ -197,14 +196,7 @@ function jobUndetectableError(
   sourceFile: string,
   description: JobUndetectableDescription,
 ): CLIError {
-  return withErrorDiagnostics(
-    CLIError({
-      ...description,
-      code: JOB_UNDETECTABLE,
-      context: { file: sourceFile, ...description.context },
-    }),
-    { location: { file: sourceFile } },
-  );
+  return locatedCLIError({ file: sourceFile }, { ...description, code: JOB_UNDETECTABLE });
 }
 
 /**
@@ -524,13 +516,12 @@ async function filterUsedJobs(
         const source = await fs.promises.readFile(sourceFile, "utf-8");
         const { program, errors } = parseSync(sourceFile, source);
         if (errors.length > 0) {
-          throw withErrorDiagnostics(
-            CLIError({
+          throw locatedCLIError(
+            { file: sourceFile },
+            {
               code: SOURCE_PARSE_FAILED,
               message: `Failed to parse workflow source: ${errors.map((e) => e.message).join("; ")}`,
-              context: { file: sourceFile },
-            }),
-            { location: { file: sourceFile } },
+            },
           );
         }
 

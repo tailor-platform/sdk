@@ -1,4 +1,4 @@
-import { CLIError, internalError } from "./errors";
+import { internalError } from "./errors";
 import type { AppConfig } from "#/configure/config/types";
 
 type AuthNamespaceApplication = {
@@ -36,20 +36,4 @@ export function getApplicationAuthNamespace(
   application: AuthNamespaceApplication,
 ): string | undefined {
   return soleAuthService(application)?.config.name ?? application.config?.auth?.name;
-}
-
-/**
- * Require an auth namespace, throwing when none is configured.
- * @param authNamespace - Auth namespace the config uses
- * @returns Auth namespace
- */
-export function requireAuthNamespace(authNamespace: string | undefined): string {
-  if (!authNamespace) {
-    throw CLIError({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "No Auth service configured",
-      suggestion: "Ensure tailor.config.ts has an auth config.",
-    });
-  }
-  return authNamespace;
 }

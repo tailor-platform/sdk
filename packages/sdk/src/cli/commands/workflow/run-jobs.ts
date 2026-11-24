@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
+import { startContextAuth } from "#/cli/services/application";
 import { bundleWorkflowJobs } from "#/cli/services/workflow/bundler";
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { createWorkflowService, type CollectedJob } from "#/cli/services/workflow/service";
@@ -9,6 +10,7 @@ import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
+import { functionEnv } from "#/cli/shared/function-env";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { buildStartContext } from "#/cli/shared/start-context";
 import { createTsconfigLookupCache } from "#/cli/shared/tsconfig-paths-plugin";
@@ -141,22 +143,24 @@ export async function bundleWorkflowRunJobs(
   const tsconfigCache = createTsconfigLookupCache();
   // The application's files are read with its ignore rules, and the selected file on its own,
   // so that a file the config leaves out is not scanned just because a run goes through it.
+  const { authNamespace, machineUserAuthNamespaces } = startContextAuth(config);
   const appStartContext = await buildStartContext(
     config.workflow ?? { files: [] },
-    target.authNamespace,
+    authNamespace,
     baseDir,
     appService?.workflowSources ?? [],
     tsconfigCache,
   );
   const fileStartContext = await buildStartContext(
     { files: [literalPattern(filePath)] },
-    target.authNamespace,
+    authNamespace,
     baseDir,
     fileService.workflowSources,
     tsconfigCache,
   );
   const baseStartContext = {
     ...appStartContext,
+    machineUserAuthNamespaces,
     modules: new Map([...appStartContext.modules, ...fileStartContext.modules]),
   };
   const startContext = {
@@ -168,7 +172,7 @@ export async function bundleWorkflowRunJobs(
   const { bundledCode } = await bundleWorkflowJobs({
     allJobs,
     mainJobNames: [jobName],
-    env: config.env ?? {},
+    env: functionEnv(config, "workflow-job", filePath),
     startContext,
     baseDir,
     inlineSourcemap: resolveInlineSourcemap(buildOptions.inlineSourcemap),

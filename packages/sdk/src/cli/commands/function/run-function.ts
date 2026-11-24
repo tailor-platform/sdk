@@ -6,6 +6,7 @@ import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
+import { functionEnv } from "#/cli/shared/function-env";
 import { logger, styles } from "#/cli/shared/logger";
 import {
   executeScriptReportingStart,
@@ -15,7 +16,7 @@ import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { LoadedConfig, LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
 import type { Jsonifiable } from "type-fest";
 
 /** The function `function run` executes and the context it runs in */
@@ -24,8 +25,8 @@ export interface FunctionRunTarget {
   filePath: string;
   /** Workflow job name to run */
   jobName: string | undefined;
-  /** Loaded application config */
-  config: LoadedConfig;
+  /** Loaded config of either kind */
+  config: LoadedConfig | LoadedWorkspaceConfig;
   kyselyTemporal?: boolean | undefined;
   /** Operator client */
   client: OperatorClient;
@@ -211,7 +212,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
             configPath: config.path,
           })
         : undefined,
-    env: config.env ?? {},
+    env: functionEnv(config, detected.type, filePath),
     inlineSourcemap: buildOptions.inlineSourcemap,
     inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
     inlineSourcemapProjectSources: projectSourcesOf({ buildOptions, baseDir }),

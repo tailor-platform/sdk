@@ -34,7 +34,8 @@ export interface PreparedAssertion {
 export interface PreparedMigrationTest {
   assertion?: PreparedAssertion | undefined;
   sourceWorkspaceId: string;
-  sourceApplicationName: string;
+  /** Application `--data clone` copies; undefined for a workspace config that clones none. */
+  sourceApplicationName: string | undefined;
   temporaryWorkspace: {
     name: string;
     region: string;
@@ -66,7 +67,7 @@ interface MigrationTestTarget {
 
 interface MigrationTestDataTarget extends MigrationTestTarget {
   sourceWorkspaceId: string;
-  applicationName: string;
+  applicationName: string | undefined;
   cloneTimeout?: number | undefined;
 }
 

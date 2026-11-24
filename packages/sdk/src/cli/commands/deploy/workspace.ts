@@ -52,7 +52,8 @@ export interface ResolveDeployWorkspaceOptions {
 
 interface WorkspaceContextTarget {
   configPath: string;
-  applicationId: string;
+  /** Id of the application a `defineConfig()` config deploys; a workspace config has none. */
+  applicationId?: string;
 }
 
 type DeployWorkspaceOptions = ResolveDeployWorkspaceOptions & {

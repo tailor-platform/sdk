@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { z } from "zod";
-import { withErrorDiagnostics } from "./error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "./error-diagnostics";
 import { errorToJson, serializeError } from "./error-json";
 import {
   CLIError,
@@ -11,6 +11,7 @@ import {
   formatCommandHint,
   internalError,
   isCLIError,
+  locatedCLIError,
   locatedMessage,
   toError,
   typeOnlyImportHint,
@@ -326,6 +327,34 @@ describe("locatedMessage", () => {
     const error = withErrorDiagnostics(zodError, { location: { file } });
 
     expect(locatedMessage(error)).toBe(`tailordb/item.ts: ${zodError.message}`);
+  });
+});
+
+describe("locatedCLIError", () => {
+  test("carries the file and line as its context and its source location", () => {
+    const error = locatedCLIError(
+      { file: "/project/seed/item.jsonl", line: 3 },
+      { code: "SEED_DATA_INVALID", message: "Row is not valid JSON.", context: { file: "stale" } },
+    );
+
+    expect(error).toMatchObject({
+      code: "SEED_DATA_INVALID",
+      message: "Row is not valid JSON.",
+      context: { file: "/project/seed/item.jsonl", line: 3 },
+    });
+    expect(getErrorDiagnostics(error).location).toEqual({
+      file: "/project/seed/item.jsonl",
+      line: 3,
+    });
+  });
+
+  test("leaves line out of the context when the location has none", () => {
+    const error = locatedCLIError(
+      { file: "/project/tailor.config.ts" },
+      { code: "AUTH_CONFIG_REQUIRED", message: "No Auth.", context: { executor: "sync" } },
+    );
+
+    expect(error.context).toEqual({ executor: "sync", file: "/project/tailor.config.ts" });
   });
 });
 

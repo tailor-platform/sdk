@@ -10,7 +10,8 @@ import {
 } from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configApplications, requireApplication } from "#/cli/shared/config-applications";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken } from "#/cli/shared/context";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -32,13 +33,74 @@ interface CloneOptions {
   name: string;
   config?: string | undefined;
   nameFromConfig?: boolean | undefined;
+  /** TailorDB namespaces the application exposes, when the config is a workspace config. */
+  tailordbNamespaces?: string[] | undefined;
   copyFiles?: boolean | undefined;
   copyIdpUsers?: boolean | undefined;
   noWait?: boolean | undefined;
   profile?: string | undefined;
 }
 
-async function $clone(options: CloneOptions & { yes?: boolean | undefined }) {
+function truncateScopes(options: CloneOptions): string[] {
+  return options.tailordbNamespaces === undefined
+    ? ["--all"]
+    : options.tailordbNamespaces.map((namespace) => `--namespace=${namespace}`);
+}
+
+const SEPARATE_REMOVAL_HINT =
+  "with --copy-idp-users or --copy-files, remove IdP users or files from the target separately.";
+
+function emptyTargetHint(options: CloneOptions, configArgs: string[]): string {
+  if (!options.nameFromConfig) {
+    return `To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help). That does not remove IdP users or files: ${SEPARATE_REMOVAL_HINT}`;
+  }
+  const scopes = truncateScopes(options);
+  if (scopes.length === 0) {
+    return `The application exposes no TailorDB namespace, so ${SEPARATE_REMOVAL_HINT}`;
+  }
+  const commands = scopes.map((scope) =>
+    formatCommandHint({
+      command: "tailor",
+      args: [
+        "tailordb",
+        "truncate",
+        scope,
+        ...recoveryContextArgs({
+          workspaceId: options.targetWorkspaceId,
+          profile: options.profile,
+        }),
+        ...configArgs,
+      ],
+    }),
+  );
+  return `To empty the target's TailorDB records, run ${commands.join(" and ")}. That does not remove IdP users or files: ${SEPARATE_REMOVAL_HINT}`;
+}
+
+type CloneTarget = Pick<CloneOptions, "name" | "nameFromConfig" | "tailordbNamespaces">;
+
+interface CloneTargetParams {
+  /** `--name`, when given. */
+  name: string | undefined;
+  /** `--config`, when given. */
+  configPath: string | undefined;
+}
+
+async function cloneTarget(params: CloneTargetParams): Promise<CloneTarget> {
+  const { name, configPath } = params;
+  if (name !== undefined) return { name, nameFromConfig: false };
+  const application = requireApplication({
+    config: configApplications(await loadConfigFile(configPath)),
+    name: undefined,
+    option: "--name <application>",
+  });
+  return {
+    name: application.name,
+    nameFromConfig: true,
+    tailordbNamespaces: application.tailordbNamespaces,
+  };
+}
+
+async function $clone(options: CloneOptions & { yes?: boolean }) {
   const configArg = formatConfigArg(options.config);
   const configArgs = configArg ? [configArg] : [];
   if (options.sourceWorkspaceId === options.targetWorkspaceId) {
@@ -121,23 +183,7 @@ async function $clone(options: CloneOptions & { yes?: boolean | undefined }) {
       throw CLIError({
         code: "DATA_CLONE_PRECONDITION_FAILED",
         message: error.rawMessage,
-        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${
-          options.nameFromConfig
-            ? `To empty the target's TailorDB records, run ${formatCommandHint({
-                command: "tailor",
-                args: [
-                  "tailordb",
-                  "truncate",
-                  "--all",
-                  ...recoveryContextArgs({
-                    workspaceId: options.targetWorkspaceId,
-                    profile: options.profile,
-                  }),
-                  ...configArgs,
-                ],
-              })}.`
-            : "To empty the target's TailorDB records, run tailor tailordb truncate for the namespaces of this application (see tailor tailordb truncate --help)."
-        } That does not remove IdP users or files: with --copy-idp-users or --copy-files, remove those from the target separately.`,
+        suggestion: `A clone needs both workspaces in the same region with the same namespaces, a matching TailorDB schema (deploy the same version to the target first), and an empty target for every copy type in scope. ${emptyTargetHint(options, configArgs)}`,
         command: "data clone",
         cause: error,
       });
@@ -212,7 +258,7 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
     name: arg(z.string().optional(), {
       alias: "n",
       description:
-        "Application name, the same in the source and the target workspace (default: the name in the config file)",
+        "Application name, the same in the source and the target workspace (default: the only application in the config file)",
       completion: { type: "none" },
     }),
     ...configArg,
@@ -228,13 +274,11 @@ With --json, the result carries \`status\`: \`completed\` once the clone has fin
   }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const name = args.name ?? (await loadConfig(args.config)).config.name;
     const { operationId, status } = await $clone({
+      ...(await cloneTarget({ name: args.name, configPath: args.config })),
       sourceWorkspaceId: args.from,
       targetWorkspaceId: args.to,
-      name,
       config: args.config,
-      nameFromConfig: args.name === undefined,
       copyFiles: args["copy-files"],
       copyIdpUsers: args["copy-idp-users"],
       noWait: args["no-wait"],

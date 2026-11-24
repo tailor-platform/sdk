@@ -22,12 +22,12 @@ import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf, defineConfigFileServices } from "#/cli/shared/config-file";
+import { loadConfigFile, tailorDBTypeNameScopeOf } from "#/cli/shared/config-loader";
 import { serializeError, type errorToJson } from "#/cli/shared/error-json";
 import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import {
   getNamespacesWithMigrations,
@@ -71,9 +71,8 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices, ServiceSettings } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type {
   MigrationInProgress,
   PendingMigration,
@@ -214,8 +213,8 @@ interface BuildValidationReportsOptions {
 interface PendingMigrationChecks {
   client: OperatorClient;
   workspaceId: string;
-  application: Pick<Application, "authServices" | "env">;
-  config: LoadedConfig;
+  application: Pick<ConfigServices, "authServices" | "env">;
+  config: ServiceSettings;
   namespaces: readonly NamespaceWithMigrations[];
   remoteResults: readonly RemoteSchemaVerificationResult[];
   /** Remote migration state of each namespace, as the remote schema check read it */
@@ -468,7 +467,7 @@ async function reportPendingScripts(check: NamespaceScriptsCheck): Promise<Names
   const machineUser = assertDefined(
     machineUsers?.byNamespace.get(namespace),
     "a namespace whose pending scripts can run has a machine user to run them",
-  );
+  ).machineUserName;
   return { report: { valid: true, migrationNumbers, machineUser } };
 }
 
@@ -632,7 +631,8 @@ function buildValidationReports(
 async function collectValidationReports(
   options: ValidateOptions,
 ): Promise<CollectedValidationReports> {
-  const { config, plugins } = await loadConfig(options.configPath);
+  const loaded = await loadConfigFile(options.configPath);
+  const config = configOf(loaded);
   const configDir = path.dirname(config.path);
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
@@ -650,16 +650,17 @@ async function collectValidationReports(
     });
   }
 
-  const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const { defineApplication } = await import("#/cli/services/application");
-  const application = defineApplication({ config, pluginManager });
+  const application = await defineConfigFileServices(loaded);
   // Load every namespace (not just the targets): plugins registered while
   // types load may contribute types to the target namespaces.
   for (const service of application.tailorDBServices) {
     await service.loadTypes();
     await service.processNamespacePlugins();
   }
-  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: application.tailorDBServices,
+    scope: tailorDBTypeNameScopeOf(config),
+  });
   for (const { namespace } of targetNamespaces) {
     if (!application.tailorDBServices.some((s) => s.namespace === namespace)) {
       throw CLIError({

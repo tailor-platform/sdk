@@ -195,6 +195,7 @@ describe("labeledResourceChecks", () => {
         resourceName: "a",
         action: "update",
         currentOwner: "shop",
+        currentAppId: "id-1",
       },
       {
         resourceType: "executor",
@@ -202,6 +203,7 @@ describe("labeledResourceChecks", () => {
         resourceName: "b",
         action: "delete",
         currentOwner: "shop",
+        currentAppId: "id-1",
       },
     ]);
   });
