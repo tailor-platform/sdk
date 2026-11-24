@@ -3,6 +3,8 @@ export type FunctionEntry = {
   scriptContent: string;
   contentHash: string;
   description: string;
+  /** Resolver namespace of a resolver's function. */
+  pipelineNamespace?: string;
 };
 
 /**

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import {
   assertRecordableDependencies,
   collectDependentApps,
@@ -185,11 +186,21 @@ describe("collectEventSubscriptions", () => {
       owns: { workflows: ["orders"] },
     },
   ])("throws when no config in the run declares the subscribed resource ($kind)", ({ trigger }) => {
-    expect(() =>
+    let error: unknown;
+    try {
       collectEventSubscriptions([
         target({ configPath: "buyer/tailor.config.ts", executors: { "sync-it": trigger } }),
-      ]),
-    ).toThrow(/which no config in this deploy declares/);
+      ]);
+    } catch (thrown) {
+      error = thrown;
+    }
+
+    expect(error).toMatchObject({
+      code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+      message: expect.stringMatching(/which no config in this deploy declares/),
+      context: { executor: "sync-it", file: "/sync-it.ts" },
+    });
+    expect(getErrorDiagnostics(error as Error).location).toEqual({ file: "/sync-it.ts" });
   });
 
   test.each([

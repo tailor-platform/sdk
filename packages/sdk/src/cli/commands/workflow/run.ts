@@ -13,7 +13,8 @@ import {
   workspaceArgs,
 } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { exitAfterOutput } from "#/cli/shared/exit-after-output";
 import { logger } from "#/cli/shared/logger";
@@ -33,12 +34,7 @@ import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
 import { detectFunctionType } from "../function/detect";
-import {
-  resolveArgOptions,
-  resolveAuthNamespace,
-  resolveMachineUser,
-  resolveMachineUserName,
-} from "../function/run";
+import { resolveArgOptions, resolveRunMachineUser } from "../function/run";
 import {
   argumentToSend,
   executionRecord,
@@ -129,20 +125,16 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
     });
     assertWorkflowArg(functionArg?.value);
 
-    const { config, plugins } = await loadConfig(args.config);
-    const authNamespace = resolveAuthNamespace(config.auth);
-    const machineUserName = await resolveMachineUserName({
+    const loaded = await loadConfigFile(args.config);
+    const config = configOf(loaded);
+    const { plugins } = loaded;
+    const { authNamespace, machineUser } = await resolveRunMachineUser({
+      client,
+      workspaceId,
+      loaded,
       cliMachineUser: args["machine-user"],
       cliMachineUserSource: resolveMachineUserInputSource(args["machine-user"]),
       profile: args.profile,
-      authConfig: config.auth,
-    });
-    const machineUser = await resolveMachineUser({
-      client,
-      workspaceId,
-      authNamespace,
-      machineUserName,
-      authConfig: config.auth,
     });
     assertJobSource({ filePath, job: args.job });
     const workflowRequired = (found?: string) =>

@@ -2,7 +2,7 @@ import { runCommand } from "@politty/zod";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
 import {
   captureStderr,
@@ -31,7 +31,7 @@ vi.mock("#/cli/shared/client", () => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("./get", () => ({
@@ -86,11 +86,13 @@ describe("startWorkflow", () => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(loadMachineUserName).mockResolvedValue("legacy-user");
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
+      plugins: [],
       config: {
         name: "my-app",
       },
-    } as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 
     client = createClient();
     vi.mocked(initOperatorClient).mockResolvedValue(client);
@@ -114,7 +116,7 @@ describe("startWorkflow", () => {
       invoker: "typed-user",
     });
 
-    expect(loadConfig).toHaveBeenCalledTimes(1);
+    expect(loadConfigFile).toHaveBeenCalledTimes(1);
     expect(client.getApplication).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       applicationName: "my-app",
@@ -131,12 +133,14 @@ describe("startWorkflow", () => {
   });
 
   test("typed shape falls back to external auth config name", async () => {
-    vi.mocked(loadConfig).mockResolvedValueOnce({
+    vi.mocked(loadConfigFile).mockResolvedValueOnce({
+      kind: "config",
+      plugins: [],
       config: {
         name: "my-app",
         auth: { name: "external-auth", external: true },
       },
-    } as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     client.getApplication.mockResolvedValueOnce({
       application: {},
     });

@@ -14,7 +14,7 @@ OAuth client IDs as build environment variables.
 pnpm add -D @tailor-platform/sdk-plugin-frontend
 ```
 
-Use an SDK version that supports `onDeployed` hooks. When testing a PR before
+Use an SDK version whose `onDeployed` hooks receive `staticWebsites`. When testing a PR before
 that SDK release, install both the SDK and frontend plugin from the same
 `pkg.pr.new` commit.
 
@@ -50,12 +50,15 @@ export const plugins = definePlugins(
     workingDir: "../web",
     build: "pnpm run build",
     distDir: "dist",
-    env: ({ site, application }) => ({
-      ...(application.url ? { VITE_TAILOR_APP_URL: application.url } : {}),
-      VITE_SITE_URL: site.url,
-      VITE_OAUTH2_CLIENT_ID:
-        application.auth?.oauth2Clients.find((client) => client.name === "web")?.clientId ?? "",
-    }),
+    env: ({ site, applications }) => {
+      const app = applications.find(({ name }) => name === "my-app");
+      return {
+        ...(app?.url ? { VITE_TAILOR_APP_URL: app.url } : {}),
+        VITE_SITE_URL: site.url,
+        VITE_OAUTH2_CLIENT_ID:
+          app?.auth?.oauth2Clients.find((client) => client.name === "web")?.clientId ?? "",
+      };
+    },
   }),
 );
 ```
@@ -81,10 +84,12 @@ or asynchronously. Its values override matching variables inherited from the
 parent process. Choose variable names for your frontend framework; the plugin
 does not add a prefix.
 
-The callback receives the destination `site`, the registering `application`, all
-`applications` in the deploy, and `workspaceId`. Each application lists its static
-websites by name under `staticWebsites`, so `application.staticWebsites.admin?.url`
-reads another site of the same config.
+The callback receives the destination `site`, all `applications` in the deploy,
+the `staticWebsites` of the registering config, and `workspaceId`. `staticWebsites`
+lists the config's sites by name, so `staticWebsites.admin?.url` reads another site
+of the same config, and each application lists its config's sites the same way.
+`application`, the registering application, is deprecated: find it in
+`applications` by name instead.
 Only public OAuth client IDs are provided. Values embedded into browser assets
 are visible to visitors, so supply only values intended for public use.
 
@@ -103,7 +108,7 @@ frontendPlugin({
   site: website,
   workingDir: "../web",
   distDir: "dist",
-  build: async ({ site, application, workspaceId, profile, distDir, exec, node }) => {
+  build: async ({ site, applications, workspaceId, profile, distDir, exec, node }) => {
     await exec("pnpm run build");
     const client = await initOperatorClient(await loadAccessToken({ profile }));
     const { customDomains } = await client.listCustomDomains({
@@ -114,7 +119,7 @@ frontendPlugin({
     const origin = active ? `https://${active.domain}` : site.url;
     await node.fs.writeFile(
       node.path.join(distDir, "config.json"),
-      JSON.stringify({ origin, apiUrl: application.url }),
+      JSON.stringify({ origin, apiUrl: applications.find(({ name }) => name === "my-app")?.url }),
     );
   },
 });

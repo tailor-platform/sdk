@@ -82,6 +82,8 @@ pnpm docs:check
 pnpm docs:update
 ```
 
+`packages/sdk/src/cli/command-mentions.test.ts` fails when a message, doc, README, or script in `packages/` names a `tailor` command that neither the CLI nor its plugins define. After renaming or removing a command, update the places it lists.
+
 ## Example App Tests
 
 `example/` has its own test suite used in CI:

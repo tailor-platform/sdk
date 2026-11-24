@@ -38,7 +38,7 @@ function makeLock(): LockFile {
 }
 
 describe("LOCK_VERSION", () => {
-  test("matches the version the SDK writes", () => {
+  test("matches the newest version the SDK reads", () => {
     expect(LOCK_VERSION).toBe(TAILOR_LOCK_VERSION);
   });
 });
@@ -121,6 +121,21 @@ describe("readLock / writeLock", () => {
     const lock = { ...makeLock(), version: 1 };
     writeLock(testDir, lock);
     expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test("round-trips the workspace configs of a version 3 lock", () => {
+    const lock: LockFile = { ...makeLock(), version: 3, workspaces: ["tailor.config.ts"] };
+    writeLock(testDir, lock);
+    expect(readLock(testDir)).toEqual(lock);
+  });
+
+  test.each([
+    { name: "a path outside the repository", workspaces: ["../tailor.config.ts"] },
+    { name: "a repeated path", workspaces: ["tailor.config.ts", "tailor.config.ts"] },
+    { name: "a value that is not a list", workspaces: "tailor.config.ts" },
+  ])("rejects a workspaces section with $name", ({ workspaces }) => {
+    writeLock(testDir, { ...makeLock(), version: 3, workspaces: workspaces as string[] });
+    expect(() => readLock(testDir)).toThrow(/invalid 'workspaces' section/);
   });
 
   test("rejects an appIds section that is not config paths to UUIDs", () => {

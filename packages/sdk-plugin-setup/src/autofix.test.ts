@@ -2222,6 +2222,24 @@ describe("setupAutofix", () => {
     expect(content).toBe(render("github-token").content);
   });
 
+  test.each([
+    { name: "a lock that records workspace configs", workspaces: ["tailor.config.ts"], version: 3 },
+    { name: "a lock that records none", workspaces: undefined, version: 2 },
+  ])("writes $name with the version it needs", async ({ workspaces, version }) => {
+    const target = deployTarget("my-app", ".github/workflows/tailor-my-app.yml");
+    writeLock(repo, {
+      version: LOCK_VERSION,
+      targets: [target],
+      ...(workspaces && { workspaces }),
+    });
+
+    await setupAutofix(options());
+
+    const lock = readLock(repo);
+    expect(lock?.version).toBe(version);
+    expect(lock?.workspaces).toEqual(workspaces);
+  });
+
   test("records an explicit package manager and the securefix server repository", async () => {
     await setupAutofix(
       options({

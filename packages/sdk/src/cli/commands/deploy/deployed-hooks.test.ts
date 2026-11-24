@@ -1,10 +1,11 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
+import { loadDeployedTargets, runDeployedHooks } from "./deployed-hooks";
 import type { DeployedContext, Plugin } from "#/plugin/types";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
@@ -29,15 +30,43 @@ vi.mock("../staticwebsite/deploy", () => ({
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 
 function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
+  const configPath = `/repo/${name}/tailor.config.ts`;
+  const application = {
+    staticWebsiteServices: [{ name: `${name}-web` }],
+    aiGatewayServices: [{ name: "ai" }],
+    authServices: [{ config: { name: "auth" } }],
+  };
   return {
-    config: { path: `/repo/${name}/tailor.config.ts`, aiGateways: [{ name: "ai" }] },
-    application: {
-      id: `${name}-id`,
+    source: {
+      kind: "config",
+      config: { path: configPath, name },
+      application: { ...application, id: `${name}-id`, name },
+    },
+    config: { path: configPath },
+    application,
+    owner: { kind: "application", name, id: `${name}-id` },
+    applications: [{ name, subgraphs: [{}], authNamespace: "auth", settings: {} }],
+    plugins,
+  } as unknown as BuiltDeploymentTarget;
+}
+function workspaceTarget(plugins: Plugin[], apps: readonly string[]): BuiltDeploymentTarget {
+  const configPath = "/repo/tailor.config.ts";
+  const application = {
+    staticWebsiteServices: [{ name: "front" }, { name: "console" }],
+    aiGatewayServices: [],
+    authServices: [{ config: { name: "auth" } }],
+  };
+  return {
+    source: { kind: "workspace", workspace: { path: configPath } },
+    config: { path: configPath },
+    application,
+    owner: { kind: "workspace" },
+    applications: apps.map((name) => ({
       name,
       subgraphs: [{}],
-      staticWebsiteServices: [{ name: `${name}-web` }],
-      authServices: [{ config: { name: "auth" } }],
-    },
+      authNamespace: "auth",
+      settings: {},
+    })),
     plugins,
   } as unknown as BuiltDeploymentTarget;
 }
@@ -182,7 +211,7 @@ describe("deployed hooks", () => {
     const hook = (id: string) =>
       plugin(async (ctx) => {
         await Promise.resolve();
-        seen.push(`${ctx.application.name}:${id}`);
+        seen.push(`${path.basename(path.dirname(ctx.configPath))}:${id}`);
         expect(ctx.applications).toHaveLength(2);
         expect(ctx.applications.map((app) => Object.keys(app.staticWebsites))).toEqual([
           ["a-web"],
@@ -236,7 +265,9 @@ describe("deployed hooks", () => {
     const hook = vi.fn();
     const external = target([plugin(hook)]);
     Object.assign(external.application, { authServices: [] });
-    Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
+    Object.assign(external, {
+      applications: [{ name: "app", subgraphs: [{}], authNamespace: "shared-auth", settings: {} }],
+    });
     await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
     expect(client.listAuthOAuth2Clients).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "shared-auth" }),
@@ -488,13 +519,6 @@ describe("deployed hooks", () => {
     });
     expect(hook).not.toHaveBeenCalled();
   });
-  test("exposes only the static websites the config declares", async () => {
-    const client = clientMock();
-    const hook = vi.fn();
-    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
-    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
-    expect(application.staticWebsites["toString"]).toBeUndefined();
-  });
   test("rejects missing publish directories with an absolute path", async () => {
     const client = clientMock();
     await runDeployedHooks({
@@ -504,7 +528,7 @@ describe("deployed hooks", () => {
         target([
           plugin(async (ctx) => {
             await expect(
-              ctx.application.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
+              ctx.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
             ).rejects.toThrow("/missing/deployed-hook-build");
           }),
         ]),
@@ -522,9 +546,7 @@ describe("deployed hooks", () => {
       targets: [
         target([
           plugin(async (ctx) => {
-            await expect(ctx.application.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow(
-              "EACCES",
-            );
+            await expect(ctx.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow("EACCES");
           }),
         ]),
       ],
@@ -544,17 +566,6 @@ describe("deployed hooks", () => {
       "web-app-web": { name: "web-app-web", url: "https://web-app-web" },
     });
   });
-  test("keeps other applications' static websites out of the registering application", async () => {
-    const client = clientMock();
-    const hook = vi.fn();
-    await runDeployedHooks({
-      client,
-      workspaceId: "ws",
-      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
-    });
-    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
-    expect(Object.keys(application.staticWebsites)).toEqual(["admin-app-web"]);
-  });
   test("publishes an existing directory to the static website", async () => {
     using _logger = silenceLogger();
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
@@ -566,7 +577,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx: DeployedContext) => {
-              expect(await ctx.application.staticWebsites["app-web"]?.publish(dir)).toEqual({
+              expect(await ctx.staticWebsites["app-web"]?.publish(dir)).toEqual({
                 url: "https://published",
                 skippedFiles: [],
               });
@@ -585,6 +596,101 @@ describe("deployed hooks", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+  test("gives the hook every static website of its config with publish", async () => {
+    const client = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
+    });
+    const { staticWebsites } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(staticWebsites).toEqual({
+      "admin-app-web": {
+        name: "admin-app-web",
+        url: "https://admin-app-web",
+        publish: expect.any(Function),
+      },
+    });
+    expect(staticWebsites["toString"]).toBeUndefined();
+  });
+
+  describe("for a workspace config", () => {
+    test("gives the hook its static websites and every application", async () => {
+      const client = clientMock();
+      const hook = vi.fn();
+      await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [workspaceTarget([plugin(hook)], ["shop", "admin"])],
+      });
+      const context = hook.mock.calls[0]?.[0] as DeployedContext;
+      expect(Object.keys(context.staticWebsites)).toEqual(["front", "console"]);
+      expect(context.staticWebsites["front"]?.publish).toEqual(expect.any(Function));
+      expect(context.applications.map(({ name }) => name)).toEqual(["shop", "admin"]);
+      expect(context.applications[0]).not.toHaveProperty("id");
+    });
+
+    test("fails the hook that reads application when the config deploys several", async () => {
+      const client = clientMock();
+      const later = vi.fn();
+      const error = await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          workspaceTarget(
+            [
+              // oxlint-disable-next-line typescript/no-deprecated -- Reading the deprecated field is what this test covers.
+              plugin((ctx) => void ctx.application.name),
+              plugin(later, "later"),
+            ],
+            ["shop", "admin"],
+          ),
+        ],
+      }).catch((thrown: unknown) => thrown);
+      expect(error).toMatchObject({
+        code: "DEPLOYED_HOOK_FAILED",
+        message: expect.stringContaining('hook of plugin "hook" failed for the workspace config: '),
+        details: "Hooks not run: later (workspace config)",
+        cause: {
+          code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
+          context: {
+            field: "application",
+            replacement: ["applications", "staticWebsites"],
+            candidates: ["shop", "admin"],
+          },
+        },
+      });
+      expect(later).not.toHaveBeenCalled();
+    });
+
+    test("gives the hook its only application, with publishable static websites", async () => {
+      const client = clientMock();
+      const hook = vi.fn();
+      await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [workspaceTarget([plugin(hook)], ["shop"])],
+      });
+      // oxlint-disable-next-line typescript/no-deprecated -- The deprecated field keeps working for one application.
+      const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
+      expect(application.name).toBe("shop");
+      expect(application.staticWebsites["front"]?.publish).toEqual(expect.any(Function));
+    });
+
+    test("reports hook outputs without an application", async () => {
+      const client = clientMock();
+      const outputs = { published: true };
+      expect(
+        await runDeployedHooks({
+          client,
+          workspaceId: "ws",
+          targets: [workspaceTarget([plugin(() => ({ outputs }))], ["shop", "admin"])],
+        }),
+      ).toEqual([{ pluginId: "hook", outputs }]);
+    });
+  });
+
   test("rejects a publish path that is a file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
     try {
@@ -597,9 +703,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(async (ctx) => {
-              await expect(
-                ctx.application.staticWebsites["app-web"]?.publish(file),
-              ).rejects.toThrow(file);
+              await expect(ctx.staticWebsites["app-web"]?.publish(file)).rejects.toThrow(file);
             }),
           ]),
         ],
@@ -613,11 +717,12 @@ describe("deployed hooks", () => {
 
 test("loads serializable deployed information for every application without hooks", async () => {
   const client = clientMock();
-  const applications = await loadDeployedApplications({
+  const deployed = await loadDeployedTargets({
     client,
     workspaceId: "ws",
     targets: [target([], "a"), target([], "b")],
   });
+  const applications = deployed.flatMap((entry) => entry.applications);
   expect(JSON.parse(JSON.stringify(applications))).toEqual([
     {
       id: "a-id",

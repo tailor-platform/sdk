@@ -24,9 +24,18 @@ export interface StartModuleBindings {
 
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
+  /**
+   * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
+   * config has no Auth service, and a string-literal invoker stops the build.
+   */
   authNamespace?: string;
   /** Name of the job function a job is started under (default: the job's own name) */
   jobFunctionName?: (jobName: string) => string;
+  /**
+   * Auth namespaces that define each machine user, for a config with several Auth services, whose
+   * string-literal invokers are resolved by name.
+   */
+  machineUserAuthNamespaces?: ReadonlyMap<string, readonly string[]>;
   tsconfigCache?: TsconfigLookupCache;
 }
 
@@ -102,7 +111,7 @@ export interface LoadedWorkflowSource {
 /**
  * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
- * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
+ * @param authNamespace - Namespace of the config's only Auth service; undefined for a config with none or several
  * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
  * @param loadedWorkflows - Default-exported workflows read by importing the workflow files, which also covers workflows the source text alone cannot identify
  * @param tsconfigCache - tsconfig lookup cache shared with the bundlers in this CLI run
@@ -167,5 +176,8 @@ export function serializeStartContext(context: StartContext | undefined): string
       sortedTargets(bindings.localBindings),
       sortedTargets(bindings.exports),
     ]);
-  return JSON.stringify(modules) + (context.authNamespace ?? "");
+  const machineUsers = context.machineUserAuthNamespaces
+    ? JSON.stringify([...context.machineUserAuthNamespaces].toSorted())
+    : "";
+  return JSON.stringify(modules) + (context.authNamespace ?? "") + machineUsers;
 }
