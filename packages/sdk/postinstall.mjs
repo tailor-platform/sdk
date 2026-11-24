@@ -34,11 +34,15 @@ async function install() {
     const configDir = dirname(configPath);
     process.chdir(configDir);
 
-    const { generateUserTypes, loadConfig } = await import(
+    const { generateUserTypes, generateWorkspaceUserTypes, loadConfigFile } = await import(
       pathToFileURL(resolve(__dirname, "dist", "cli", "lib.mjs")).href
     );
-    const { config } = await loadConfig(configPath);
-    await generateUserTypes({ config, configPath });
+    const loaded = await loadConfigFile(configPath);
+    if (loaded.kind === "workspace") {
+      await generateWorkspaceUserTypes({ workspace: loaded.workspace });
+    } else {
+      await generateUserTypes({ config: loaded.config, configPath });
+    }
   } catch (error) {
     console.warn("⚠️  Failed to generate types from config:", error.message);
   }
