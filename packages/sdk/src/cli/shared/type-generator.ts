@@ -588,6 +588,11 @@ interface GenerateWorkspaceUserTypesOptions {
 /**
  * Generate user type definitions from a workspace config and write them to disk, as
  * {@link generateUserTypes} does for an app config.
+ * Writes nothing when `tsconfig.json` enables the content mapper for this config
+ * (unless `TAILOR_DTS_PATH` is set), since TypeScript then reads the definitions
+ * from the config itself; it only warns when an old file remains.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
  */

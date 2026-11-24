@@ -20,6 +20,7 @@ import {
   defaultLoadErdNamespaces,
   defaultLoadHasMigrations,
   defaultLoadHasSeeds,
+  loadUnlistedMigrationNamespaces,
 } from "./config-loaders";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
@@ -632,18 +633,35 @@ async function findWorkspaceConfig(
 }
 
 /**
- * Reject the options whose jobs run commands that do not load a workspace config yet.
+ * Reject the options whose jobs cannot run for a workspace config.
  * @param options - Setup options
+ * @param configPath - Absolute path to the workspace config
  */
-function assertWorkspaceConfigOptions(options: SetupTargetOptions): void {
+async function assertWorkspaceConfigOptions(
+  options: SetupTargetOptions,
+  configPath: string,
+): Promise<void> {
   if (options.kind !== "branch") return;
-  const unsupported = [
-    ...(options.erdPreview ? ["--erd-preview"] : []),
-    ...(options.migrationTest ? ["--migration-test"] : []),
-  ];
-  if (unsupported.length > 0) {
+  if (options.erdPreview) {
     throw new Error(
-      `A defineWorkspace() or defineApp() config does not support ${unsupported.join(" or ")} yet.`,
+      "A defineWorkspace() or defineApp() config does not support --erd-preview yet.",
+    );
+  }
+  if (!options.migrationTest) return;
+  // Keep in step with migrationTestCloneApplication() in @tailor-platform/sdk, which this plugin cannot import.
+  const applications = Object.entries(await loadUnlistedMigrationNamespaces(configPath));
+  const [only] = applications;
+  if (only === undefined || applications.length > 1) {
+    throw new Error(
+      "The --migration-test job copies the data of one application, but the workspace config deploys " +
+        `${String(applications.length)} applications. Generate the target without --migration-test.`,
+    );
+  }
+  const [name, unlisted] = only;
+  if (unlisted.length > 0) {
+    throw new Error(
+      `The --migration-test job copies the data of application ${name}, which does not list ` +
+        `${unlisted.join(", ")}. Generate the target without --migration-test.`,
     );
   }
 }
@@ -670,7 +688,9 @@ async function resolve(options: SetupTargetOptions): Promise<Resolved> {
   if (multi) assertDistinctConfigs(dirs, configPaths);
   const configPath = configPaths[0] ?? resolveConfigPath(options.outputDir, dir);
   const workspaceConfigPath = await findWorkspaceConfig(options, dirs, configPaths);
-  if (workspaceConfigPath !== undefined) assertWorkspaceConfigOptions(options);
+  if (workspaceConfigPath !== undefined) {
+    await assertWorkspaceConfigOptions(options, workspaceConfigPath);
+  }
   await assertSeedable(options, configPath, multi);
 
   const packageManager = resolvePackageManager(options.outputDir, options.packageManager);
