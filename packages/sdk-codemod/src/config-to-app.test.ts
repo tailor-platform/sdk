@@ -30,6 +30,7 @@ describe("v3/config-to-app", () => {
         'const auth = defineAuth("shop-auth", { machineUsers: { admin: {} } });',
         "",
         "export default defineConfig({",
+        "  // SDK-managed app id — do not edit, except when copying this config to a separate app.",
         `  id: "${APP_ID}",`,
         '  name: "shop",',
         "  auth,",

@@ -7,6 +7,10 @@ import {
 import { SDK_MODULE, type ConfigModule } from "./config-module";
 import { applyEdits, replaceNode, type TextEdit } from "./text";
 
+/** The comment `tailor deploy` writes above the `id` it adds to a config. */
+const ID_COMMENT =
+  "// SDK-managed app id — do not edit, except when copying this config to a separate app.";
+
 /**
  * Edits that make a config call `functionName` instead of the SDK's `defineConfig`, keeping
  * how the file reaches the SDK (a named import, an alias, or a namespace import).
@@ -44,8 +48,14 @@ export function toDefineApp(member: ConfigModule): string {
   const id = member.entries.find((entry) => entry.key === "id");
   if (id) {
     const line = ownLineRange(source, id.node);
-    if (line) edits.push({ ...line, text: "" });
-    else {
+    if (line) {
+      const previous = source.lastIndexOf("\n", line.start - 2) + 1;
+      const start =
+        line.start > 0 && source.slice(previous, line.start).trim() === ID_COMMENT
+          ? previous
+          : line.start;
+      edits.push({ ...line, start, text: "" });
+    } else {
       const comma = followingComma(id.node);
       const end = comma ? comma.range().end.index : id.node.range().end.index;
       const trailing = /^\s*/u.exec(source.slice(end))![0].length;
