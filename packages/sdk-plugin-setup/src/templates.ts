@@ -10,7 +10,7 @@ import tagTemplate from "./tag.workflow.yml";
 // true and when to re-record the fingerprint.
 // Released template fingerprint: 6a201ed250992c8b55048c0c903fa29f5ed47dd2bcfc4143b6b69765ec30953c
 const RELEASED_TEMPLATE_VERSION = 31;
-const TEMPLATE_CHANGED_SINCE_RELEASE = false;
+const TEMPLATE_CHANGED_SINCE_RELEASE = true;
 export const ACTIONS_SHA = "1c1a451a463770897b3e1987c45df57b27369c8f";
 export const ACTIONS_VERSION = "v2.9.0";
 
