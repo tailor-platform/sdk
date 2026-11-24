@@ -1,16 +1,17 @@
 import { describe, expect, test, vi } from "vitest";
 import { defaultLoadSeedSettings } from "./seed-settings";
 
-const loadConfig = vi.hoisted(() => vi.fn());
+const loadConfigFile = vi.hoisted(() => vi.fn());
 
 vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
   ...(await importOriginal()),
-  loadConfig,
+  loadConfigFile,
 }));
 
 describe("defaultLoadSeedSettings", () => {
   test("reads a machine user given with its Auth service as configured", async () => {
-    loadConfig.mockResolvedValue({
+    loadConfigFile.mockResolvedValue({
+      kind: "config",
       config: { path: "/project/tailor.config.ts" },
       plugins: [
         {
