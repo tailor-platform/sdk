@@ -50,26 +50,68 @@ describe("function run --name review", () => {
       "run.sh",
       "tailor function --verbose run a.ts --name validate-order\n",
     ],
+    ["a Windows path before --name", "run.cmd", "tailor function run C:\\proj\\a.ts --name x\r\n"],
+    ["a quoted argument holding a separator", "run.sh", 'tailor function run "a;b.ts" --name x\n'],
+    [
+      "a quoted argument before --name in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { job: 'tailor function run "a b.ts" --name x' } }),
+    ],
+    [
+      "a JSON argument before --name in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { job: `tailor function run a.ts --arg '{"n":1}' --name x` } }),
+    ],
+    [
+      "a Windows path before --name in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { job: "tailor function run C:\\proj\\a.ts --name x" } }),
+    ],
   ])("reports %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([relativePath]);
   });
 
   test.each([
-    ["a function run without --name", "tailor function run a.ts --arg '{}'\n"],
-    ["--name of another command", "tailor workspace create --name my-app\n"],
+    ["a function run without --name", "run.sh", "tailor function run a.ts --arg '{}'\n"],
+    ["--name of another command", "run.sh", "tailor workspace create --name my-app\n"],
     [
       "--name of another command chained after function run with &&",
+      "run.sh",
       "tailor function run a.ts && tailor workspace create --name my-app\n",
     ],
     [
       "--name of another command chained after function run with ;",
+      "run.sh",
       "tailor function run a.ts; tailor workspace create --name my-app\n",
     ],
     [
       "--name of another command piped from function run",
+      "run.sh",
       "tailor function run a.ts | tailor workspace create --name my-app\n",
     ],
-  ])("does not report %s", async (_name, source) => {
-    expect(await reportedFiles("run.sh", source)).toEqual([]);
+    [
+      "--name text inside a single-quoted argument",
+      "run.sh",
+      `tailor function run a.ts --arg '{"text":" --name example"}'\n`,
+    ],
+    [
+      "--name text inside a double-quoted argument",
+      "run.sh",
+      'tailor function run a.ts --arg "text --name example"\n',
+    ],
+    [
+      "a line of many escaped quotes without --name, without taking exponential time",
+      "run.sh",
+      `tailor function run ${String.raw`\"`.repeat(20000)}\n`,
+    ],
+    [
+      "--name text inside an argument in a package.json script",
+      "package.json",
+      JSON.stringify({
+        scripts: { job: `tailor function run a.ts --arg '{"text":" --name example"}'` },
+      }),
+    ],
+  ])("does not report %s", async (_name, relativePath, source) => {
+    expect(await reportedFiles(relativePath, source)).toEqual([]);
   });
 });
