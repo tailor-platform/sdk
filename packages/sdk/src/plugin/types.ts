@@ -162,7 +162,6 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
-/** @lintignore kept exported for the zinfer-generated reference in src/types/plugin-config.generated.ts */
 export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
