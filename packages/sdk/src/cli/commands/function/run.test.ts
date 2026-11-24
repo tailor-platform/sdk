@@ -6,10 +6,12 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { awaitFunctionAsyncRun, startFunctionAsyncRun } from "#/cli/shared/function-async-run";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { bundleForRun } from "./bundle";
@@ -37,6 +39,15 @@ vi.mock("#/cli/shared/script-executor", () => ({
   executeScriptReportingStart: vi.fn(),
 }));
 
+vi.mock("#/cli/shared/function-async-run", () => ({
+  startFunctionAsyncRun: vi.fn(),
+  awaitFunctionAsyncRun: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/workflow-run-sweep", () => ({
+  sweepBeforeRun: vi.fn(),
+}));
+
 vi.mock("./detect", () => ({
   detectFunctionType: vi.fn().mockResolvedValue({ type: "plain", name: "main", hasInput: false }),
 }));
@@ -60,6 +71,8 @@ vi.mock("./script-scaffold", async (importActual) => {
     verifyScriptSchemaSnapshot: vi.fn(),
   };
 });
+
+const asyncRun = { runId: "r00abc-xyz", name: "tmp-run-r00abc-xyz", executionId: "exec-1" };
 
 function createClient() {
   return mockOperatorClient({
@@ -108,6 +121,14 @@ describe("function run --json", () => {
       logs: "",
       result: '{"ok":true}',
     });
+    vi.mocked(startFunctionAsyncRun).mockReset().mockResolvedValue(asyncRun);
+    vi.mocked(awaitFunctionAsyncRun)
+      .mockReset()
+      .mockResolvedValue({
+        state: "finished",
+        result: { success: true, logs: "hello", result: '{"ok":true}' },
+      });
+    vi.mocked(sweepBeforeRun).mockReset();
     await runTest();
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -217,6 +238,283 @@ describe("function run --json", () => {
     }
 
     expect(stderr.output).not.toContain("deprecated");
+  });
+
+  describe("when the synchronous run is stopped by the Platform's time limit", () => {
+    const stopped = {
+      success: false,
+      logs: "partial",
+      result: "",
+      error: "Execution timed out after 60 seconds",
+    };
+
+    test("points to the same command with --async, carrying the options it was given, in the JSON result", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        "--arg",
+        '{"a":1}',
+        "--machine-user",
+        "admin",
+        "--profile",
+        "dev",
+      ]);
+
+      const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
+      expect(suggestion).toContain("tailor function run");
+      expect(suggestion).toContain("--async");
+      expect(suggestion).toContain(`--arg '{"a":1}'`);
+      expect(suggestion).toContain("--machine-user=admin");
+      expect(suggestion).toContain("--profile=dev");
+      expect(suggestion).not.toMatch(/\d+ seconds/);
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    test("prints the same hint after the error when the output is for a person", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using _stdout = captureStdout();
+      using stderr = captureStderr();
+
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+      expect(stderr.output).toContain("synchronous run");
+      expect(stderr.output).toContain("--async");
+    });
+
+    test("gives no hint for a failure that is not the time limit", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue({
+        ...stopped,
+        error: "Error: boom",
+      });
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
+
+      expect(JSON.parse(stdout.output)).not.toHaveProperty("suggestion");
+    });
+
+    test("gives no hint when --name was given, which --async cannot be combined with", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        "--name",
+        "job",
+        "--machine-user",
+        "admin",
+      ]);
+
+      expect(JSON.parse(stdout.output)).not.toHaveProperty("suggestion");
+    });
+  });
+
+  describe("--async", () => {
+    const runAsync = async (...extra: string[]) =>
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        "--async",
+        "--machine-user",
+        "admin",
+        ...extra,
+      ]);
+
+    test.each([
+      { extra: ["--watch"], conflicting: "--watch" },
+      { extra: ["--name", "job"], conflicting: "--name" },
+    ])(
+      "refuses $conflicting before anything is loaded or created",
+      async ({ extra, conflicting }) => {
+        using _stdout = captureStdout();
+        using _stderr = captureStderr();
+        using _json = jsonMode();
+
+        const result = await runAsync(...extra);
+
+        expect(result.error).toMatchObject({
+          code: "FUNCTION_RUN_OPTIONS_CONFLICT",
+          message: expect.stringContaining(conflicting),
+        });
+        expect(loadConfig).not.toHaveBeenCalled();
+        expect(startFunctionAsyncRun).not.toHaveBeenCalled();
+      },
+    );
+
+    test.each([
+      { option: "--timeout", value: "30s" },
+      { option: "--interval", value: "1s" },
+    ])("refuses $option without --async, before anything is loaded", async ({ option, value }) => {
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      const result = await runCommand(runFunctionCommand, [
+        scriptPath,
+        option,
+        value,
+        "--machine-user",
+        "admin",
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "FUNCTION_RUN_OPTIONS_CONFLICT",
+        message: expect.stringContaining(option),
+      });
+      expect(loadConfig).not.toHaveBeenCalled();
+    });
+
+    test("starts the bundled script as an asynchronous run instead of executing it synchronously", async () => {
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runAsync("--arg", '{"a":1}');
+
+      expect(startFunctionAsyncRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: "12345678-1234-4abc-8def-123456789012",
+          code: "export default async function main() { return { ok: true }; }",
+          arg: { a: 1 },
+          invoker: expect.objectContaining({ namespace: "auth", machineUserName: "admin" }),
+        }),
+      );
+      expect(executeScriptReportingStart).not.toHaveBeenCalled();
+      expect(sweepBeforeRun).toHaveBeenCalledOnce();
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        success: true,
+        result: '{"ok":true}',
+        runId: asyncRun.runId,
+        executionId: asyncRun.executionId,
+      });
+    });
+
+    test("sweeps the resources of finished runs before it starts", async () => {
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+      const order: string[] = [];
+      vi.mocked(sweepBeforeRun).mockImplementation(async () => {
+        order.push("sweep");
+      });
+      vi.mocked(startFunctionAsyncRun).mockImplementation(async () => {
+        order.push("start");
+        return asyncRun;
+      });
+
+      await runAsync();
+
+      expect(order).toEqual(["sweep", "start"]);
+    });
+
+    test("waits without a limit and polls every 3s unless told otherwise", async () => {
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runAsync();
+
+      expect(awaitFunctionAsyncRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          started: asyncRun,
+          timeoutMs: Number.POSITIVE_INFINITY,
+          pollInterval: 3000,
+        }),
+      );
+    });
+
+    test("waits at most as long as --timeout says, polling as often as --interval says", async () => {
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runAsync("--timeout", "30s", "--interval", "500ms");
+
+      expect(awaitFunctionAsyncRun).toHaveBeenCalledWith(
+        expect.objectContaining({ timeoutMs: 30_000, pollInterval: 500 }),
+      );
+    });
+
+    test("refuses a poll interval longer than a finished run is kept, before anything is created", async () => {
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      const result = await runAsync("--interval", "2m");
+
+      expect(result.error).toMatchObject({
+        code: "WORKFLOW_RUN_INTERVAL_TOO_LONG",
+        command: "function run",
+      });
+      expect(startFunctionAsyncRun).not.toHaveBeenCalled();
+    });
+
+    test("exits with 1 when the function failed, after printing its logs", async () => {
+      vi.mocked(awaitFunctionAsyncRun).mockResolvedValue({
+        state: "finished",
+        result: { success: false, logs: "partial", result: "", error: "Error: boom" },
+      });
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runAsync();
+
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        success: false,
+        logs: "partial",
+        error: "Error: boom",
+      });
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    test("stops waiting at --timeout, leaving the run going, and says how to read it and remove its resources", async () => {
+      vi.mocked(awaitFunctionAsyncRun).mockResolvedValue({ state: "timedOut" });
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      const result = await runAsync("--timeout", "1s");
+
+      expect(result.error).toMatchObject({
+        code: "FUNCTION_RUN_WAIT_TIMEOUT",
+        suggestion: expect.stringContaining("tailor function logs exec-1"),
+        context: { runId: asyncRun.runId, executionId: asyncRun.executionId },
+      });
+      expect(result.error).toMatchObject({
+        suggestion: expect.stringContaining("tailor workflow prune"),
+      });
+    });
+
+    test("reports that the outcome could not be read, with where to read it", async () => {
+      vi.mocked(awaitFunctionAsyncRun).mockResolvedValue({
+        state: "outcomeUnavailable",
+        reason: "the execution of the run was not found",
+      });
+      using _stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      const result = await runAsync();
+
+      expect(result.error).toMatchObject({
+        code: "FUNCTION_RUN_OUTCOME_UNAVAILABLE",
+        message: expect.stringContaining("the execution of the run was not found"),
+        suggestion: expect.stringContaining("tailor function logs exec-1"),
+      });
+    });
   });
 
   test("dispatches the deprecated test-run alias to the run command", async () => {
