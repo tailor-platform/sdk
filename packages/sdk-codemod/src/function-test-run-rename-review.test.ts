@@ -64,6 +64,18 @@ describe("function test-run rename", () => {
       "spawn('tailor', ['function', '--env-file', '.env', 'test-run', 'a.ts']);\n",
     ],
     ["a flag", "spawn('tailor', ['function', '--json', 'test-run', 'a.ts']);\n"],
+    [
+      "a camelCase long option and a value with a space",
+      "spawn('tailor', ['function', '--envFile', '.env local', 'test-run', 'a.ts']);\n",
+    ],
+    [
+      "a camelCase option that has no short alias and a value with a space",
+      "spawn('tailor', ['function', '--envFileIfExists', '.env local', 'test-run', 'a.ts']);\n",
+    ],
+    [
+      "joined short aliases and a value with a space",
+      "spawn('tailor', ['function', '-je', '.env local', 'test-run', 'a.ts']);\n",
+    ],
   ])("warns about an argv array with %s before test-run", async (_name, source) => {
     const { result, output } = await run("run.ts", source);
 
@@ -72,4 +84,21 @@ describe("function test-run rename", () => {
       expect.stringContaining("was not migrated automatically (rule: v3/function-test-run-rename)"),
     ]);
   });
+
+  test.each([
+    ["a short option", "spawn('tailor', ['function', '-e', 'test-run', 'run', 'a.ts']);\n"],
+    [
+      "a camelCase long option",
+      "spawn('tailor', ['function', '--envFile', 'test-run', 'run', 'a.ts']);\n",
+    ],
+    ["joined short aliases", "spawn('tailor', ['function', '-je', 'test-run', 'run', 'a.ts']);\n"],
+  ])(
+    "does not warn about an argv array whose value for %s is named test-run",
+    async (_name, source) => {
+      const { result, output } = await run("run.ts", source);
+
+      expect(output).toBe(source);
+      expect(result.warnings).toEqual([]);
+    },
+  );
 });

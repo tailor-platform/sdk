@@ -31,6 +31,19 @@ const aliasesOf = (options: readonly { alias?: string }[]) =>
 const BOOLEAN_ALIASES = aliasesOf(GLOBAL_BOOLEAN_OPTIONS).join("");
 const VALUE_ALIASES = aliasesOf(GLOBAL_VALUE_OPTIONS).join("");
 
+const GLOBAL_VALUE_FLAG_SET: ReadonlySet<string> = new Set(GLOBAL_VALUE_FLAGS);
+const JOINED_VALUE_ALIASES = new RegExp(`^-[${BOOLEAN_ALIASES}]*[${VALUE_ALIASES}]$`);
+
+/**
+ * Whether an argv element is a global option that takes the next element as its
+ * value: any spelling of a value option, or short aliases joined as in `-je`.
+ * @param token - One argv element, such as `--envFile` or `-je`
+ * @returns true when the option has no value of its own and the next element is it
+ */
+export function takesSeparateGlobalValue(token: string): boolean {
+  return GLOBAL_VALUE_FLAG_SET.has(token) || JOINED_VALUE_ALIASES.test(token);
+}
+
 function globalOptions(separator: string, valuesMayBeOmitted: boolean): string {
   const optionalValue = valuesMayBeOmitted ? "?" : "";
   const separatedValue = valuesMayBeOmitted ? `(?!-)${ARG_VALUE}` : ARG_VALUE;

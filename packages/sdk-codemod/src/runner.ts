@@ -5,6 +5,7 @@ import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
+import { takesSeparateGlobalValue } from "./command-line-pattern";
 import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
@@ -303,8 +304,8 @@ function isSourceValueArgument(fragment: SgNode, source: string): boolean {
   const previous = sourceStaticStringContent(elements[index - 1]!, source);
   return (
     previous != null &&
-    TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) &&
-    !previous.includes("=")
+    ((TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) && !previous.includes("=")) ||
+      takesSeparateGlobalValue(previous))
   );
 }
 
