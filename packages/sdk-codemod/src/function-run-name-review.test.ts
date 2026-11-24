@@ -125,6 +125,16 @@ describe("function run --name review", () => {
       'const a = "tailor function run a.ts"; const b = "tailor workspace create --name app";\n',
     ],
     [
+      "--name of another command inside a shell function named run",
+      "run.sh",
+      "function run() { tailor workspace create --name app; }\n",
+    ],
+    [
+      "--name of another command inside a shell function named run, declared without parentheses",
+      "run.sh",
+      "function run { tailor workspace create --name app; }\n",
+    ],
+    [
       "--name of another command on the next line of a shell script",
       "run.sh",
       "tailor function run a.ts\ntailor workspace create --name app\n",

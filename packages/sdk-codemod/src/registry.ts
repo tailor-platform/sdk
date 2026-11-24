@@ -45,7 +45,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 const SHELL_ARGUMENT_UNIT = String.raw`(?:"(?:[^"\\\n\0]|\\[^\0])*"|'[^'\n\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
 const FUNCTION_RUN_NAME_FLAG = String.raw`(?:\r?\n[^\S\r\n]*|\s)(?:--name|-n)(?:[\s=]|$)`;
 const FUNCTION_RUN_NAME_PATTERN = new RegExp(
-  String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
+  String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
 );
 
 const V2_NEXT_1 = "2.0.0-next.1";
