@@ -15,16 +15,16 @@ import { resolveTableNamespaces } from "#/cli/shared/tailordb-namespace";
 import { assertDefined } from "#/utils/assert";
 
 export interface TruncateOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  all?: boolean;
-  namespace?: string;
-  tables?: string[];
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  all?: boolean | undefined;
+  namespace?: string | undefined;
+  tables?: string[] | undefined;
 }
 
 interface InternalTruncateOptions extends TruncateOptions {
-  yes?: boolean;
+  yes?: boolean | undefined;
 }
 
 interface TruncateSingleTypeOptions {

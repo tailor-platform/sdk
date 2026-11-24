@@ -22,8 +22,8 @@ const nameArgs = {
 
 export type GetExecutorTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 /**

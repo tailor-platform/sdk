@@ -30,8 +30,8 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 interface FixtureOptions {
   auth?: boolean;
   machineUsers?: Record<string, object>;
-  migrationMachineUser?: string;
-  seedMachineUser?: string;
+  migrationMachineUser?: string | undefined;
+  seedMachineUser?: string | undefined;
   seedRows?: boolean;
   migrationScript?: boolean;
   extraSeedNamespace?: boolean;

@@ -14,14 +14,14 @@ import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 
 export interface GetMachineUserTokenOptions {
-  name?: string;
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  name?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
 }
 
 type GetMachineUserTokenInternalOptions = GetMachineUserTokenOptions & {
-  nameSource?: MachineUserInputSource;
+  nameSource?: MachineUserInputSource | undefined;
 };
 
 export interface MachineUserTokenInfo {

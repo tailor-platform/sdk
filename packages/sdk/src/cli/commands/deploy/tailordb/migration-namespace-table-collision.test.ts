@@ -7,6 +7,7 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import { omitUndefined } from "#/utils/omit-undefined";
 import * as migrationModule from "./migration";
 import {
   createMockClient as createBaseMockClient,
@@ -88,12 +89,12 @@ function createMockPlanResult(options: {
 }) {
   const deletes = options.deletes ?? [];
   return createPlanResult({
-    type: {
+    type: omitUndefined({
       creates: options.creates,
       updates: options.updates,
       deletes: deletes.map((entry) => entry.type),
       unchanged: options.unchanged,
-    },
+    }),
     gqlPermission: { deletes: deletes.map((entry) => entry.gqlPermission) },
     context: {
       namespacesWithMigrations: state.migratingNamespaces.map((namespace) => ({

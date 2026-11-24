@@ -1,4 +1,5 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { CLIError } from "../shared/errors";
 import { logger } from "../shared/logger";
 import { jsonMode } from "../shared/test-helpers/json-mode";
@@ -518,7 +519,7 @@ describe("query", () => {
   });
 
   test("throws when machine user does not exist", async () => {
-    mockClient.getAuthMachineUser.mockResolvedValue({ machineUser: undefined });
+    mockClient.getAuthMachineUser.mockResolvedValue(omitUndefined({ machineUser: undefined }));
 
     await expect(
       query({

@@ -40,6 +40,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
+import { omitUndefined } from "#/utils/omit-undefined";
 
 interface FunctionExecutionListInfo {
   id: string;
@@ -229,7 +230,7 @@ function printFunctionExecutionLogs(detail: FunctionExecutionDetailInfo): void {
 interface PrintFunctionExecutionOutcomeOptions {
   detail: FunctionExecutionDetailInfo;
   /** Bundled script content for sourcemap-based stack trace mapping (optional) */
-  bundledCode?: string | null;
+  bundledCode?: string | null | undefined;
 }
 
 /**
@@ -262,7 +263,7 @@ interface FetchFunctionExecutionOptions {
   workspaceId: string;
   executionId: string;
   /** Aborts the request, e.g. when a follow deadline passes mid-request */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 async function fetchFunctionExecution(
@@ -270,7 +271,7 @@ async function fetchFunctionExecution(
 ): Promise<FunctionExecution> {
   const { execution } = await options.client.getFunctionExecution(
     { workspaceId: options.workspaceId, executionId: options.executionId },
-    { signal: options.signal },
+    omitUndefined({ signal: options.signal }),
   );
   if (!execution) {
     throw CLIError({
@@ -285,7 +286,7 @@ interface FollowFunctionExecutionOptions extends FetchFunctionExecutionOptions {
   /** Polling interval in milliseconds */
   interval: number;
   /** Maximum time to keep polling in milliseconds; unbounded when omitted */
-  timeout?: number;
+  timeout?: number | undefined;
   /** Print the summary, new log entries, and status changes as they arrive */
   showProgress: boolean;
 }
@@ -592,12 +593,14 @@ Stack traces are mapped only when the execution includes a content hash for the 
       const listed = await fetchWithinLimit(args.limit, (limit) =>
         fetchPaged(
           async (pageToken, pageSize) => {
-            const { executions, nextPageToken } = await client.listFunctionExecutions({
-              workspaceId,
-              pageToken,
-              pageSize,
-              pageDirection,
-            });
+            const { executions, nextPageToken } = await client.listFunctionExecutions(
+              omitUndefined({
+                workspaceId,
+                pageToken,
+                pageSize,
+                pageDirection,
+              }),
+            );
             return [executions, nextPageToken];
           },
           { limit },

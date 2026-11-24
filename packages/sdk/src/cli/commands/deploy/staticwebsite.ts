@@ -130,27 +130,27 @@ type RemoveCustomDomainEntry = {
 type AdoptCustomDomainEntry = {
   name: string;
   metaRequest: MetadataLabelWrite;
-  details?: readonly string[];
+  details?: readonly string[] | undefined;
 };
 
 type RequestCustomDomainTransferEntry = {
   name: string;
   staticWebsiteName: string;
   request: MessageInitShape<typeof RequestCustomDomainTransferRequestSchema>;
-  details?: readonly string[];
+  details?: readonly string[] | undefined;
 };
 
 type CancelCustomDomainTransferEntry = {
   name: string;
   staticWebsiteName: string;
   request: MessageInitShape<typeof CancelCustomDomainTransferRequestSchema>;
-  details?: readonly string[];
+  details?: readonly string[] | undefined;
 };
 
 /** A custom domain declared in config, with its transfer intent when it has one. */
 type DesiredCustomDomain = {
   domain: string;
-  transferToWorkspaceId?: string;
+  transferToWorkspaceId?: string | undefined;
 };
 
 /** Why a custom domain produced no change in this plan. */

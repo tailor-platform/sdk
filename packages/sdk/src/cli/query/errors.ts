@@ -29,7 +29,7 @@ type MapQueryExecutionErrorArgs = {
   error: unknown;
   engine: QueryEngine;
   namespace: string | undefined;
-  machineUser?: string;
+  machineUser?: string | undefined;
 };
 
 /**

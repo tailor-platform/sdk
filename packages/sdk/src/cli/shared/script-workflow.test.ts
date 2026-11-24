@@ -7,6 +7,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { logger } from "./logger";
 import {
   assertNoActiveScriptWorkflow,
@@ -269,7 +270,7 @@ describe("withScriptWorkflow", () => {
 
   test("reports an unknown outcome when a finished workflow's job result cannot be found", async () => {
     const { client } = createMockClient();
-    client.getFunctionExecution.mockResolvedValue({ execution: undefined });
+    client.getFunctionExecution.mockResolvedValue(omitUndefined({ execution: undefined }));
 
     const outcome = await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 

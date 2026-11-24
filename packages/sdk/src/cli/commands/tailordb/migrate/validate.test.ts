@@ -90,7 +90,7 @@ vi.mock("#/cli/services/application", () => ({
   })),
 }));
 
-function mockConfig(migration: { machineUser?: string } = {}): void {
+function mockConfig(migration: { machineUser?: string | undefined } = {}): void {
   vi.mocked(loadConfig).mockResolvedValue({
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),

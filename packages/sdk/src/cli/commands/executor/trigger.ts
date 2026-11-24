@@ -8,6 +8,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { getExecutorWaitFailure, printDownstreamExecution, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
 import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "#/types/executor.generated";
@@ -84,34 +85,34 @@ type ManualTriggerExecutor<T extends ManualTrigger = ManualTrigger> = T extends 
 
 type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
   executor: E;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 interface TriggerExecutorByNameOptions {
   executorName: string;
-  payload?: JsonObject;
-  headers?: TriggerHeaders;
-  workspaceId?: string;
-  profile?: string;
+  payload?: JsonObject | undefined;
+  headers?: TriggerHeaders | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 }
 
 export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
   E extends ManualTriggerExecutor<IncomingWebhookTrigger>
     ? TriggerExecutorBaseOptions<E> & {
         /** JSON object the executor receives as `body`. */
-        payload?: JsonObject;
+        payload?: JsonObject | undefined;
         /**
          * Request headers the executor receives as `headers`, keyed by header name.
          * A value is a string, or a list of strings for a name sent on more than one line.
          * Unlike `--header`, names are sent as given, and two keys that differ only in letter case are rejected.
          */
-        headers?: TriggerHeaders;
+        headers?: TriggerHeaders | undefined;
       }
-    : TriggerExecutorBaseOptions<E> & { payload?: never; headers?: never };
+    : TriggerExecutorBaseOptions<E> & { payload?: never | undefined; headers?: never | undefined };
 
 export interface TriggerExecutorResult {
-  jobId?: string;
+  jobId?: string | undefined;
 }
 
 async function triggerExecutorByName(
@@ -123,12 +124,14 @@ async function triggerExecutorByName(
   });
 
   try {
-    const response = await client.triggerExecutor({
-      workspaceId,
-      executorName: options.executorName,
-      payload: options.payload,
-      headers: options.headers,
-    });
+    const response = await client.triggerExecutor(
+      omitUndefined({
+        workspaceId,
+        executorName: options.executorName,
+        payload: options.payload,
+        headers: options.headers,
+      }),
+    );
 
     return { jobId: response.jobId };
   } catch (error) {

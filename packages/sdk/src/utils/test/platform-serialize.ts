@@ -44,7 +44,9 @@ export function platformSerialize<T>(value: T): T {
     if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) {
       const proto = Object.getPrototypeOf(raw);
       if (proto !== Object.prototype && proto !== null) {
-        const ctor = (raw as { constructor?: { name?: string } }).constructor?.name ?? "anonymous";
+        const ctor =
+          (raw as { constructor?: { name?: string | undefined } | undefined }).constructor?.name ??
+          "anonymous";
         throw new TypeError(
           `platformSerialize: non-plain object at ${formatPath(key)} (${ctor} instance)`,
         );

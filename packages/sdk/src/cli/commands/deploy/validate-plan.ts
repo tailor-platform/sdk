@@ -112,7 +112,7 @@ type RequestCheck<Item> = {
   /** The request the item sends, or undefined when it sends none. */
   request(item: Item, results: PlanResults): object | undefined;
   /** The action its violations name, when it differs from the list's own. */
-  action?: Action;
+  action?: Action | undefined;
 };
 
 type RequestCheckOptions = Pick<RequestCheck<never>, "action">;
@@ -144,10 +144,10 @@ type ResourceChecks<C extends CheckedChangeSet> = {
   [L in Exclude<CheckedList, "unchanged"> as C[L][number] extends never ? never : L]: ReadonlyArray<
     RequestCheck<C[L][number]>
   >;
-} & { unchanged?: ReadonlyArray<RequestCheck<C["unchanged"][number]>> };
+} & { unchanged?: ReadonlyArray<RequestCheck<C["unchanged"][number]>> | undefined };
 
 // Static-website URL placeholders in cors are resolved at apply time.
-function withoutCors<Request extends { cors?: string[] }>(request: Request): Request {
+function withoutCors<Request extends { cors?: string[] | undefined }>(request: Request): Request {
   return { ...request, cors: undefined };
 }
 

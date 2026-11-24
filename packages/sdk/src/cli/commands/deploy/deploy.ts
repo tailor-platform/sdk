@@ -126,43 +126,43 @@ import type {
 } from "./types";
 
 export interface DeployOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  dryRun?: boolean;
-  yes?: boolean;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  dryRun?: boolean | undefined;
+  yes?: boolean | undefined;
   /** **Beta:** This API may change in future releases. */
-  noSchemaCheck?: boolean;
+  noSchemaCheck?: boolean | undefined;
   /**
    * Steps of an in-progress multi-step migration to skip, keyed by namespace.
    *
    * **Beta:** This API may change in future releases.
    */
-  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
-  noValidate?: boolean;
-  noCache?: boolean;
-  cleanCache?: boolean;
-  createWorkspace?: boolean;
-  workspaceName?: string;
-  workspaceRegion?: string;
-  organizationId?: string;
-  folderId?: string;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
+  noValidate?: boolean | undefined;
+  noCache?: boolean | undefined;
+  cleanCache?: boolean | undefined;
+  createWorkspace?: boolean | undefined;
+  workspaceName?: string | undefined;
+  workspaceRegion?: string | undefined;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
-  buildOnly?: boolean;
+  buildOnly?: boolean | undefined;
 }
 
 interface DeployCLIContext extends Partial<EnvFileArgs> {
-  verbose?: boolean;
-  json?: boolean;
+  verbose?: boolean | undefined;
+  json?: boolean | undefined;
 }
 
 interface DeployInternalContext {
-  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
-  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
-  migrationMachineUserOverride?: string;
-  suppressResultOutput?: boolean;
-  skipDeployedHooks?: boolean;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
+  migrationMachineUserOverride?: string | undefined;
+  suppressResultOutput?: boolean | undefined;
+  skipDeployedHooks?: boolean | undefined;
 }
 
 // None of these resource kinds can embed `env` or this run's rebuilt bundle
@@ -193,7 +193,9 @@ function collectExpectedLocalStaticWebsiteNames(
 // Same set as collectExpectedLocalStaticWebsiteNames, read from the loaded
 // configs so it is available before any of them is bundled.
 export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
-  configs: ReadonlyArray<{ config: { staticWebsites?: ReadonlyArray<{ name: string }> } }>,
+  configs: ReadonlyArray<{
+    config: { staticWebsites?: ReadonlyArray<{ name: string }> | undefined };
+  }>,
 ): ReadonlySet<string> {
   const websiteNames = new Set<string>();
   for (const { config } of configs) {
@@ -316,30 +318,30 @@ type PlanDeploymentTargetParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
-  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
-  migrationRecoveryArgs?: readonly string[];
-  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
-  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
-  migrationMachineUserOverride?: string;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
+  migrationRecoveryArgs?: readonly string[] | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
+  migrationMachineUserOverride?: string | undefined;
   /** Resource kinds to reuse from `previous` instead of re-planning. */
-  skip?: ReadonlySet<ReusablePlanKind>;
+  skip?: ReadonlySet<ReusablePlanKind> | undefined;
   /** This target's own plan result from before the rebuild, source for `skip` reuse. */
-  previous?: PlannedDeployment;
+  previous?: PlannedDeployment | undefined;
 };
 
 type ConfirmDeploymentPlansParams = {
   deployments: ReadonlyArray<PlannedDeployment>;
   yes: boolean;
-  dryRun?: boolean;
+  dryRun?: boolean | undefined;
   /** Applications recorded as dependencies but absent from this deploy. */
-  missingDependentApps?: MissingDependentApp[];
+  missingDependentApps?: MissingDependentApp[] | undefined;
   /** Deployments already confirmed in this run; what they ask about is not asked again. */
-  confirmedDeployments?: ReadonlyArray<PlannedDeployment>;
+  confirmedDeployments?: ReadonlyArray<PlannedDeployment> | undefined;
 };
 
 type ReviewDeploymentPlansParams = ConfirmDeploymentPlansParams &
   Pick<PrintDeploymentPlansOptions, "pendingDeployedHooks"> & {
-    noValidate?: boolean;
+    noValidate?: boolean | undefined;
   };
 
 type PlanDeploymentTargetsParams = {
@@ -348,16 +350,16 @@ type PlanDeploymentTargetsParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
-  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
-  migrationRecoveryArgs?: readonly string[];
-  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
-  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
-  migrationMachineUserOverride?: string;
-  planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
+  migrationRecoveryArgs?: readonly string[] | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
+  migrationMachineUserOverride?: string | undefined;
+  planTarget?: ((params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>) | undefined;
   /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
-  skip?: ReadonlySet<ReusablePlanKind>;
+  skip?: ReadonlySet<ReusablePlanKind> | undefined;
   /** Prior plan results, matched to targets by application name, source for `skip` reuse. */
-  previousDeployments?: ReadonlyArray<PlannedDeployment>;
+  previousDeployments?: ReadonlyArray<PlannedDeployment> | undefined;
 };
 
 function recoveryEnvironmentArgs(

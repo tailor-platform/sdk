@@ -9,14 +9,15 @@ import { CLIError } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { MachineUserSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 export interface MachineUserInfo {
@@ -24,7 +25,7 @@ export interface MachineUserInfo {
   name: string;
   clientId: string;
   /** @deprecated since 2.30.0 — the Platform no longer returns the secret from list calls, so this is never set; use `machineuser token` instead. codemod: none (no automatic migration exists) */
-  clientSecret?: string;
+  clientSecret?: string | undefined;
   createdAt: Date | null;
   updatedAt: Date | null;
   attributes: Record<string, unknown>;
@@ -78,13 +79,15 @@ export async function listMachineUsers(
   const pageDirection = toPageDirection(options?.order);
   const machineUsers = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-        workspaceId,
-        pageToken,
-        pageSize,
-        authNamespace: application.authNamespace,
-        pageDirection,
-      });
+      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          authNamespace: application.authNamespace,
+          pageDirection,
+        }),
+      );
       return [machineUsers, nextPageToken];
     },
     { limit: options?.limit },

@@ -79,7 +79,7 @@ type SQLResultRow = Record<string, unknown>;
 type SQLExecutionResult = {
   rows: SQLResultRow[];
   rowCount: number;
-  affectedRows?: number;
+  affectedRows?: number | undefined;
 };
 
 type QueryCommandInput =
@@ -329,9 +329,9 @@ function parseExecutionResult(result: string): unknown {
  * @returns Normalized input mode
  */
 export async function resolveQueryCommandInput(args: {
-  query?: string;
-  file?: string;
-  edit?: boolean;
+  query?: string | undefined;
+  file?: string | undefined;
+  edit?: boolean | undefined;
   engine: QueryEngine;
 }): Promise<QueryCommandInput> {
   if (args.query != null) {
@@ -533,7 +533,7 @@ function createReplValidator(engine: QueryEngine): (value: string) => string | u
 
 async function runRepl(
   options: QueryBaseOptions & {
-    json?: boolean;
+    json?: boolean | undefined;
     newlineOnEnter: boolean;
   },
 ): Promise<void> {
@@ -902,7 +902,7 @@ function toSqlJsonResult(execResult: SQLExecutionResult) {
 
 function printSingleSqlResult(
   execResult: SQLExecutionResult,
-  options: { json?: boolean } = {},
+  options: { json?: boolean | undefined } = {},
 ): void {
   if (options.json) {
     logger.out(toSqlJsonResult(execResult));
@@ -952,7 +952,10 @@ function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[
   return Array.isArray(value) && value.length > 0 && value.every(isSQLExecutionResult);
 }
 
-function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+function printSqlResult(
+  result: SQLQueryDispatchResult,
+  options: { json?: boolean | undefined } = {},
+): void {
   if (isSQLExecutionResultArray(result.result)) {
     if (options.json) {
       logger.out(result.result.map(toSqlJsonResult));
@@ -982,7 +985,10 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
   });
 }
 
-function printGqlResult(result: GQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+function printGqlResult(
+  result: GQLQueryDispatchResult,
+  options: { json?: boolean | undefined } = {},
+): void {
   if (options.json) {
     logger.out({
       result: result.result,

@@ -29,9 +29,9 @@ export type TailorDBFieldOutput = {
     | "datetime"
     | "time"
     | "nested";
-  fields?: Record<string, TailorDBFieldOutput>;
+  fields?: Record<string, TailorDBFieldOutput> | undefined;
   metadata: DBFieldMetadataGenerated;
-  rawRelation?: RawRelationConfigGenerated;
+  rawRelation?: RawRelationConfigGenerated | undefined;
 };
 
 export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
@@ -40,19 +40,19 @@ export type TypeSourceInfo = Record<string, TypeSourceInfoEntry>;
 interface UserDefinedTypeSource {
   filePath: string;
   exportName: string;
-  pluginId?: never;
+  pluginId?: never | undefined;
 }
 
 export interface PluginGeneratedTableSource {
-  filePath?: never;
+  filePath?: never | undefined;
   exportName: string;
   pluginId: string;
   pluginImportPath: string;
   originalFilePath: string;
   originalExportName: string;
-  generatedTableKind?: string;
+  generatedTableKind?: string | undefined;
   pluginConfig?: unknown;
-  namespace?: string;
+  namespace?: string | undefined;
 }
 
 export type TypeSourceInfoEntry = UserDefinedTypeSource | PluginGeneratedTableSource;
@@ -68,34 +68,36 @@ interface OperatorValidateConfig {
 }
 
 interface OperatorFieldHook {
-  create?: Script;
-  update?: Script;
+  create?: Script | undefined;
+  update?: Script | undefined;
 }
 
 export interface OperatorFieldConfig {
   type: string;
-  required?: boolean;
-  description?: string;
-  allowedValues?: EnumValue[];
-  array?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  vector?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  rawRelation?: RawRelationConfig;
-  validate?: OperatorValidateConfig[];
-  hooks?: OperatorFieldHook;
-  serial?: {
-    start: number;
-    maxValue?: number;
-    format?: string;
-    gapless?: boolean;
-  };
-  scale?: number;
+  required?: boolean | undefined;
+  description?: string | undefined;
+  allowedValues?: EnumValue[] | undefined;
+  array?: boolean | undefined;
+  index?: boolean | undefined;
+  unique?: boolean | undefined;
+  vector?: boolean | undefined;
+  foreignKey?: boolean | undefined;
+  foreignKeyType?: string | undefined;
+  foreignKeyField?: string | undefined;
+  rawRelation?: RawRelationConfig | undefined;
+  validate?: OperatorValidateConfig[] | undefined;
+  hooks?: OperatorFieldHook | undefined;
+  serial?:
+    | {
+        start: number;
+        maxValue?: number | undefined;
+        format?: string | undefined;
+        gapless?: boolean | undefined;
+      }
+    | undefined;
+  scale?: number | undefined;
   default?: unknown;
-  fields?: Record<string, OperatorFieldConfig>;
+  fields?: Record<string, OperatorFieldConfig> | undefined;
 }
 
 // Permission types (parsed/standard format)
@@ -130,7 +132,7 @@ export type StandardActionPermission<
   Update extends boolean = boolean,
 > = {
   conditions: readonly StandardPermissionCondition<Level, Update>[];
-  description?: string;
+  description?: string | undefined;
   permit: "allow" | "deny";
 };
 
@@ -145,26 +147,28 @@ export type StandardGqlPermissionPolicy = {
   conditions: readonly StandardPermissionCondition<"gql">[];
   actions: readonly ["all"] | readonly GqlPermissionAction[];
   permit: "allow" | "deny";
-  description?: string;
+  description?: string | undefined;
 };
 
 export type StandardTailorTypeGqlPermission = readonly StandardGqlPermissionPolicy[];
 
 export interface Permissions {
-  record?: StandardTailorTypePermission;
-  gql?: StandardTailorTypeGqlPermission;
+  record?: StandardTailorTypePermission | undefined;
+  gql?: StandardTailorTypeGqlPermission | undefined;
 }
 
 export interface ParsedField {
   name: string;
   config: OperatorFieldConfig;
-  relation?: {
-    targetType: string;
-    forwardName: string;
-    backwardName: string;
-    key: string;
-    unique: boolean;
-  };
+  relation?:
+    | {
+        targetType: string;
+        forwardName: string;
+        backwardName: string;
+        key: string;
+        unique: boolean;
+      }
+    | undefined;
 }
 
 export interface ParsedRelationship {
@@ -179,16 +183,16 @@ export interface ParsedRelationship {
 export interface TailorDBType {
   name: string;
   pluralForm: string;
-  description?: string;
+  description?: string | undefined;
   fields: Record<string, ParsedField>;
   forwardRelationships: Record<string, ParsedRelationship>;
   backwardRelationships: Record<string, ParsedRelationship>;
   settings: TailorDBTypeParsedSettings;
   permissions: Permissions;
-  indexes?: TailorDBTypeMetadata["indexes"];
-  files?: TailorDBTypeMetadata["files"];
-  typeHookExpr?: { create?: string; update?: string };
-  typeValidateExpr?: string;
+  indexes?: TailorDBTypeMetadata["indexes"] | undefined;
+  files?: TailorDBTypeMetadata["files"] | undefined;
+  typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+  typeValidateExpr?: string | undefined;
 }
 
 export type ScriptExprKind =

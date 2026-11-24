@@ -69,7 +69,7 @@ type CheckedResourceType = Extract<
 
 type ResourceKey<T extends string> = {
   resourceType: T;
-  namespace?: string;
+  namespace?: string | undefined;
   name: string;
 };
 
@@ -185,9 +185,9 @@ const USER_LABELS: Record<UserResourceType, (user: ResourceUser) => string> = {
 
 type ResourceUse = ResourceRef & {
   /** Application that uses the resource, absent for a user no application manages. */
-  application?: string;
+  application?: string | undefined;
   /** Resource that uses it, absent when the application itself references it. */
-  usedBy?: ResourceUser;
+  usedBy?: ResourceUser | undefined;
 };
 
 type ResourceDeletingCommand = "deploy" | "remove";
@@ -258,7 +258,10 @@ function servicesOf(
   return [...auth, ...subgraphServices];
 }
 
-type ApplicationAuth = { authNamespace?: string; authIdpConfigName?: string };
+type ApplicationAuth = {
+  authNamespace?: string | undefined;
+  authIdpConfigName?: string | undefined;
+};
 
 function idpConfigRefs(auth: ApplicationAuth): ResourceRef[] {
   return auth.authNamespace && auth.authIdpConfigName
@@ -312,7 +315,7 @@ function applicationUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resour
 type FinalUser<T> = {
   resource: T;
   name: string;
-  namespace?: string;
+  namespace?: string | undefined;
   application: string | undefined;
 };
 
@@ -335,7 +338,9 @@ function finalUsers<T>(
 }
 
 function labelledUsers<T>(
-  records: ReadonlyArray<[string, { resource: T; allLabels?: Record<string, string> } | undefined]>,
+  records: ReadonlyArray<
+    [string, { resource: T; allLabels?: Record<string, string> | undefined } | undefined]
+  >,
 ): FinalUser<T>[] {
   return records.flatMap(([name, entry]) =>
     entry
@@ -344,7 +349,7 @@ function labelledUsers<T>(
   );
 }
 
-type NamespacedEntry = { name: string; request: { namespaceName?: string } };
+type NamespacedEntry = { name: string; request: { namespaceName?: string | undefined } };
 
 function namespacedName(entry: NamespacedEntry): UserName {
   return { namespace: entry.request.namespaceName, name: entry.name };
@@ -364,7 +369,10 @@ function plannedUsers<E extends NamespacedEntry, T>(
 
 type NamedResource<T> = Pick<FinalUser<T>, "resource" | "name">;
 
-type NamespaceServices = ReadonlyMap<string, { allLabels?: Record<string, string> } | undefined>;
+type NamespaceServices = ReadonlyMap<
+  string,
+  { allLabels?: Record<string, string> | undefined } | undefined
+>;
 
 async function recordedUsers<T>(
   services: NamespaceServices,
@@ -502,7 +510,7 @@ function aiGatewayUses(deployments: ReadonlyArray<ResourceDeletePlan>): Resource
       application: application.name,
     })),
   );
-  const gateways = finalUsers<{ authNamespace?: string }>(
+  const gateways = finalUsers<{ authNamespace?: string | undefined }>(
     planned,
     deployments.flatMap(({ aiGateway }) => aiGateway.changeSet.deletes),
     labelledUsers(
@@ -675,7 +683,7 @@ async function scimConfigUses(params: WorkspaceUsesParams): Promise<ResourceUse[
 }
 
 type TailorDBProvider =
-  | { case: "tailordb"; value: { namespace?: string; type?: string } }
+  | { case: "tailordb"; value: { namespace?: string | undefined; type?: string | undefined } }
   | { case: undefined; value?: undefined };
 
 function providerTableRefs(provider: TailorDBProvider | undefined): ResourceRef[] {

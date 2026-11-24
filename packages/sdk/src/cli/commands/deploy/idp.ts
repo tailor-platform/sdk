@@ -37,11 +37,12 @@ import {
   parseIdPPermission,
 } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
 import {
   actionPolicyLists,
   defineRequestComparison,
-  emptyMessageAsUnset,
+  unsetEmptyMessage,
   isRequestUnchanged,
 } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
@@ -67,9 +68,9 @@ import type {
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
 
 type IdPServiceMutationRequest = {
-  workspaceId?: string;
-  namespaceName?: string;
-  userAuthPolicy?: { allowedReturnOrigins?: string[] } | undefined;
+  workspaceId?: string | undefined;
+  namespaceName?: string | undefined;
+  userAuthPolicy?: { allowedReturnOrigins?: string[] | undefined } | undefined;
 };
 
 async function resolveServiceReturnOrigins(
@@ -167,16 +168,20 @@ export async function applyIdP(
           assertDefined(create.request.namespaceName, "request missing namespaceName"),
           create.request.client?.name || "",
         );
-        await client.createSecretManagerVault({
-          workspaceId: create.request.workspaceId,
-          secretmanagerVaultName: vaultName,
-        });
-        await client.createSecretManagerSecret({
-          workspaceId: create.request.workspaceId,
-          secretmanagerVaultName: vaultName,
-          secretmanagerSecretName: secretName,
-          secretmanagerSecretValue: resp.client?.clientSecret,
-        });
+        await client.createSecretManagerVault(
+          omitUndefined({
+            workspaceId: create.request.workspaceId,
+            secretmanagerVaultName: vaultName,
+          }),
+        );
+        await client.createSecretManagerSecret(
+          omitUndefined({
+            workspaceId: create.request.workspaceId,
+            secretmanagerVaultName: vaultName,
+            secretmanagerSecretName: secretName,
+            secretmanagerSecretValue: resp.client?.clientSecret,
+          }),
+        );
       }),
       ...changeSet.client.updates.map(async (update) => {
         // Ensure the vault and secret exist
@@ -199,12 +204,14 @@ export async function applyIdP(
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
         });
-        await client.createSecretManagerSecret({
-          workspaceId: update.workspaceId,
-          secretmanagerVaultName: vaultName,
-          secretmanagerSecretName: secretName,
-          secretmanagerSecretValue: idpClient?.clientSecret,
-        });
+        await client.createSecretManagerSecret(
+          omitUndefined({
+            workspaceId: update.workspaceId,
+            secretmanagerVaultName: vaultName,
+            secretmanagerSecretName: secretName,
+            secretmanagerSecretValue: idpClient?.clientSecret,
+          }),
+        );
       }),
     ]);
   } else if (phase === "delete-resources") {
@@ -220,10 +227,12 @@ export async function applyIdP(
           del.name,
         );
         try {
-          await client.deleteSecretManagerVault({
-            workspaceId: del.request.workspaceId,
-            secretmanagerVaultName: vaultName,
-          });
+          await client.deleteSecretManagerVault(
+            omitUndefined({
+              workspaceId: del.request.workspaceId,
+              secretmanagerVaultName: vaultName,
+            }),
+          );
         } catch (error) {
           if (!isNotFoundError(error)) throw error;
         }
@@ -313,7 +322,7 @@ type DeleteService = {
  */
 type UnchangedService = {
   name: string;
-  metaRequest?: MetadataLabelWrite;
+  metaRequest?: MetadataLabelWrite | undefined;
 };
 
 type DesiredService = {
@@ -341,16 +350,17 @@ const idpServiceComparison = defineRequestComparison({
       ...new Set(userAuthPolicy.allowedEmailDomains.map((domain) => domain.toLowerCase())),
     ].toSorted();
     userAuthPolicy.allowedReturnOrigins.sort();
-    request.disableGqlOperations = emptyMessageAsUnset(
-      IdPDisableGqlOperationsSchema,
-      request.disableGqlOperations,
-    );
-    request.emailConfig = emptyMessageAsUnset(IdPEmailConfigSchema, request.emailConfig);
-    request.permission = emptyMessageAsUnset(ProtoIdPPermissionSchema, request.permission);
+    unsetEmptyMessage({
+      schema: IdPDisableGqlOperationsSchema,
+      owner: request,
+      key: "disableGqlOperations",
+    });
+    unsetEmptyMessage({ schema: IdPEmailConfigSchema, owner: request, key: "emailConfig" });
+    unsetEmptyMessage({ schema: ProtoIdPPermissionSchema, owner: request, key: "permission" });
     for (const policies of actionPolicyLists(ProtoIdPPermissionSchema, request.permission)) {
       for (const policy of policies) {
         // The platform returns an empty string for an unset description.
-        policy.description ||= undefined;
+        if (!policy.description) delete policy.description;
       }
     }
   },
@@ -457,22 +467,25 @@ async function planServices(
       `IdP service "${namespaceName}" allowedReturnOrigins`,
       { expectedLocalNames: expectedLocalWebsites },
     );
-    const request = {
+    const request = omitUndefined({
       workspaceId,
       namespaceName,
       authorization,
       lang,
-      userAuthPolicy,
+      userAuthPolicy: userAuthPolicy && omitUndefined(userAuthPolicy),
       publishUserEvents: publishEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
       emailConfig,
       permission: protoPermission,
-    };
+    });
     desired.push({
       name: namespaceName,
       request,
       comparableRequest: userAuthPolicy
-        ? { ...request, userAuthPolicy: { ...userAuthPolicy, allowedReturnOrigins } }
+        ? {
+            ...request,
+            userAuthPolicy: omitUndefined({ ...userAuthPolicy, allowedReturnOrigins }),
+          }
         : request,
       metaRequest,
     });
@@ -509,7 +522,7 @@ type UpdateClient = {
 type DeleteClient = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPClientRequestSchema>;
-  vaultOnly?: boolean;
+  vaultOnly?: boolean | undefined;
 };
 
 async function planClients(
@@ -561,7 +574,7 @@ async function planClients(
       update: (name) => ({ name, workspaceId, namespaceName }),
       unchanged: (name) => ({ name }),
       delete: (name) => {
-        const request = { workspaceId, namespaceName, name };
+        const request = omitUndefined({ workspaceId, namespaceName, name });
         if (isDeletableName(name)) return { name, request };
         if (deleted) return { name, request, vaultOnly: true };
         logger.warn(
@@ -632,11 +645,11 @@ function protoIdPPolicy(
     default:
       throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
-  return {
+  return omitUndefined({
     conditions: policy.conditions.map((cond) => protoIdPCondition(cond)),
     permit,
     description: policy.description,
-  };
+  });
 }
 
 function protoIdPCondition(

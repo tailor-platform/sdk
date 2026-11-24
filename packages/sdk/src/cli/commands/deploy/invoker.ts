@@ -87,7 +87,7 @@ type ListInvokerMachineUsersParams = {
   /** Auth namespace that string invokers refer to. */
   authNamespace: string | undefined;
   /** Machine users that each Auth namespace has after this deploy run, for the namespaces a config in the run defines. */
-  plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>;
+  plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>> | undefined;
 };
 
 /**

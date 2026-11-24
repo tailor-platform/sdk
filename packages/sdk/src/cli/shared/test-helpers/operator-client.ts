@@ -15,7 +15,7 @@ type MethodImpl<K extends OperatorMethod> = (
  */
 type PlainImpl<K extends OperatorMethod> = {
   (...args: Parameters<MethodImpl<K>>): ReturnType<MethodImpl<K>>;
-  mock?: never;
+  mock?: never | undefined;
 };
 
 type MethodResponse<K extends OperatorMethod> = Awaited<ReturnType<MethodImpl<K>>>;

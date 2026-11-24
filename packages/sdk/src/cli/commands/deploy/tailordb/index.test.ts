@@ -35,6 +35,7 @@ import {
   type OperatorClientMocks,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "../label";
 import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import { logMigrationPlanNotices } from "./migration-validation";
@@ -138,7 +139,7 @@ describe("planTailorDB (service level)", () => {
     existingServices: Array<{
       name: string;
       label?: string;
-      sdkVersion?: string;
+      sdkVersion?: string | undefined;
     }>,
     overrides?: OperatorClientMocks<K>,
   ): OperatorClient {
@@ -1053,7 +1054,7 @@ describe("planTailorDB (service level)", () => {
         fields: {},
       });
       client.listTailorDBTypes.mockResolvedValue({
-        tailordbTypes: [{ name: "Invoice", schema: remoteManifest.schema }],
+        tailordbTypes: [omitUndefined({ name: "Invoice", schema: remoteManifest.schema })],
         nextPageToken: "",
       });
 

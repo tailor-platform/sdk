@@ -53,7 +53,7 @@ export interface SeedContext {
    * Named combinations of dataset directory names from seedPlugin options.
    * Always set by {@link loadSeedContext}; optional so a context built elsewhere stays valid.
    */
-  datasets?: Record<string, readonly string[]>;
+  datasets?: Record<string, readonly string[]> | undefined;
   /** Seed ordering information per TailorDB namespace. */
   namespaces: SeedNamespaceConfig[];
   /** IdP `_User` seeding context, or null when not applicable. */
@@ -65,7 +65,7 @@ export interface SeedContext {
  */
 export interface LoadSeedContextOptions {
   /** Path to tailor.config.ts. Defaults to searching from the current directory. */
-  configPath?: string;
+  configPath?: string | undefined;
 }
 
 /**
@@ -137,7 +137,7 @@ interface SeedOptionsErrorParams {
   /** Rejected option, with its path within the seedPlugin options. */
   issue: FlatIssue;
   /** How to fix the option. */
-  suggestion?: string;
+  suggestion?: string | undefined;
 }
 
 function seedOptionsError(params: SeedOptionsErrorParams): CLIError {

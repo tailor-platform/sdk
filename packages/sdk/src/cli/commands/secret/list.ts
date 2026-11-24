@@ -8,15 +8,16 @@ import { CLIError } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { vaultArgs } from "./args";
 import type { SecretManagerSecret } from "@tailor-platform/tailor-proto/secret_manager_resource_pb";
 
 interface SecretListOptions {
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
   vaultName: string;
-  order?: Order;
-  limit?: number;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 export interface SecretInfo {
@@ -47,13 +48,15 @@ async function secretList(options: SecretListOptions): Promise<SecretInfo[]> {
   const pageDirection = toPageDirection(options.order);
   const secrets = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-        workspaceId,
-        secretmanagerVaultName: options.vaultName,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { secrets, nextPageToken } = await client.listSecretManagerSecrets(
+        omitUndefined({
+          workspaceId,
+          secretmanagerVaultName: options.vaultName,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [secrets, nextPageToken];
     },
     { limit: options.limit },

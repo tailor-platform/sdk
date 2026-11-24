@@ -24,10 +24,10 @@ export interface StartModuleBindings {
 
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
-  authNamespace?: string;
+  authNamespace?: string | undefined;
   /** Name of the job function a job is started under (default: the job's own name) */
-  jobFunctionName?: (jobName: string) => string;
-  tsconfigCache?: TsconfigLookupCache;
+  jobFunctionName?: ((jobName: string) => string) | undefined;
+  tsconfigCache?: TsconfigLookupCache | undefined;
 }
 
 /**

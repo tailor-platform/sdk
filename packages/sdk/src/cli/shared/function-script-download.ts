@@ -7,6 +7,7 @@
 
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { logger } from "#/cli/shared/logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { OperatorClient } from "#/cli/shared/client";
 
 /**
@@ -88,7 +89,7 @@ export interface DownloadFunctionScriptOptions {
   /** Function registry name (translated from FunctionExecution.scriptName via scriptNameToRegistryName) */
   name: string;
   /** Optional content hash for a specific version (defaults to current version) */
-  contentHash?: string;
+  contentHash?: string | undefined;
 }
 
 /** Result of a successful function script download */
@@ -113,11 +114,13 @@ export async function downloadFunctionScript(
   const { client, workspaceId, name, contentHash } = options;
   try {
     const chunks: Uint8Array[] = [];
-    for await (const response of client.downloadFunctionRegistryScript({
-      workspaceId,
-      name,
-      contentHash,
-    })) {
+    for await (const response of client.downloadFunctionRegistryScript(
+      omitUndefined({
+        workspaceId,
+        name,
+        contentHash,
+      }),
+    )) {
       if (response.payload.case === "chunk") {
         chunks.push(response.payload.value);
       }

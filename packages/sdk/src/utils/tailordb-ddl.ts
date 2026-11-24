@@ -7,25 +7,27 @@
 /** The field shape the DDL generator reads; parsed and snapshot field configs are both assignable. */
 export interface DDLFieldConfig {
   type: string;
-  required?: boolean;
-  array?: boolean;
-  unique?: boolean;
-  serial?: { start: number; maxValue?: number; format?: string };
-  scale?: number;
+  required?: boolean | undefined;
+  array?: boolean | undefined;
+  unique?: boolean | undefined;
+  serial?:
+    | { start: number; maxValue?: number | undefined; format?: string | undefined }
+    | undefined;
+  scale?: number | undefined;
   default?: unknown;
-  optionalOnCreate?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  hooks?: { create?: unknown; update?: unknown };
-  fields?: Record<string, DDLFieldConfig>;
+  optionalOnCreate?: boolean | undefined;
+  foreignKey?: boolean | undefined;
+  foreignKeyType?: string | undefined;
+  foreignKeyField?: string | undefined;
+  hooks?: { create?: unknown; update?: unknown } | undefined;
+  fields?: Record<string, DDLFieldConfig> | undefined;
 }
 
 /** A table to emit DDL for. */
 export interface DDLTableConfig {
   name: string;
   fields: Record<string, DDLFieldConfig>;
-  indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+  indexes?: Record<string, { fields: string[]; unique?: boolean | undefined }> | undefined;
 }
 
 const MAX_IDENTIFIER_BYTES = 63;
@@ -623,9 +625,9 @@ function referencedTrigger(
 /** What {@link generateTableDDL} needs to know about the other tables of the schema. */
 export interface TableDDLOptions {
   /** Every table of the schema, to resolve the types referenced columns point at */
-  tables?: readonly DDLTableConfig[];
+  tables?: readonly DDLTableConfig[] | undefined;
   /** Columns whose FOREIGN KEY is added after all tables exist, because the target is created later */
-  deferredReferences?: ReadonlySet<string>;
+  deferredReferences?: ReadonlySet<string> | undefined;
 }
 
 /** DDL statements of one table, without trailing semicolons. */

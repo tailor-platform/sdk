@@ -44,13 +44,13 @@ import { handleOptionalToRequiredError } from "./types";
 import type { GenerateAllManifestsOptions } from "./snapshot-manifest";
 
 interface SyncOptions {
-  configPath?: string;
+  configPath?: string | undefined;
   number: string;
-  namespace?: string;
-  yes?: boolean;
+  namespace?: string | undefined;
+  yes?: boolean | undefined;
   force: boolean;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 }
 
 /**

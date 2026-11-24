@@ -130,27 +130,27 @@ type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
 type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
 type PfConfig = z.output<typeof pfConfigSchemaV3>;
 type PfUser = z.output<typeof pfUserSchemaV3>;
-type UserTokens = { accessToken: string; refreshToken?: string };
+type UserTokens = { accessToken: string; refreshToken?: string | undefined };
 type PfConfigV3 = PfConfig;
 type LoadWorkspaceIdOptions = {
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 type LoadAccessTokenOptions = {
-  profile?: string;
+  profile?: string | undefined;
 };
 type LoadPlatformClientConfigOptions = {
-  profile?: string;
-  allowMissingProfile?: boolean;
+  profile?: string | undefined;
+  allowMissingProfile?: boolean | undefined;
 };
 type LoadConsoleBaseUrlOptions = {
-  profile?: string;
-  allowMissingProfile?: boolean;
+  profile?: string | undefined;
+  allowMissingProfile?: boolean | undefined;
 };
 type LoadMachineUserNameOptions = {
-  machineUser?: string;
-  machineUserSource?: MachineUserInputSource;
-  profile?: string;
+  machineUser?: string | undefined;
+  machineUserSource?: MachineUserInputSource | undefined;
+  profile?: string | undefined;
 };
 type ExplicitMachineUser = {
   source: MachineUserInputSource;
@@ -190,9 +190,9 @@ export function platformConfigExists(): boolean {
 }
 
 type ProfilePlatformSettings = {
-  platform_url?: string;
-  oauth2_client_id?: string;
-  console_url?: string;
+  platform_url?: string | undefined;
+  oauth2_client_id?: string | undefined;
+  console_url?: string | undefined;
 };
 
 /**
@@ -233,13 +233,13 @@ function canUseLegacyUserKey(platformUrl: string): boolean {
 }
 
 type UserEntryLookupOptions = {
-  allowLegacyUserKey?: boolean;
+  allowLegacyUserKey?: boolean | undefined;
 };
 
 type StoredUserTokensLookup = UserEntryLookupOptions & {
-  platformConfig?: PlatformClientConfig;
+  platformConfig?: PlatformClientConfig | undefined;
   /** Selected profile for login recovery */
-  profile?: string;
+  profile?: string | undefined;
 };
 
 function findUserByEmail(
@@ -444,8 +444,8 @@ async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise
 let warnedAboutNewerConfig = false;
 
 async function warnIfNewerConfigAvailable(config: {
-  latest_version?: number;
-  latest_min_sdk_version?: string;
+  latest_version?: number | undefined;
+  latest_min_sdk_version?: string | undefined;
 }) {
   if (!config.latest_min_sdk_version || warnedAboutNewerConfig) return;
   const packageJson = await readPackageJson();
@@ -967,7 +967,7 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
 /** Where `workspace create` places a workspace when no location is given. */
 export type UserWorkspaceDefaults = {
   organizationId: string;
-  folderId?: string;
+  folderId?: string | undefined;
 };
 
 /**
@@ -1074,7 +1074,7 @@ export async function resolveTokens(
   user: string,
   label: string,
   loginFailure: LoginFailure,
-): Promise<{ accessToken: string; refreshToken?: string }> {
+): Promise<{ accessToken: string; refreshToken?: string | undefined }> {
   if (userEntry.storage === "keyring") {
     let tokens: UserTokens | undefined;
     try {
@@ -1148,7 +1148,7 @@ export async function saveUserTokens(
   user: string,
   tokens: UserTokens,
   expiresAt: string,
-  opts: { platformConfig?: PlatformClientConfig; email?: string } = {},
+  opts: { platformConfig?: PlatformClientConfig | undefined; email?: string | undefined } = {},
 ): Promise<void> {
   registerTokenSecrets(tokens);
   const userKey = platformUserKey(user, opts.platformConfig);
@@ -1212,7 +1212,7 @@ export async function loadStoredUserTokens(
   | {
       userEntry: PfUser;
       accessToken: string;
-      refreshToken?: string;
+      refreshToken?: string | undefined;
     }
   | undefined
 > {
@@ -1293,10 +1293,10 @@ type StoredToken = {
 type TokenRequest = {
   config: PfConfig;
   user: string;
-  platformConfig?: PlatformClientConfig;
-  profile?: string;
+  platformConfig?: PlatformClientConfig | undefined;
+  profile?: string | undefined;
   /** A token the Platform rejected; a stored token equal to it counts as expired. */
-  rejectedToken?: string;
+  rejectedToken?: string | undefined;
 };
 
 function expiresWithin(expiresAt: number, marginMs: number): boolean {
@@ -1537,8 +1537,8 @@ const FORCED_RENEWAL_INTERVAL_MS = 60_000;
 
 type StoredTokenSourceInit = {
   token: ResolvedToken;
-  platformConfig?: PlatformClientConfig;
-  profile?: string;
+  platformConfig?: PlatformClientConfig | undefined;
+  profile?: string | undefined;
 };
 
 /**

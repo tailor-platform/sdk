@@ -25,19 +25,21 @@ interface ScriptRef {
  */
 export interface ScriptFieldConfig {
   type: string;
-  array?: boolean;
-  hooks?: {
-    create?: ScriptRef;
-    update?: ScriptRef;
-  };
-  validate?: { script?: ScriptRef; errorMessage: string }[];
+  array?: boolean | undefined;
+  hooks?:
+    | {
+        create?: ScriptRef | undefined;
+        update?: ScriptRef | undefined;
+      }
+    | undefined;
+  validate?: { script?: ScriptRef | undefined; errorMessage: string }[] | undefined;
   default?: unknown;
-  fields?: Record<string, ScriptFieldConfig>;
+  fields?: Record<string, ScriptFieldConfig> | undefined;
 }
 
 export interface TypeScripts {
-  typeHook?: { create?: ScriptRef; update?: ScriptRef };
-  typeValidate?: { create?: ScriptRef; update?: ScriptRef };
+  typeHook?: { create?: ScriptRef | undefined; update?: ScriptRef | undefined } | undefined;
+  typeValidate?: { create?: ScriptRef | undefined; update?: ScriptRef | undefined } | undefined;
 }
 
 const key = (name: string) => JSON.stringify(name);
@@ -81,8 +83,8 @@ function collectFieldScriptSources(fields: Record<string, ScriptFieldConfig>): [
 export function computeSourceScriptHash(
   fields: Record<string, ScriptFieldConfig>,
   options?: {
-    typeHookExpr?: { create?: string; update?: string };
-    typeValidateExpr?: string;
+    typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+    typeValidateExpr?: string | undefined;
   },
 ): string | undefined {
   const fieldSources = collectFieldScriptSources(fields);
@@ -281,10 +283,10 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
 }
 
 interface BuildTypeScriptsOptions {
-  typeHookExpr?: { create?: string; update?: string };
-  typeValidateExpr?: string;
+  typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+  typeValidateExpr?: string | undefined;
   /** Original fields to hash when execution requires compatibility transformations. */
-  sourceFields?: Record<string, ScriptFieldConfig>;
+  sourceFields?: Record<string, ScriptFieldConfig> | undefined;
 }
 
 /**
@@ -308,7 +310,7 @@ export function buildTypeScripts(
   const hash = computeSourceScriptHash(options?.sourceFields ?? fields, options);
   const hashSuffix = hash ? ` ${SOURCE_HASH_PREFIX}${hash}` : "";
 
-  const hook: { create?: ScriptRef; update?: ScriptRef } = {};
+  const hook: { create?: ScriptRef | undefined; update?: ScriptRef | undefined } = {};
   for (const operation of ["create", "update"] as const) {
     const perFieldExpr = buildHookObject(
       fields,

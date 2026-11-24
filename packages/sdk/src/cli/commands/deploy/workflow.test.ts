@@ -63,9 +63,9 @@ describe("planWorkflow", () => {
   }
 
   type MockJobFunction = {
-    label?: string;
-    sdkVersion?: string;
-    publishExecutionEvents?: boolean;
+    label?: string | undefined;
+    sdkVersion?: string | undefined;
+    publishExecutionEvents?: boolean | undefined;
   };
 
   function createMockClient(
@@ -74,7 +74,7 @@ describe("planWorkflow", () => {
       name: string;
       label?: string;
       resource?: MessageInitShape<typeof WorkflowSchema>;
-      sdkVersion?: string;
+      sdkVersion?: string | undefined;
       /** Extra labels the workflow's own TRN answers with. */
       extraLabels?: Record<string, string>;
     }>,

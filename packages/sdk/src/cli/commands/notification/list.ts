@@ -10,6 +10,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { humanizeRelativeTime } from "#/cli/shared/format";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createNotificationClient } from "./client";
 import { transformNotification, type NotificationInfo } from "./transform";
 
@@ -65,16 +66,18 @@ export const listCommand = defineAppCommand({
     const listed = await fetchWithinLimit(args.limit, (limit) =>
       fetchPaged(
         async (pageToken, pageSize) => {
-          const { notifications, nextPageToken } = await client.listMyNotifications({
-            pageToken,
-            pageSize,
-            pageDirection,
-            category,
-            minSeverity,
-            unreadOnly: args.unread,
-            scopeWorkspaceId: args["scope-workspace"] ?? "",
-            scopeOrganizationId: args["scope-organization"] ?? "",
-          });
+          const { notifications, nextPageToken } = await client.listMyNotifications(
+            omitUndefined({
+              pageToken,
+              pageSize,
+              pageDirection,
+              category,
+              minSeverity,
+              unreadOnly: args.unread,
+              scopeWorkspaceId: args["scope-workspace"] ?? "",
+              scopeOrganizationId: args["scope-organization"] ?? "",
+            }),
+          );
           return [notifications, nextPageToken];
         },
         { limit },

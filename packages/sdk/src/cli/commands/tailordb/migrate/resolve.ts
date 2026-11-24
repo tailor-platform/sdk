@@ -61,12 +61,12 @@ import { handleOptionalToRequiredError } from "./types";
 type ResolveMode = MigrationResolution | "maintenance";
 
 interface ResolveOptions {
-  configPath?: string;
+  configPath?: string | undefined;
   resolution: ResolveMode;
-  namespace?: string;
-  yes?: boolean;
-  workspaceId?: string;
-  profile?: string;
+  namespace?: string | undefined;
+  yes?: boolean | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 }
 
 type ResolveResult = {
@@ -77,9 +77,9 @@ type ResolveResult = {
   migrationNumber: number;
   checkpoint: number;
   /** Set when no migration was recorded as in progress, but a deploy left the Pre-phase or maintenance mode of this one in place. */
-  interrupted?: true;
+  interrupted?: true | undefined;
   /** How the recorded `main` run stood; absent for a migration whose steps partly committed. */
-  runStatus?: MigrationRunStatus;
+  runStatus?: MigrationRunStatus | undefined;
   tables: { created: string[]; updated: string[]; deleted: string[] };
   gqlPermissions: { set: string[]; deleted: string[] };
 };

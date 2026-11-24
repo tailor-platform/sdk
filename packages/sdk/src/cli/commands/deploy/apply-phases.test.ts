@@ -16,7 +16,8 @@ import type { MaintenanceModeRelease } from "./tailordb";
 
 const mocks = vi.hoisted(() => {
   const calls: string[] = [];
-  const state: { onApplicationApply?: (client: OperatorClient) => Promise<void> } = {};
+  const state: { onApplicationApply?: ((client: OperatorClient) => Promise<void>) | undefined } =
+    {};
   const marker = (value: unknown) => (value as { marker: string }).marker;
   return {
     calls,

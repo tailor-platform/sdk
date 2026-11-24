@@ -214,7 +214,7 @@ export interface VerifyScriptSchemaSnapshotOptions {
   /** Script path as passed on the command line (threaded into hints) */
   scriptArgValue: string;
   /** Profile as passed on the command line, when any (threaded into hints) */
-  profileArgValue?: string;
+  profileArgValue?: string | undefined;
   /** The snapshot sidecar found next to the script */
   sidecar: ScriptSchemaSnapshotSidecar;
 }

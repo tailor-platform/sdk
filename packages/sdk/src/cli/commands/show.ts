@@ -13,16 +13,16 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 import type { AuthOAuth2ClientSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ShowOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
 }
 
 interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
-  workspaceFolderName?: string;
-  workspaceRegion?: string;
+  workspaceFolderName?: string | undefined;
+  workspaceRegion?: string | undefined;
 }
 
 export interface ApplicationInfo {

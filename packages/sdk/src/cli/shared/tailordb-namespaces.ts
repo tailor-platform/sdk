@@ -24,9 +24,9 @@ export type TailorDBNamespaceSelector =
  */
 export interface LoadTailorDBNamespacesOptions {
   /** Path to tailor.config.ts. Defaults to searching from the current directory. */
-  configPath?: string;
+  configPath?: string | undefined;
   /** Namespaces to load. Omit to load all owned namespaces. */
-  namespaces?: TailorDBNamespaceSelector;
+  namespaces?: TailorDBNamespaceSelector | undefined;
 }
 
 /**
@@ -34,7 +34,7 @@ export interface LoadTailorDBNamespacesOptions {
  */
 export interface LoadConfigNamespacesOptions {
   /** Bundle each table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
-  precompileScripts?: boolean;
+  precompileScripts?: boolean | undefined;
 }
 
 /**

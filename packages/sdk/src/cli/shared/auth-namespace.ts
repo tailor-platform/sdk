@@ -3,7 +3,7 @@ import type { AppConfig } from "#/configure/config/types";
 
 type AuthNamespaceApplication = {
   authServices: ReadonlyArray<{ config: { name: string } }>;
-  config?: Pick<AppConfig, "auth">;
+  config?: Pick<AppConfig, "auth"> | undefined;
 };
 
 type AuthServiceHolder<Service> = {

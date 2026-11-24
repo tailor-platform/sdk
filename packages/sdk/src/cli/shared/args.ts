@@ -13,7 +13,7 @@ import { parseBoolean } from "./parse-boolean";
 type ArgsShape = Record<string, z.ZodType>;
 export type MachineUserInputSource = "option" | "env";
 type ResolveMachineUserInputSourceOptions = {
-  valueIsExplicit?: boolean;
+  valueIsExplicit?: boolean | undefined;
 };
 
 // ============================================================================
@@ -320,7 +320,7 @@ function jsonArgSource(source: ArgSource | undefined): JsonModeSource {
 
 export interface CommonArgsOptions {
   /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
-  verboseAlias?: string;
+  verboseAlias?: string | undefined;
 }
 
 /**
@@ -703,8 +703,8 @@ type LocationIdArgs = {
  * @returns Organization and folder IDs; empty values from the environment count as not given
  */
 export function locationIds(args: LocationIdArgs): {
-  organizationId?: string;
-  folderId?: string;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
 } {
   const read = (name: LocationIdName) => {
     const value = args[name];

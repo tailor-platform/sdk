@@ -79,12 +79,12 @@ interface GenerateSchemaResult {
 
 interface GenerateDiffResult {
   diffFilePath: string;
-  migrateFilePath?: string;
-  dbTypesFilePath?: string;
+  migrateFilePath?: string | undefined;
+  dbTypesFilePath?: string | undefined;
   /** Written with db.ts unless the schema cannot be expressed as DDL; see `pgliteSchemaError`. */
-  pgliteSchemaFilePath?: string;
+  pgliteSchemaFilePath?: string | undefined;
   /** Why db.pglite.ts was skipped */
-  pgliteSchemaError?: string;
+  pgliteSchemaError?: string | undefined;
   migrationNumber: number;
 }
 
@@ -208,15 +208,15 @@ interface GenerateDataOnlyFilesOptions {
   migrationNumber: number;
   /** Schema the migration runs against, used for db.ts generation. */
   snapshot: SchemaSnapshot;
-  description?: string;
+  description?: string | undefined;
   /**
    * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
    * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
    * was configured with. Defaults to `false`.
    */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 /** Files written for a data-only migration. */
@@ -225,9 +225,9 @@ interface GenerateDataOnlyFilesResult {
   migrateFilePath: string;
   dbTypesFilePath: string;
   /** Written with db.ts unless the schema cannot be expressed as DDL; see `pgliteSchemaError`. */
-  pgliteSchemaFilePath?: string;
+  pgliteSchemaFilePath?: string | undefined;
   /** Why db.pglite.ts was skipped */
-  pgliteSchemaError?: string;
+  pgliteSchemaError?: string | undefined;
   migrationNumber: number;
 }
 
@@ -319,7 +319,7 @@ interface ScriptStep {
   body: string;
   dependsOn: readonly string[];
   /** The step rewrites values that already exist, which a rollback does not bring back. */
-  overwritesExistingValues?: boolean;
+  overwritesExistingValues?: boolean | undefined;
 }
 
 /** A field a step reads or writes; `ALL_FIELDS` stands for every field of the table. */

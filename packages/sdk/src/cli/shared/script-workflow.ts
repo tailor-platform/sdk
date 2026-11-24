@@ -27,6 +27,7 @@ import {
   uploadTemporaryFunction,
 } from "#/cli/shared/temporary-workflow";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
 import type { CreatedTemporaryWorkflow } from "#/cli/shared/temporary-workflow";
@@ -69,7 +70,7 @@ export interface ScriptWorkflowOptions {
   /** Profile the run uses, carried into the hint of a refusal so the hinted command selects it too */
   profile?: string | undefined;
   /** Poll interval in milliseconds (default: 3000ms) */
-  pollIntervalMs?: number;
+  pollIntervalMs?: number | undefined;
 }
 
 /**
@@ -190,11 +191,13 @@ export async function assertMachineUserExists(
 ): Promise<void> {
   const { client, workspaceId, invoker } = params;
   const machineUser = await client
-    .getAuthMachineUser({
-      workspaceId,
-      authNamespace: invoker.namespace,
-      name: invoker.machineUserName,
-    })
+    .getAuthMachineUser(
+      omitUndefined({
+        workspaceId,
+        authNamespace: invoker.namespace,
+        name: invoker.machineUserName,
+      }),
+    )
     .then((response) => response.machineUser)
     .catch((error: unknown) => {
       if (error instanceof ConnectError && error.code === Code.NotFound) return undefined;
@@ -353,15 +356,15 @@ export interface ReadOutcomeParams {
   /** Wait between reads in milliseconds */
   pollInterval: number;
   /** Epoch milliseconds after which reading stops with an error; no limit when omitted */
-  deadline?: number;
+  deadline?: number | undefined;
   /** Names a job function in the logs of a run that started other jobs (default: its name) */
-  jobLabel?: (jobFunctionName: string) => string;
+  jobLabel?: ((jobFunctionName: string) => string) | undefined;
 }
 
 /** What a finished run reported, and which job it was read from. */
 export interface ScriptWorkflowOutcome extends ScriptExecutionResult {
   /** Job function the result and error were read from; its bundle maps the error's stack */
-  jobFunctionName?: string;
+  jobFunctionName?: string | undefined;
 }
 
 interface ReadJobParams {

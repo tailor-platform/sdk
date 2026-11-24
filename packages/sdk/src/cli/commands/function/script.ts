@@ -335,7 +335,7 @@ function resolveKyselyTypesImport(
   plugins: readonly Plugin[],
   configPath: string,
   scriptDir: string,
-): { specifier: string; generatedFile?: string } {
+): { specifier: string; generatedFile?: string | undefined } {
   const options = resolvePluginConfig(plugins, KyselyGeneratorID);
   const distPath = options?.distPath;
   if (options?.contentMapper === true) return { specifier: SDK_KYSELY_DB_SPECIFIER };

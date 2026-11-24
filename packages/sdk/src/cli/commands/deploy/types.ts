@@ -26,36 +26,36 @@ export interface PlanContext {
   owner: DeployOwner;
   forRemoval: boolean;
   config: Readonly<ServiceSettings>;
-  noSchemaCheck?: boolean;
+  noSchemaCheck?: boolean | undefined;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
-  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
   /** Profile and env-file arguments of this deploy, kept in the migration commands it suggests. */
-  migrationRecoveryArgs?: readonly string[];
-  forceApplyAll?: boolean;
+  migrationRecoveryArgs?: readonly string[] | undefined;
+  forceApplyAll?: boolean | undefined;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
    * Controls how `publishEvents` defaults on each IdP service. Empty when
    * no idpUser triggers are defined.
    */
-  idpUserTriggerTargets?: ReadonlySet<string>;
+  idpUserTriggerTargets?: ReadonlySet<string> | undefined;
   /** Type names that have at least one executor with a TailorDB record trigger. */
-  executorUsedTailorDBTables?: ReadonlySet<string>;
+  executorUsedTailorDBTables?: ReadonlySet<string> | undefined;
   /** Resolver names that have at least one executor with a resolverExecuted trigger. */
-  executorUsedResolvers?: ReadonlySet<string>;
+  executorUsedResolvers?: ReadonlySet<string> | undefined;
   /** Static website names planned by any config in the same deploy run. */
-  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string> | undefined;
   /** Planned external Auth IDP config names keyed by Auth namespace. */
-  externalAuthIdpConfigNames?: ReadonlyMap<string, string | undefined>;
+  externalAuthIdpConfigNames?: ReadonlyMap<string, string | undefined> | undefined;
   /** Machine user names that every config in the same deploy run defines, keyed by Auth namespace. */
-  plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>;
+  plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>> | undefined;
   /** TailorDB namespaces keyed by type name for same-run external trigger resolution. */
-  tailorDBTypeNamespaces?: ReadonlyMap<string, string | undefined>;
+  tailorDBTypeNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
   /** Pipeline namespaces keyed by resolver name for same-run external trigger resolution. */
-  resolverNamespaces?: ReadonlyMap<string, string | undefined>;
+  resolverNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
   /** IdP names known to the current deploy run. */
-  idpNames?: ReadonlySet<string>;
+  idpNames?: ReadonlySet<string> | undefined;
   /** Stable ids of every application taking part in the current deploy run. */
-  runAppIds?: ReadonlySet<string>;
+  runAppIds?: ReadonlySet<string> | undefined;
   /**
    * Applications that have to take part in the same deploy for this config's
    * resources to be applied the same way, keyed by resource.
@@ -64,15 +64,15 @@ export interface PlanContext {
    * resource's own labels, so a record lives on the thing whose `publishEvents`
    * is at stake rather than on the application.
    */
-  dependentApps?: DependentAppsByResource;
+  dependentApps?: DependentAppsByResource | undefined;
   /**
    * Baseline snapshots used internally by `tailordb migration test`. Consumed
    * by TailorDB planning only; other plan modules receive an `application`
    * already adjusted for the migration test deploy by the deploy pipeline.
    */
-  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
   /** Committed schema snapshots used internally by `tailordb migration test`. Consumed by TailorDB planning only. */
-  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
   /** Machine user that runs migration scripts in place of the configured one, given by `tailordb migration test`. Consumed by TailorDB planning only. */
-  migrationMachineUserOverride?: string;
+  migrationMachineUserOverride?: string | undefined;
 }

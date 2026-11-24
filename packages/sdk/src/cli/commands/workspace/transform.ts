@@ -9,9 +9,9 @@ import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource
 export interface WorkspaceInfo {
   id: string;
   name: string;
-  folderName?: string;
+  folderName?: string | undefined;
   organizationId: string;
-  folderId?: string;
+  folderId?: string | undefined;
   region: string;
   createdAt: Date | null;
   updatedAt: Date | null;

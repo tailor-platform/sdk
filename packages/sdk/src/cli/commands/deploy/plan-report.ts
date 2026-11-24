@@ -33,7 +33,7 @@ import type { MissingDependentApp, WorkspaceTakeover } from "./confirm";
 import type { ManagedResourceType } from "./managed-resource-type";
 import type { CustomDomainNoteKind } from "./staticwebsite";
 type PrintPlanOptions = {
-  dryRun?: boolean;
+  dryRun?: boolean | undefined;
 };
 
 /** Deploy hook that a dry run would run after applying resources. */
@@ -43,9 +43,9 @@ interface PendingDeployedHook {
 }
 
 export type PrintDeploymentPlansOptions = PrintPlanOptions & {
-  pendingDeployedHooks?: readonly PendingDeployedHook[];
+  pendingDeployedHooks?: readonly PendingDeployedHook[] | undefined;
   /** Applications recorded as dependencies but absent from this deploy. */
-  missingDependentApps?: readonly MissingDependentApp[];
+  missingDependentApps?: readonly MissingDependentApp[] | undefined;
 };
 
 type JsonPlanPayload = {
@@ -64,12 +64,14 @@ type JsonPlanPayload = {
     currentOwner: string;
   }>;
   /** Resources an application config deployed that a workspace config takes over or deletes. */
-  takeovers?: Array<{
-    resourceType: ManagedResourceType;
-    name: string;
-    action: WorkspaceTakeover["action"];
-    currentOwner?: string;
-  }>;
+  takeovers?:
+    | Array<{
+        resourceType: ManagedResourceType;
+        name: string;
+        action: WorkspaceTakeover["action"];
+        currentOwner?: string | undefined;
+      }>
+    | undefined;
   /** Custom domains that produced no change, with the reason. */
   notes: Array<{
     type: CustomDomainNoteKind;
@@ -85,12 +87,12 @@ type MissingDependentAppWarning = Pick<
 > & {
   type: "missingDependentApp";
   /** Set only on the records about a workflow's jobs. */
-  scope?: "jobs";
+  scope?: "jobs" | undefined;
 };
 
 type JsonDeploymentPlansPayload = Omit<JsonPlanPayload, "warnings"> & {
   warnings: Array<JsonPlanPayload["warnings"][number] | MissingDependentAppWarning>;
-  pendingDeployedHooks?: readonly PendingDeployedHook[];
+  pendingDeployedHooks?: readonly PendingDeployedHook[] | undefined;
 };
 
 type PlanReport = {

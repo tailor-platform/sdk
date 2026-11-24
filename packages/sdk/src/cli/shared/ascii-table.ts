@@ -8,9 +8,9 @@ const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme
 
 export interface AsciiTableConfig {
   /** Suppress horizontal lines between rows, keeping only the outer border. */
-  singleLine?: boolean;
+  singleLine?: boolean | undefined;
   /** Decide whether to draw the horizontal line at `lineIndex` (range `[0, rowCount]` inclusive). */
-  drawHorizontalLine?: (lineIndex: number, rowCount: number) => boolean;
+  drawHorizontalLine?: ((lineIndex: number, rowCount: number) => boolean) | undefined;
 }
 
 interface CellLine {

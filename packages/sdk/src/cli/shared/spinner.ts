@@ -22,8 +22,8 @@ function visibleLength(s: string): number {
 }
 
 export type SpinnerOptions = {
-  indent?: number;
-  stream?: NodeJS.WriteStream;
+  indent?: number | undefined;
+  stream?: NodeJS.WriteStream | undefined;
 };
 
 const activeSpinners = new Set<Spinner>();
@@ -70,7 +70,7 @@ export class Spinner {
   readonly #stream: NodeJS.WriteStream;
   readonly #isEnabled: boolean;
   #frame = 0;
-  #timer?: NodeJS.Timeout;
+  #timer?: NodeJS.Timeout | undefined;
   #linesDrawn = 0;
   #started = false;
 

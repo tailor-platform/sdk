@@ -67,9 +67,9 @@ const matchingSubgraphs = [
 function createMockApplication(
   overrides: {
     name?: string;
-    id?: string;
+    id?: string | undefined;
     cors?: string[];
-    metadata?: Record<string, string>;
+    metadata?: Record<string, string> | undefined;
     subgraphs?: Array<{ Type: string; Name: string }>;
     staticWebsiteServices?: Array<{ name: string }>;
   } = {},
@@ -105,7 +105,7 @@ type RemoteApplication = MessageInitShape<typeof ApplicationSchema> & {
   name: string;
   sdkVersion?: string;
   label?: string;
-  sdkAppId?: string;
+  sdkAppId?: string | undefined;
   extraLabels?: Record<string, string>;
 };
 

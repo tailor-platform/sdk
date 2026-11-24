@@ -33,13 +33,13 @@ export interface PGliteQueryResult {
   /** Rows returned by the statement. */
   rows: unknown[];
   /** Number of rows an INSERT/UPDATE/DELETE touched. */
-  affectedRows?: number;
+  affectedRows?: number | undefined;
   /** Postgres command tag of the statement (`"SELECT"`, `"INSERT"`, ...). */
-  command?: string;
+  command?: string | undefined;
   /** Row count reported alongside the command tag. */
-  rowCount?: number;
+  rowCount?: number | undefined;
   /** Name and Postgres type OID of each returned column. */
-  fields?: PGliteField[];
+  fields?: PGliteField[] | undefined;
 }
 
 /**

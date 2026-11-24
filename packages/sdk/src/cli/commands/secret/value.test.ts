@@ -33,7 +33,10 @@ vi.mock("#/cli/shared/logger", async (importOriginal) => {
   };
 });
 
-function input(chunks: (string | Buffer)[], isTTY?: boolean): Readable & { isTTY?: boolean } {
+function input(
+  chunks: (string | Buffer)[],
+  isTTY?: boolean,
+): Readable & { isTTY?: boolean | undefined } {
   return Object.assign(Readable.from(chunks), { isTTY });
 }
 

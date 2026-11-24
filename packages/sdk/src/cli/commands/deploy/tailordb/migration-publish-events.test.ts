@@ -60,12 +60,14 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   type WrittenSettings = {
     bulkUpsert?: boolean;
     publishRecordEvents?: boolean;
-    disableGqlOperations?: {
-      create?: boolean;
-      update?: boolean;
-      delete?: boolean;
-      read?: boolean;
-    };
+    disableGqlOperations?:
+      | {
+          create?: boolean | undefined;
+          update?: boolean;
+          delete?: boolean;
+          read?: boolean;
+        }
+      | undefined;
   };
 
   let checkpoint: RemoteCheckpoint;

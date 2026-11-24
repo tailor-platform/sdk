@@ -25,6 +25,7 @@ import {
 } from "#/cli/shared/publish-events";
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { configAuthNamespace } from "./deploy-application";
@@ -158,8 +159,8 @@ export async function applyPipeline(
 export async function planPipeline(
   context: PlanContext,
   previous?: {
-    existingServices?: ExistingPipelineServices;
-    existingResolvers?: PreviousPipelineResolvers;
+    existingServices?: ExistingPipelineServices | undefined;
+    existingResolvers?: PreviousPipelineResolvers | undefined;
   },
 ) {
   const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
@@ -330,7 +331,7 @@ type UpdateResolver = {
  */
 type UnchangedResolver = {
   name: string;
-  metaRequest?: MetadataLabelWrite;
+  metaRequest?: MetadataLabelWrite | undefined;
 };
 
 type DeleteResolver = {
@@ -353,8 +354,8 @@ const pipelineResolverComparison = defineRequestComparison({
 /** What planResolvers needs to record dependencies on each resolver. */
 type ResolverRecordInputs = {
   owner: DeployOwner;
-  dependentApps?: DependentAppsByResource;
-  runAppIds?: ReadonlySet<string>;
+  dependentApps?: DependentAppsByResource | undefined;
+  runAppIds?: ReadonlySet<string> | undefined;
 };
 
 async function planResolvers(
@@ -389,7 +390,7 @@ async function planResolvers(
    */
   const resolverMetaRequest = async (
     namespace: string,
-    resolver: { name: string; publishEvents?: boolean },
+    resolver: { name: string; publishEvents?: boolean | undefined },
   ) => {
     const trn = resolverTrn(workspaceId, namespace, resolver.name);
     return addDependencyRecords(await buildMetaRequest({ trn, owner }), {
@@ -559,7 +560,7 @@ function processResolver(
   invokerMachineUsers: InvokerMachineUsers | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
-    {
+    omitUndefined({
       name: "body",
       operationName: "body",
       description: `${resolver.name} function body`,
@@ -575,7 +576,7 @@ function processResolver(
         `Resolver "${resolver.name}"`,
         invokerMachineUsers,
       ),
-    },
+    }),
   ];
 
   const typeBaseName = inflection.camelize(resolver.name);

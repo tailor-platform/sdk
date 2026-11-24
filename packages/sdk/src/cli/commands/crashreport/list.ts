@@ -10,7 +10,7 @@ import { logger } from "#/cli/shared/logger";
 
 export function orderAndLimitCrashReports(
   entries: string[],
-  options: { order?: Order; limit?: number },
+  options: { order?: Order | undefined; limit?: number | undefined },
 ): string[] {
   const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).toSorted();
   const ordered = options.order === "asc" ? sorted : sorted.toReversed();

@@ -6,15 +6,15 @@ export interface ErrorSourceLocation {
   /** Absolute path to the file the failure points at. */
   file: string;
   /** 1-based line within `file`. */
-  line?: number;
+  line?: number | undefined;
 }
 
 interface ErrorDiagnostics {
-  code?: string;
-  suggestion?: string;
-  context?: Readonly<Record<string, Jsonifiable | undefined>>;
-  causes?: Readonly<Record<string, unknown>>;
-  location?: ErrorSourceLocation;
+  code?: string | undefined;
+  suggestion?: string | undefined;
+  context?: Readonly<Record<string, Jsonifiable | undefined>> | undefined;
+  causes?: Readonly<Record<string, unknown>> | undefined;
+  location?: ErrorSourceLocation | undefined;
 }
 
 const diagnostics = new WeakMap<Error, ErrorDiagnostics>();

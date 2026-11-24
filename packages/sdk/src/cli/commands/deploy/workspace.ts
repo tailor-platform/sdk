@@ -36,18 +36,18 @@ import {
 } from "./workspace-context";
 
 export interface ResolveDeployWorkspaceOptions {
-  workspaceId?: string;
-  profile?: string;
-  createWorkspace?: boolean;
-  workspaceName?: string;
-  workspaceRegion?: string;
-  organizationId?: string;
-  folderId?: string;
-  dryRun?: boolean;
-  contextTargets?: readonly WorkspaceContextTarget[];
-  deployArgs?: readonly string[];
-  workspaceCommandArgs?: readonly string[];
-  workspaceCommandJson?: boolean;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  createWorkspace?: boolean | undefined;
+  workspaceName?: string | undefined;
+  workspaceRegion?: string | undefined;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
+  dryRun?: boolean | undefined;
+  contextTargets?: readonly WorkspaceContextTarget[] | undefined;
+  deployArgs?: readonly string[] | undefined;
+  workspaceCommandArgs?: readonly string[] | undefined;
+  workspaceCommandJson?: boolean | undefined;
 }
 
 interface WorkspaceContextTarget {
@@ -56,9 +56,9 @@ interface WorkspaceContextTarget {
 }
 
 type DeployWorkspaceOptions = ResolveDeployWorkspaceOptions & {
-  userDefaults?: UserWorkspaceDefaults;
+  userDefaults?: UserWorkspaceDefaults | undefined;
   /** Set once the user defaults have been applied to the organization and folder. */
-  locationResolved?: boolean;
+  locationResolved?: boolean | undefined;
 };
 
 export interface ResolvedDeployWorkspace {

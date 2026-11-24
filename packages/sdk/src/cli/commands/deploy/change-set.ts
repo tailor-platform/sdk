@@ -8,7 +8,7 @@ export interface HasName {
    * `ChangeSet.lines()` (e.g. per-sub-resource diffs embedded in a single
    * resource).
    */
-  details?: readonly string[];
+  details?: readonly string[] | undefined;
 }
 
 /**
@@ -16,7 +16,7 @@ export interface HasName {
  * planned only because the application's resources were last applied by a
  * different SDK version.
  */
-export type UpdateAnnotation = { forcedBySdkVersion?: true };
+export type UpdateAnnotation = { forcedBySdkVersion?: true | undefined };
 
 const FORCED_BY_SDK_VERSION = "forced by SDK version";
 

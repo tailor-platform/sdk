@@ -7,14 +7,15 @@ import { CLIError } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface ListOAuth2ClientsOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 /**
@@ -45,13 +46,15 @@ export async function listOAuth2Clients(
   const pageDirection = toPageDirection(options?.order);
   const oauth2Clients = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
-        workspaceId,
-        pageToken,
-        pageSize,
-        namespaceName: application.authNamespace,
-        pageDirection,
-      });
+      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          namespaceName: application.authNamespace,
+          pageDirection,
+        }),
+      );
       return [oauth2Clients, nextPageToken];
     },
     { limit: options?.limit },

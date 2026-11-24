@@ -38,7 +38,7 @@ export type DiffChangeKind = DiffChange["kind"];
  */
 interface DiffChangeBase {
   tableName: string;
-  reason?: string;
+  reason?: string | undefined;
 }
 
 /**
@@ -47,23 +47,23 @@ interface DiffChangeBase {
  * diff.json files written by older versions may still contain it.
  */
 export interface TypeSettingsPatch {
-  indexes?: Record<string, SnapshotIndexConfig>;
-  files?: Record<string, string>;
+  indexes?: Record<string, SnapshotIndexConfig> | undefined;
+  files?: Record<string, string> | undefined;
 }
 
 /** Table-level settings and metadata state used by current diffs. */
 export interface SnapshotTypeSettingsState {
-  description?: string;
+  description?: string | undefined;
   pluralForm: string;
-  settings?: TailorDBSnapshotType["settings"];
+  settings?: TailorDBSnapshotType["settings"] | undefined;
 }
 
 /**
  * Permission state carried by `permission_modified` changes.
  */
 export interface SnapshotPermissionState {
-  recordPermission?: SnapshotRecordPermission;
-  gqlPermission?: SnapshotGqlPermission;
+  recordPermission?: SnapshotRecordPermission | undefined;
+  gqlPermission?: SnapshotGqlPermission | undefined;
 }
 
 /** A new table was added to the schema. */
@@ -97,8 +97,8 @@ export interface TableRenamedChange extends DiffChangeBase {
  */
 export interface TableModifiedChange extends DiffChangeBase {
   kind: "table_modified";
-  before?: TypeSettingsPatch;
-  after?: TypeSettingsPatch;
+  before?: TypeSettingsPatch | undefined;
+  after?: TypeSettingsPatch | undefined;
 }
 
 /** Table-level settings or metadata changed. */
@@ -142,7 +142,7 @@ export interface FieldModifiedChange extends DiffChangeBase {
   fieldName: string;
   before: SnapshotFieldConfig;
   after: SnapshotFieldConfig;
-  memberRenames?: NestedMemberRename[];
+  memberRenames?: NestedMemberRename[] | undefined;
 }
 
 /**
@@ -218,7 +218,7 @@ export interface FileModifiedChange extends DiffChangeBase {
 export interface RelationshipAddedChange extends DiffChangeBase {
   kind: "relationship_added";
   relationshipName: string;
-  relationshipType?: "forward" | "backward";
+  relationshipType?: "forward" | "backward" | undefined;
   after: SnapshotRelationship;
 }
 
@@ -226,7 +226,7 @@ export interface RelationshipAddedChange extends DiffChangeBase {
 export interface RelationshipRemovedChange extends DiffChangeBase {
   kind: "relationship_removed";
   relationshipName: string;
-  relationshipType?: "forward" | "backward";
+  relationshipType?: "forward" | "backward" | undefined;
   before: SnapshotRelationship;
 }
 
@@ -234,7 +234,7 @@ export interface RelationshipRemovedChange extends DiffChangeBase {
 export interface RelationshipModifiedChange extends DiffChangeBase {
   kind: "relationship_modified";
   relationshipName: string;
-  relationshipType?: "forward" | "backward";
+  relationshipType?: "forward" | "backward" | undefined;
   before: SnapshotRelationship;
   after: SnapshotRelationship;
 }
@@ -246,14 +246,14 @@ export interface RelationshipModifiedChange extends DiffChangeBase {
  */
 export interface PermissionModifiedChange extends DiffChangeBase {
   kind: "permission_modified";
-  before?: SnapshotPermissionState;
-  after?: SnapshotPermissionState;
+  before?: SnapshotPermissionState | undefined;
+  after?: SnapshotPermissionState | undefined;
 }
 
 /** Table-level hook/validate script state for diff tracking. */
 export interface TypeScriptsState {
-  typeHookExpr?: { create?: string; update?: string };
-  typeValidateExpr?: string;
+  typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+  typeValidateExpr?: string | undefined;
 }
 
 /** Table-level hook/validate scripts changed. */
@@ -316,7 +316,7 @@ export interface MigrationDiff {
   version: number;
   namespace: string;
   createdAt: string;
-  description?: string;
+  description?: string | undefined;
   changes: DiffChange[];
   /** Whether there are breaking changes (data loss or constraint violations possible) */
   hasBreakingChanges: boolean;
@@ -329,19 +329,19 @@ export interface MigrationDiff {
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
   /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
-  scriptSkipped?: ScriptSkippedInfo;
+  scriptSkipped?: ScriptSkippedInfo | undefined;
   /**
    * Whether this migration's `db.ts` was generated with Temporal column types, so its
    * script runs against a `tailordb.Client` created with `{ temporal: true }`. Absent
    * means `false`.
    */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /**
    * The `defaultDateRepresentation` in effect when this migration's script was
    * generated. The script keeps running with it, whatever the config says later.
    * Absent means string values.
    */
-  dateRepresentation?: "temporal" | "date";
+  dateRepresentation?: "temporal" | "date" | undefined;
 }
 
 /**
@@ -360,12 +360,12 @@ export interface ScriptSkippedInfo {
  */
 export interface BreakingChangeInfo {
   tableName: string;
-  fieldName?: string;
+  fieldName?: string | undefined;
   reason: string;
   /** If true, this change is not supported and migration generation will fail */
-  unsupported?: boolean;
+  unsupported?: boolean | undefined;
   /** If true, show 3-step migration instructions for this unsupported change */
-  showThreeStepHint?: boolean;
+  showThreeStepHint?: boolean | undefined;
 }
 
 /**
@@ -379,7 +379,7 @@ export interface BreakingChangeInfo {
 export interface WarningChangeInfo {
   tableName: string;
   /** Field name, or the dotted path of a member inside a nested field (e.g. `address.zip`). */
-  fieldName?: string;
+  fieldName?: string | undefined;
   reason: string;
 }
 
@@ -481,7 +481,7 @@ function formatDiffChange(change: DiffChange): string {
     default: {
       // Runtime fallback: diff.json is parsed without validation, so
       // hand-edited or future-version files may carry unknown kinds.
-      const unknown = change as { tableName: string; fieldName?: string };
+      const unknown = change as { tableName: string; fieldName?: string | undefined };
       return `  ? ${unknown.tableName}.${unknown.fieldName ?? ""}`;
     }
   }

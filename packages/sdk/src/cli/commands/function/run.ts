@@ -338,7 +338,7 @@ export function resolveArgOptions(options: ArgOptions): ResolvedArgOptions {
  * @returns Resolved auth namespace
  */
 export function resolveAuthNamespace(
-  authConfig: { name: string; external?: boolean } | undefined,
+  authConfig: { name: string; external?: boolean | undefined } | undefined,
 ): string {
   if (authConfig?.name) {
     return authConfig.name;
@@ -355,7 +355,11 @@ type ResolveMachineUserNameOptions = {
   cliMachineUserSource: MachineUserInputSource | undefined;
   profile: string | undefined;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | {
+        name: string;
+        external?: boolean | undefined;
+        machineUsers?: Record<string, unknown> | undefined;
+      }
     | undefined;
 };
 
@@ -402,7 +406,11 @@ interface ResolveMachineUserOptions {
   authNamespace: string;
   machineUserName: string;
   authConfig:
-    | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
+    | {
+        name: string;
+        external?: boolean | undefined;
+        machineUsers?: Record<string, unknown> | undefined;
+      }
     | undefined;
 }
 
@@ -437,8 +445,8 @@ export async function resolveMachineUser(
   let attributeList: unknown[] = [];
   if (machineUserConfig && typeof machineUserConfig === "object") {
     const cfg = machineUserConfig as {
-      attributes?: Record<string, unknown>;
-      attributeList?: unknown[];
+      attributes?: Record<string, unknown> | undefined;
+      attributeList?: unknown[] | undefined;
     };
     attributes = cfg.attributes ?? null;
     attributeList = cfg.attributeList ?? [];

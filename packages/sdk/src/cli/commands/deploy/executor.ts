@@ -19,6 +19,7 @@ import { CLIError, internalError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { configAuthNamespace } from "./deploy-application";
@@ -350,7 +351,7 @@ function resolveNamespace(params: {
   resourceName: string;
   localNamespaces: ReadonlyArray<string>;
   findLocalNamespace: () => string | undefined;
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>;
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
 }): string {
   const { resourceLabel, resourceName, localNamespaces, findLocalNamespace, sameRunNamespaces } =
     params;
@@ -501,7 +502,7 @@ function protoExecutor(
   function typedEventTrigger(
     typedConfig: MessageInitShape<typeof ExecutorTriggerEventConfigSchema>["typedConfig"],
   ): MessageInitShape<typeof ExecutorTriggerConfigSchema> {
-    return { config: { case: "event", value: { typedConfig } } };
+    return { config: { case: "event", value: omitUndefined({ typedConfig }) } };
   }
 
   switch (trigger.kind) {
@@ -628,7 +629,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "webhook",
-          value: {
+          value: omitUndefined({
             url: {
               expr: `(${stringifyFunction(target.url)})(${argsExpr})`,
             },
@@ -657,7 +658,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.requestBody)})(${argsExpr})`,
                 }
               : undefined,
-          },
+          }),
         },
       };
       break;
@@ -667,7 +668,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "tailorGraphql",
-          value: {
+          value: omitUndefined({
             appName: target.appName ?? soleApplicationName(context),
             query: target.query,
             variables: target.variables
@@ -681,7 +682,7 @@ function protoExecutor(
               invokerContext,
               invokerMachineUsers,
             ),
-          },
+          }),
         },
       };
       break;
@@ -697,7 +698,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "function",
-          value: {
+          value: omitUndefined({
             name: "operation",
             scriptRef: executorFunctionName(executor.name),
             variables: {
@@ -709,7 +710,7 @@ function protoExecutor(
               invokerContext,
               invokerMachineUsers,
             ),
-          },
+          }),
         },
       };
       break;
@@ -719,7 +720,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "workflow",
-          value: {
+          value: omitUndefined({
             workflowName: target.workflowName,
             variables:
               target.args !== undefined
@@ -733,7 +734,7 @@ function protoExecutor(
               invokerContext,
               invokerMachineUsers,
             ),
-          },
+          }),
         },
       };
       break;
@@ -742,7 +743,7 @@ function protoExecutor(
       throw internalError(`Unknown target: ${target satisfies never}`);
   }
 
-  return {
+  return omitUndefined({
     name: executor.name,
     description: executor.description,
     disabled: executor.disabled,
@@ -750,5 +751,5 @@ function protoExecutor(
     triggerConfig,
     targetType,
     targetConfig,
-  };
+  });
 }

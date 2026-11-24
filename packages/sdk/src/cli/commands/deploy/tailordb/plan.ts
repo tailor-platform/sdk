@@ -54,7 +54,7 @@ export type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
 export type TailorDBChangeSet = TailorDBPlanResult["changeSet"];
 
 /** A change-set entry that names a table and the namespace it lives in. */
-export type NamespacedEntry = { name: string; request: { namespaceName?: string } };
+export type NamespacedEntry = { name: string; request: { namespaceName?: string | undefined } };
 
 /**
  * Whether the plan deletes a table and creates it again: the deletion runs before the
@@ -366,14 +366,14 @@ type UpdateType = {
  */
 type UnchangedType = {
   name: string;
-  metaRequest?: MetadataLabelWrite;
+  metaRequest?: MetadataLabelWrite | undefined;
 };
 
 /** What planTypes needs to record dependencies on each table. */
 type TypeRecordInputs = {
   owner: DeployOwner;
-  dependentApps?: DependentAppsByResource;
-  runAppIds?: ReadonlySet<string>;
+  dependentApps?: DependentAppsByResource | undefined;
+  runAppIds?: ReadonlySet<string> | undefined;
 };
 
 type DeleteType = {

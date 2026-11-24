@@ -77,7 +77,7 @@ interface RuntimeState {
   loaded: LoadedApplicationNamespaces;
   options: MigrationTestOptions;
   seeds: PreparedSeed[];
-  seedMachineUsers?: MigrationMachineUsers;
+  seedMachineUsers?: MigrationMachineUsers | undefined;
 }
 
 interface PreparedSeed {
@@ -92,10 +92,10 @@ interface WaitForCloneOptions {
   sourceWorkspaceId: string;
   targetWorkspaceId: string;
   operationId: string;
-  pollInterval?: number;
-  timeout?: number;
-  errorCodePrefix?: string;
-  onStatus?: (status: CloneOperationStatus) => void;
+  pollInterval?: number | undefined;
+  timeout?: number | undefined;
+  errorCodePrefix?: string | undefined;
+  onStatus?: ((status: CloneOperationStatus) => void) | undefined;
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -461,8 +461,8 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
 }
 
 interface TemporaryWorkspaceLocation {
-  organizationId?: string;
-  folderId?: string;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
 }
 
 interface DesignatedTargetLocation extends TemporaryWorkspaceLocation {
@@ -1063,7 +1063,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
               message: execution.error ?? `Seed execution failed for namespace "${namespace}".`,
             });
           }
-          const result = JSON.parse(execution.result || "{}") as { success?: boolean };
+          const result = JSON.parse(execution.result || "{}") as { success?: boolean | undefined };
           if (result.success !== true) {
             throw CLIError({
               code: "MIGRATION_TEST_SEED_FAILED",

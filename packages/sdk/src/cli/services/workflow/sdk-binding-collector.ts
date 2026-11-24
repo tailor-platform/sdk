@@ -34,7 +34,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
             const imported =
               importSpec.imported.type === "Identifier"
                 ? importSpec.imported.name
-                : (importSpec.imported as { value?: string }).value;
+                : (importSpec.imported as { value?: string | undefined }).value;
             if (imported === functionName) {
               bindings.add(importSpec.local.name);
             }
@@ -84,7 +84,7 @@ export function collectSdkBindings(program: Program, functionName: string): Set<
                 const keyName =
                   bindingProp.key.type === "Identifier"
                     ? bindingProp.key.name
-                    : (bindingProp.key as { value?: string }).value;
+                    : (bindingProp.key as { value?: string | undefined }).value;
                 if (keyName === functionName) {
                   const localName =
                     bindingProp.value.type === "Identifier" ? bindingProp.value.name : keyName;

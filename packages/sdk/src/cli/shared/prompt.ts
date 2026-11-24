@@ -40,46 +40,46 @@ function withGuard<Config extends BasePromptConfig, R>(
 /** Options every prompt accepts. */
 export interface BasePromptConfig {
   /** Remediation reported when the prompt cannot be shown, such as the option or environment variable that supplies the answer instead. */
-  suggestion?: string;
+  suggestion?: string | undefined;
 }
 
 /** Options accepted by {@link prompt.confirm}. */
 export interface ConfirmConfig extends BasePromptConfig {
   message: string;
-  default?: boolean;
+  default?: boolean | undefined;
 }
 
 /** Options accepted by {@link prompt.text}. */
 export interface TextConfig extends BasePromptConfig {
   message: string;
-  default?: string;
-  required?: boolean;
-  validate?: (value: string) => boolean | string | Promise<boolean | string>;
+  default?: string | undefined;
+  required?: boolean | undefined;
+  validate?: ((value: string) => boolean | string | Promise<boolean | string>) | undefined;
 }
 
 /** Options accepted by {@link prompt.password}. */
 export interface PasswordConfig extends BasePromptConfig {
   message: string;
-  mask?: boolean | string;
-  validate?: (value: string) => boolean | string | Promise<boolean | string>;
+  mask?: boolean | string | undefined;
+  validate?: ((value: string) => boolean | string | Promise<boolean | string>) | undefined;
 }
 
 /** A selectable entry of {@link SelectConfig.choices}. */
 export interface SelectChoice<Value> {
   value: Value;
-  name?: string;
-  description?: string;
-  short?: string;
-  disabled?: boolean | string;
+  name?: string | undefined;
+  description?: string | undefined;
+  short?: string | undefined;
+  disabled?: boolean | string | undefined;
 }
 
 /** Options accepted by {@link prompt.select}. */
 export interface SelectConfig<Value> extends BasePromptConfig {
   message: string;
   choices: readonly SelectChoice<Value>[];
-  default?: NoInfer<Value>;
-  pageSize?: number;
-  loop?: boolean;
+  default?: NoInfer<Value> | undefined;
+  pageSize?: number | undefined;
+  loop?: boolean | undefined;
 }
 
 /**

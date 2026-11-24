@@ -15,8 +15,8 @@ interface TreeNode {
 }
 
 export interface OrganizationTreeOptions {
-  organizationId?: string;
-  depth?: number;
+  organizationId?: string | undefined;
+  depth?: number | undefined;
 }
 
 interface OrganizationTreeJson {

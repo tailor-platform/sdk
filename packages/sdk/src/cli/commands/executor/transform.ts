@@ -173,7 +173,7 @@ function formatTriggerType(executor: ExecutorExecutor): string {
 
 function readLegacyEventTriggerConfig(config: ExecutorTriggerEventConfig): {
   eventType: string;
-  condition?: string;
+  condition?: string | undefined;
 } {
   // oxlint-disable-next-line typescript/no-deprecated -- Existing resources can still contain the legacy event fields.
   return { eventType: config.eventType, condition: config.condition?.expr };

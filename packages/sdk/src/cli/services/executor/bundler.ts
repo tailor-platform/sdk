@@ -20,11 +20,11 @@ export interface BundleExecutorsOptions extends FunctionBundleSettings {
   /** Executor file loading configuration */
   config: FileLoadConfig;
   /** Additional files to bundle (e.g., plugin-generated executors) */
-  additionalFiles?: string[];
+  additionalFiles?: string[] | undefined;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
   /** Globals each installed package may reference */
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals | undefined;
 }
 
 /**

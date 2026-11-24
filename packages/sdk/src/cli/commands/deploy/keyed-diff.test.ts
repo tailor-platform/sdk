@@ -114,7 +114,7 @@ describe("diffKeyed", () => {
 
 describe("labeledResourceChecks", () => {
   type LabeledDesired = { name: string; metaRequest: MetadataLabelWrite };
-  type LabeledExisting = { allLabels?: Record<string, string> };
+  type LabeledExisting = { allLabels?: Record<string, string> | undefined };
 
   const desired: LabeledDesired = {
     name: "a",

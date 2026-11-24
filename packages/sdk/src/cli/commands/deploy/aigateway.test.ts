@@ -51,7 +51,7 @@ function createMockClient<K extends keyof OperatorClient = never>(
     name: string;
     authNamespace?: string;
     cors?: string[];
-    label?: string;
+    label?: string | undefined;
     sdkVersion?: string;
   }>,
   overrides?: OperatorClientMocks<K>,

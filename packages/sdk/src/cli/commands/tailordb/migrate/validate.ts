@@ -84,25 +84,25 @@ import type {
 } from "./types";
 
 interface ValidateOptions {
-  configPath?: string;
-  namespace?: string;
-  workspaceId?: string;
-  profile?: string;
-  json?: boolean;
-  strict?: boolean;
+  configPath?: string | undefined;
+  namespace?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  json?: boolean | undefined;
+  strict?: boolean | undefined;
   /** Steps a deploy would be asked to skip, keyed by namespace */
-  migrationSkipSteps?: ReadonlyMap<string, readonly string[]>;
+  migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
 }
 
 interface MigrationFilesReport {
   valid: boolean;
-  error?: string;
+  error?: string | undefined;
 }
 
 interface LocalSchemaReport {
   hasDiff: boolean;
   /** Present when local tables drifted from the latest migration snapshot; absent when the drift is a missing snapshot */
-  diff?: MigrationDiff;
+  diff?: MigrationDiff | undefined;
 }
 
 interface CompletedRemoteSchemaReport {
@@ -110,25 +110,25 @@ interface CompletedRemoteSchemaReport {
   hasDrift: boolean;
   drifts: SchemaDrift[];
   /** Set when the remote check could not run (namespace not deployed, or no snapshot at the remote migration number) */
-  skipped?: RemoteSchemaVerificationSkipReason;
+  skipped?: RemoteSchemaVerificationSkipReason | undefined;
   /** Set when the namespace has tables but no migration checkpoint, so it was checked as checkpoint 0 */
-  checkpointUnset?: true;
+  checkpointUnset?: true | undefined;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
-  checkpointMissingLocal?: boolean;
+  checkpointMissingLocal?: boolean | undefined;
   /**
    * Set alongside `checkpointMissingLocal` when the cause is an environment that fell behind
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
-  rebaselinePending?: RebaselinePendingInfo;
+  rebaselinePending?: RebaselinePendingInfo | undefined;
   /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
-  localLatestMigration?: number | null;
+  localLatestMigration?: number | null | undefined;
   /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
-  historyIdMismatch?: boolean;
-  checkpointRepair?: { from: number; to: 0 };
+  historyIdMismatch?: boolean | undefined;
+  checkpointRepair?: { from: number; to: 0 } | undefined;
   /** Tables the checkpoint's migration removed that the next deploy deletes */
-  unfinishedRemovals?: string[];
+  unfinishedRemovals?: string[] | undefined;
   /** Migration whose Pre-phase schema or maintenance mode a deploy left in place without recording it as in progress; the next deploy runs it again */
-  interruptedMigration?: number;
+  interruptedMigration?: number | undefined;
 }
 
 type FailedRemoteSchemaReport = { skipped: "check_failed" } & {
@@ -159,9 +159,9 @@ interface MigrationInProgressReport {
   /** Whether the next deploy resumes the migration */
   valid: boolean;
   /** The migration an earlier deploy left in progress; absent when its record cannot be read or the checkpoint already covers it */
-  migrationNumber?: number;
+  migrationNumber?: number | undefined;
   /** Why the next deploy would stop, as the deploy reports it */
-  error?: SectionError;
+  error?: SectionError | undefined;
 }
 
 interface PendingMigrationScriptsReport {
@@ -170,11 +170,11 @@ interface PendingMigrationScriptsReport {
   /** The pending migrations that have a migrate.ts */
   migrationNumbers: number[];
   /** The machine user that runs the scripts */
-  machineUser?: string;
+  machineUser?: string | undefined;
   /** Why the next deploy would stop, as the deploy reports it */
-  error?: SectionError;
+  error?: SectionError | undefined;
   /** Set when the check could not run */
-  skipped?: "check_failed";
+  skipped?: "check_failed" | undefined;
 }
 
 interface NamespaceValidationReport {
@@ -182,33 +182,33 @@ interface NamespaceValidationReport {
   valid: boolean;
   migrationFiles: MigrationFilesReport;
   /** Omitted when the migration files are invalid (the check cannot run) */
-  localSchema?: LocalSchemaReport;
+  localSchema?: LocalSchemaReport | undefined;
   /** Omitted when the migration files are invalid */
-  remoteSchema?: RemoteSchemaReport;
+  remoteSchema?: RemoteSchemaReport | undefined;
   /**
    * Present when the namespace records a migration in progress; omitted when the remote migration
    * checkpoint is not in the local migration history
    */
-  migrationInProgress?: MigrationInProgressReport;
+  migrationInProgress?: MigrationInProgressReport | undefined;
   /**
    * Present when a pending migration has a migrate.ts or --migration-skip-steps names the namespace;
    * omitted when the remote migration checkpoint is unknown or not in the local migration history,
    * or when the in-progress check fails
    */
-  pendingMigrationScripts?: PendingMigrationScriptsReport;
+  pendingMigrationScripts?: PendingMigrationScriptsReport | undefined;
   /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
-  warningAcknowledgments?: WarningAcknowledgmentsReport;
+  warningAcknowledgments?: WarningAcknowledgmentsReport | undefined;
 }
 
 interface BuildValidationReportsOptions {
   targetNamespaces: NamespaceWithMigrations[];
   migrationFileErrors: Map<string, string>;
   localResults: MigrationCheckResult[];
-  remoteResults?: RemoteSchemaVerificationResult[];
-  inProgressReports?: ReadonlyMap<string, MigrationInProgressReport>;
-  scriptReports?: ReadonlyMap<string, PendingMigrationScriptsReport>;
+  remoteResults?: RemoteSchemaVerificationResult[] | undefined;
+  inProgressReports?: ReadonlyMap<string, MigrationInProgressReport> | undefined;
+  scriptReports?: ReadonlyMap<string, PendingMigrationScriptsReport> | undefined;
   /** Per-namespace candidates for the --strict warning acknowledgment check */
-  unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]>;
+  unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]> | undefined;
 }
 
 interface PendingMigrationChecks {
@@ -235,13 +235,13 @@ interface NamespacePendingCheck {
 }
 
 interface NamespaceInProgressResult {
-  report?: MigrationInProgressReport;
+  report?: MigrationInProgressReport | undefined;
   /** The record the next deploy resumes */
-  resumed?: MigrationInProgress;
+  resumed?: MigrationInProgress | undefined;
 }
 
 interface NamespaceScriptsResult {
-  report?: PendingMigrationScriptsReport;
+  report?: PendingMigrationScriptsReport | undefined;
   /** Failure that kept the check from running */
   error?: unknown;
 }
@@ -265,7 +265,7 @@ interface CollectedValidationReports {
   reports: NamespaceValidationReport[];
   remoteError?: unknown;
   /** Workspace whose remote schema was checked, when the remote checks ran */
-  workspaceId?: string;
+  workspaceId?: string | undefined;
 }
 
 /**

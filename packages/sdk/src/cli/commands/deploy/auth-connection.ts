@@ -7,6 +7,7 @@ import { partition } from "es-toolkit";
 import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
@@ -47,7 +48,7 @@ type CreateConnection = {
 type UpdateConnection = {
   name: string;
   /** Absent when only the connection's metadata labels are written. */
-  request?: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
+  request?: MessageInitShape<typeof UpdateAuthConnectionRequestSchema> | undefined;
   metaRequest: MetadataLabelWrite;
 };
 
@@ -155,7 +156,7 @@ export async function planAuthConnections(
       const { metadata } = await client.getMetadata({
         trn: resourceTrn(workspaceId, "auth_connection", resource.name),
       });
-      existingConnections[resource.name] = { resource, allLabels: metadata?.labels };
+      existingConnections[resource.name] = omitUndefined({ resource, allLabels: metadata?.labels });
     }),
   );
 

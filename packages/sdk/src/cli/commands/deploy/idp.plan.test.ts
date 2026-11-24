@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { planIdP } from "./idp";
 import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -130,8 +131,8 @@ type MockRemoteService = {
   publishEvents: boolean;
   userAuthPolicy?: MessageInitShape<typeof IdPUserAuthPolicySchema>;
   disableGqlOperations?: MessageInitShape<typeof IdPDisableGqlOperationsSchema>;
-  permission?: MessageInitShape<typeof IdPPermissionSchema>;
-  label?: string;
+  permission?: MessageInitShape<typeof IdPPermissionSchema> | undefined;
+  label?: string | undefined;
   sdkVersion?: string;
 };
 
@@ -158,15 +159,17 @@ function createMockClient(opts?: {
 
   return mockOperatorClient({
     listIdPServices: {
-      idpServices: services.map((service): MessageInitShape<typeof IdPServiceSchema> => ({
-        namespace: { name: service.name },
-        authorization: "",
-        lang: service.lang,
-        publishUserEvents: service.publishEvents,
-        userAuthPolicy: service.userAuthPolicy,
-        disableGqlOperations: service.disableGqlOperations,
-        permission: service.permission,
-      })),
+      idpServices: services.map((service): MessageInitShape<typeof IdPServiceSchema> =>
+        omitUndefined({
+          namespace: { name: service.name },
+          authorization: "",
+          lang: service.lang,
+          publishUserEvents: service.publishEvents,
+          userAuthPolicy: service.userAuthPolicy,
+          disableGqlOperations: service.disableGqlOperations,
+          permission: service.permission,
+        }),
+      ),
       nextPageToken: "",
     },
     listIdPClients: (request) => ({

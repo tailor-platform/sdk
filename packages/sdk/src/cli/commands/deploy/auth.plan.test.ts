@@ -22,6 +22,7 @@ import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -58,7 +59,7 @@ function remoteOAuth2Client(overrides: {
   redirectUris: string[];
   accessTokenLifetime: { seconds: bigint };
   refreshTokenLifetime: { seconds: bigint };
-  refreshTokenIdleLifetime?: { seconds: bigint };
+  refreshTokenIdleLifetime?: { seconds: bigint } | undefined;
 }) {
   return {
     name: "sample",
@@ -221,13 +222,13 @@ function remoteSCIMResource(userNameDescription?: string) {
     coreSchema: {
       name: "urn:ietf:params:scim:schemas:core:2.0:User",
       attributes: [
-        {
+        omitUndefined({
           type: AuthSCIMAttribute_Type.STRING,
           name: "userName",
           description: userNameDescription,
           required: true,
           uniqueness: AuthSCIMAttribute_Uniqueness.NONE,
-        },
+        }),
         {
           type: AuthSCIMAttribute_Type.COMPLEX,
           name: "name",
@@ -407,7 +408,7 @@ type MockClientOptions = {
     clientType: AuthOAuth2Client_ClientType;
     accessTokenLifetime?: { seconds: bigint };
     refreshTokenLifetime?: { seconds: bigint };
-    refreshTokenIdleLifetime?: { seconds: bigint };
+    refreshTokenIdleLifetime?: { seconds: bigint } | undefined;
     requireDpop: boolean;
     clientId?: string;
     clientSecret?: string;

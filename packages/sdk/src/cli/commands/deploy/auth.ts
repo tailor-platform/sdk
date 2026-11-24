@@ -69,6 +69,7 @@ import {
   DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS,
 } from "#/parser/service/auth/index";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
@@ -506,11 +507,11 @@ async function planServices(
   for (const { config } of auths) {
     desired.push({
       name: config.name,
-      request: {
+      request: omitUndefined({
         workspaceId,
         namespaceName: config.name,
         publishSessionEvents: config.publishSessionEvents,
-      },
+      }),
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "auth", config.name),
         owner,
@@ -635,12 +636,12 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
         config: {
           config: {
             case: "idToken",
-            value: {
+            value: omitUndefined({
               providerUrl: idpConfig.providerURL,
               clientId: idpConfig.clientID,
               issuerUrl: idpConfig.issuerURL,
               usernameClaim: idpConfig.usernameClaim,
-            },
+            }),
           },
         },
       };
@@ -651,7 +652,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
         config: {
           config: {
             case: "saml",
-            value: {
+            value: omitUndefined({
               ...(idpConfig.metadataURL !== undefined
                 ? { metadataUrl: idpConfig.metadataURL }
                 : {
@@ -662,7 +663,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
                   }),
               enableSignRequest: idpConfig.enableSignRequest,
               defaultRedirectUrl: idpConfig.defaultRedirectURL,
-            },
+            }),
           },
         },
       };
@@ -673,7 +674,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
         config: {
           config: {
             case: "oidc",
-            value: {
+            value: omitUndefined({
               clientIdKey: idpConfig.clientID,
               clientSecretKey: {
                 vaultName: idpConfig.clientSecret.vaultName,
@@ -682,7 +683,7 @@ function protoIdPConfig(idpConfig: IdProviderConfig): MessageInitShape<typeof Au
               providerUrl: idpConfig.providerURL,
               issuerUrl: idpConfig.issuerURL,
               usernameClaim: idpConfig.usernameClaim,
-            },
+            }),
           },
         },
       };
@@ -751,12 +752,12 @@ async function tryProtoBuiltinIdPConfig(
   return {
     config: {
       case: "oidc",
-      value: {
+      value: omitUndefined({
         clientIdKey: idpClient.client?.clientId,
         clientSecretKey: builtinIdPClientSecret(builtinIdPConfig),
         providerUrl: idpService.idpService?.providerUrl,
         usernameClaim: "name",
-      },
+      }),
     },
   };
 }
@@ -852,14 +853,14 @@ function protoUserProfileConfig(
     config: {
       config: {
         case: "tailordb",
-        value: {
+        value: omitUndefined({
           namespace: userProfile.namespace,
           type: userProfile.type.name,
           usernameField: userProfile.usernameField,
           tenantIdField: undefined,
           attributesFields: userProfile.attributeList,
           attributeMap,
-        },
+        }),
       },
     },
   };
@@ -1000,7 +1001,7 @@ async function planMachineUsers(
       }
       desired.push({
         name,
-        request: {
+        request: omitUndefined({
           workspaceId,
           authNamespace: namespaceName,
           name,
@@ -1008,7 +1009,7 @@ async function planMachineUsers(
           attributeMap: machineUser.attributes
             ? protoMachineUserAttributeMap(machineUser.attributes)
             : undefined,
-        },
+        }),
       });
     }
     await diffKeyed({
@@ -1075,7 +1076,7 @@ const oauth2ClientComparison = defineRequestComparison({
     // The platform generates the credentials and the creation time.
     oauth2Client.clientId = "";
     oauth2Client.clientSecret = "";
-    oauth2Client.createdAt = undefined;
+    delete oauth2Client.createdAt;
     oauth2Client.grantTypes.sort((left, right) => left - right);
     oauth2Client.redirectUris.sort();
     // The platform stores whole seconds, and the parser's defaults for an omitted lifetime.
@@ -1088,9 +1089,11 @@ const oauth2ClientComparison = defineRequestComparison({
         create(DurationSchema, { seconds: BigInt(DEFAULT_REFRESH_TOKEN_LIFETIME_SECONDS) }),
     );
     // The platform returns no idle lifetime for a client that has none.
-    oauth2Client.refreshTokenIdleLifetime =
-      oauth2Client.refreshTokenIdleLifetime &&
-      wholeSecondsLifetime(oauth2Client.refreshTokenIdleLifetime);
+    if (oauth2Client.refreshTokenIdleLifetime) {
+      oauth2Client.refreshTokenIdleLifetime = wholeSecondsLifetime(
+        oauth2Client.refreshTokenIdleLifetime,
+      );
+    }
   },
 });
 
@@ -1188,7 +1191,7 @@ function protoOAuth2Client(
   // application.ts) validated it and transformed the numeric token lifetimes
   // into Duration ({ seconds, nanos }). Consume it directly instead of
   // re-parsing, which would reject the already-transformed lifetimes.
-  return {
+  return omitUndefined({
     name: oauth2ClientName,
     description: oauth2Client.description,
     grantTypes: oauth2Client.grantTypes.map((grantType) => {
@@ -1213,7 +1216,7 @@ function protoOAuth2Client(
     refreshTokenLifetime: oauth2Client.refreshTokenLifetimeSeconds,
     refreshTokenIdleLifetime: oauth2Client.refreshTokenIdleLifetimeSeconds,
     requireDpop: oauth2Client.requireDpop,
-  };
+  });
 }
 
 type CreateSCIMConfig = {
@@ -1285,10 +1288,10 @@ function protoSCIMConfig(scimConfig: SCIMConfig): MessageInitShape<typeof AuthSC
         authorizationType: AuthSCIMConfig_AuthorizationType.BEARER,
         authorizationConfig: {
           case: "bearerSecret",
-          value: {
+          value: omitUndefined({
             vaultName: authorization.bearerSecret?.vaultName,
             secretKey: authorization.bearerSecret?.secretKey,
-          },
+          }),
         },
       };
     case "oauth2":
@@ -1426,7 +1429,7 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
     default:
       throw internalError(`Unknown SCIM attribute uniqueness: ${configUniqueness satisfies never}`);
   }
-  return {
+  return omitUndefined({
     type: typ,
     name: attr.name,
     description: attr.description,
@@ -1436,7 +1439,7 @@ function protoSCIMAttribute(attr: SCIMAttribute): MessageInitShape<typeof AuthSC
     uniqueness,
     canonicalValues: attr.canonicalValues ?? undefined,
     subAttributes: attr.subAttributes?.map((attr) => protoSCIMAttribute(attr)),
-  };
+  });
 }
 
 type CreateAuthHook = {

@@ -113,7 +113,7 @@ interface MigrationExecutionOptions {
   /** Owner whose labels a migration's temporary resources carry. */
   owner: DeployOwner;
   maintenanceMode: boolean;
-  skipSteps?: ReadonlyMap<string, readonly string[]>;
+  skipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
   /** Checkpoint each namespace must still have when one of its migrations starts running. */
   checkpoints: ReadonlyMap<string, ExpectedMigrationCheckpoint>;
   /** Migration history ID of the namespace's local migrations, if they have one. */
@@ -135,13 +135,13 @@ export interface MigrationContext {
   /** Config file the deploy loaded. */
   configPath: string;
   /** Profile and env-file arguments of the deploy, kept in the migration commands it suggests. */
-  migrationRecoveryArgs?: readonly string[];
+  migrationRecoveryArgs?: readonly string[] | undefined;
   /** Owner whose labels a migration's temporary resources carry. */
   owner: DeployOwner;
   /** Whether the migrating namespaces are in maintenance mode. */
   maintenanceMode: boolean;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
-  skipSteps?: ReadonlyMap<string, readonly string[]>;
+  skipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
   /** Migration history ID of each namespace's local migrations, or null when they have none. */
   migrationHistoryIds: Readonly<Record<string, string | null>>;
 }
@@ -150,16 +150,16 @@ interface ExecutionResult {
   namespace: string;
   migrationNumber: number;
   success: boolean;
-  logs?: string;
-  error?: string;
+  logs?: string | undefined;
+  error?: string | undefined;
   /** Thrown in place of a plain migration failure once the logs are shown. */
-  failure?: Error;
-  canceled?: boolean;
+  failure?: Error | undefined;
+  canceled?: boolean | undefined;
   /**
    * Whether the script's steps completed in an earlier run, which this deploy
    * reused without running them again.
    */
-  reusedEarlierRun?: boolean;
+  reusedEarlierRun?: boolean | undefined;
 }
 
 // ============================================================================
@@ -417,7 +417,7 @@ interface MigrationBundleOptions {
   /** Whether an earlier deploy left this migration in progress. */
   resumed: boolean;
   /** Steps the step runner reports as skipped. */
-  skipSteps?: readonly string[];
+  skipSteps?: readonly string[] | undefined;
 }
 
 const SCRIPT_BUNDLE_FAILED = "MIGRATION_SCRIPT_BUNDLE_FAILED";
@@ -1442,7 +1442,7 @@ export async function executeMigrations(
  * @returns {string | undefined} Machine user name or undefined if none available
  */
 export function getMigrationMachineUser(
-  migrationConfig: { machineUser?: string } | undefined,
+  migrationConfig: { machineUser?: string | undefined } | undefined,
   machineUsers: string[] | undefined,
 ): string | undefined {
   // Priority 1: Explicit config
@@ -1463,7 +1463,7 @@ interface MigrationRunSource {
   application: Pick<Application, "authServices" | "env">;
   config: ServiceSettings;
   /** Machine user that runs every namespace's scripts in place of the configured one. */
-  migrationMachineUserOverride?: string;
+  migrationMachineUserOverride?: string | undefined;
 }
 
 /** Machine user that runs the migration scripts of each namespace. */

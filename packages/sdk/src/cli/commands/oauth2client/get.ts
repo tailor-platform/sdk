@@ -12,9 +12,9 @@ import { type OAuth2ClientCredentials, toOAuth2ClientCredentials } from "./trans
 
 export interface GetOAuth2ClientOptions {
   name: string;
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
 }
 
 /**

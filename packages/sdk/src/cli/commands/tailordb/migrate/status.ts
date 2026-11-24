@@ -37,17 +37,17 @@ import {
 } from "./snapshot";
 
 interface StatusOptions {
-  configPath?: string;
-  namespace?: string;
-  workspaceId?: string;
-  profile?: string;
-  json?: boolean;
+  configPath?: string | undefined;
+  namespace?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  json?: boolean | undefined;
 }
 
 interface PendingMigrationStatusInfo {
   number: number;
   label: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 interface MigrationStatusInfo {
@@ -57,20 +57,20 @@ interface MigrationStatusInfo {
   currentMigrationLabel: string;
   pendingMigrations: PendingMigrationStatusInfo[];
   /** Migration an earlier deploy left in progress. */
-  inProgressMigration?: number;
-  inProgressMigrationLabel?: string;
+  inProgressMigration?: number | undefined;
+  inProgressMigrationLabel?: string | undefined;
   /**
    * How the in-progress migration ran: `steps` partly committed, which the next deploy resumes, or
    * a `main` run whose outcome `migration resolve` settles before the next deploy.
    */
-  inProgressMigrationRun?: "steps" | "main";
+  inProgressMigrationRun?: "steps" | "main" | undefined;
   /** Commands that continue or settle the in-progress migration. */
-  inProgressMigrationActions?: InProgressMigrationAction[];
+  inProgressMigrationActions?: InProgressMigrationAction[] | undefined;
   /** Checkpoint a deploy's maintenance mode record names, when no migration is in progress. */
-  maintenanceModeCheckpoint?: number;
-  maintenanceModeCheckpointLabel?: string;
+  maintenanceModeCheckpoint?: number | undefined;
+  maintenanceModeCheckpointLabel?: string | undefined;
   /** Command that removes the record, taking the tables out of maintenance mode if they are in it. */
-  maintenanceModeRelease?: MaintenanceModeRelease;
+  maintenanceModeRelease?: MaintenanceModeRelease | undefined;
 }
 
 interface MigrationStatusFailure {

@@ -10,8 +10,9 @@ import { ConcurrencyPolicySchema } from "@tailor-platform/tailor-proto/workflow_
 import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
-import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from "./compare";
+import { defineRequestComparison, unsetEmptyMessage, isRequestUnchanged } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
@@ -74,12 +75,12 @@ export function executionPolicyCreateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof CreateWorkflowJobFunctionExecutionPolicyRequestSchema> {
-  return {
+  return omitUndefined({
     workspaceId,
     executionPolicyName: policy.name,
     executionPolicyKey: toPlatformExecutionPolicyKey(policy),
     concurrencyPolicy: toConcurrencyPolicyInit(policy.concurrencyPolicy),
-  };
+  });
 }
 
 /**
@@ -92,21 +93,22 @@ export function executionPolicyUpdateRequest(
   workspaceId: string,
   policy: ExecutionPolicyInstance,
 ): MessageInitShape<typeof UpdateWorkflowJobFunctionExecutionPolicyRequestSchema> {
-  return {
+  return omitUndefined({
     workspaceId,
     executionPolicyName: policy.name,
     concurrencyPolicy: toConcurrencyPolicyInit(policy.concurrencyPolicy),
-  };
+  });
 }
 
 const executionPolicyComparison = defineRequestComparison({
   schema: UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
   excluded: ["workspaceId", "executionPolicyName"],
   normalize: (request) => {
-    request.concurrencyPolicy = emptyMessageAsUnset(
-      ConcurrencyPolicySchema,
-      request.concurrencyPolicy,
-    );
+    unsetEmptyMessage({
+      schema: ConcurrencyPolicySchema,
+      owner: request,
+      key: "concurrencyPolicy",
+    });
   },
 });
 
@@ -120,7 +122,7 @@ const executionPolicyComparison = defineRequestComparison({
  */
 function declaredKey(policy: ExecutionPolicyInstance): string {
   if (policy.matchType === "exact") return policy.key;
-  const key = (policy as unknown as { key?: string }).key;
+  const key = (policy as unknown as { key?: string | undefined }).key;
   if (typeof key !== "string") {
     throw CLIError({
       code: "WORKFLOW_EXECUTION_POLICY_INVALID",

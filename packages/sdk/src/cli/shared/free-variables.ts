@@ -220,7 +220,7 @@ function alwaysExits(statement: Node): boolean {
 
 interface FindUndefinedReferencesOptions {
   /** Include references protected by typeof checks, even though they cannot throw. */
-  includeGuardedReferences?: boolean;
+  includeGuardedReferences?: boolean | undefined;
 }
 
 /**

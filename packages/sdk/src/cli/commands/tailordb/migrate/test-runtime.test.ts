@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { errorToJson } from "#/cli/shared/error-json";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -851,7 +852,7 @@ describe("migration test runtime", () => {
       { namespace: "main", migrationsDir: "/project/migrations/main" },
     ]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([check]);
-    const client = mockOperatorClient({ getMetadata: { metadata } });
+    const client = mockOperatorClient({ getMetadata: omitUndefined({ metadata }) });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],

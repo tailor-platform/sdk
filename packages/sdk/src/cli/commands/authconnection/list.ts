@@ -7,6 +7,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 interface ConnectionInfo {
@@ -49,12 +50,14 @@ export const listAuthConnectionCommand = defineAppCommand({
       const listed = await fetchWithinLimit(args.limit, (limit) =>
         fetchPaged(
           async (pageToken, pageSize) => {
-            const { connections, nextPageToken } = await client.listAuthConnections({
-              workspaceId,
-              pageToken,
-              pageSize,
-              pageDirection,
-            });
+            const { connections, nextPageToken } = await client.listAuthConnections(
+              omitUndefined({
+                workspaceId,
+                pageToken,
+                pageSize,
+                pageDirection,
+              }),
+            );
             return [connections, nextPageToken];
           },
           { limit },

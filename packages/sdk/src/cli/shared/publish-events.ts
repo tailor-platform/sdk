@@ -7,7 +7,7 @@ export type PublishEventsConflict = {
   /** Executor trigger family named in the error, e.g. `record`. */
   trigger: string;
   /** What the subscribing executors subscribe to. Defaults to `"it"`. */
-  subscribesTo?: string;
+  subscribesTo?: string | undefined;
 };
 
 /**
