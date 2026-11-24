@@ -415,7 +415,7 @@ snapshots:
 				"@connectrpc/connect": "2.3.0",
 				"@connectrpc/connect-node": "2.3.0",
 				"@enlumine/graphql": "0.2.1",
-				"@enlumine/sql": "0.2.0",
+				"@enlumine/sql": "0.2.1",
 				"@enlumine/terminal": "0.2.1",
 				"@inquirer/prompts": "8.8.0",
 				"@jridgewell/trace-mapping": "0.3.31",
@@ -1171,11 +1171,6 @@ snapshots:
 			},
 		},
 
-		"@enlumine/core@0.2.0": {
-			"integrity": "sha512-ZDcyAWXtTCoQe7DLObMpqjIWoVJ2czAChJ3AboYGghG7nyZ2ckSrS85WRPfzWzt/4DEdxsgbPJOGgJxNoeu49A==",
-			"engines": {"node": ">=22"},
-		},
-
 		"@enlumine/core@0.2.1": {
 			"integrity": "sha512-GRoH33zRfxu9OayriDo/LPaZLZMbg2zJJGL1TqpDsu4BXtpkdoswNVLpoShG7ISUS7zxStxSofAGYm3SigByTA==",
 			"engines": {"node": ">=22"},
@@ -1189,11 +1184,11 @@ snapshots:
 			},
 		},
 
-		"@enlumine/sql@0.2.0": {
-			"integrity": "sha512-b20V94Ilys0gWeL+OqtvLdnMGX6EA7zhD4c4MzLTZf6TOQcLLnb0Hcw4EiFicJjTNTLocb72Gig1puM/zThE3A==",
+		"@enlumine/sql@0.2.1": {
+			"integrity": "sha512-WOI2POSqMKMDKO3mgQ5gg6XdVvb9DoRhvED17yW+Zh1sv8ylItVxkDWoixBjf0/0i0kQ/GbIPpIKC2QsnfXuLg==",
 			"engines": {"node": ">=22"},
 			"dependencies": {
-				"@enlumine/core": "0.2.0",
+				"@enlumine/core": "0.2.1",
 			},
 		},
 
