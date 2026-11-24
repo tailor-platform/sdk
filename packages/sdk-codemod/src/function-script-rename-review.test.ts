@@ -31,6 +31,26 @@ describe("function script rename", () => {
   test.each([
     ["a package runner", "README.md", "Run `npx @tailor-platform/sdk function script a.ts`.\n"],
     ["a pinned package runner", "run.sh", "npx @tailor-platform/sdk@2.46.0 function script a.ts\n"],
+    [
+      "a package runner with a global option before function",
+      "run.sh",
+      "npx @tailor-platform/sdk --json function script a.ts\n",
+    ],
+    [
+      "a package runner with a global option after function",
+      "run.sh",
+      "npx @tailor-platform/sdk function -e .env script a.ts\n",
+    ],
+    [
+      "an argv array with a spaced option value",
+      "run.ts",
+      "spawn('tailor', ['function', '--envFile', '.env local', 'script', 'a.ts']);\n",
+    ],
+    [
+      "an argv array with joined short aliases",
+      "run.ts",
+      "spawn('tailor', ['function', '-je', '.env local', 'script', 'a.ts']);\n",
+    ],
   ])("warns when %s still names function script after the rewrite", async (_name, file, source) => {
     const { result, output } = await run(file, source);
 
@@ -47,6 +67,8 @@ describe("function script rename", () => {
     ["workflow scaffold", "run.sh", "tailor workflow scaffold flow.ts\n"],
     ["another binary", "run.sh", "custom-tailor function script a.ts\n"],
     ["a file named script.ts", "run.sh", "tailor function run script.ts\n"],
+    ["an env file value taken for the subcommand", "run.sh", "tailor -e function script a.ts\n"],
+    ["a migrated command with a global option", "run.sh", "tailor function --json scaffold a.ts\n"],
   ])("neither rewrites nor warns about %s", async (_name, file, source) => {
     const { result, output } = await run(file, source);
 

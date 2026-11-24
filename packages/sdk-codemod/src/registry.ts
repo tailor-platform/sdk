@@ -1,7 +1,7 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
-import { tailorCommandPrefix } from "./command-line-pattern";
+import { TAILOR_BINARY, tailorCommandPrefix } from "./command-line-pattern";
 import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
 import type { CodemodPackage } from "./types";
 
@@ -57,8 +57,13 @@ const FUNCTION_RUN_NAME_PATTERN = new RegExp(
   String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
 );
 
-const FUNCTION_SCRIPT_COMMAND_PATTERN =
-  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
+const TAILOR_PACKAGE_RUNNER_TARGET = `(?:${TAILOR_BINARY}|@tailor-platform\\/sdk(?:@[^\\s'"\`]+)?)`;
+const FUNCTION_SCRIPT_COMMAND_PATTERN = new RegExp(
+  `${tailorCommandPrefix(TAILOR_PACKAGE_RUNNER_TARGET, ["function"], { crossLines: true })}script(?![\\w.-])`,
+);
+const FUNCTION_SCRIPT_SOURCE_STRING_PATTERN = new RegExp(
+  `${tailorCommandPrefix(TAILOR_PACKAGE_RUNNER_TARGET, ["function"], { crossLines: true, valuesMayBeOmitted: true })}script(?![\\w.-])`,
+);
 
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
@@ -1780,7 +1785,7 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     legacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
-    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_SOURCE_STRING_PATTERN],
     examples: [
       {
         lang: "sh",
