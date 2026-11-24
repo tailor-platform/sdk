@@ -29,6 +29,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { exitAfterOutput } from "#/cli/shared/exit-after-output";
 import {
   awaitFunctionAsyncRun,
   startFunctionAsyncRun,
@@ -516,7 +517,7 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
     else logger.error("Execution failed");
     printExecutionDetails(prepared, result);
   }
-  if (!result.success) process.exit(1);
+  if (!result.success) await exitAfterOutput(1);
 }
 
 /**

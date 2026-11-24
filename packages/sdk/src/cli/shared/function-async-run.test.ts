@@ -225,6 +225,40 @@ describe("awaitFunctionAsyncRun", () => {
     expect(client.deleteFunctionRegistry).toHaveBeenCalledOnce();
   });
 
+  test("keeps the name and the stack trace of the error, which `function logs` shows and the source map needs", async () => {
+    const client = createClient({
+      status: FunctionExecution_Status.FAILED,
+      result: "",
+    });
+    client.getFunctionExecution.mockResolvedValue({
+      execution: {
+        status: FunctionExecution_Status.FAILED,
+        result: "",
+        logEntries: [],
+        error: {
+          name: "Runtime error",
+          message: "Error: boom",
+          stackTrace: "    at main (file:///tmp-run-x:5:9)",
+        },
+      },
+    });
+    const outcome = await awaitFunctionAsyncRun({
+      client,
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toMatchObject({
+      state: "finished",
+      result: {
+        success: false,
+        error: "Runtime error: Error: boom\n    at main (file:///tmp-run-x:5:9)",
+      },
+    });
+  });
+
   test("reports a canceled execution as failed", async () => {
     const client = createClient({ status: FunctionExecution_Status.CANCELED, result: "" });
     const outcome = await awaitFunctionAsyncRun({
@@ -242,18 +276,24 @@ describe("awaitFunctionAsyncRun", () => {
   });
 
   test("keeps polling while the execution runs, and leaves the function in place when the wait times out", async () => {
-    const client = createClient({ status: FunctionExecution_Status.RUNNING });
-    const outcome = await awaitFunctionAsyncRun({
-      client,
-      workspaceId: "ws",
-      started,
-      pollInterval: 1,
-      timeoutMs: 10,
-    });
+    vi.useFakeTimers();
+    try {
+      const client = createClient({ status: FunctionExecution_Status.RUNNING });
+      const waiting = awaitFunctionAsyncRun({
+        client,
+        workspaceId: "ws",
+        started,
+        pollInterval: 1000,
+        timeoutMs: 3500,
+      });
+      await vi.advanceTimersByTimeAsync(4000);
 
-    expect(outcome).toEqual({ state: "timedOut" });
-    expect(client.getFunctionExecution.mock.calls.length).toBeGreaterThan(1);
-    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+      await expect(waiting).resolves.toEqual({ state: "timedOut" });
+      expect(client.getFunctionExecution.mock.calls.length).toBeGreaterThan(2);
+      expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("waits without a limit when the wait is unlimited", async () => {

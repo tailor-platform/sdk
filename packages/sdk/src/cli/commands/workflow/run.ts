@@ -15,6 +15,7 @@ import {
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { exitAfterOutput } from "#/cli/shared/exit-after-output";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -275,14 +276,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
         result,
       );
     }
-    if (!result.success) {
-      // Exiting at once would cut off what is still queued for a pipe.
-      const queued = [process.stdout, process.stderr].filter((stream) => stream.writableLength > 0);
-      await Promise.all(
-        queued.map((stream) => new Promise<void>((resolve) => stream.write("", () => resolve()))),
-      );
-      process.exit(1);
-    }
+    if (!result.success) await exitAfterOutput(1);
   },
 });
 

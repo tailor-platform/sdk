@@ -8,6 +8,7 @@
 
 import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import { composeExecutionErrorString } from "#/cli/commands/function/logs";
 import { isNotFoundError } from "#/cli/shared/client";
 import {
   isFunctionExecutionTerminalStatus,
@@ -171,7 +172,7 @@ export async function awaitFunctionAsyncRun(
                 logs,
                 result,
                 error:
-                  execution.error?.message.trim() ||
+                  (execution.error ? composeExecutionErrorString(execution.error).trim() : "") ||
                   result.trim() ||
                   (execution.status === FunctionExecution_Status.CANCELED
                     ? "Script execution was canceled"
