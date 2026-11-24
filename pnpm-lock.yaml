@@ -507,6 +507,7 @@ snapshots:
 				"@ast-grep/napi": "0.51.3",
 				"@politty/zod": "0.7.8",
 				"diff": "9.0.0",
+				"get-tsconfig": "4.14.3",
 				"pathe": "2.0.3",
 				"picomatch": "4.0.7",
 				"pkg-types": "2.4.0",

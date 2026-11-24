@@ -11,7 +11,7 @@ export type ConfigGroup = {
 };
 
 const DEPLOY_COMMAND =
-  /(?:^|[\s;&|("])(?:(?:npx|bunx|pnpm(?:\s+exec)?|yarn)\s+)?tailor\s+deploy\b([^;&|]*)/gu;
+  /(?:^|[\s;&|("])(?:(?:npx|bunx|pnpm(?:\s+exec)?|yarn)\s+)?(?:[^\s;&|("'=]*\/)?tailor\s+deploy\b([^;&|]*)/gu;
 const CONFIG_OPTION = /(?:^|\s)(?:-c|--config)(?:=|\s+)(["']?)([^\s"']+)\1/gu;
 const CONFIG_PATH_ENV = /\bTAILOR_CONFIG_PATH\s*[:=]\s*(["']?)([^\s"'#]+)\1/gu;
 
@@ -45,8 +45,8 @@ function splitPaths(value: string, baseDir: string): string[] {
 }
 
 /**
- * Find the scripts and workflows that name config paths: `-c`/`--config` in package.json scripts
- * and `TAILOR_CONFIG_PATH` in workflows and `.env` files.
+ * Find the scripts and workflows that name config paths: `-c`/`--config` and `TAILOR_CONFIG_PATH`
+ * in package.json scripts, and `TAILOR_CONFIG_PATH` in workflows and `.env` files.
  * @param cache - Module cache of the project
  * @returns Each use
  */
@@ -58,16 +58,22 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
       const source = cache.project.read(file) ?? "";
       for (const command of source.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
         const text = command[0];
+        if (!/\btailor\b/u.test(text)) continue;
+        const deploys = [...text.matchAll(DEPLOY_COMMAND)];
         for (const option of text.matchAll(CONFIG_OPTION)) {
-          if (!/\btailor\b/u.test(text)) continue;
-          const deploy = [...text.matchAll(DEPLOY_COMMAND)].some((match) =>
-            match[1]!.includes(option[0].trim()),
-          );
           uses.push({
             file,
             ...lineAt(source, command.index),
             paths: splitPaths(option[2]!, path.dirname(file)),
-            deploysTogether: deploy,
+            deploysTogether: deploys.some((match) => match[1]!.includes(option[0].trim())),
+          });
+        }
+        for (const match of text.matchAll(CONFIG_PATH_ENV)) {
+          uses.push({
+            file,
+            ...lineAt(source, command.index),
+            paths: splitPaths(match[2]!, path.dirname(file)),
+            deploysTogether: deploys.length > 0,
           });
         }
       }

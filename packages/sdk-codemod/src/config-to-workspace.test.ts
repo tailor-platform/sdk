@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { loadConfigFile } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { assert, describe, expect, test } from "vitest";
 import { createProject, runOnProject, type TestProject } from "./test-helpers/project";
 
 const CODEMODS = ["v3/config-to-app", "v3/config-to-workspace"];
@@ -23,6 +23,10 @@ const SDK_IMPORT = 'import { defineConfig } from "@tailor-platform/sdk";';
 
 function deployedTogether(...configs: string[]): string {
   return `${JSON.stringify({ scripts: { deploy: `tailor deploy -c ${configs.join(",")}` } })}\n`;
+}
+
+function tsconfig(compilerOptions: object): string {
+  return `${JSON.stringify({ compilerOptions })}\n`;
 }
 
 const SDK_PACKAGE = path.resolve(__dirname, "../../sdk");
@@ -497,9 +501,41 @@ describe("v3/config-to-workspace", () => {
         file: "tailor.config.ts",
         line: output.split("\n").indexOf('  kyselyTypePlugin({ distPath: "./b/generated" }),') + 1,
         message:
-          "Two configs registered kyselyTypePlugin; keep one, since a workspace config runs each plugin once for every namespace.",
+          "kyselyTypePlugin is registered 2 times; keep one, since a workspace config runs each plugin once for every namespace.",
         excerpt: "kyselyTypePlugin",
       },
+    ]);
+  });
+
+  test("reports a plugin that three configs register once", async () => {
+    const config = (name: string) =>
+      lines(
+        'import { defineConfig, definePlugins } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        "",
+        `export default defineConfig({ name: "${name}", db: { ${name}: { files: [] } } });`,
+        "",
+        'export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated" }));',
+      );
+    const project = createProject({
+      "package.json": deployedTogether(
+        "a/tailor.config.ts",
+        "b/tailor.config.ts",
+        "c/tailor.config.ts",
+      ),
+      "a/tailor.config.ts": config("a"),
+      "b/tailor.config.ts": config("b"),
+      "c/tailor.config.ts": config("c"),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ message }) => message),
+    ).toEqual([
+      "kyselyTypePlugin is registered 3 times; keep one, since a workspace config runs each plugin once for every namespace.",
     ]);
   });
 
@@ -555,6 +591,54 @@ describe("v3/config-to-workspace", () => {
   });
 
   test.each([
+    ["no executor subscribes to resolvers", {}, []],
+    [
+      "an executor uses resolverExecutedTrigger()",
+      {
+        "a/executors/on-get-user.ts": lines(
+          'import resolver from "../resolvers/getUser";',
+          "export default createExecutor({",
+          "  trigger: resolverExecutedTrigger({ resolver }),",
+          '  operation: { kind: "function", body: () => {} },',
+          "});",
+        ),
+      },
+      [
+        {
+          file: "b/resolvers/getUser.ts",
+          line: 1,
+          message:
+            "Namespaces a and b both define getUser, and an executor's resolverExecutedTrigger() names a resolver only by its name, so it subscribes to one of them. Rename one of them.",
+        },
+      ],
+    ],
+  ])("reports a resolver name two merged namespaces define when %s", async (_, extra, expected) => {
+    const config = (name: string) =>
+      lines(
+        SDK_IMPORT,
+        `export default defineConfig({ name: "${name}", resolver: { ${name}: { files: ["./resolvers/*.ts"] } }, executor: { files: ["./executors/*.ts"] } });`,
+      );
+    const resolver =
+      'export default createResolver({ name: "getUser", operation: "query", body: () => 1 });\n';
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": config("a"),
+      "b/tailor.config.ts": config("b"),
+      "a/resolvers/getUser.ts": resolver,
+      "b/resolvers/getUser.ts": resolver,
+      ...extra,
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(
+      findingsOf(result)
+        .filter(({ message }) => message.includes("both define"))
+        .map(({ file, line, message }) => ({ file, line, message })),
+    ).toEqual(expected);
+  });
+
+  test.each([
     [
       "they set maintenanceMode differently",
       'maintenanceMode: "deploy", ',
@@ -566,6 +650,12 @@ describe("v3/config-to-workspace", () => {
       'httpAdapter: { files: ["./http/*.ts"] }, ',
       "",
       "`httpAdapter` serves one application, and the merged workspace has several.",
+    ],
+    [
+      "they both set executor.env",
+      'executor: { files: [], env: { A: "1" } }, ',
+      'executor: { files: [], env: { A: "1" } }, ',
+      "Another config also sets `executor.env`; a workspace config has one.",
     ],
   ])("leaves the configs when %s", async (_, aExtra, bExtra, message) => {
     const files = {
@@ -881,5 +971,217 @@ describe("v3/config-to-workspace", () => {
     ).toEqual([
       "package.json:1 deploys this config together with b/tailor.config.ts, which the conversion cannot read, so it was not converted.",
     ]);
+  });
+
+  test.each([
+    [
+      "runs tailor by its path",
+      "apps/a/node_modules/.bin/tailor deploy --config a/tailor.config.ts,b/tailor.config.ts",
+    ],
+    [
+      "sets TAILOR_CONFIG_PATH",
+      "TAILOR_CONFIG_PATH=a/tailor.config.ts,b/tailor.config.ts tailor deploy",
+    ],
+  ])("merges the configs a script deploys together when it %s", async (_, script) => {
+    const project = createProject({
+      "package.json": `${JSON.stringify({ scripts: { deploy: script } })}\n`,
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(result.filesDeleted).toEqual(["a/tailor.config.ts", "b/tailor.config.ts"]);
+  });
+
+  test("imports what configs import through their own tsconfig paths from the files the aliases name", async () => {
+    const app = (name: string) => ({
+      [`apps/${name}/tsconfig.json`]: tsconfig({ paths: { "@/*": ["./src/*"] } }),
+      [`apps/${name}/src/db.ts`]: lines(
+        'import { db } from "@tailor-platform/sdk";',
+        `export const user = db.table("${name.toUpperCase()}User", { email: db.string().unique() });`,
+      ),
+      [`apps/${name}/tailor.config.ts`]: lines(
+        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+        'import { user } from "@/db";',
+        "",
+        `const auth = defineAuth("${name}-auth", { userProfile: { type: user, usernameField: "email" } });`,
+        "",
+        `export default defineConfig({ name: "${name}", auth, db: { "${name}-db": { files: ["./src/db.ts"] } } });`,
+      ),
+    });
+    const project = createProject({
+      "package.json": deployedTogether("apps/a/tailor.config.ts", "apps/b/tailor.config.ts"),
+      ...app("a"),
+      ...app("b"),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toContain(
+      lines(
+        'import { user } from "./apps/a/src/db";',
+        'import { user as bUser } from "./apps/b/src/db";',
+      ),
+    );
+    expect(findingsOf(result).filter(({ file }) => file === "tailor.config.ts")).toEqual([]);
+    const loaded = await loadConverted(project);
+    assert(loaded.kind === "workspace");
+    expect(
+      Object.fromEntries(
+        Object.entries(loaded.workspace.auth).map(([name, auth]) => [
+          name,
+          auth.userProfile?.type.name,
+        ]),
+      ),
+    ).toEqual({ "a-auth": "AUser", "b-auth": "BUser" });
+  });
+
+  test("keeps an alias the workspace config resolves the same way, and imports one file once", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "tsconfig.json": tsconfig({ paths: { "@lib/*": ["./lib/*"], "*": ["./types/*"] } }),
+      "lib/origin.ts": 'export const origin = "https://example.com";\n',
+      "a/tailor.config.ts": lines(
+        'import { defineConfig, definePlugins } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        'import { origin } from "@lib/origin";',
+        "",
+        'export default defineConfig({ name: "a", cors: [origin], db: { a: { files: [] } } });',
+        "",
+        'export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./generated" }));',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'import { origin } from "../lib/origin";',
+        "",
+        'export default defineConfig({ name: "b", cors: [origin], db: { b: { files: [] } } });',
+      ),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    expect(output).toContain(
+      'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+    );
+    expect(output.match(/^import .*origin.*$/gmu)).toEqual([
+      'import { origin } from "@lib/origin";',
+    ]);
+  });
+
+  test("reports the imports of a config whose tsconfig does not load", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tsconfig.json": `${JSON.stringify({ extends: "./missing.json" })}\n`,
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'import { origin } from "@/origin";',
+        "",
+        'export default defineConfig({ name: "a", cors: [origin], db: { a: { files: [] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toContain('import { origin } from "@/origin";');
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ file, message }) => ({ file, message })),
+    ).toEqual([
+      {
+        file: "tailor.config.ts",
+        message:
+          "a/tsconfig.json could not be read (File './missing.json' not found.), so the imports of a/tailor.config.ts that do not start with ./ or ../ were kept as written; check that they resolve from the workspace config.",
+      },
+    ]);
+  });
+
+  test.each([
+    [
+      "a package that only its own package.json declares",
+      {
+        "package.json": `${JSON.stringify({
+          scripts: { deploy: "tailor deploy -c a/tailor.config.ts,b/tailor.config.ts" },
+          devDependencies: { "@tailor-platform/sdk": "2.47.0" },
+        })}\n`,
+        "a/package.json": `${JSON.stringify({
+          devDependencies: {
+            "@tailor-platform/sdk": "2.47.0",
+            "@tailor-platform/sdk-plugin-frontend": "0.3.0",
+          },
+        })}\n`,
+      },
+      'import { frontendPlugin } from "@tailor-platform/sdk-plugin-frontend";',
+      "`@tailor-platform/sdk-plugin-frontend` is declared in a/package.json but not in package.json; declare it there, since the workspace config imports it.",
+    ],
+    [
+      "a subpath import of its own package.json",
+      {
+        "a/package.json": `${JSON.stringify({ imports: { "#web": "./web.ts" } })}\n`,
+        "a/web.ts": 'export const origin = "https://example.com";\n',
+      },
+      'import { origin } from "#web";',
+      "`#web` resolves through the `imports` of a/package.json, which does not apply to the workspace config; import the file by a relative path.",
+    ],
+  ])("reports a merged config's import of %s", async (_, extra, importLine, message) => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      ...extra,
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        importLine,
+        "",
+        'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ file, line, message }) => ({ file, line, message })),
+    ).toEqual([
+      { file: "tailor.config.ts", line: output.split("\n").indexOf(importLine) + 1, message },
+    ]);
+  });
+
+  test("groups configs through a service name a config imports through a path alias", async () => {
+    const project = createProject({
+      "a/tsconfig.json": tsconfig({ paths: { "@/*": ["./src/*"] } }),
+      "a/src/names.ts": 'export const sharedDb = "shared";\n',
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'import { sharedDb } from "@/names";',
+        "",
+        'export default defineConfig({ name: "a", db: { [sharedDb]: { files: [] } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'export default defineConfig({ name: "b", db: { shared: { external: true } } });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(result.filesDeleted).toEqual(["a/tailor.config.ts", "b/tailor.config.ts"]);
+    expect(project.read("tailor.config.ts")).toContain('import { sharedDb } from "./a/src/names";');
   });
 });

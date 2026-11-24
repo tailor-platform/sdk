@@ -396,7 +396,7 @@ class SectionsBuilder {
         this.stop(
           member,
           item,
-          `Two configs set \`${key}.${itemKey}\`; a workspace config has one.`,
+          `Another config also sets \`${key}.${itemKey}\`; a workspace config has one.`,
         );
       }
       return piece;

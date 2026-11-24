@@ -222,17 +222,18 @@ class Conversion {
         message: `seedPlugin seeds as machine user "${seedMachineUser}", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.`,
       });
     }
-    pluginNames.forEach((name, index) => {
-      if (name === undefined || pluginNames.indexOf(name) === index) return;
+    for (const name of new Set(pluginNames)) {
+      const count = pluginNames.filter((candidate) => candidate === name).length;
+      if (name === undefined || count < 2) continue;
       const line =
         lines.findLastIndex((candidate) => candidate.trimStart().startsWith(`${name}(`)) + 1;
       this.changes.findings.push({
         file: outputPath,
         line: Math.max(line, 1),
         excerpt: name,
-        message: `Two configs registered ${name}; keep one, since a workspace config runs each plugin once for every namespace.`,
+        message: `${name} is registered ${count} times; keep one, since a workspace config runs each plugin once for every namespace.`,
       });
-    });
+    }
 
     this.changes.findings.push(
       ...composed.findings,

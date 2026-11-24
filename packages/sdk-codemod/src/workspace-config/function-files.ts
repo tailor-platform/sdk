@@ -255,10 +255,20 @@ export function rewriteFunctionFiles(
 
 const TABLE_CALL = /\bdb\s*\.\s*(?:table|type)\s*\(\s*(["'`])([^"'`]+)\1/gu;
 const RESOLVER_NAME = /\bcreateResolver\s*\(\s*\{[^}]*?\bname\s*:\s*(["'`])([^"'`]+)\1/gu;
+const RESOLVER_EXECUTED_TRIGGER = /\bresolverExecutedTrigger\b|(["'`])resolverExecuted\1/u;
+
+function subscribesToResolvers(cache: ModuleCache): boolean {
+  return cache.project.paths.some(
+    (file) =>
+      SOURCE_EXTENSIONS.has(path.extname(file)) &&
+      RESOLVER_EXECUTED_TRIGGER.test(cache.project.read(file) ?? ""),
+  );
+}
 
 /**
- * Report TailorDB type names and resolver names that two namespaces of the merged workspace both
- * use, which a workspace config rejects or resolves to one of them.
+ * Report TailorDB type names that two namespaces of the merged workspace both use, which a
+ * workspace config rejects, and, when an executor subscribes to resolvers, resolver names that two
+ * namespaces both use, which its trigger resolves to one of them.
  * @param cache - Module cache of the project
  * @param members - The merged configs
  * @returns The reports, at the second definition
@@ -268,18 +278,23 @@ export function reportDuplicateNames(
   members: readonly ConfigModule[],
 ): Report[] {
   const reports: Report[] = [];
-  for (const [key, pattern, problem] of [
+  const checks = [
     [
       "db",
       TABLE_CALL,
       "a workspace config needs TailorDB type names to be unique across its namespaces",
     ],
-    [
-      "resolver",
-      RESOLVER_NAME,
-      "an executor's resolverExecutedTrigger() names a resolver only by its name, so it subscribes to one of them",
-    ],
-  ] as const) {
+    ...(subscribesToResolvers(cache)
+      ? [
+          [
+            "resolver",
+            RESOLVER_NAME,
+            "an executor's resolverExecutedTrigger() names a resolver only by its name, so it subscribes to one of them",
+          ] as const,
+        ]
+      : []),
+  ] as const;
+  for (const [key, pattern, problem] of checks) {
     const seen = new Map<string, string>();
     for (const member of members) {
       for (const { namespace, service } of servicesOf(member, [key])) {

@@ -1,3 +1,4 @@
+import { builtinModules } from "node:module";
 import * as path from "pathe";
 import {
   arrayElements,
@@ -10,7 +11,13 @@ import {
   parseRoot,
 } from "../ast-grep-helpers";
 import { callArguments, parseConfigModule, SDK_MODULE, type ConfigModule } from "./config-module";
-import { literalText, relativeSpecifier, type ModuleCache, type Report } from "./project";
+import {
+  declaresDependency,
+  literalText,
+  relativeSpecifier,
+  type ModuleCache,
+  type Report,
+} from "./project";
 import { applyEdits, rebasePattern, replaceNode, type TextEdit } from "./text";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -228,6 +235,63 @@ function pluginPathEdits(
 }
 
 /**
+ * The specifier that names, from the workspace config, what a member imports: a relative one
+ * rebased, and a `paths` alias rewritten to a relative one unless the workspace config resolves
+ * it with the same tsconfig.
+ */
+function outputSpecifier(
+  cache: ModuleCache,
+  member: ConfigModule,
+  specifier: string,
+  outputPath: string,
+): string {
+  if (specifier.startsWith(".")) {
+    return relativeSpecifier(outputPath, path.join(member.dir, specifier));
+  }
+  const alias = cache.aliasTarget(member.path, specifier);
+  if (alias === null || cache.nearestTsconfig(path.dirname(outputPath))?.path === alias.tsconfig) {
+    return specifier;
+  }
+  return relativeSpecifier(outputPath, alias.mapped);
+}
+
+function packageName(specifier: string): string {
+  const parts = specifier.split("/");
+  return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0]!;
+}
+
+/**
+ * Report an import the workspace config resolves through another package.json than the member: a
+ * subpath import, or a package only the member's package.json declares.
+ */
+function packageScopeReport(
+  cache: ModuleCache,
+  member: ConfigModule,
+  statement: SgNode,
+  specifier: string,
+  outputDir: string,
+): Report | null {
+  const own = cache.nearestPackageJson(member.dir);
+  const output = cache.nearestPackageJson(outputDir);
+  if (own === null || own.path === output?.path) return null;
+  if (specifier.startsWith("#")) {
+    return {
+      file: member.path,
+      node: statement,
+      message: `\`${specifier}\` resolves through the \`imports\` of ${own.path}, which does not apply to the workspace config; import the file by a relative path.`,
+    };
+  }
+  const name = packageName(specifier);
+  if (builtinModules.includes(name) || !declaresDependency(own, name)) return null;
+  if (output !== null && declaresDependency(output, name)) return null;
+  return {
+    file: member.path,
+    node: statement,
+    message: `\`${name}\` is declared in ${own.path} but not in ${output?.path ?? "a package.json above the workspace config"}; declare it there, since the workspace config imports it.`,
+  };
+}
+
+/**
  * Merge the members' modules: give every top-level name one meaning, renaming the names two
  * members declare differently, rewrite relative imports for the workspace config's location, and
  * drop the imports between members.
@@ -370,14 +434,33 @@ export function composeMembers(
     }
     composed.members.push(renamed);
 
+    const tsconfig = cache.nearestTsconfig(member.dir);
+    if (
+      tsconfig !== null &&
+      "error" in tsconfig &&
+      cache.nearestTsconfig(outputDir)?.path !== tsconfig.path
+    ) {
+      composed.findings.push({
+        file: member.path,
+        node: member.call,
+        message: `${tsconfig.path} could not be read (${tsconfig.error}), so the imports of ${member.path} that do not start with ./ or ../ were kept as written; check that they resolve from the workspace config.`,
+      });
+    }
     for (const statement of findImportStatements(renamed.module.root)) {
       const importPath = importSource(statement);
       if (importPath === null) continue;
       const resolved = cache.resolve(member.path, importPath);
       if (resolved !== null && memberPaths.has(resolved)) continue;
-      const rewritten = importPath.startsWith(".")
-        ? relativeSpecifier(outputPath, path.join(member.dir, importPath))
-        : importPath;
+      const report = packageScopeReport(cache, member, statement, importPath, outputDir);
+      if (
+        report &&
+        !composed.findings.some(
+          (existing) => existing.file === report.file && existing.message === report.message,
+        )
+      ) {
+        composed.findings.push(report);
+      }
+      const rewritten = outputSpecifier(cache, member, importPath, outputPath);
       const names = importedNames(statement);
       if (names.length === 0) {
         if (!composed.sideEffects.includes(rewritten)) composed.sideEffects.push(rewritten);
@@ -386,11 +469,7 @@ export function composeMembers(
       for (const named of names) {
         if (importPath === SDK_MODULE && named.imported === "defineConfig") continue;
         const local = renames.get(named.local) ?? named.local;
-        if (
-          !composed.imports.some(
-            (existing) => existing.source === rewritten && existing.local === local,
-          )
-        ) {
+        if (!composed.imports.some((existing) => existing.local === local)) {
           composed.imports.push({ ...named, source: rewritten, local });
         }
       }
@@ -441,17 +520,21 @@ export function composeMembers(
           ? statement.children().find((child) => child.kind() === "string")
           : undefined;
       const reexportPath = literalText(reexported);
-      if (reexported && reexportPath !== null && reexportPath.startsWith(".")) {
-        if (memberPaths.has(cache.resolve(member.path, reexportPath) ?? "")) {
-          composed.stops.push({
-            file: member.path,
-            node: statement,
-            message:
-              "The config re-exports another config's exports, which the merge puts in one module.",
-          });
-        }
+      if (
+        reexportPath !== null &&
+        memberPaths.has(cache.resolve(member.path, reexportPath) ?? "")
+      ) {
+        composed.stops.push({
+          file: member.path,
+          node: statement,
+          message:
+            "The config re-exports another config's exports, which the merge puts in one module.",
+        });
+      }
+      const rewritten =
+        reexportPath === null ? null : outputSpecifier(cache, member, reexportPath, outputPath);
+      if (reexported && rewritten !== null && rewritten !== reexportPath) {
         const quote = reexported.text()[0];
-        const rewritten = relativeSpecifier(outputPath, path.join(member.dir, reexportPath));
         statements.push(
           applyEdits(
             statement.text(),
