@@ -190,8 +190,9 @@ describe("function run --name review", () => {
       "run.ts",
       'spawnSync("tailor", ["function", "run", "a.ts"]); spawnSync("tailor", ["workspace", "create", "--name", "app"]);\n',
     ],
-    ["--name of function registry get", "run.sh", "tailor function registry get --name x\n"],
-    ["--name of workflow registry list", "run.sh", "tailor workflow registry list --name x\n"],
+    ["--name of function get", "run.sh", "tailor function get --name x\n"],
+    ["-n of function get", "run.sh", "tailor function get -n x\n"],
+    ["a quoted --name of function get", "run.sh", 'tailor function get "--name" x\n'],
     ["a quoted --name of another command", "run.sh", 'tailor workspace create "--name" app\n'],
     [
       "a quoted --name of another command in a template string",
