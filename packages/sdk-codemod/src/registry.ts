@@ -44,6 +44,10 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
   ].join(""),
 );
 const FUNCTION_TEST_RUN_PATTERN = new RegExp(
+  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true })}test-run(?![\\w.-])`,
+);
+// A source string may be an argv array whose option values were removed, so a value can be missing.
+const FUNCTION_TEST_RUN_SOURCE_STRING_PATTERN = new RegExp(
   `${tailorCommandPrefix("\\bfunction", [], { crossLines: true, valuesMayBeOmitted: true })}test-run(?![\\w.-])`,
 );
 
@@ -1741,7 +1745,7 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     legacyPatterns: [FUNCTION_TEST_RUN_PATTERN],
-    sourceStringLegacyPatterns: [FUNCTION_TEST_RUN_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_TEST_RUN_SOURCE_STRING_PATTERN],
     examples: [
       {
         lang: "sh",

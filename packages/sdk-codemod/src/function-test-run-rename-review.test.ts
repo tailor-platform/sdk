@@ -86,6 +86,24 @@ describe("function test-run rename", () => {
   });
 
   test.each([
+    ["a shell script", "run.sh", "tailor function --env-file test-run run a.ts\n"],
+    ["a shell script with a short option", "run.sh", "tailor function -e test-run run a.ts\n"],
+    [
+      "a shell script with a camelCase option",
+      "run.sh",
+      "tailor function --envFile test-run run a.ts\n",
+    ],
+  ])(
+    "does not warn about %s whose env file is named test-run",
+    async (_name, relativePath, source) => {
+      const { result, output } = await run(relativePath, source);
+
+      expect(output).toBe(source);
+      expect(result.warnings).toEqual([]);
+    },
+  );
+
+  test.each([
     ["a short option", "spawn('tailor', ['function', '-e', 'test-run', 'run', 'a.ts']);\n"],
     [
       "a camelCase long option",
