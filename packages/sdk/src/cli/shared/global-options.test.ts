@@ -10,25 +10,23 @@ import {
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { commonArgs, createCommonArgs, flagTokensOf } from "./args";
+import { commonArgs, createCommonArgs } from "./args";
 import { defineAppCommand } from "./command";
 
 const fields = extractFields(z.strictObject(commonArgs)).fields;
 const valueFields = fields.filter((field) => field.type !== "boolean");
 const booleanFields = fields.filter((field) => field.type === "boolean");
 
-const isNegated = (flag: string) => /^--no(?:-|[A-Z])/.test(flag);
-
 describe("the global options the codemods look for", () => {
-  test("name every value-taking global option of the CLI, with every spelling", () => {
-    expect(valueFields.flatMap(flagTokensOf).toSorted()).toEqual(
-      [...GLOBAL_VALUE_FLAGS].toSorted(),
+  test("name every value-taking global option of the CLI", () => {
+    expect(valueFields.map((field) => field.cliName).toSorted()).toEqual(
+      GLOBAL_VALUE_OPTIONS.map((option) => option.name).toSorted(),
     );
   });
 
-  test("name every global flag of the CLI, with every spelling but the negated ones", () => {
-    expect([...new Set(booleanFields.flatMap(flagTokensOf))].toSorted()).toEqual(
-      GLOBAL_BOOLEAN_FLAGS.filter((flag) => !isNegated(flag)).toSorted(),
+  test("name every global flag of the CLI", () => {
+    expect(booleanFields.map((field) => field.cliName).toSorted()).toEqual(
+      GLOBAL_BOOLEAN_OPTIONS.map((option) => option.name).toSorted(),
     );
   });
 
