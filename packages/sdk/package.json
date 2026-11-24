@@ -199,7 +199,7 @@
     "@connectrpc/connect-node": "2.3.0",
     "@enlumine/graphql": "0.2.1",
     "@enlumine/sql": "0.2.0",
-    "@enlumine/terminal": "0.2.0",
+    "@enlumine/terminal": "0.2.1",
     "@inquirer/prompts": "8.8.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@napi-rs/keyring": "2.1.2",

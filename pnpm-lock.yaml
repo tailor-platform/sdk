@@ -416,7 +416,7 @@ snapshots:
 				"@connectrpc/connect-node": "2.3.0",
 				"@enlumine/graphql": "0.2.1",
 				"@enlumine/sql": "0.2.0",
-				"@enlumine/terminal": "0.2.0",
+				"@enlumine/terminal": "0.2.1",
 				"@inquirer/prompts": "8.8.0",
 				"@jridgewell/trace-mapping": "0.3.31",
 				"@napi-rs/keyring": "2.1.2",
@@ -1197,11 +1197,11 @@ snapshots:
 			},
 		},
 
-		"@enlumine/terminal@0.2.0": {
-			"integrity": "sha512-UePUhtcFpX/RNmJOGOOC+VqlcQuF8iDfVSn4c3VukcW//yBx4LLK5ozsrGzTvfh+jZIBUS04Dimu1Wmv+u8RmA==",
+		"@enlumine/terminal@0.2.1": {
+			"integrity": "sha512-1kSCBJYJojMgqwd5TAKqZUHpIleTdSjjN9PJdTGC0lvic9JNTWrOTlH6waG9eSSe/A6Fo0gchOvHje+ua+E79Q==",
 			"engines": {"node": ">=22"},
 			"dependencies": {
-				"@enlumine/core": "0.2.0",
+				"@enlumine/core": "0.2.1",
 			},
 		},
 
