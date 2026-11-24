@@ -2055,6 +2055,7 @@ describe("runCodemods", () => {
       ],
       ["a leading substitution", "run(`${dir} tailor deploy ${file}`);\n", /^ tailor deploy $/],
       ["a hex escape", 'run("tailor dep\\x6coy");\n', /tailor dep[^\0 ]oy/],
+      ["an escaped dollar sign", 'run("curl \\$PLATFORM_URL");\n', "PLATFORM_URL"],
     ])("keeps a string command readable with %s", async (_name, source, pattern) => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
       tmpDir = dir;

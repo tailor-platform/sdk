@@ -200,6 +200,11 @@ describe("function run --name review", () => {
     ["a quoted --name of function get", "run.sh", 'tailor function get "--name" x\n'],
     ["a quoted --name of another command", "run.sh", 'tailor workspace create "--name" app\n'],
     [
+      "-n of another command on the next line after a newline escape in a template string",
+      "run.ts",
+      "execSync(`tailor function run ${file}\\necho -n done\\n`);\n",
+    ],
+    [
       "a quoted --name of another command in a template string",
       "run.ts",
       "execSync(`tailor workspace create ${a} '--name' app`);\n",

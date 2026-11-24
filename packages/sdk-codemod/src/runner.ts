@@ -171,8 +171,9 @@ function contentForResidualMatching(relative: string, content: string): string {
 const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
 
 function sourceStringEscapeForResidualMatching(escape: string): string {
-  if (/^\\(?:[nrtvf]|\r\n|\r|\n)$/.test(escape)) return " ";
-  if (/^\\[\\"'`$/]$/.test(escape)) return escape.slice(1);
+  if (/^\\[nr]$/.test(escape)) return "\n";
+  if (/^\\(?:[tvf]|\r\n|\r|\n)$/.test(escape)) return " ";
+  if (/^\\[\\"'`/]$/.test(escape)) return escape.slice(1);
   return SOURCE_STRING_OPAQUE_VALUE;
 }
 
