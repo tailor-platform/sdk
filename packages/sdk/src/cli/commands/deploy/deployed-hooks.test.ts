@@ -650,9 +650,8 @@ describe("deployed hooks", () => {
       }).catch((thrown: unknown) => thrown);
       expect(error).toMatchObject({
         code: "DEPLOYED_HOOK_FAILED",
-        message: expect.stringMatching(
-          /hook of plugin "hook" failed for the workspace config.*Hooks not run: later \(workspace config\)$/s,
-        ),
+        message: expect.stringContaining('hook of plugin "hook" failed for the workspace config: '),
+        details: "Hooks not run: later (workspace config)",
         cause: {
           code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
           context: {
