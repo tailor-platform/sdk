@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { configDefaults, defineConfig } from "vitest/config";
+import { loadYamlText } from "../sdk-plugin-setup/scripts/yaml-text-plugin.mjs";
 
 type PackageExport = {
   import?: string;
@@ -108,6 +109,8 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
 const { isolated: isolatedUnitTests, shared: sharedUnitTests } = classifyUnitTests();
 
 export default defineConfig({
+  // command-mentions.test.ts imports the setup plugin, whose workflow templates are YAML text modules.
+  plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
     alias: [
       // Keep package self-imports on the source tree so V8 coverage does not

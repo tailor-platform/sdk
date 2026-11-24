@@ -5,7 +5,7 @@ import type { WorkspaceApplication, WorkspaceRepresentation } from "./types";
 import type { z } from "zod";
 
 /** The default export of `tailor.config.ts`, told apart by the function that defined it. */
-export type ParsedConfigExport =
+type ParsedConfigExport =
   | { kind: "config"; config: AppConfig }
   | {
       kind: "workspace";
