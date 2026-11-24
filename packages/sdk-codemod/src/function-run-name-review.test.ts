@@ -67,6 +67,21 @@ describe("function run --name review", () => {
       "package.json",
       JSON.stringify({ scripts: { job: "tailor function run C:\\proj\\a.ts --name x" } }),
     ],
+    [
+      "--name after a PowerShell backtick continuation",
+      "run.ps1",
+      "tailor function run a.ts `\n  --name x\n",
+    ],
+    [
+      "--name after a cmd caret continuation",
+      "run.cmd",
+      "tailor function run a.ts ^\r\n  --name x\r\n",
+    ],
+    [
+      "--name on its own line of a folded YAML scalar",
+      ".github/workflows/job.yml",
+      "steps:\n  - run: >-\n      tailor function run a.ts\n      --name x\n",
+    ],
   ])("reports %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([relativePath]);
   });
@@ -103,6 +118,16 @@ describe("function run --name review", () => {
       "a line of many escaped quotes without --name, without taking exponential time",
       "run.sh",
       `tailor function run ${String.raw`\"`.repeat(20000)}\n`,
+    ],
+    [
+      "--name of another command in a separate string of a TypeScript file",
+      "run.ts",
+      'const a = "tailor function run a.ts"; const b = "tailor workspace create --name app";\n',
+    ],
+    [
+      "--name of another command on the next line of a shell script",
+      "run.sh",
+      "tailor function run a.ts\ntailor workspace create --name app\n",
     ],
     [
       "--name text inside an argument in a package.json script",
