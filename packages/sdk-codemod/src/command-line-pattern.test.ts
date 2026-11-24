@@ -177,6 +177,16 @@ describe("tailorCommandPrefix", () => {
 
       expect(elapsedMs("function", {}, commandLine)).toBeLessThan(50);
     });
+
+    test.each([["-e=.env"], ["-je=.env"], ["--env-file=.env"]])(
+      "does not take longer for every %s that follows another",
+      (option) => {
+        const commandLine = `function${` ${option}`.repeat(24)} nope`;
+
+        expect(elapsedMs("function", {}, commandLine)).toBeLessThan(50);
+        expect(elapsedMs("function", { valuesMayBeOmitted: true }, commandLine)).toBeLessThan(50);
+      },
+    );
   });
 
   test.each([
