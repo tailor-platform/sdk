@@ -18,9 +18,11 @@ import {
   durationArg,
   formatConfigArg,
   parseDuration,
+  readEnvFileArgs,
   recoveryContextArgs,
   resolveMachineUserInputSource,
   flagTokensOf,
+  type EnvFileArgs,
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
@@ -287,7 +289,8 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     const suggestion =
       isTimeoutFailure(result) && args.name === undefined
         ? asyncRunSuggestion({
-            file: path.relative(process.cwd(), filePath) || args.file,
+            file: fileForHint(filePath, args.file),
+            ...readEnvFileArgs(process.argv.slice(2)),
             arg: args.arg,
             argFile: args["arg-file"],
             machineUser: args["machine-user"],
@@ -309,11 +312,14 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       if (suggestion) logger.info(suggestion);
     }
 
-    if (!result.success) {
-      process.exit(1);
-    }
+    if (!result.success) await exitAfterOutput(1);
   },
 });
+
+function fileForHint(filePath: string, given: string): string {
+  const relative = path.relative(process.cwd(), filePath) || given;
+  return relative.startsWith("-") ? `./${relative}` : relative;
+}
 
 const TIMEOUT_ERROR = /Execution timed out after \d+ seconds?/i;
 
@@ -321,7 +327,7 @@ function isTimeoutFailure(result: ScriptExecutionResult): boolean {
   return !result.success && TIMEOUT_ERROR.test(result.error ?? "");
 }
 
-interface AsyncRunSuggestionParams {
+interface AsyncRunSuggestionParams extends EnvFileArgs {
   /** File given to the command, as the user can pass it again */
   file: string;
   arg: string | undefined;
@@ -345,6 +351,8 @@ function asyncRunSuggestion(params: AsyncRunSuggestionParams): string {
     "run",
     params.file,
     "--async",
+    ...params.envFiles.map((file) => `--env-file=${file}`),
+    ...params.envFilesIfExists.map((file) => `--env-file-if-exists=${file}`),
     ...(params.arg === undefined ? [] : ["--arg", params.arg]),
     ...(params.argFile === undefined ? [] : ["--arg-file", params.argFile]),
     ...(params.machineUser === undefined ? [] : [`--machine-user=${params.machineUser}`]),
@@ -459,7 +467,7 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
         ? `Stopped before the Platform confirmed run ${runId}. It may be running; ${prune} removes its temporary resource once it has finished.`
         : `Stopped waiting. Run ${runId} keeps running; read it with ${inspect}, then ${prune}.`,
     );
-    process.exit(130);
+    void exitAfterOutput(130);
   };
   process.once("SIGINT", onInterrupt);
   let started: StartedFunctionAsyncRun;

@@ -274,6 +274,52 @@ describe("function run --json", () => {
       expect(exit).toHaveBeenCalledWith(1);
     });
 
+    test("keeps a file name that starts with a hyphen from being read as an option", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const dashed = path.join(path.dirname(scriptPath), "-backfill.js");
+      fs.copyFileSync(scriptPath, dashed);
+      vi.spyOn(process, "cwd").mockReturnValue(path.dirname(scriptPath));
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [dashed, "--machine-user", "admin"]);
+
+      const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
+      expect(suggestion).toContain("function run ./-backfill.js --async");
+    });
+
+    test("carries the env files it was given, in the order they are loaded", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const envFile = path.join(path.dirname(scriptPath), "base.env");
+      fs.writeFileSync(envFile, "FUNCTION_RUN_TEST_ENV_FILE=1\n");
+      const args = [
+        scriptPath,
+        `--env-file=${envFile}`,
+        "--env-file-if-exists",
+        "missing.env",
+        "--machine-user",
+        "admin",
+      ];
+      const originalArgv = process.argv;
+      process.argv = ["node", "tailor", "function", "run", ...args];
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      try {
+        await runCommand(runFunctionCommand, args);
+      } finally {
+        process.argv = originalArgv;
+        delete process.env.FUNCTION_RUN_TEST_ENV_FILE;
+      }
+
+      const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
+      expect(suggestion).toContain(`--env-file=${envFile} --env-file-if-exists=missing.env`);
+    });
+
     test("prints the same hint after the error when the output is for a person", async () => {
       vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
       vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
@@ -515,7 +561,7 @@ describe("function run --json", () => {
       release(asyncRun);
       await finished;
 
-      expect(exit).toHaveBeenCalledWith(130);
+      await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
       expect(stderr.output).toContain("may be running");
       expect(stderr.output).toContain("tailor workflow prune");
     });
