@@ -40,7 +40,10 @@ describe("postinstall", () => {
     });
 
     const dtsPath = path.join(tmp.dir, "tailor.d.ts");
-    expect(fs.existsSync(dtsPath), `${result.stdout}${result.stderr}`).toBe(true);
+    expect(
+      fs.existsSync(dtsPath),
+      `${result.stdout}${result.stderr}\n(if dist is stale, run pnpm build)`,
+    ).toBe(true);
     const dts = fs.readFileSync(dtsPath, "utf8");
     expect(dts).toContain("APP_ENV: string;");
     expect(dts).toContain(registryEntry);
