@@ -1,0 +1,12 @@
+{
+  "name": "ws-ci-verify",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "devDependencies": {
+    "@tailor-platform/sdk": "https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk@97aa8d4c3a440a36e18ecc71cadd8aacad904c62",
+    "@tailor-platform/sdk-plugin-seed": "https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk-plugin-seed@97aa8d4c3a440a36e18ecc71cadd8aacad904c62",
+    "@tailor-platform/sdk-plugin-setup": "https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk-plugin-setup@97aa8d4c3a440a36e18ecc71cadd8aacad904c62",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "version": 8,
+  "namespace": "ledger-db",
+  "createdAt": "2026-11-24T12:48:31.875Z",
+  "tables": {
+    "Entry": {
+      "name": "Entry",
+      "pluralForm": "Entries",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "title": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [],
+            "actions": [
+              "all"
+            ],
+            "permit": "allow"
+          }
+        ]
+      }
+    }
+  }
+}

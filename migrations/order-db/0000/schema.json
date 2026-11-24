@@ -1,0 +1,59 @@
+{
+  "version": 8,
+  "namespace": "order-db",
+  "createdAt": "2026-11-24T12:48:31.874Z",
+  "tables": {
+    "Order": {
+      "name": "Order",
+      "pluralForm": "Orders",
+      "fields": {
+        "id": {
+          "type": "uuid",
+          "required": true
+        },
+        "title": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "settings": {},
+      "permissions": {
+        "record": {
+          "create": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "read": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "update": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ],
+          "delete": [
+            {
+              "conditions": [],
+              "permit": "allow"
+            }
+          ]
+        },
+        "gql": [
+          {
+            "conditions": [],
+            "actions": [
+              "all"
+            ],
+            "permit": "allow"
+          }
+        ]
+      }
+    }
+  }
+}

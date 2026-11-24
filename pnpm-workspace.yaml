@@ -1,0 +1,5 @@
+minimumReleaseAgeExclude:
+  - "@enlumine/core"
+  - "@enlumine/graphql"
+# allowBuilds rejects a pkg.pr.new URL key; tailor generate writes tailor.d.ts instead of the SDK's postinstall.
+strictDepBuilds: false
