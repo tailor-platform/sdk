@@ -64,7 +64,7 @@ export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { annotateTerminalError, withSourceLocation } from "./shared/github-actions";
 export type { ErrorSourceLocation } from "./shared/error-diagnostics";
-export { generateUserTypes } from "./shared/type-generator";
+export { generateUserTypes, generateWorkspaceUserTypes } from "./shared/type-generator";
 export {
   loadTailorDBNamespaces,
   type TailorDBNamespaceSelector,

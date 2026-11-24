@@ -580,6 +580,8 @@ interface GenerateWorkspaceUserTypesOptions {
 /**
  * Generate user type definitions from a workspace config and write them to disk, as
  * {@link generateUserTypes} does for an app config.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
  */
