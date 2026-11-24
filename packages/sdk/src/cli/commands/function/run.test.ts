@@ -6,7 +6,9 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
+import { CLIError } from "#/cli/shared/errors";
 import { awaitFunctionAsyncRun, startFunctionAsyncRun } from "#/cli/shared/function-async-run";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -44,6 +46,9 @@ vi.mock("#/cli/shared/function-async-run", () => ({
   awaitFunctionAsyncRun: vi.fn(),
 }));
 
+vi.mock("#/cli/shared/readonly-guard", () => ({
+  assertWritable: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("#/cli/shared/workflow-run-sweep", () => ({
   sweepBeforeRun: vi.fn(),
 }));
@@ -368,6 +373,27 @@ describe("function run --json", () => {
       expect(JSON.parse(stdout.output)).not.toHaveProperty("suggestion");
     });
 
+    test("gives no hint for a read-only profile, which --async refuses", async () => {
+      vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
+      vi.mocked(assertWritable).mockRejectedValueOnce(
+        CLIError({ code: "PROFILE_READONLY", message: 'Profile "dev" is read-only.' }),
+      );
+      vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using stdout = captureStdout();
+      using _stderr = captureStderr();
+      using _json = jsonMode();
+
+      await runCommand(runFunctionCommand, [
+        scriptPath,
+        "--machine-user",
+        "admin",
+        "--profile",
+        "dev",
+      ]);
+
+      expect(JSON.parse(stdout.output)).not.toHaveProperty("suggestion");
+    });
+
     test("gives no hint when --name was given, which --async cannot be combined with", async () => {
       vi.mocked(executeScriptReportingStart).mockResolvedValue(stopped);
       vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
@@ -584,7 +610,7 @@ describe("function run --json", () => {
 
       await vi.waitFor(() => expect(exit).toHaveBeenCalledWith(130));
       expect(stderr.output).toContain("may be running");
-      expect(stderr.output).toContain("tailor workflow prune");
+      expect(stderr.output).toContain("tailor workflow prune --include-unlabeled");
     });
 
     test("reports that the outcome could not be read, with where to read it", async () => {

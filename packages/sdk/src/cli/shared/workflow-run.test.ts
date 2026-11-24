@@ -1072,6 +1072,25 @@ describe("reclaimWorkflowRuns", () => {
     });
   });
 
+  test("removes a finished workflow run whose job function stays suspended after it started another job", async () => {
+    const client = createSweepClient([
+      {
+        name: `tmp-run-${runId}`,
+        labels: run(runId),
+        executions: [WorkflowExecution_Status.SUCCESS],
+      },
+      {
+        kind: "function",
+        name: `tmp-run-${runId}-main`,
+        labels: run(runId),
+        functionExecutions: [FunctionExecution_Status.SUSPEND],
+      },
+    ]);
+    await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).toHaveBeenCalledOnce();
+  });
+
   test("leaves workflows that are not runs alone", async () => {
     const client = createSweepClient([
       {

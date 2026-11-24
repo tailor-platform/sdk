@@ -22,17 +22,17 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                       | Description                                                                            |
-| --------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`workflow list`](#workflow-list)             | List all workflows in the workspace.                                                   |
-| [`workflow get`](#workflow-get)               | Get workflow details.                                                                  |
-| [`workflow start`](#workflow-start)           | Start a workflow execution.                                                            |
-| [`workflow run`](#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying. |
-| [`workflow scaffold`](#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                             |
-| [`workflow prune`](#workflow-prune)           | Remove the temporary resources that `workflow run` left behind.                        |
-| [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                                         |
-| [`workflow executions`](#workflow-executions) | List or get workflow executions.                                                       |
-| [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution.                                         |
+| Command                                       | Description                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`workflow list`](#workflow-list)             | List all workflows in the workspace.                                                       |
+| [`workflow get`](#workflow-get)               | Get workflow details.                                                                      |
+| [`workflow start`](#workflow-start)           | Start a workflow execution.                                                                |
+| [`workflow run`](#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying.     |
+| [`workflow scaffold`](#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                                 |
+| [`workflow prune`](#workflow-prune)           | Remove the temporary resources that `workflow run` and `function run --async` left behind. |
+| [`workflow wait`](#workflow-wait)             | Wait for a workflow execution.                                                             |
+| [`workflow executions`](#workflow-executions) | List or get workflow executions.                                                           |
+| [`workflow resume`](#workflow-resume)         | Resume a failed or pending workflow execution.                                             |
 
 ### workflow list
 
@@ -216,7 +216,7 @@ Rename the jobs and the workflow and fill in the bodies; to deploy it, add the f
 
 ### workflow prune
 
-Remove the temporary resources that `workflow run` left behind.
+Remove the temporary resources that `workflow run` and `function run --async` left behind.
 
 **Usage**
 
@@ -226,11 +226,11 @@ tailor workflow prune [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                                                                                | Required | Default | Env                            |
-| ------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                               | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                          | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
-| `--include-unlabeled`           | -     | Also remove resources named `tmp-run-…` that carry no `workflow run` label (a run that was cut off before it labeled them) | No       | `false` | -                              |
+| Option                          | Alias | Description                                                                                                     | Required | Default | Env                            |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                    | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                               | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--include-unlabeled`           | -     | Also remove resources named `tmp-run-…` that carry no run label (a run that was cut off before it labeled them) | No       | `false` | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -250,9 +250,9 @@ $ tailor workflow prune --include-unlabeled
 
 **Notes**
 
-Removes the workflow, job functions and functions of every `workflow run` that has finished, at once. A run that is still executing is left alone.
+Removes the workflow, job functions and functions of every `workflow run`, and the function of every `function run --async`, that has finished, at once. A run that is still executing is left alone.
 
-A resource whose name starts with `tmp-run-` but that carries no `workflow run` label is reported and left in place, because the name alone does not prove `workflow run` created it. When it is a leftover of an interrupted run, `--include-unlabeled` removes it.
+A resource whose name starts with `tmp-run-` but that carries no run label is reported and left in place, because the name alone does not prove `workflow run` or `function run --async` created it. When it is a leftover of an interrupted run, `--include-unlabeled` removes it.
 
 ### workflow wait
 

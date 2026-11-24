@@ -15,13 +15,14 @@ import {
   joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
+import { pollUntil } from "#/cli/shared/poll-until";
 import { assertMachineUserExists } from "#/cli/shared/script-workflow";
 import {
   isStartRefused,
   teardownTemporaryWorkflow,
   uploadTemporaryFunction,
 } from "#/cli/shared/temporary-workflow";
-import { isRetryableWaitError } from "#/cli/shared/wait-error";
+import { formatWaitError } from "#/cli/shared/wait-error";
 import { workflowRunLabels, workflowRunResourceName } from "#/cli/shared/workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptExecutionResult, ScriptInvoker } from "#/cli/shared/script-executor";
@@ -102,11 +103,14 @@ export async function startFunctionAsyncRun(
   }
 }
 
-async function removeFunction(params: {
+interface RemoveFunctionParams {
   client: OperatorClient;
   workspaceId: string;
+  /** Name of the registered function */
   name: string;
-}): Promise<boolean> {
+}
+
+async function removeFunction(params: RemoveFunctionParams): Promise<boolean> {
   return await teardownTemporaryWorkflow({
     ...params,
     workflowId: undefined,
@@ -144,57 +148,43 @@ export async function awaitFunctionAsyncRun(
 ): Promise<FunctionAsyncRunOutcome> {
   const { client, workspaceId, started, pollInterval, timeoutMs } = params;
   const deadline = Number.isFinite(timeoutMs) ? Date.now() + timeoutMs : undefined;
-  // loop exits when the execution reaches a terminal status or the deadline passes
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  while (true) {
-    let signal: AbortSignal | undefined;
-    try {
-      if (deadline !== undefined) {
-        const budget = deadline - Date.now();
-        if (budget <= 0) return { state: "timedOut" };
-        signal = AbortSignal.timeout(budget);
-      }
+  const notFound: FunctionAsyncRunOutcome = {
+    state: "outcomeUnavailable",
+    reason: "the execution of the run was not found",
+  };
+  return await pollUntil<FunctionAsyncRunOutcome>({
+    pollInterval,
+    deadline,
+    onTimeout: () => ({ state: "timedOut" }),
+    onError: (error) =>
+      isNotFoundError(error)
+        ? notFound
+        : { state: "outcomeUnavailable", reason: formatWaitError(error) },
+    read: async (signal) => {
       const request = { workspaceId, executionId: started.executionId };
       const { execution } = await (signal
         ? client.getFunctionExecution(request, { signal })
         : client.getFunctionExecution(request));
-      if (!execution) {
-        return { state: "outcomeUnavailable", reason: "the execution of the run was not found" };
-      }
-      if (isFunctionExecutionTerminalStatus(execution.status)) {
-        const logs = joinFunctionLogMessages(execution.logEntries);
-        const result = execution.result;
-        const outcome: ScriptExecutionResult =
-          execution.status === FunctionExecution_Status.SUCCESS
-            ? { success: true, logs, result }
-            : {
-                success: false,
-                logs,
-                result,
-                error:
-                  (execution.error ? composeExecutionErrorString(execution.error).trim() : "") ||
-                  result.trim() ||
-                  (execution.status === FunctionExecution_Status.CANCELED
-                    ? "Script execution was canceled"
-                    : "Script execution failed with unknown error"),
-              };
-        await removeFunction({ client, workspaceId, name: started.name });
-        return { state: "finished", result: outcome };
-      }
-    } catch (error) {
-      if (signal?.aborted) return { state: "timedOut" };
-      if (isNotFoundError(error)) {
-        return { state: "outcomeUnavailable", reason: "the execution of the run was not found" };
-      }
-      if (!isRetryableWaitError(error)) {
-        return {
-          state: "outcomeUnavailable",
-          reason: error instanceof Error ? error.message : String(error),
-        };
-      }
-    }
-    const remaining = deadline === undefined ? pollInterval : deadline - Date.now();
-    if (remaining <= 0) return { state: "timedOut" };
-    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
-  }
+      if (!execution) return notFound;
+      if (!isFunctionExecutionTerminalStatus(execution.status)) return undefined;
+      const logs = joinFunctionLogMessages(execution.logEntries);
+      const result = execution.result;
+      const outcome: ScriptExecutionResult =
+        execution.status === FunctionExecution_Status.SUCCESS
+          ? { success: true, logs, result }
+          : {
+              success: false,
+              logs,
+              result,
+              error:
+                (execution.error ? composeExecutionErrorString(execution.error).trim() : "") ||
+                result.trim() ||
+                (execution.status === FunctionExecution_Status.CANCELED
+                  ? "Script execution was canceled"
+                  : "Script execution failed with unknown error"),
+            };
+      await removeFunction({ client, workspaceId, name: started.name });
+      return { state: "finished", result: outcome };
+    },
+  });
 }

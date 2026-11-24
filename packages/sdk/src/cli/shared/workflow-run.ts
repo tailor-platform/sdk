@@ -26,6 +26,7 @@ import {
   joinFunctionLogMessages,
 } from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
+import { pollUntil } from "#/cli/shared/poll-until";
 import {
   assertMachineUserExists,
   isSuspendedCallRecord,
@@ -44,7 +45,6 @@ import {
   uploadTemporaryFunction,
   type CreatedTemporaryWorkflow,
 } from "#/cli/shared/temporary-workflow";
-import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
   isWorkflowRunResourceName,
   readWorkflowRunMarker,
@@ -375,16 +375,17 @@ async function outcomeAfterWorkflowRemoved(
   if (!jobExecutionId) {
     return unavailable("the workflow was removed before the job of the run was seen");
   }
-  // loop exits when the job reaches a terminal status or the deadline passes
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  while (true) {
-    let signal: AbortSignal | undefined;
-    try {
-      if (deadline !== undefined) {
-        const budget = deadline - Date.now();
-        if (budget <= 0) return unavailable("the job was still running when the wait ended");
-        signal = AbortSignal.timeout(budget);
-      }
+  return await pollUntil<WorkflowRunOutcome>({
+    pollInterval,
+    deadline,
+    onTimeout: (stage) =>
+      unavailable(
+        stage === "read"
+          ? "reading the job of the run did not finish in time"
+          : "the job was still running when the wait ended",
+      ),
+    onError: (error) => unavailable(error instanceof Error ? error.message : String(error)),
+    read: async (signal) => {
       const request = { workspaceId, executionId: jobExecutionId };
       const { execution: job } = await (signal
         ? client.getFunctionExecution(request, { signal })
@@ -413,17 +414,9 @@ async function outcomeAfterWorkflowRemoved(
             : "Script execution failed with unknown error");
         return { state: "finished", result: { success: false, logs, result, error } };
       }
-    } catch (error) {
-      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
-      if (signal?.aborted) return unavailable("reading the job of the run did not finish in time");
-      if (!isRetryableWaitError(error)) {
-        return unavailable(error instanceof Error ? error.message : String(error));
-      }
-    }
-    const remaining = deadline === undefined ? pollInterval : deadline - Date.now();
-    if (remaining <= 0) return unavailable("the job was still running when the wait ended");
-    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
-  }
+      return undefined;
+    },
+  });
 }
 
 export interface ReclaimWorkflowRunsParams {
@@ -594,7 +587,7 @@ export async function reclaimWorkflowRuns(
     const functionExecutions = await listFunctionRunExecutions(
       client,
       workspaceId,
-      run.functions.map((item) => item.name),
+      run.functions.filter((item) => item.name === name).map((item) => item.name),
     );
     if (
       executions.some(isExecutionActive) ||

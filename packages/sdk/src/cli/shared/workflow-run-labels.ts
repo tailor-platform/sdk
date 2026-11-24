@@ -11,6 +11,9 @@ import * as crypto from "node:crypto";
 
 const workflowRunLabelKey = "sdk-workflow-run-job";
 
+/** Base-36 digits of the start time in a run id */
+const RUN_ID_SECONDS_LENGTH = 8;
+
 export interface WorkflowRunMarker {
   runId: string;
 }
@@ -24,7 +27,7 @@ export interface WorkflowRunMarker {
 export function createRunId(now: Date, random: string): string {
   const seconds = Math.floor(now.getTime() / 1000)
     .toString(36)
-    .padStart(8, "0");
+    .padStart(RUN_ID_SECONDS_LENGTH, "0");
   return `r${seconds}-${random}`;
 }
 
@@ -50,6 +53,9 @@ export function readWorkflowRunMarker(
 }
 
 const RESOURCE_PREFIX = "tmp-run-";
+
+/** A whole run id: what {@link createRunId} builds, with a suffix free of hyphens */
+const FUNCTION_RUN_ID = new RegExp(`^r[0-9a-z]{${RUN_ID_SECONDS_LENGTH}}-[0-9a-z]+$`);
 
 /** Longest name the Platform accepts for a job function. */
 const MAX_NAME_LENGTH = 63;
@@ -97,7 +103,9 @@ export function isWorkflowRunResourceName(name: string): boolean {
  * @returns True for exactly the name of a run's own function
  */
 export function isFunctionRunResourceName(name: string): boolean {
-  return /^tmp-run-r[0-9a-z]{8}-[0-9a-z]{6}$/.test(name);
+  return (
+    name.startsWith(RESOURCE_PREFIX) && FUNCTION_RUN_ID.test(name.slice(RESOURCE_PREFIX.length))
+  );
 }
 
 /**
@@ -106,7 +114,7 @@ export function isFunctionRunResourceName(name: string): boolean {
  * @returns Start time truncated to the second, or undefined for any other id
  */
 export function runIdStartedAt(runId: string): Date | undefined {
-  const match = /^r([0-9a-z]{8})-/.exec(runId);
+  const match = new RegExp(`^r([0-9a-z]{${RUN_ID_SECONDS_LENGTH}})-`).exec(runId);
   if (!match?.[1]) return undefined;
   return new Date(Number.parseInt(match[1], 36) * 1000);
 }

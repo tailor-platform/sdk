@@ -30,7 +30,7 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
-import { CLIError, formatCommandHint } from "#/cli/shared/errors";
+import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { exitAfterOutput } from "#/cli/shared/exit-after-output";
 import {
   awaitFunctionAsyncRun,
@@ -134,7 +134,7 @@ A script scaffolded by \`function script\` with a generated \`db.ts\` is checked
 
 Each run prints a \`-->\` line when the Platform accepts it and a \`<--\` line with \`[OK]\` or \`[FAILED]\` when it finishes, followed by its logs and result. Both lines carry the execution ID, which \`function logs\` accepts. When reading the argument file, loading or bundling the function, or the request to the Platform fails, the command prints an \`[ERROR]\` line and keeps watching. Until the function loads and bundles again, adding a file anywhere in the project also starts a run, so a file that an import names can be created after the import. A save during a run starts one more run after it finishes. With \`--json\`, each run writes one JSON object per line to stdout, including its \`executionId\`, and each failure writes an error object to stderr.
 
-A synchronous run is stopped by the Platform when it takes too long. \`--async\` runs the function as an asynchronous job instead, which the Platform ends after 5 minutes. The command registers the function as a temporary resource, starts it, waits for it to finish, prints its logs and result the way a synchronous run does, and removes the temporary resource. \`--timeout\` limits how long the command waits, not how long the function may run; \`--interval\` sets how often it checks. When the wait stops (\`--timeout\` elapsed, or Ctrl+C), the function keeps running and its temporary resource stays in place: the command prints the run ID, \`tailor function logs <execution ID>\` reads the outcome, and \`tailor workflow prune\` removes the resource of runs that have finished. A function that is given no argument receives an empty object, as in a synchronous run. \`--async\` cannot be combined with \`--watch\` or \`--name\`; \`--timeout\` and \`--interval\` need \`--async\`.
+A synchronous run is stopped by the Platform when it takes too long. \`--async\` runs the function as an asynchronous job instead, which the Platform ends after 5 minutes. The command registers the function as a temporary resource, starts it, waits for it to finish, prints its logs and result the way a synchronous run does, and removes the temporary resource. \`--timeout\` limits how long the command waits, not how long the function may run; \`--interval\` sets how often it checks. When the wait stops (\`--timeout\` elapsed, or Ctrl+C), the function keeps running and its temporary resource stays in place: the command prints the run ID and the execution ID, \`tailor function logs <execution ID>\` reads the outcome, and \`tailor workflow prune\` removes the resource of runs that have finished. A function that is given no argument receives an empty object, as in a synchronous run. \`--async\` cannot be combined with \`--watch\` or \`--name\`; \`--timeout\` and \`--interval\` need \`--async\`.
 
 Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files, and installed packages are not picked up; restart the command after changing them.
 
@@ -287,7 +287,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 
     // 6. Display result
     const suggestion =
-      isTimeoutFailure(result) && args.name === undefined
+      isTimeoutFailure(result) && args.name === undefined && (await isWritableProfile(args.profile))
         ? asyncRunSuggestion({
             file: fileForHint(filePath, args.file),
             ...readEnvFileArgs(process.argv.slice(2)),
@@ -315,6 +315,16 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     if (!result.success) await exitAfterOutput(1);
   },
 });
+
+async function isWritableProfile(profile: string | undefined): Promise<boolean> {
+  try {
+    await assertWritable({ profile });
+    return true;
+  } catch (error) {
+    if (isCLIError(error) && error.code === "PROFILE_READONLY") return false;
+    throw error;
+  }
+}
 
 function fileForHint(filePath: string, given: string): string {
   const relative = path.relative(process.cwd(), filePath) || given;
@@ -458,13 +468,18 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
 
   const context = recoveryContextArgs({ workspaceId, profile: options.profile });
   const prune = pruneHint({ workspaceId, profile: options.profile });
+  const pruneUnlabeled = pruneHint({
+    workspaceId,
+    profile: options.profile,
+    includeUnlabeled: true,
+  });
   const readHint = (executionId: string) =>
     formatCommandHint({ command: "tailor", args: ["function", "logs", executionId, ...context] });
   let inspect: string | undefined;
   const onInterrupt = () => {
     logger.warn(
       inspect === undefined
-        ? `Stopped before the Platform confirmed run ${runId}. It may be running; ${prune} removes its temporary resource once it has finished.`
+        ? `Stopped before the Platform confirmed run ${runId}. It may be running; ${pruneUnlabeled} removes its temporary resource once it has finished, even if it was stopped before the resource was labeled.`
         : `Stopped waiting. Run ${runId} keeps running; read it with ${inspect}, then ${prune}.`,
     );
     void exitAfterOutput(130);

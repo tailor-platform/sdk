@@ -9,17 +9,18 @@ import { pruneHint, reclaimWorkflowRuns } from "#/cli/shared/workflow-run";
 
 export const pruneCommand = defineAppCommand({
   name: "prune",
-  description: "Remove the temporary resources that `workflow run` left behind.",
+  description:
+    "Remove the temporary resources that `workflow run` and `function run --async` left behind.",
   args: z.strictObject({
     ...workspaceArgs,
     "include-unlabeled": arg(z.boolean().default(false), {
       description:
-        "Also remove resources named `tmp-run-…` that carry no `workflow run` label (a run that was cut off before it labeled them)",
+        "Also remove resources named `tmp-run-…` that carry no run label (a run that was cut off before it labeled them)",
     }),
   }),
-  notes: `Removes the workflow, job functions and functions of every \`workflow run\` that has finished, at once. A run that is still executing is left alone.
+  notes: `Removes the workflow, job functions and functions of every \`workflow run\`, and the function of every \`function run --async\`, that has finished, at once. A run that is still executing is left alone.
 
-A resource whose name starts with \`tmp-run-\` but that carries no \`workflow run\` label is reported and left in place, because the name alone does not prove \`workflow run\` created it. When it is a leftover of an interrupted run, \`--include-unlabeled\` removes it.`,
+A resource whose name starts with \`tmp-run-\` but that carries no run label is reported and left in place, because the name alone does not prove \`workflow run\` or \`function run --async\` created it. When it is a leftover of an interrupted run, \`--include-unlabeled\` removes it.`,
   examples: [
     { cmd: "", desc: "Remove the resources of finished runs" },
     {

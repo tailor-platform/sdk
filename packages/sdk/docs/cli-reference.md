@@ -685,18 +685,18 @@ Commands for managing Auth service resources.
 
 Commands for managing workflows and executions.
 
-| Command                                                      | Description                                                                            |
-| ------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| [workflow](./cli/workflow.md#workflow)                       | Manage workflows and workflow executions.                                              |
-| [workflow list](./cli/workflow.md#workflow-list)             | List all workflows in the workspace.                                                   |
-| [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                                                                  |
-| [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                                                            |
-| [workflow run](./cli/workflow.md#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying. |
-| [workflow scaffold](./cli/workflow.md#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                             |
-| [workflow prune](./cli/workflow.md#workflow-prune)           | Remove the temporary resources that `workflow run` left behind.                        |
-| [workflow wait](./cli/workflow.md#workflow-wait)             | Wait for a workflow execution.                                                         |
-| [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.                                                       |
-| [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed or pending workflow execution.                                         |
+| Command                                                      | Description                                                                                |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| [workflow](./cli/workflow.md#workflow)                       | Manage workflows and workflow executions.                                                  |
+| [workflow list](./cli/workflow.md#workflow-list)             | List all workflows in the workspace.                                                       |
+| [workflow get](./cli/workflow.md#workflow-get)               | Get workflow details.                                                                      |
+| [workflow start](./cli/workflow.md#workflow-start)           | Start a workflow execution.                                                                |
+| [workflow run](./cli/workflow.md#workflow-run)               | Run a workflow job with the jobs it starts, as a temporary workflow without deploying.     |
+| [workflow scaffold](./cli/workflow.md#workflow-scaffold)     | Scaffold a workflow definition to run with `workflow run`.                                 |
+| [workflow prune](./cli/workflow.md#workflow-prune)           | Remove the temporary resources that `workflow run` and `function run --async` left behind. |
+| [workflow wait](./cli/workflow.md#workflow-wait)             | Wait for a workflow execution.                                                             |
+| [workflow executions](./cli/workflow.md#workflow-executions) | List or get workflow executions.                                                           |
+| [workflow resume](./cli/workflow.md#workflow-resume)         | Resume a failed or pending workflow execution.                                             |
 
 ### [Function Commands](./cli/function.md)
 
