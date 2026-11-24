@@ -9,7 +9,7 @@ import {
   type SchemaSnapshot,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -20,7 +20,7 @@ import { scriptCommand } from "./script";
 import { SCRIPT_DB_TYPES_FILE_NAME, SCRIPT_SNAPSHOT_FILE_NAME } from "./script-scaffold";
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -83,13 +83,14 @@ function mockLocalNamespace(snapshot: SchemaSnapshot = makeSnapshot()): void {
 }
 
 function mockConfig(dir: string, options: { plugins?: unknown[]; db?: unknown } = {}): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: {
       path: path.join(dir, "tailor.config.ts"),
       db: options.db ?? { tailordb: {} },
     },
     plugins: options.plugins ?? [],
-  } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 }
 
 const kyselyPluginStub = {
@@ -103,7 +104,7 @@ describe("function script", () => {
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", undefined);
-    vi.mocked(loadConfig).mockReset();
+    vi.mocked(loadConfigFile).mockReset();
     vi.mocked(fetchRemoteSchemaSnapshot).mockReset();
     vi.mocked(loadTailorDBNamespaces).mockReset();
     vi.mocked(loadAccessToken).mockClear();

@@ -1,4 +1,6 @@
-import { MAX_PAGE_SIZE } from "./client";
+import { assertDefined } from "#/utils/assert";
+import { isNotFoundError, MAX_PAGE_SIZE } from "./client";
+import { CLIError } from "./errors";
 
 type ListTailorDBTypesClient = {
   listTailorDBTypes(args: {
@@ -20,13 +22,15 @@ type ResolveTableNamespacesArgs = {
 };
 
 /**
- * Resolve TailorDB table names to namespace names.
+ * Find every namespace that has each TailorDB table. A table name matches with the same case
+ * when any namespace has it so; otherwise it matches case-insensitively. A namespace that is not
+ * deployed has no tables, unless no namespace is deployed.
  * @param args - Resolution inputs
- * @returns Table to namespace map for found tables
+ * @returns Namespaces of each found table, in the given namespace order; tables no namespace has are left out
  */
 export async function resolveTableNamespaces(
   args: ResolveTableNamespacesArgs,
-): Promise<Map<string, string>> {
+): Promise<Map<string, string[]>> {
   const requestedTablesByLowercase = new Map<string, string[]>();
   for (const tableName of args.tableNames) {
     const key = tableName.toLowerCase();
@@ -38,14 +42,17 @@ export async function resolveTableNamespaces(
     requestedTablesByLowercase.set(key, [tableName]);
   }
 
-  const unresolvedTables = new Set(args.tableNames);
-  const tableNamespaceMap = new Map<string, string>();
+  const exact = new Map<string, string[]>();
+  const caseInsensitive = new Map<string, string[]>();
+  const add = (matches: Map<string, string[]>, tableName: string, namespace: string) => {
+    const namespaces = matches.get(tableName) ?? [];
+    if (!namespaces.includes(namespace)) namespaces.push(namespace);
+    matches.set(tableName, namespaces);
+  };
 
-  for (const namespace of args.namespaces) {
-    if (unresolvedTables.size === 0) {
-      break;
-    }
-
+  const listNamespace = async (namespace: string): Promise<Array<{ name: string }>> => {
+    const types: Array<{ name: string }> = [];
+    const unfound = new Set(args.tableNames);
     let pageToken = "";
     do {
       const { tailordbTypes, nextPageToken } = await args.client.listTailorDBTypes({
@@ -54,50 +61,72 @@ export async function resolveTableNamespaces(
         pageToken,
         pageSize: MAX_PAGE_SIZE,
       });
-
-      for (const type of tailordbTypes) {
-        const matchedRequestedTypes = requestedTablesByLowercase.get(type.name.toLowerCase());
-        if (!matchedRequestedTypes) {
-          continue;
-        }
-
-        for (const requestedTableName of matchedRequestedTypes) {
-          if (tableNamespaceMap.has(requestedTableName)) {
-            continue;
-          }
-          tableNamespaceMap.set(requestedTableName, namespace);
-          unresolvedTables.delete(requestedTableName);
-        }
-      }
-
+      types.push(...tailordbTypes);
+      for (const type of tailordbTypes) unfound.delete(type.name);
       pageToken = nextPageToken;
-    } while (pageToken && unresolvedTables.size > 0);
+    } while (pageToken && unfound.size > 0);
+    return types;
+  };
+
+  const listed = await Promise.all(
+    args.namespaces.map(async (namespace) => {
+      try {
+        return { namespace, types: await listNamespace(namespace), notFound: undefined };
+      } catch (error) {
+        if (isNotFoundError(error)) return { namespace, types: [], notFound: error };
+        throw error;
+      }
+    }),
+  );
+  const [firstListed] = listed;
+  if (firstListed && listed.every((result) => result.notFound !== undefined)) {
+    throw firstListed.notFound;
   }
 
-  return tableNamespaceMap;
+  for (const result of listed) {
+    for (const type of result.types) {
+      for (const requestedTableName of requestedTablesByLowercase.get(type.name.toLowerCase()) ??
+        []) {
+        add(caseInsensitive, requestedTableName, result.namespace);
+        if (type.name === requestedTableName) add(exact, requestedTableName, result.namespace);
+      }
+    }
+  }
+
+  return new Map(
+    [...caseInsensitive].map(([tableName, namespaces]) => [
+      tableName,
+      exact.get(tableName) ?? namespaces,
+    ]),
+  );
 }
 
-type ResolveTableNamespaceArgs = {
-  workspaceId: string;
-  namespaces: string[];
-  tableName: string;
-  client: ListTailorDBTypesClient;
-};
-
 /**
- * Resolve a single TailorDB table name to namespace.
+ * Resolve each TailorDB table name to the one namespace that has it.
  * @param args - Resolution inputs
- * @returns Namespace name if found
+ * @returns Namespace of each found table; tables no namespace has are left out
  */
-export async function resolveTableNamespace(
-  args: ResolveTableNamespaceArgs,
-): Promise<string | null> {
-  const tableNamespaceMap = await resolveTableNamespaces({
-    workspaceId: args.workspaceId,
-    namespaces: args.namespaces,
-    tableNames: [args.tableName],
-    client: args.client,
-  });
-
-  return tableNamespaceMap.get(args.tableName) ?? null;
+export async function resolveUniqueTableNamespaces(
+  args: ResolveTableNamespacesArgs,
+): Promise<Map<string, string>> {
+  const found = await resolveTableNamespaces(args);
+  const ambiguous = [...found]
+    .filter(([, namespaces]) => namespaces.length > 1)
+    .map(([table, namespaces]) => ({ table, namespaces }));
+  if (ambiguous.length > 0) {
+    throw CLIError({
+      code: "TAILORDB_TABLE_NAMESPACE_AMBIGUOUS",
+      message: `Several TailorDB namespaces have ${ambiguous
+        .map(({ table, namespaces }) => `table "${table}" (${namespaces.join(", ")})`)
+        .join(", ")}.`,
+      suggestion: "Pass --namespace to choose the namespace.",
+      context: { tables: ambiguous },
+    });
+  }
+  return new Map(
+    [...found].map(([table, namespaces]) => [
+      table,
+      assertDefined(namespaces[0], "table namespace missing"),
+    ]),
+  );
 }

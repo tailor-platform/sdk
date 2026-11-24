@@ -4,7 +4,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -19,8 +19,9 @@ import { loadScriptSchemaSnapshot, verifyScriptSchemaSnapshot } from "./script-s
 import { startFunctionRunWatch } from "./watch";
 import { functionCommand } from "./index";
 
-vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -84,12 +85,13 @@ describe("function run --json", () => {
     fs.writeFileSync(tsScriptPath, "export default async function main() { return { ok: true }; }");
 
     vi.mocked(executeScriptReportingStart).mockClear();
-    vi.mocked(loadConfig).mockClear();
+    vi.mocked(loadConfigFile).mockClear();
     vi.mocked(startFunctionRunWatch).mockClear();
     vi.mocked(verifyScriptSchemaSnapshot).mockReset();
     vi.mocked(loadScriptSchemaSnapshot).mockReset().mockReturnValue(null);
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
         auth: {
@@ -100,7 +102,7 @@ describe("function run --json", () => {
         },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     client = createClient();
     vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(executeScriptReportingStart).mockResolvedValue({
@@ -168,7 +170,7 @@ describe("function run --json", () => {
       vi.unstubAllEnvs();
     }
 
-    expect(loadConfig).toHaveBeenCalledWith("env/tailor.config.ts");
+    expect(loadConfigFile).toHaveBeenCalledWith("env/tailor.config.ts");
   });
 
   test.each([
@@ -304,8 +306,8 @@ describe("function run --json", () => {
   });
 
   test("bundles the script with the temporal option of the config's kyselyTypePlugin", async () => {
-    const loaded = await loadConfig();
-    vi.mocked(loadConfig).mockResolvedValueOnce({
+    const loaded = await loadConfigFile();
+    vi.mocked(loadConfigFile).mockResolvedValueOnce({
       ...loaded,
       plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts", temporal: true })),
     });
@@ -448,7 +450,7 @@ describe("function run --json", () => {
       ]);
 
       expect(result.error).toMatchObject({ code: "FUNCTION_RUN_OPTIONS_CONFLICT" });
-      expect(loadConfig).not.toHaveBeenCalled();
+      expect(loadConfigFile).not.toHaveBeenCalled();
     });
 
     test("rejects a file that is not valid JSON before the config is loaded", async () => {
@@ -462,7 +464,7 @@ describe("function run --json", () => {
 
       expect(result.error).toMatchObject({ code: "FUNCTION_ARG_INVALID" });
       expect(result.error?.message).toContain("arg.json");
-      expect(loadConfig).not.toHaveBeenCalled();
+      expect(loadConfigFile).not.toHaveBeenCalled();
     });
 
     test("rejects a path it cannot read as a file", async () => {

@@ -201,6 +201,7 @@ describe("setupUpdate", () => {
   const loaders = {
     gitRunner: () => "origin/main",
     loadConfigId: async () => undefined,
+    loadConfigKind: async () => "config" as const,
     loadErdNamespaces: async () => ["tailordb"],
     loadHasMigrations: async () => false,
     loadHasSeeds: async () => false,

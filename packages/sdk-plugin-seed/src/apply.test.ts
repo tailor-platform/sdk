@@ -853,6 +853,39 @@ describe("seedApplyCommand", () => {
     expect(warnedLines.some((line) => line.includes("25/51"))).toBe(true);
   });
 
+  test("runs as the machine user the seed context resolves, owned by the context's application", async () => {
+    const base = await sdk.loadSeedContext();
+    sdk.loadSeedContext.mockResolvedValue({
+      ...base,
+      appName: undefined,
+      resolveMachineUser: (machineUser: string) => ({
+        namespace: "partner-auth",
+        machineUserName: machineUser.replace(/^.*\//, ""),
+      }),
+    });
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
+
+    const result = await runApplyCommand(["--machine-user", "partner-auth/admin", "--skip-idp"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.withScriptWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invoker: { namespace: "partner-auth", machineUserName: "admin" },
+        appName: undefined,
+      }),
+      expect.any(Function),
+    );
+  });
+
   test("passes --upsert through to the TailorDB and IdP seed scripts", async () => {
     jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
       Object.fromEntries(typeNames.map((typeName) => [typeName, [{ id: "u1" }]])),

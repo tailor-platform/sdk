@@ -60,3 +60,67 @@ export function writeWorkspaceTables(dir: string, tableSource: (name: string) =>
     fs.writeFileSync(path.join(dir, "db", namespace, "table.ts"), tableSource(table));
   }
 }
+
+const ALLOW_ALL_TABLE = (name: string) =>
+  `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const table = db
+  .table(${JSON.stringify(name)}, { title: db.string() })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`;
+
+/** Source spliced into the config {@link writeWorkspaceProject} writes. */
+export interface WorkspaceProjectOptions {
+  /** Further properties of the `defineWorkspace()` object, such as `workflow: { ... },`. */
+  extra?: string;
+  /** Items of the `plugins` export. */
+  plugins?: string;
+  /** The `db` object, reading the tables {@link writeWorkspaceTables} writes. */
+  db?: string;
+}
+
+/**
+ * Write a workspace project shaped like the one commands run against: apps `shop` and `backoffice`
+ * on Auth service `corp-auth` (machine users `admin`, `seeder`) with `customer-db` and `order-db`,
+ * app `partner` on `partner-auth` (machine user `admin`) with `order-db`, and `ledger-db` in no app.
+ * Run it inside the package, so the project's `@tailor-platform/sdk` imports resolve to its build.
+ * @param dir - Directory to write `tailor.config.ts` and the table files into
+ * @param options - Source spliced into the config
+ * @returns Path of the written config file
+ */
+export function writeWorkspaceProject(dir: string, options: WorkspaceProjectOptions = {}): string {
+  const { extra = "", plugins = "", db = WORKSPACE_DB_SOURCE } = options;
+  writeWorkspaceTables(dir, ALLOW_ALL_TABLE);
+  const configPath = path.join(dir, "tailor.config.ts");
+  fs.writeFileSync(
+    configPath,
+    `import { db, defineAuth, definePlugins } from "@tailor-platform/sdk";
+${plugins.includes("seedPlugin") ? 'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";\n' : ""}
+const machineUserAttributes = { role: db.string() };
+${brandedDefault(
+  "workspace-config",
+  `{
+  db: ${db},
+  auth: {
+    "corp-auth": defineAuth("corp-auth", {
+      machineUserAttributes,
+      machineUsers: { admin: { attributes: { role: "ADMIN" } }, seeder: { attributes: { role: "SEED" } } },
+    }),
+    "partner-auth": defineAuth("partner-auth", {
+      machineUserAttributes,
+      machineUsers: { admin: { attributes: { role: "PARTNER" } } },
+    }),
+  },
+  ${extra}
+  apps: {
+    shop: { db: ["customer-db", "order-db"], auth: "corp-auth" },
+    backoffice: { db: ["customer-db", "order-db"], auth: "corp-auth" },
+    partner: { db: ["order-db"], auth: "partner-auth" },
+  },
+}`,
+)}
+export const plugins = definePlugins(${plugins});
+`,
+  );
+  return configPath;
+}

@@ -162,7 +162,6 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
-/** @lintignore kept exported for the zinfer-generated reference in src/types/plugin-config.generated.ts */
 export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
@@ -515,10 +514,15 @@ export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
   /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
   profile?: string;
-  /** Application whose config registers this plugin. Only its static websites can be published. */
+  /**
+   * Application whose config registers this plugin.
+   * @deprecated since NEXT_RELEASE — use `applications`, or `staticWebsites` to publish, instead. codemod: v3/plugin-context-application
+   */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */
   applications: readonly DeployedApplication[];
+  /** Static websites declared in the config that registers this plugin, keyed by name. Only these can be published. */
+  staticWebsites: Readonly<Partial<Record<string, PublishableStaticWebsite>>>;
   /** Absolute path of the config registering this plugin. */
   configPath: string;
   pluginConfig: PluginConfig;
