@@ -643,7 +643,7 @@ function assertWorkspaceConfigOptions(options: SetupTargetOptions): void {
   ];
   if (unsupported.length > 0) {
     throw new Error(
-      `${unsupported.join(" and ")} does not support a defineWorkspace() or defineApp() config yet.`,
+      `A defineWorkspace() or defineApp() config does not support ${unsupported.join(" or ")} yet.`,
     );
   }
 }

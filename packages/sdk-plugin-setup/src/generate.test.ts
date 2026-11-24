@@ -4390,17 +4390,19 @@ export default defineConfig({
     });
 
     test.each([
-      { flag: "--erd-preview", options: { erdPreview: true } },
-      { flag: "--migration-test", options: { migrationTest: true } },
-    ])("rejects $flag for a workspace config", async ({ flag, options }) => {
+      { flags: "--erd-preview", options: { erdPreview: true } },
+      { flags: "--migration-test", options: { migrationTest: true } },
+      {
+        flags: "--erd-preview or --migration-test",
+        options: { erdPreview: true, migrationTest: true },
+      },
+    ])("rejects $flags for a workspace config", async ({ flags, options }) => {
       const dir = nextAppDir();
       writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
 
       await expect(
         setupTarget(baseOptions({ ...configLoaders, ...options, workspaceName: "shop", dir })),
-      ).rejects.toThrow(
-        new RegExp(`${flag} does not support a defineWorkspace\\(\\) or defineApp\\(\\) config`),
-      );
+      ).rejects.toThrow(`A defineWorkspace() or defineApp() config does not support ${flags} yet.`);
       expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
     });
 
