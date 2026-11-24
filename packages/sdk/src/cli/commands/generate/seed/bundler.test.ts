@@ -348,6 +348,44 @@ describe("seed script upsert behavior", () => {
     expect(queries).toHaveLength(3);
   });
 
+  test("reports a self-referencing table's progress once after all of its groups", async () => {
+    stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main({
+      data: {
+        Category: [
+          { id: "c1", parentId: null },
+          { id: "c2", parentId: "c1" },
+          { id: "c3", parentId: "c2" },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: false,
+    });
+
+    expect(logSpy.mock.calls).toEqual([["[tailordb] Category: 3/3"]]);
+  });
+
+  test("reports a self-referencing table once when every row falls back to its own group", async () => {
+    stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await main({
+      data: { Category: [{ parentId: null }, { parentId: null }, { parentId: null }] },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+      upsert: false,
+    });
+
+    expect(logSpy.mock.calls).toEqual([["[tailordb] Category: 3/3"]]);
+  });
+
   test("orders self-referencing inserts by dependency, not file order", async () => {
     // Dumped rows are ordered by id (a UUID), so a child can land before its
     // parent in the file; selfRefFields must let the script reorder them.

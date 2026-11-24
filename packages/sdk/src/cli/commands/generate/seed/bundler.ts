@@ -119,18 +119,19 @@ function generateSeedScriptContent(namespace: string): string {
                 (input.selfRefKeys || {})[tableName] || {},
               )
             : [recordsToInsert];
+          const reportProgress = () =>
+            console.log(
+              \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length}\`,
+            );
           for (const group of groups) {
             for (let i = 0; i < group.length; i += BATCH_SIZE) {
               const batch = group.slice(i, i + BATCH_SIZE);
               await db.insertInto(tableName).values(batch).execute();
               processed[tableName].inserted += batch.length;
-              if (!upsert) {
-                console.log(
-                  \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length}\`,
-                );
-              }
+              if (!upsert && !hasSelfRef) reportProgress();
             }
           }
+          if (!upsert && hasSelfRef) reportProgress();
 
           for (const record of recordsToUpdate) {
             const { id, ...values } = record;
