@@ -19,6 +19,7 @@ import {
   prepareFunction,
   printExecutionDetails,
   readFunctionArgFile,
+  warnStartedJobsSkipped,
 } from "./run-function";
 import type { ScriptExecutionResult } from "#/cli/shared/script-executor";
 import type { Jsonifiable } from "type-fest";
@@ -175,6 +176,7 @@ export async function startFunctionRunWatch(
   };
 
   let preparationFailed = false;
+  let startedJobsWarned = false;
   const runOnce = async () => {
     preparationFailed = true;
     try {
@@ -185,6 +187,7 @@ export async function startFunctionRunWatch(
         progress: (message) => logger.debug(message),
       });
       preparationFailed = false;
+      if (!startedJobsWarned) startedJobsWarned = warnStartedJobsSkipped(target, prepared);
       updateWatched(prepared.sourceFiles);
       let executionId = "";
       const result = await executeFunction({

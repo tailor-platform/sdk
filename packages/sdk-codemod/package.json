@@ -27,7 +27,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@ast-grep/napi": "0.51.2",
+    "@ast-grep/napi": "0.51.3",
     "@politty/zod": "0.7.5",
     "diff": "9.0.0",
     "pathe": "2.0.3",
@@ -46,7 +46,7 @@
     "tsdown": "0.23.7",
     "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "6.0.3",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "engines": {
     "bun": ">=1.2.0",

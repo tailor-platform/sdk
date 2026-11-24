@@ -165,17 +165,17 @@ tailor function run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                                                             | Required | Default | Env                                 |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
-| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                                | No       | -       | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                                   | No       | -       | -                                   |
-| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                                        | No       | -       | -                                   |
-| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes              | No       | `false` | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.          | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`                |
-| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                                 | No       | `false` | -                                   |
+| Option                          | Alias | Description                                                                                                           | Required | Default | Env                                 |
+| ------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                          | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                     | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
+| `--name <NAME>`                 | `-n`  | Deprecated: use `tailor workflow run --job`. Workflow job name to run (matches the `name` field of createWorkflowJob) | No       | -       | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                                                 | No       | -       | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                                                      | No       | -       | -                                   |
+| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes                            | No       | `false` | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.                        | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)               | No       | -       | `TAILOR_CONFIG_PATH`                |
+| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                                               | No       | `false` | -                                   |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -197,12 +197,6 @@ $ tailor function run resolvers/add.ts --arg-file args/add.json
 
 ```bash
 $ tailor function run resolvers/add.ts --watch
-```
-
-**Run a specific workflow job by name**
-
-```bash
-$ tailor function run workflows/sample.ts --name validate-order
 ```
 
 **Run a pre-bundled .js file directly**
@@ -228,8 +222,10 @@ Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and i
 
 `test-run` is a deprecated alias of this command and will be removed in v3.
 
+`--name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>`, which also runs the jobs the job starts with `.start()`.
+
 > [!WARNING]
-> Workflow job `.start()` calls do not work in this mode.
+> Workflow job `.start()` calls do not work in this mode, with or without `--name`.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.
 
 ### function scaffold
