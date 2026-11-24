@@ -56,7 +56,7 @@ interface DetectFunctionOptions {
   filePath: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
   jobName?: string;
-  /** Flag the asking command selects a job with, named in the hint (default: `--name`) */
+  /** Flag the asking command selects a job with, named in the hint; without one the hint points to `workflow run` */
   jobFlag?: string;
   /** Start from the main job of the workflow the file exports as default when no job name is given */
   useWorkflowMainJob?: boolean;
@@ -70,7 +70,7 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName, jobFlag = "--name", useWorkflowMainJob = false } = options;
+  const { filePath, jobName, jobFlag, useWorkflowMainJob = false } = options;
 
   const module = await importUserModule(filePath);
 
@@ -158,7 +158,7 @@ function workflowMainJobName(workflow: unknown): string | undefined {
 function assertMainJobExported(
   module: Record<string, unknown>,
   mainJobName: string,
-  jobFlag: string,
+  jobFlag: string | undefined,
 ): void {
   const exported = Object.entries(module).some(
     ([exportName, exportValue]) =>
@@ -169,7 +169,7 @@ function assertMainJobExported(
   throw CLIError({
     code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED",
     message: `The main job "${mainJobName}" of the workflow this file exports is defined in another file.`,
-    suggestion: `Run the file that defines the job, or select a job this file defines with ${jobFlag}.`,
+    suggestion: `Run the file that defines the job, or select a job this file defines with ${jobFlag ?? "`tailor workflow run <file> --job <name>`"}.`,
   });
 }
 
@@ -186,7 +186,7 @@ function assertMainJobExported(
 function detectWorkflowJob(
   module: Record<string, unknown>,
   jobName: string | undefined,
-  jobFlag: string,
+  jobFlag: string | undefined,
 ): DetectedFunction | null {
   const jobs: Array<{ name: string; exportName: string }> = [];
 
@@ -230,7 +230,10 @@ function detectWorkflowJob(
     code: "WORKFLOW_JOB_AMBIGUOUS",
     message: "Multiple workflow jobs found.",
     details: `Available jobs:\n${available}`,
-    suggestion: `Specify one with ${jobFlag}.`,
+    suggestion:
+      jobFlag === undefined
+        ? "Run `tailor workflow run <file> --job <name>` to select one."
+        : `Specify one with ${jobFlag}.`,
   });
 }
 

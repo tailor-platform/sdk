@@ -269,14 +269,16 @@ describe("startFunctionRunWatch", () => {
         code: "WORKFLOW_JOB_AMBIGUOUS",
         message: "Multiple workflow jobs found.",
         details: 'Available jobs:\n  - "a"',
-        suggestion: "Specify one with --name.",
+        suggestion: "Run `tailor workflow run <file> --job <name>` to select one.",
       }),
     );
 
     await start();
 
     await vi.waitFor(() =>
-      expect(stripAnsi(stderr.output)).toContain("Suggestion: Specify one with --name."),
+      expect(stripAnsi(stderr.output)).toContain(
+        "Suggestion: Run `tailor workflow run <file> --job <name>` to select one.",
+      ),
     );
     const output = stripAnsi(stderr.output);
     expect(output).toMatch(

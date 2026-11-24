@@ -2273,7 +2273,7 @@ export const allCodemods: CodemodPackage[] = [
       "  object and read it from the job's input.",
       "- `workflow run` has no `--watch`. Replace a `function run --watch --name`",
       "  call with a file watcher that runs `workflow run` after each change.",
-      "- Leave `--name` of other commands unchanged (`function logs`, `workspace`,",
+      "- Leave `--name` of other commands unchanged (`function get`, `workspace`,",
       "  and so on).",
     ].join("\n"),
   },

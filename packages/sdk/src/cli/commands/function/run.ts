@@ -103,7 +103,7 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 \`--name\` is deprecated and will be removed in v3. Use \`tailor workflow run <file> --job <name>\`, which also runs the jobs the job starts with \`.start()\`.
 
 > [!WARNING]
-> Workflow job \`.start()\` calls do not work with \`--name\`.
+> Workflow job \`.start()\` calls do not work in this mode, with or without \`--name\`.
 > Started jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
@@ -222,6 +222,11 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
 
     // 5. Bundle and execute
     const prepared = await prepareFunction({ target, progress: (message) => logger.info(message) });
+    if (prepared.functionType === "workflow-job" && args.name === undefined) {
+      logger.warn(
+        `Only the body of workflow job "${prepared.functionName}" runs, and the jobs it starts with \`.start()\` do not. Use \`tailor workflow run <file> --job <name>\` to run them too.`,
+      );
+    }
     const argValue = argumentToSend(prepared, functionArg);
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
     const result = await executeFunction({ target, prepared, arg: argValue });

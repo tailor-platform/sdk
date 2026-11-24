@@ -324,15 +324,15 @@ export default {
       );
     });
 
-    test("tells to specify the job with --name by default", async () => {
+    test("points to workflow run when the caller names no flag", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
       await expect(detectFunctionType({ filePath })).rejects.toMatchObject({
-        suggestion: "Specify one with --name.",
+        suggestion: "Run `tailor workflow run <file> --job <name>` to select one.",
       });
     });
 
-    test("names the flag of the command asking when it is not --name", async () => {
+    test("names the flag of the command asking", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
       await expect(detectFunctionType({ filePath, jobFlag: "--job" })).rejects.toMatchObject({

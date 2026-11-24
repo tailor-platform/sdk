@@ -225,7 +225,7 @@ Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and i
 `--name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>`, which also runs the jobs the job starts with `.start()`.
 
 > [!WARNING]
-> Workflow job `.start()` calls do not work with `--name`.
+> Workflow job `.start()` calls do not work in this mode, with or without `--name`.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.
 
 ### function script
