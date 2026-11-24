@@ -15,9 +15,7 @@ type AuthServiceHolder<Service> = {
  * @param application - Application whose Auth services to read
  * @returns The Auth service, or undefined when the application defines none
  */
-export function soleAuthService<Service>(
-  application: AuthServiceHolder<Service>,
-): Service | undefined {
+function soleAuthService<Service>(application: AuthServiceHolder<Service>): Service | undefined {
   const [authService, ...others] = application.authServices;
   if (others.length > 0) {
     throw internalError(
