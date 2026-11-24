@@ -3,7 +3,7 @@ import { getCommand } from "./get";
 import { listCommand } from "./list";
 import { logsCommand } from "./logs";
 import { runFunctionCommand } from "./run";
-import { scriptCommand } from "./script";
+import { scaffoldCommand } from "./scaffold";
 
 export const functionCommand = defineCommand({
   name: "function",
@@ -13,7 +13,7 @@ export const functionCommand = defineCommand({
     list: listCommand,
     logs: logsCommand,
     run: runFunctionCommand,
-    script: scriptCommand,
+    scaffold: scaffoldCommand,
   },
   defaultSubCommand: "list",
 });

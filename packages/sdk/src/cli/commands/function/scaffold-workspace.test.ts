@@ -4,10 +4,10 @@ import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { writeWorkspaceProject } from "#/cli/shared/test-helpers/workspace-config";
-import { scriptCommand } from "./script";
+import { scaffoldCommand } from "./scaffold";
 import { SCRIPT_SNAPSHOT_FILE_NAME } from "./script-scaffold";
 
-describe("function script with a workspace config", () => {
+describe("function scaffold with a workspace config", () => {
   let dir: string;
   let configPath: string;
 
@@ -26,7 +26,7 @@ describe("function script with a workspace config", () => {
   test("scaffolds a script from the local tables of a namespace no application lists", async () => {
     const scriptPath = path.join(dir, "scripts", "fix.ts");
 
-    const result = await runCommand(scriptCommand, [
+    const result = await runCommand(scaffoldCommand, [
       scriptPath,
       "--config",
       configPath,

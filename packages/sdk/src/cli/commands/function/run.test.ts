@@ -173,49 +173,12 @@ describe("function run --json", () => {
     expect(loadConfigFile).toHaveBeenCalledWith("env/tailor.config.ts");
   });
 
-  test.each([
-    [["function", "test-run"]],
-    [["function", "--verbose", "test-run"]],
-    [["function", "-j", "test-run"]],
-    [["function", "--env-file", ".env", "test-run"]],
-    [["function", "-e", ".env", "test-run"]],
-    [["function", "--env-file=.env", "test-run"]],
-    [["function", "--envFileIfExists", ".env", "test-run"]],
-    [["--json", "function", "test-run"]],
-    [["--env-file", "function", "function", "test-run"]],
-  ])("warns when the deprecated test-run alias is invoked as %j", async (argv) => {
+  test("does not warn about a deprecated name when invoked as run", async () => {
     using _stdout = captureStdout();
     using stderr = captureStderr();
     using _json = jsonMode();
 
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", ...argv, scriptPath];
-    try {
-      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
-    } finally {
-      process.argv = originalArgv;
-    }
-
-    expect(stderr.output).toContain("`tailor function test-run` is deprecated");
-  });
-
-  test.each([
-    [["function", "--env-file", "test-run"]],
-    [["function", "-e", "test-run"]],
-    [["function", "--envFileIfExists", "test-run"]],
-    [["function", "--", "test-run"]],
-  ])("does not warn when the invoked name is not the alias: %j", async (argv) => {
-    using _stdout = captureStdout();
-    using stderr = captureStderr();
-    using _json = jsonMode();
-
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", ...argv, scriptPath];
-    try {
-      await runCommand(runFunctionCommand, [scriptPath, "--machine-user", "admin"]);
-    } finally {
-      process.argv = originalArgv;
-    }
+    await runCommand(functionCommand, ["run", scriptPath, "--machine-user", "admin"]);
 
     expect(stderr.output).not.toContain("deprecated");
   });
@@ -293,13 +256,7 @@ describe("function run --json", () => {
     using stderr = captureStderr();
     using _json = jsonMode();
 
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "function", "test-run", scriptPath];
-    try {
-      await runCommand(functionCommand, ["test-run", scriptPath, "--machine-user", "admin"]);
-    } finally {
-      process.argv = originalArgv;
-    }
+    await runCommand(functionCommand, ["test-run", scriptPath, "--machine-user", "admin"]);
 
     expect(JSON.parse(stdout.output)).toMatchObject({ success: true });
     expect(stderr.output).toContain("`tailor function test-run` is deprecated");

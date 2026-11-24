@@ -20,13 +20,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                               | Aliases    | Description                                                     |
-| ------------------------------------- | ---------- | --------------------------------------------------------------- |
-| [`function get`](#function-get)       | -          | Get a function registry by name                                 |
-| [`function list`](#function-list)     | -          | List function registries in a workspace                         |
-| [`function logs`](#function-logs)     | -          | List or get function execution logs.                            |
-| [`function run`](#function-run)       | `test-run` | Run a function on the Tailor Platform server without deploying. |
-| [`function script`](#function-script) | -          | Scaffold a one-off script to run with `function run`.           |
+| Command                                   | Aliases    | Description                                                     |
+| ----------------------------------------- | ---------- | --------------------------------------------------------------- |
+| [`function get`](#function-get)           | -          | Get a function registry by name                                 |
+| [`function list`](#function-list)         | -          | List function registries in a workspace                         |
+| [`function logs`](#function-logs)         | -          | List or get function execution logs.                            |
+| [`function run`](#function-run)           | `test-run` | Run a function on the Tailor Platform server without deploying. |
+| [`function scaffold`](#function-scaffold) | `script`   | Scaffold a one-off script to run with `function run`.           |
 
 ### function get
 
@@ -210,7 +210,7 @@ $ tailor function run build/resolvers/add.js --arg '{"a":1,"b":2}'
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
-A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
+A script scaffolded by `function scaffold` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
 
 `--arg-file` reads the argument from a JSON file instead of `--arg`; the two cannot be combined.
 
@@ -228,14 +228,16 @@ Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and i
 > Workflow job `.start()` calls do not work in this mode, with or without `--name`.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.
 
-### function script
+### function scaffold
 
 Scaffold a one-off script to run with `function run`.
+
+**Aliases:** `script`
 
 **Usage**
 
 ```
-tailor function script [options] <file>
+tailor function scaffold [options] <file>
 ```
 
 **Arguments**
@@ -261,19 +263,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Scaffold a one-off script (single-namespace project)**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts
+$ tailor function scaffold scripts/fix-prices.ts
 ```
 
 **Scaffold a script targeting a specific namespace**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts --namespace tailordb
+$ tailor function scaffold scripts/fix-prices.ts --namespace tailordb
 ```
 
 **Scaffold from a deployed or external namespace**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts --namespace shared --remote
+$ tailor function scaffold scripts/fix-prices.ts --namespace shared --remote
 ```
 
 **Notes**
@@ -283,3 +285,5 @@ The scaffolded script is a plain default-exported function; execute it with `tai
 By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types, or from `@tailor-platform/sdk/plugin/kysely-type/db` when the plugin sets `contentMapper: true`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Pass `--remote` to generate the script-scoped files from the deployed schema instead, even when `kyselyTypePlugin` is configured. This is required for an external namespace. Re-running the command refreshes `db.ts` and `db.snapshot.json` from the selected source and leaves the script itself untouched.
+
+`script` is a deprecated alias of this command and will be removed in v3.
