@@ -65,6 +65,29 @@ export async function defaultLoadHasMigrations(configPath: string): Promise<bool
 }
 
 /**
+ * List, for each application a config deploys, the TailorDB namespaces with migrations that the
+ * application does not list.
+ * @param configPath - Absolute path to the app's tailor.config.ts
+ * @returns The unlisted namespaces by application name
+ */
+export async function loadUnlistedMigrationNamespaces(
+  configPath: string,
+): Promise<Record<string, string[]>> {
+  const loaded = await loadConfigFile(configPath);
+  if (loaded.kind === "config") return { [loaded.config.name]: [] };
+  const { workspace } = loaded;
+  const migrated = getNamespacesWithMigrations(workspace, path.dirname(configPath)).map(
+    (entry) => entry.namespace,
+  );
+  return Object.fromEntries(
+    Object.entries(workspace.apps).map(([name, app]) => [
+      name,
+      migrated.filter((namespace) => !app.db.includes(namespace)),
+    ]),
+  );
+}
+
+/**
  * Tell whether an app's config uses seedPlugin.
  * @param configPath - Absolute path to the app's tailor.config.ts
  * @returns Whether the config uses seedPlugin

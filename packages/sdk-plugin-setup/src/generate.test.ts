@@ -4389,22 +4389,86 @@ export default defineConfig({
       });
     });
 
-    test.each([
-      { flags: "--erd-preview", options: { erdPreview: true } },
-      { flags: "--migration-test", options: { migrationTest: true } },
-      {
-        flags: "--erd-preview or --migration-test",
-        options: { erdPreview: true, migrationTest: true },
-      },
-    ])("rejects $flags for a workspace config", async ({ flags, options }) => {
+    test("rejects --erd-preview for a workspace config", async () => {
       const dir = nextAppDir();
       writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
 
       await expect(
-        setupTarget(baseOptions({ ...configLoaders, ...options, workspaceName: "shop", dir })),
-      ).rejects.toThrow(`A defineWorkspace() or defineApp() config does not support ${flags} yet.`);
+        setupTarget(
+          baseOptions({ ...configLoaders, erdPreview: true, workspaceName: "shop", dir }),
+        ),
+      ).rejects.toThrow(
+        "A defineWorkspace() or defineApp() config does not support --erd-preview yet.",
+      );
       expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
     });
+
+    const MIGRATED_DB = `{ files: [], migration: { directory: "./migrations/main" } }`;
+
+    test.each([
+      {
+        name: "a defineApp() config",
+        kind: "app-config",
+        source: `{ name: "shop", db: { "main-db": ${MIGRATED_DB} } }`,
+      },
+      {
+        name: "a defineWorkspace() config whose only application lists every namespace with migrations",
+        kind: "workspace-config",
+        source: `{
+          db: { "main-db": ${MIGRATED_DB}, "cache-db": { files: [] } },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+      },
+    ] as const)("adds the migration test job for $name", async ({ kind, source }) => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, kind, source);
+
+      await setupTarget(
+        baseOptions({ ...configLoaders, migrationTest: true, workspaceName: "shop", dir }),
+      );
+
+      const wf = parseYAML(
+        fs.readFileSync(path.join(testDir, ".github/workflows/tailor-shop.yml"), "utf-8"),
+      ) as Workflow;
+      expect(wf.jobs["tailor-migration-test"]).toBeDefined();
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { migrationTest: true } });
+    });
+
+    test.each([
+      {
+        name: "deploys several applications",
+        source: `{
+          db: { "main-db": ${MIGRATED_DB} },
+          apps: { shop: { db: ["main-db"] }, admin: { db: ["main-db"] } },
+        }`,
+        message:
+          "--migration-test copies the data of one application, but the workspace config deploys 2 applications. " +
+          "Generate the target without --migration-test.",
+      },
+      {
+        name: "has an application that does not list a namespace with migrations",
+        source: `{
+          db: { "main-db": { files: [] }, "ledger-db": ${MIGRATED_DB} },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+        message:
+          "--migration-test copies the data of application shop, which does not list ledger-db. " +
+          "Generate the target without --migration-test.",
+      },
+    ])(
+      "rejects --migration-test for a workspace config that $name",
+      async ({ source, message }) => {
+        const dir = nextAppDir();
+        writeWorkspaceConfig(dir, "workspace-config", source);
+
+        await expect(
+          setupTarget(
+            baseOptions({ ...configLoaders, migrationTest: true, workspaceName: "shop", dir }),
+          ),
+        ).rejects.toThrow(message);
+        expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
+      },
+    );
 
     test("rejects a workspace config deployed together with another --dir", async () => {
       fs.writeFileSync(
