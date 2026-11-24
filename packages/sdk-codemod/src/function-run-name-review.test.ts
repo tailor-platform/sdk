@@ -82,6 +82,16 @@ describe("function run --name review", () => {
       ".github/workflows/job.yml",
       "steps:\n  - run: >-\n      tailor function run a.ts\n      --name x\n",
     ],
+    [
+      "an argv array passed to a process call",
+      "run.ts",
+      'spawnSync("tailor", ["function", "run", "a.ts", "--name", "x"]);\n',
+    ],
+    [
+      "an argv array held in a variable",
+      "run.ts",
+      'const argv = ["tailor", "function", "run", "a.ts", "--name", "x"];\n',
+    ],
   ])("reports %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([relativePath]);
   });
@@ -145,6 +155,16 @@ describe("function run --name review", () => {
       JSON.stringify({
         scripts: { job: `tailor function run a.ts --arg '{"text":" --name example"}'` },
       }),
+    ],
+    [
+      "--name of another command in an argv array",
+      "run.ts",
+      'spawnSync("tailor", ["workspace", "create", "--name", "app"]);\n',
+    ],
+    [
+      "--name of another command in an argv array next to a function run array",
+      "run.ts",
+      'spawnSync("tailor", ["function", "run", "a.ts"]); spawnSync("tailor", ["workspace", "create", "--name", "app"]);\n',
     ],
   ])("does not report %s", async (_name, relativePath, source) => {
     expect(await reportedFiles(relativePath, source)).toEqual([]);
