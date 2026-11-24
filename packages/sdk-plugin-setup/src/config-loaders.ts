@@ -65,16 +65,18 @@ export async function defaultLoadHasMigrations(configPath: string): Promise<bool
 }
 
 /**
- * List, for each application a config deploys, the TailorDB namespaces with migrations that the
- * application does not list.
- * @param configPath - Absolute path to the app's tailor.config.ts
+ * List, for each application a `defineWorkspace()` or `defineApp()` config deploys, the TailorDB
+ * namespaces with migrations that the application does not list.
+ * @param configPath - Absolute path to the workspace config
  * @returns The unlisted namespaces by application name
  */
 export async function loadUnlistedMigrationNamespaces(
   configPath: string,
 ): Promise<Record<string, string[]>> {
   const loaded = await loadConfigFile(configPath);
-  if (loaded.kind === "config") return { [loaded.config.name]: [] };
+  if (loaded.kind !== "workspace") {
+    throw new Error(`${configPath} is not a defineWorkspace() or defineApp() config.`);
+  }
   const { workspace } = loaded;
   const withMigrations = getNamespacesWithMigrations(workspace, path.dirname(configPath)).map(
     (entry) => entry.namespace,
