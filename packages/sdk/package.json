@@ -244,7 +244,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@ark/attest": "0.58.0",
+    "@ark/attest": "0.58.1",
     "@electric-sql/pglite": "0.5.17",
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",

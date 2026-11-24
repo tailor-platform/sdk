@@ -465,7 +465,7 @@ snapshots:
 				"zod": "4.6.7",
 			},
 			"devDependencies": {
-				"@ark/attest": "0.58.0",
+				"@ark/attest": "0.58.1",
 				"@electric-sql/pglite": "0.5.17",
 				"@tailor-platform/shared": "workspace:^",
 				"@tailor-platform/tailor-proto": "workspace:^",
@@ -627,8 +627,8 @@ snapshots:
 			},
 		},
 
-		"@ark/attest@0.58.0": {
-			"integrity": "sha512-UxsK1WE3D40yM7C6jDS+sQiwtfQxtkcJ7SlUB76iFnJktavlzFDYUv5s4Odj1wpbab71wIyR2U/Wsz0ZMwX13w==",
+		"@ark/attest@0.58.1": {
+			"integrity": "sha512-PkfpRbFjHIf8gNZJotKtp9s0X9IAp5B6ycyhESa3bnNCBzu5tRTQ3iRKUrI5cCEPXnjxeWFk67egvqa2Q1zFKw==",
 			"hasBin": true,
 			"peerDependencies": {
 				"supports-color": {
@@ -646,30 +646,30 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@ark/fs": "0.56.8",
-				"@ark/schema": "0.56.8",
-				"@ark/util": "0.56.8",
+				"@ark/fs": "0.56.9",
+				"@ark/schema": "0.56.9",
+				"@ark/util": "0.56.9",
 				"@prettier/sync": "0.6.1",
 				"@typescript/analyze-trace": "0.10.1",
 				"@typescript/vfs": "1.6.1",
-				"arktype": "2.2.9",
+				"arktype": "2.2.10",
 				"prettier": "3.6.2",
 			},
 		},
 
-		"@ark/fs@0.56.8": {
-			"integrity": "sha512-HVVLmDg2tni6W+cVDmZpeK8fdsGCyQrzQy+9avr9fvOzwIEBrOHOu+tMOajgY2BGY8w2JlNOHx3E7tSm210Oew==",
+		"@ark/fs@0.56.9": {
+			"integrity": "sha512-GPS2mLpsS3qvSPKF8k3Qx6iB557bNNt19J1FcNoCU8M8uq77EjIFFZ7GS4KqslS71XxdfZom/W6s3yotK2OULg==",
 		},
 
-		"@ark/schema@0.56.8": {
-			"integrity": "sha512-R05TOe85oQBGFFw2zKMuZpqkXibLKuC/aJt6VwFn5Cjc4x3NkWfhvGRpRDycNkj3ddcHnOPtIsmjVowJO9Yxdw==",
+		"@ark/schema@0.56.9": {
+			"integrity": "sha512-3kFUweE9PagqzEC9FEOirBRrVxBj0D6o8UiZDDrCyrcaBepRFHjUezf6MuTk8mKfJ4NKzSsaUCOVK+jzcm+dPw==",
 			"dependencies": {
-				"@ark/util": "0.56.8",
+				"@ark/util": "0.56.9",
 			},
 		},
 
-		"@ark/util@0.56.8": {
-			"integrity": "sha512-XLiQyGfpJcws1zCtp2Cva8s1oheCdFn1Rt6JSyC4NnkDrpwCJnlaiawuuOc1Z97vMH+jEzW5vyyf0xOju5wUQA==",
+		"@ark/util@0.56.9": {
+			"integrity": "sha512-/yA1me+AMmI75VaQ5owz1A1owopAJ0ZZFXy9SI1Q69kErJfxuglQBYjGeOTFyygJjZ9Rf4UjCtD5XTuEiNiGHw==",
 		},
 
 		"@ast-grep/napi-darwin-arm64@0.51.2": {
@@ -4055,19 +4055,19 @@ snapshots:
 			"integrity": "sha512-gkco+qxENJV+8vFcDiiFhuoSvRXb2a/QPqpSoWhVz829VNJfOTnELbBmPmNKFxf3xdNnw4DWCkzkDaavcX/1YQ==",
 		},
 
-		"arkregex@0.0.14": {
-			"integrity": "sha512-G3I/uCtWE0IKQiPh0qqmmAFDdtjZKZQ5mNPR6gJBeAMZ7VqYCpoaDeXnLju2Zo6ywExtmxZJELeVFb0MPDjPyA==",
+		"arkregex@0.0.15": {
+			"integrity": "sha512-mu9vS4b8kTipqr2AfVIL1NYhGH47CZgPdYFzB762lu4/dsxm7hmNsN3ayDahcM9OhepOpTQc+W744yh4KE+mAw==",
 			"dependencies": {
-				"@ark/util": "0.56.8",
+				"@ark/util": "0.56.9",
 			},
 		},
 
-		"arktype@2.2.9": {
-			"integrity": "sha512-Cja0IMEn19rB35on9da1i1z6QMasuS7ULffXbetCry09jvCGYT8Bi1KgYiqri5FymF4nQAXkM90yksYkgSK2EA==",
+		"arktype@2.2.10": {
+			"integrity": "sha512-xfum3++1RGjULFBeeXph3XrejEhAfswZlpH/V5m324j8aZ/53tHUd8OPCXE1v5iU/2UEkn/ZDFUT0Exkjv96xA==",
 			"dependencies": {
-				"@ark/schema": "0.56.8",
-				"@ark/util": "0.56.8",
-				"arkregex": "0.0.14",
+				"@ark/schema": "0.56.9",
+				"@ark/util": "0.56.9",
+				"arkregex": "0.0.15",
 			},
 		},
 
