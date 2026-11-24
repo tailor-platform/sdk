@@ -15,6 +15,7 @@ export interface Namespace {
     Item: {
       id: Generated<string>;
       title: string;
+      note: string | null;
     }
   },
   "order-db": {

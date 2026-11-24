@@ -1,0 +1,21 @@
+{
+  "version": 8,
+  "namespace": "main-db",
+  "createdAt": "2026-11-24T13:00:25.911Z",
+  "changes": [
+    {
+      "kind": "field_added",
+      "tableName": "Item",
+      "fieldName": "note",
+      "after": {
+        "type": "string",
+        "required": false
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}
