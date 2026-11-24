@@ -8,7 +8,7 @@ import {
   GLOBAL_VALUE_OPTIONS,
 } from "@tailor-platform/shared/global-options";
 import * as path from "pathe";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { commonArgs, createCommonArgs, flagTokensOf } from "./args";
 import { defineAppCommand } from "./command";
@@ -57,25 +57,51 @@ describe("a command line spelled with the global options", () => {
     fs.rmSync(path.dirname(envFile), { recursive: true, force: true });
   });
 
-  async function exitCodeOf(argv: string[]): Promise<number> {
-    const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
-    const result = await runCommand(command, argv, {
-      globalArgs: z.strictObject(createCommonArgs()),
+  async function run(argv: string[]) {
+    const messages: string[] = [];
+    const warn = vi.spyOn(console, "warn").mockImplementation((...args: unknown[]) => {
+      messages.push(args.map(String).join(" "));
     });
-    return result.exitCode;
+    const write = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      messages.push(String(chunk));
+      return true;
+    });
+    try {
+      const command = defineAppCommand({ name: "noop", description: "noop", run: () => {} });
+      const result = await runCommand(command, argv, {
+        globalArgs: z.strictObject(createCommonArgs()),
+      });
+      return { exitCode: result.exitCode, output: messages.join("") };
+    } finally {
+      warn.mockRestore();
+      write.mockRestore();
+    }
   }
 
-  test.each(GLOBAL_BOOLEAN_FLAGS.map((flag) => [flag]))(
-    "is accepted for the flag %s",
+  test.each([["--noBogus"], ["--no-env-file"], ["--bogus"]])(
+    "warns about %s, which is not a global flag",
     async (flag) => {
-      expect(await exitCodeOf([flag])).toBe(0);
+      expect((await run([flag])).output).toContain("Unexpected");
     },
   );
 
+  test.each(GLOBAL_BOOLEAN_FLAGS.map((flag) => [flag]))("is read as the flag %s", async (flag) => {
+    const { exitCode, output } = await run([flag]);
+
+    expect(exitCode).toBe(0);
+    expect(output).not.toContain("Unexpected");
+  });
+
   test.each(GLOBAL_VALUE_FLAGS.map((flag) => [flag]))(
-    "is accepted for the option %s given a value",
+    "is read as the option %s given a value",
     async (flag) => {
-      expect(await exitCodeOf([flag, envFile])).toBe(0);
+      delete process.env.GLOBAL_OPTIONS_PROBE;
+      const argv = flag.includes("=") ? [flag] : [flag, envFile];
+      const { exitCode, output } = await run(argv);
+
+      expect(exitCode).toBe(0);
+      expect(output).not.toContain("Unexpected");
+      expect(process.env.GLOBAL_OPTIONS_PROBE).toBe("1");
     },
   );
 });
