@@ -219,7 +219,6 @@ describe("function run --json", () => {
   });
 
   test.each([
-    [["function", "run"]],
     [["function", "--env-file", "test-run"]],
     [["function", "-e", "test-run"]],
     [["function", "--envFileIfExists", "test-run"]],
@@ -538,6 +537,74 @@ describe("function run --json", () => {
         suggestion: expect.stringContaining("tailor function logs exec-1"),
       });
     });
+  });
+
+  test("warns that --name is deprecated and points to workflow run --job", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [
+      scriptPath,
+      "--name",
+      "validate-order",
+      "--machine-user",
+      "admin",
+    ]);
+
+    expect(stderr.output).toContain(
+      "`tailor function run --name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>` instead.",
+    );
+  });
+
+  test("warns that .start() jobs are skipped when a workflow job runs without --name", async () => {
+    vi.mocked(detectFunctionType).mockResolvedValueOnce({
+      type: "workflow-job",
+      name: "validate-order",
+      exportName: "validateOrder",
+    });
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
+
+    expect(stderr.output).toContain(
+      'Only the body of workflow job "validate-order" runs, and the jobs it starts with `.start()` do not. Use `tailor workflow run <file> --job <name>` to run them too.',
+    );
+    expect(stderr.output).not.toContain("--name");
+  });
+
+  test("warns once about --name, not again about the workflow job it selects", async () => {
+    vi.mocked(detectFunctionType).mockResolvedValueOnce({
+      type: "workflow-job",
+      name: "validate-order",
+      exportName: "validateOrder",
+    });
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [
+      tsScriptPath,
+      "--name",
+      "validate-order",
+      "--machine-user",
+      "admin",
+    ]);
+
+    expect(stderr.output).toContain("`tailor function run --name` is deprecated");
+    expect(stderr.output).not.toContain("do not. Use");
+  });
+
+  test("does not warn about workflow jobs when the function is not one", async () => {
+    using _stdout = captureStdout();
+    using stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(runFunctionCommand, [tsScriptPath, "--machine-user", "admin"]);
+
+    expect(stderr.output).not.toContain("workflow run");
   });
 
   test("dispatches the deprecated test-run alias to the run command", async () => {
