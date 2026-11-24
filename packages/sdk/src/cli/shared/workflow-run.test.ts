@@ -1672,6 +1672,23 @@ describe("assertWaitTimeout", () => {
   });
 });
 
+describe("the checks of a wait name the command that waits", () => {
+  test("a poll interval that is too long", () => {
+    expect(() => assertPollInterval(60_001, "function run")).toThrow(
+      expect.objectContaining({ command: "function run" }),
+    );
+    expect(() => assertPollInterval(60_001)).toThrow(
+      expect.objectContaining({ command: "workflow run" }),
+    );
+  });
+
+  test("a timeout that is too long", () => {
+    expect(() => assertWaitTimeout(2_147_483_648, "function run")).toThrow(
+      expect.objectContaining({ command: "function run" }),
+    );
+  });
+});
+
 describe("assertPollInterval", () => {
   test("accepts the longest interval a finished run is protected for", () => {
     expect(() => assertPollInterval(60_000)).not.toThrow();

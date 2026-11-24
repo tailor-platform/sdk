@@ -23,12 +23,11 @@ import {
   assertWaitTimeout,
   assertWorkflowArg,
   awaitWorkflowRun,
-  pruneHint,
-  reclaimFinishedWorkflowRuns,
   startWorkflowRun,
   workflowRunHints,
 } from "#/cli/shared/workflow-run";
 import { createRunId, workflowRunJobFunctionName } from "#/cli/shared/workflow-run-labels";
+import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -195,13 +194,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       jobs: bundled.jobs,
     };
 
-    const swept = await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
-    if (swept && swept.keptUnlabeled.length > 0) {
-      logger.warn(
-        `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
-          `If they are leftovers of an interrupted run, ${pruneHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
-      );
-    }
+    await sweepBeforeRun({ client, workspaceId, profile: args.profile });
 
     const started = await startWorkflowRun({
       ...source,

@@ -71,6 +71,9 @@ const FINISHED_GRACE_MS = 5 * 60_000;
 /** Longest time spent reading the result of a run that has already finished. */
 const OUTCOME_READ_TIMEOUT_MS = 60_000;
 
+/** Commands that wait for a run they started. */
+type WaitingCommand = "workflow run" | "function run";
+
 /** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
 const MAX_POLL_INTERVAL_MS = 60_000;
 
@@ -766,8 +769,12 @@ export async function reclaimFinishedWorkflowRuns(
  * Refuse a poll interval so long that a finished run could be removed before
  * its waiter polls again.
  * @param intervalMs - Poll interval in milliseconds
+ * @param command - Command that waits, named in the error
  */
-export function assertPollInterval(intervalMs: number): void {
+export function assertPollInterval(
+  intervalMs: number,
+  command: WaitingCommand = "workflow run",
+): void {
   if (intervalMs <= MAX_POLL_INTERVAL_MS) return;
   throw CLIError({
     code: "WORKFLOW_RUN_INTERVAL_TOO_LONG",
@@ -775,21 +782,25 @@ export function assertPollInterval(intervalMs: number): void {
     suggestion:
       "Use a shorter --interval: a finished run is only kept for a few minutes, " +
       "so a waiter polling less often could lose its result.",
-    command: "workflow run",
+    command,
   });
 }
 
 /**
  * Refuse a wait longer than a timer can count, which would end the wait as soon as the run starts.
  * @param timeoutMs - Longest time to wait in milliseconds, or infinity to wait without a limit
+ * @param command - Command that waits, named in the error
  */
-export function assertWaitTimeout(timeoutMs: number): void {
+export function assertWaitTimeout(
+  timeoutMs: number,
+  command: WaitingCommand = "workflow run",
+): void {
   if (timeoutMs <= MAX_WAIT_TIMEOUT_MS || timeoutMs === Number.POSITIVE_INFINITY) return;
   throw CLIError({
     code: "WORKFLOW_RUN_TIMEOUT_TOO_LONG",
     message: `--timeout must not exceed ${MAX_WAIT_TIMEOUT_MS} ms (about 24 days).`,
     suggestion: "Use a shorter --timeout, or omit it to wait without a limit.",
-    command: "workflow run",
+    command,
   });
 }
 
