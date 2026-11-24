@@ -105,7 +105,7 @@ describe("seed-bundler", () => {
       const result = await bundleSeedScript("tailordb", ["User"]);
 
       expect(result.bundledCode).toContain("//# sourceMappingURL=data:application/json");
-      expect(result.bundledCode).toContain("function sortBySelfReference");
+      expect(result.bundledCode).toContain("function groupBySelfReference");
     });
 
     test("minifies the script and embeds no sourcemap when inlineSourcemap is disabled", async () => {
@@ -114,7 +114,7 @@ describe("seed-bundler", () => {
       });
 
       expect(result.bundledCode).not.toContain("sourceMappingURL");
-      expect(result.bundledCode).not.toContain("function sortBySelfReference");
+      expect(result.bundledCode).not.toContain("function groupBySelfReference");
     });
 
     test("resolves the tsconfig from the provided project directory", async () => {
@@ -287,7 +287,7 @@ describe("seed script upsert behavior", () => {
     expect(logSpy).toHaveBeenCalledWith("[tailordb] User: 0 inserted, 0 updated, 1 skipped");
   });
 
-  test("inserts self-referencing types one-by-one after the id probe", async () => {
+  test("inserts self-referencing rows one-by-one when no self-reference fields are given", async () => {
     const queries = stubTailordb();
     const { main } = await loadMain("tailordb", ["Category"]);
 
@@ -307,6 +307,45 @@ describe("seed script upsert behavior", () => {
     expect(queries).toHaveLength(3);
     expect(queries[0]?.sql).toMatch(/^select /);
     expect(queries.slice(1).every(({ sql }) => sql.startsWith("insert"))).toBe(true);
+  });
+
+  test("inserts self-referencing rows of the same depth in one statement", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+
+    const result = await main({
+      data: {
+        Category: [
+          { id: "c5", parentId: "c3" },
+          { id: "c4", parentId: "c2" },
+          { id: "c3", parentId: "c1" },
+          { id: "c2", parentId: "c1" },
+          { id: "c1", parentId: null },
+        ],
+      },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+    });
+
+    expect(result.processed.Category).toEqual({ inserted: 5, updated: 0, skipped: 0 });
+    expect(queries.map(({ parameters }) => parameters.length)).toEqual([2, 4, 4]);
+  });
+
+  test("splits a self-referencing depth larger than the batch size into several statements", async () => {
+    const queries = stubTailordb();
+    const { main } = await loadMain("tailordb", ["Category"]);
+    const roots = Array.from({ length: 250 }, (_, i) => ({ id: `r${i}`, parentId: null }));
+
+    const result = await main({
+      data: { Category: roots },
+      order: ["Category"],
+      selfRefTypes: ["Category"],
+      selfRefFields: { Category: ["parentId"] },
+    });
+
+    expect(result.processed.Category?.inserted).toBe(250);
+    expect(queries).toHaveLength(3);
   });
 
   test("orders self-referencing inserts by dependency, not file order", async () => {
