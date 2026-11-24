@@ -276,6 +276,24 @@ export async function executeFunction(
 }
 
 /**
+ * Warn that a workflow job runs alone, unless `--name` selected it and its deprecation warning
+ * already named `workflow run`.
+ * @param target - Function run target
+ * @param prepared - Prepared script
+ * @returns Whether the warning was printed
+ */
+export function warnStartedJobsSkipped(
+  target: FunctionRunTarget,
+  prepared: PreparedFunction,
+): boolean {
+  if (prepared.functionType !== "workflow-job" || target.jobName !== undefined) return false;
+  logger.warn(
+    `Only the body of workflow job "${prepared.functionName}" runs, and the jobs it starts with \`.start()\` do not. Use \`tailor workflow run <file> --job <name>\` to run them too.`,
+  );
+  return true;
+}
+
+/**
  * Build the JSON output record of an execution.
  * @param prepared - Prepared script
  * @param result - Execution result

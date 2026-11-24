@@ -47,6 +47,12 @@ const FUNCTION_TEST_RUN_PATTERN = new RegExp(
   `${tailorCommandPrefix("\\bfunction", [], { crossLines: true })}test-run(?![\\w.-])`,
 );
 
+const SHELL_ARGUMENT_UNIT = String.raw`(?:"(?:[^"\\\n\0]|\\[^\0])*"|'[^'\n\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
+const FUNCTION_RUN_NAME_FLAG = String.raw`(?:\r?\n[^\S\r\n]*|\s)(?:--name|-n)(?:[\s=\0]|$)`;
+const FUNCTION_RUN_NAME_PATTERN = new RegExp(
+  String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
+);
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -2233,6 +2239,47 @@ export const allCodemods: CodemodPackage[] = [
       "",
       "When `idp` is built from a variable, a spread, or a helper, change it where the",
       "array is defined. Leave the `idp` options of other tools unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/function-run-name-to-workflow-run",
+    name: "function run --name → workflow run --job",
+    description:
+      "Replace `tailor function run <file> --name <job>` with `tailor workflow run <file> --job <job>`. `--name` is deprecated and removed in v3. It has no mechanical replacement: `function run --name` runs only the job's body and skips the jobs it starts with `.start()`, while `workflow run` runs those jobs too and accepts only a JSON object or `null` as its argument, so `tailor upgrade` reports each use for a manual change.",
+    since: "1.22.0",
+    until: "3.0.0",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    examples: [
+      {
+        before: "tailor function run workflows/sample.ts --name validate-order",
+        after: "tailor workflow run workflows/sample.ts --job validate-order",
+        lang: "sh",
+        caption:
+          "The jobs that `validate-order` starts with `.start()` now run too, and `--arg` must be a JSON object or `null`.",
+      },
+    ],
+    prompt: [
+      "`tailor function run --name` (and `function test-run --name`) is removed in v3.",
+      "Replace each flagged invocation with `tailor workflow run <file> --job <job>`.",
+      "",
+      "Check these differences before replacing:",
+      "- `function run --name` runs only the job's body; the jobs it starts with",
+      "  `.start()` are not executed. `workflow run` runs those jobs as well, so a",
+      "  script that relied on the started jobs being skipped now runs them.",
+      "- `workflow run` accepts only a JSON object or `null` as its `--arg` /",
+      "  `--arg-file`. A number, string, boolean, or array is refused; wrap it in an",
+      "  object and read it from the job's input.",
+      "- `workflow run` has no `--watch`. Replace a `function run --watch --name`",
+      "  call with a file watcher that runs `workflow run` after each change.",
+      "- Leave `--name` of other commands unchanged (`function get`, `workspace`,",
+      "  and so on).",
     ].join("\n"),
   },
 ];

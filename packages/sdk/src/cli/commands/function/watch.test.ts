@@ -269,14 +269,16 @@ describe("startFunctionRunWatch", () => {
         code: "WORKFLOW_JOB_AMBIGUOUS",
         message: "Multiple workflow jobs found.",
         details: 'Available jobs:\n  - "a"',
-        suggestion: "Specify one with --name.",
+        suggestion: "Run `tailor workflow run <file> --job <name>` to select one.",
       }),
     );
 
     await start();
 
     await vi.waitFor(() =>
-      expect(stripAnsi(stderr.output)).toContain("Suggestion: Specify one with --name."),
+      expect(stripAnsi(stderr.output)).toContain(
+        "Suggestion: Run `tailor workflow run <file> --job <name>` to select one.",
+      ),
     );
     const output = stripAnsi(stderr.output);
     expect(output).toMatch(
@@ -501,6 +503,47 @@ describe("startFunctionRunWatch", () => {
     expect(executeScriptReportingStart).toHaveBeenLastCalledWith(
       expect.objectContaining({ arg: undefined }),
     );
+  });
+
+  describe("a workflow job", () => {
+    const skippedWarning = "the jobs it starts with `.start()` do not";
+
+    async function runTwice(
+      stderr: { output: string },
+      overrides: Partial<FunctionRunTarget> = {},
+    ): Promise<void> {
+      vi.mocked(detectFunctionType).mockResolvedValue({
+        type: "workflow-job",
+        name: "validate-order",
+        exportName: "validateOrder",
+      });
+      running = await startFunctionRunWatch({
+        target: { ...target(), ...overrides },
+        argFile: undefined,
+        initialArg: undefined,
+      });
+      await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(1));
+      const argFile = argFileFrom(stderr.output);
+      fs.writeFileSync(argFile, '{"b":2}');
+      watcher.emit("change", argFile);
+      await vi.waitFor(() => expect(executeScriptReportingStart).toHaveBeenCalledTimes(2));
+    }
+
+    test("warns once that started jobs are skipped, however many times it runs", async () => {
+      using stderr = captureStderr();
+
+      await runTwice(stderr);
+
+      expect(stderr.output.split(skippedWarning)).toHaveLength(2);
+    });
+
+    test("does not warn when --name selected the job, since its deprecation warning came first", async () => {
+      using stderr = captureStderr();
+
+      await runTwice(stderr, { jobName: "validate-order" });
+
+      expect(stderr.output).not.toContain(skippedWarning);
+    });
   });
 
   test("re-reads a pre-bundled .js file on each run", async () => {
