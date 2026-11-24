@@ -16,7 +16,7 @@ import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
-import { scriptCommand } from "./script";
+import { scaffoldCommand } from "./scaffold";
 import { SCRIPT_DB_TYPES_FILE_NAME, SCRIPT_SNAPSHOT_FILE_NAME } from "./script-scaffold";
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -124,7 +124,7 @@ describe("function script", () => {
     fs.mkdirSync(path.join(tmp.dir, "sub"));
     process.chdir(path.join(tmp.dir, "sub"));
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
     const script = fs.readFileSync(path.join(tmp.dir, "sub/scripts/fix.ts"), "utf-8");
     expect(script).toContain('import { getDB } from "../../generated/tailordb";');
@@ -135,7 +135,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
     const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
     expect(script).toContain('import { getDB } from "../generated/tailordb";');
@@ -152,7 +152,7 @@ describe("function script", () => {
       plugins: [{ ...kyselyPluginStub, pluginConfig: { contentMapper: true } }],
     });
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
     const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
     expect(script).toContain('import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";');
@@ -164,7 +164,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir, { plugins: [{ ...kyselyPluginStub, pluginConfig: {} }] });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/without a distPath or contentMapper: true/);
@@ -183,7 +183,7 @@ describe("function script", () => {
       using _logger = silenceLogger("info", "success", "warn");
       mockConfig(tmp.dir);
 
-      await runCommand(scriptCommand, ["scripts/fix.ts", ...args]);
+      await runCommand(scaffoldCommand, ["scripts/fix.ts", ...args]);
 
       const nextHint = vi
         .mocked(logger.info)
@@ -199,7 +199,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir);
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
     expect(script).toContain('import { getDB } from "./db";');
@@ -230,7 +230,7 @@ describe("function script", () => {
     mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb", "--remote"]);
 
     const snapshot = JSON.parse(
       fs.readFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "utf-8"),
@@ -252,7 +252,7 @@ describe("function script", () => {
     mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     expect(fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8")).toContain(
       'import { getDB } from "./db";',
@@ -270,7 +270,7 @@ describe("function script", () => {
     });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     const dbTypes = fs.readFileSync(
       path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME),
@@ -286,7 +286,7 @@ describe("function script", () => {
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
@@ -303,7 +303,7 @@ describe("function script", () => {
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts/fix.ts"), "export default function main() {}\n");
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     expect(result.success).toBe(false);
     expect(result.error).toMatchObject({
@@ -318,7 +318,7 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir);
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const scriptPath = path.join(tmp.dir, "scripts/fix.ts");
     fs.writeFileSync(scriptPath, "// edited by the user\n");
@@ -326,7 +326,7 @@ describe("function script", () => {
     refreshed.tables.Product!.fields.price = { type: "float", required: false };
     mockLocalNamespace(refreshed);
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     expect(fs.readFileSync(scriptPath, "utf-8")).toBe("// edited by the user\n");
     const dbTypes = fs.readFileSync(
@@ -344,7 +344,7 @@ describe("function script", () => {
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME), "export {};\n");
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/Refusing to overwrite/);
   });
@@ -355,7 +355,7 @@ describe("function script", () => {
     mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
 
-    const result = await runCommand(scriptCommand, ["scripts/db.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/db.ts"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/reserved for the generated Kysely types/);
   });
@@ -368,7 +368,7 @@ describe("function script", () => {
     fs.mkdirSync(path.join(tmp.dir, "scripts"), { recursive: true });
     fs.writeFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "{broken");
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const snapshot = JSON.parse(
       fs.readFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "utf-8"),
@@ -384,7 +384,7 @@ describe("function script", () => {
       db: { tailordb: {}, theirs: { external: true } },
     });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/requires --remote/);
   });
@@ -397,7 +397,7 @@ describe("function script", () => {
       db: { tailordb: {}, theirs: { external: true } },
     });
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const script = fs.readFileSync(path.join(tmp.dir, "scripts/fix.ts"), "utf-8");
     expect(script).toContain('getDB("tailordb")');
@@ -408,9 +408,9 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir, { db: { tailordb: {}, other: {} } });
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "tailordb"]);
 
-    const result = await runCommand(scriptCommand, ["scripts/other.ts", "--namespace", "other"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/other.ts", "--namespace", "other"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/target namespace "tailordb"/);
   });
@@ -419,14 +419,14 @@ describe("function script", () => {
     using tmp = tempCwd("sdk-function-script-");
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir);
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     mockConfig(tmp.dir, { plugins: [kyselyPluginStub] });
     const refreshed = makeSnapshot();
     refreshed.tables.Product!.fields.price = { type: "float", required: false };
     mockLocalNamespace(refreshed);
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const dbTypes = fs.readFileSync(
       path.join(tmp.dir, "scripts", SCRIPT_DB_TYPES_FILE_NAME),
@@ -443,7 +443,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir, { db: { one: {}, two: {} } });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/--namespace/);
   });
@@ -455,7 +455,7 @@ describe("function script", () => {
       db: { tailordb: {}, theirs: { external: true } },
     });
 
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     expect(loadTailorDBNamespaces).toHaveBeenCalledWith({
       configPath: undefined,
@@ -469,7 +469,7 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir, { db: { theirs: { external: true } } });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/External namespaces require --remote/);
@@ -478,7 +478,7 @@ describe("function script", () => {
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
     );
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(
       expect.anything(),
@@ -494,7 +494,7 @@ describe("function script", () => {
       db: { tailordb: {}, theirs: { external: true } },
     });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "theirs"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/requires --remote/);
@@ -512,7 +512,7 @@ describe("function script", () => {
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
     );
 
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "theirs", "--remote"]);
 
     expect(loadTailorDBNamespaces).not.toHaveBeenCalled();
     expect(fetchRemoteSchemaSnapshot).toHaveBeenCalledWith(
@@ -529,7 +529,7 @@ describe("function script", () => {
       db: { tailordb: {}, theirs: { external: true } },
     });
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/Multiple TailorDB namespaces/);
@@ -541,10 +541,10 @@ describe("function script", () => {
     using _logger = silenceLogger("info", "success", "warn");
     mockConfig(tmp.dir);
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(makeSnapshot()));
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
 
     vi.mocked(fetchRemoteSchemaSnapshot).mockClear();
-    await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     const snapshot = JSON.parse(
       fs.readFileSync(path.join(tmp.dir, "scripts", SCRIPT_SNAPSHOT_FILE_NAME), "utf-8"),
@@ -564,9 +564,9 @@ describe("function script", () => {
     vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(
       normalizeSchemaSnapshot({ ...makeSnapshot(), namespace: "theirs" }),
     );
-    await runCommand(scriptCommand, ["scripts/fix.ts", "--namespace", "theirs", "--remote"]);
+    await runCommand(scaffoldCommand, ["scripts/fix.ts", "--namespace", "theirs", "--remote"]);
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
 
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/requires --remote/);
@@ -580,7 +580,7 @@ describe("function script", () => {
       normalizeSchemaSnapshot({ ...makeSnapshot(), tables: {} }),
     );
 
-    const result = await runCommand(scriptCommand, ["scripts/fix.ts", "--remote"]);
+    const result = await runCommand(scaffoldCommand, ["scripts/fix.ts", "--remote"]);
     expect(result.success).toBe(false);
     expect(result.error?.message).toMatch(/no deployed tables/);
   });

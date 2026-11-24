@@ -36,7 +36,7 @@ import {
 } from "./script-scaffold";
 import type { Plugin } from "#/plugin/types";
 
-export const scriptCommand = defineAppCommand({
+export const scaffoldCommand = defineAppCommand({
   name: "script",
   description: "Scaffold a one-off script to run with `function run`.",
   // strip unknown keys
