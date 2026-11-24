@@ -5,7 +5,7 @@
  */
 
 import * as fs from "node:fs";
-import { sortBySelfReference } from "@tailor-platform/shared/seed-order";
+import { groupBySelfReference } from "@tailor-platform/shared/seed-order";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
@@ -74,7 +74,7 @@ function generateSeedScriptContent(namespace: string): string {
       });
     }
 
-    ${sortBySelfReference.toString()}
+    ${groupBySelfReference.toString()}
 
     async function seedTables(
       db: ReturnType<typeof getDB>,
@@ -112,37 +112,26 @@ function generateSeedScriptContent(namespace: string): string {
             recordsToUpdate = records.filter((record) => existingIds.has(record.id));
           }
 
-          if (hasSelfRef) {
-            // Insert one-by-one, in dependency order, to respect
-            // self-referencing foreign keys.
-            const selfRefFieldNames = (input.selfRefFields || {})[tableName] || [];
-            const selfRefFieldKeys = (input.selfRefKeys || {})[tableName] || {};
-            const orderedRecords = sortBySelfReference(
-              recordsToInsert,
-              selfRefFieldNames,
-              selfRefFieldKeys,
+          const groups = hasSelfRef
+            ? groupBySelfReference(
+                recordsToInsert,
+                (input.selfRefFields || {})[tableName] || [],
+                (input.selfRefKeys || {})[tableName] || {},
+              )
+            : [recordsToInsert];
+          const reportProgress = () =>
+            console.log(
+              \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length}\`,
             );
-            for (const record of orderedRecords) {
-              await db.insertInto(tableName).values(record).execute();
-              processed[tableName].inserted += 1;
-            }
-            if (!upsert) {
-              console.log(
-                \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length} (one-by-one)\`,
-              );
-            }
-          } else {
-            for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
-              const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
+          for (const group of groups) {
+            for (let i = 0; i < group.length; i += BATCH_SIZE) {
+              const batch = group.slice(i, i + BATCH_SIZE);
               await db.insertInto(tableName).values(batch).execute();
               processed[tableName].inserted += batch.length;
-              if (!upsert) {
-                console.log(
-                  \`[${namespace}] \${tableName}: \${processed[tableName].inserted}/\${records.length}\`,
-                );
-              }
+              if (!upsert && !hasSelfRef) reportProgress();
             }
           }
+          if (!upsert && hasSelfRef) reportProgress();
 
           for (const record of recordsToUpdate) {
             const { id, ...values } = record;
