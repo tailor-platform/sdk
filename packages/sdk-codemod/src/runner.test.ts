@@ -2042,6 +2042,41 @@ describe("runCodemods", () => {
       expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
     });
 
+    test.each([
+      [
+        "a word boundary after a substitution",
+        "run(`x ${dir}tailor deploy`);\n",
+        /\btailor deploy/,
+      ],
+      [
+        "a word boundary before a substitution",
+        "run(`tailor deploy${dir} x`);\n",
+        /tailor deploy\b/,
+      ],
+      ["a leading substitution", "run(`${dir} tailor deploy ${file}`);\n", /^ tailor deploy $/],
+      ["a hex escape", 'run("tailor dep\\x6coy");\n', /tailor dep[^\0 ]oy/],
+    ])("keeps a string command readable with %s", async (_name, source, pattern) => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), source);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              sourceStringSuspiciousPatterns: [pattern],
+              prompt: "Review by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
+    });
+
     test("keeps LLM review patterns after regex literals with escaped slashes", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
       tmpDir = dir;

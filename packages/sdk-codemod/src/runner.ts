@@ -168,7 +168,7 @@ function contentForResidualMatching(relative: string, content: string): string {
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
 
-const SOURCE_STRING_OPAQUE_VALUE = "_";
+const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
 
 function sourceStringEscapeForResidualMatching(escape: string): string {
   if (/^\\(?:[nrtvf]|\r\n|\r|\n)$/.test(escape)) return " ";
