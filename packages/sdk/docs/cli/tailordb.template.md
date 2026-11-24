@@ -51,6 +51,7 @@ tailor tailordb truncate User Post --yes
   - Specific tables: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
 - Namespaces declared with `{ external: true }` are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
+- With a [workspace config](../workspace.md#commands) (Beta), `--all` truncates every TailorDB namespace of the workspace, including those no application lists.
 
 {{politty:command:tailordb migration:heading}}
 

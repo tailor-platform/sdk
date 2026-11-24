@@ -6,7 +6,7 @@ description: "Deploy one tailor.config.ts to development, staging, and productio
 
 A project typically runs in more than one environment — for example, each developer's own workspace, a staging workspace, and a production workspace. The SDK has no separate "environment" concept: an environment is a workspace you deploy to, and all environments share the same `tailor.config.ts`. This guide shows how to switch the deployment target and how to vary configuration values per environment.
 
-The auto-managed `id` in `defineConfig()` identifies the application, not an environment. Keep the same committed `id` when deploying the same config to multiple workspaces; see [Application Settings](./configuration.md#application-settings).
+The auto-managed `id` in `defineConfig()` identifies the application, not an environment. Keep the same committed `id` when deploying the same config to multiple workspaces; see [Application Settings](./configuration.md#application-settings). A [workspace config](./workspace.md) (Beta) has no id.
 
 ## Selecting the target workspace
 

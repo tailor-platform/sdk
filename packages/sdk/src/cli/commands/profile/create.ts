@@ -175,7 +175,7 @@ export const createCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Default machine user name for application-data commands (query, workflow start, function run, machineuser token).",
+        "Default machine user name for application-data commands (query, workflow start, workflow run, function run, machineuser token), or `<auth>/<name>` to name its Auth service too.",
     }),
     "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
       description:

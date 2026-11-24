@@ -171,6 +171,8 @@ idpUserCreatedTrigger({ idp: "backoffice-idp", external: true });
 
 The option only relaxes the type check; `deploy` resolves the name the same way with or without it.
 
+In a [`defineWorkspace()` config](../workspace.md#idps) (Beta), `idp` names any IdP of the workspace, and `IdpName` lists all of them, so `external` is not needed.
+
 These triggers require the IdP to publish user lifecycle events. `deploy` enables `publishEvents` automatically on each IdP targeted by an `idpUser` trigger taking part in the same run, and turns it back off once no such trigger remains; set the value explicitly on `defineIdp()` to pin it. See [IdP service - publishEvents](./idp.md#publishevents).
 
 ### Auth Access Token Triggers
@@ -190,6 +192,8 @@ The triggers subscribe to the Auth service the executor's config uses: its own `
 ```typescript
 authAccessTokenIssuedTrigger({ auth: "my-auth" });
 ```
+
+In a [`defineWorkspace()` config](../workspace.md#several-auth-services) (Beta), `auth` can name any Auth service of the workspace. With several Auth services, `auth` is required, and omitting it fails with `EXECUTOR_AUTH_AMBIGUOUS`.
 
 These triggers require the Auth service to publish access token events. Set `publishSessionEvents: true` in the `defineAuth()` of the Auth service that the executor's config uses; when that config references the Auth service as external, set it where the Auth service is defined. `deploy` does not enable it automatically. See [Auth service - Session Events](./auth.md#session-events).
 
@@ -373,7 +377,7 @@ createExecutor({
 });
 ```
 
-`appName` names the application whose GraphQL API the operation calls; without it, the operation calls the executor's own application. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an application that an executor's `graphql` operation still targets.
+`appName` names the application whose GraphQL API the operation calls; without it, the operation calls the executor's own application. Executors of a [`defineWorkspace()` config](../workspace.md#graphql-operations-of-executors) (Beta) belong to no application: without `appName`, the operation calls the workspace's only application, and `deploy` stops with `EXECUTOR_APP_NAME_AMBIGUOUS` when the workspace has several. `deploy` and `remove` stop with `SERVICE_IN_USE` instead of deleting an application that an executor's `graphql` operation still targets.
 
 ### Workflow Operation
 

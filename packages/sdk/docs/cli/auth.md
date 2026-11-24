@@ -151,14 +151,14 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                   | Description                                |
-| ----------------------------------------- | ------------------------------------------ |
-| [`machineuser list`](#machineuser-list)   | List all machine users in the application. |
-| [`machineuser token`](#machineuser-token) | Get an access token for a machine user.    |
+| Command                                   | Description                                                  |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| [`machineuser list`](#machineuser-list)   | List the machine users of the Auth services the config uses. |
+| [`machineuser token`](#machineuser-token) | Get an access token for a machine user.                      |
 
 ### machineuser list
 
-List all machine users in the application.
+List the machine users of the Auth services the config uses.
 
 **Usage**
 
@@ -190,9 +190,9 @@ tailor machineuser token [options] [name]
 
 **Arguments**
 
-| Argument | Description                                                                                                         | Required |
-| -------- | ------------------------------------------------------------------------------------------------------------------- | -------- |
-| `name`   | Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user. | No       |
+| Argument | Description                                                                                                                                                          | Required |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `name`   | Machine user name, or `<auth>/<name>` to name its Auth service too. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user. | No       |
 
 **Options**
 
@@ -218,14 +218,14 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                   | Description                                              |
-| ----------------------------------------- | -------------------------------------------------------- |
-| [`oauth2client list`](#oauth2client-list) | List all OAuth2 clients in the application.              |
-| [`oauth2client get`](#oauth2client-get)   | Get OAuth2 client credentials (including client secret). |
+| Command                                   | Description                                                   |
+| ----------------------------------------- | ------------------------------------------------------------- |
+| [`oauth2client list`](#oauth2client-list) | List the OAuth2 clients of the Auth services the config uses. |
+| [`oauth2client get`](#oauth2client-get)   | Get OAuth2 client credentials (including client secret).      |
 
 ### oauth2client list
 
-List all OAuth2 clients in the application.
+List the OAuth2 clients of the Auth services the config uses.
 
 **Usage**
 
@@ -250,6 +250,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 Returns a list of OAuth2 clients with the following fields:
 
 - `name` - Client name
+- `authNamespace` - Auth service the client belongs to
 - `description` - Client description
 - `clientId` - OAuth2 client ID
 - `grantTypes` - Supported grant types (e.g., `authorization_code`, `refresh_token`)
@@ -268,9 +269,9 @@ tailor oauth2client get [options] <name>
 
 **Arguments**
 
-| Argument | Description        | Required |
-| -------- | ------------------ | -------- |
-| `name`   | OAuth2 client name | Yes      |
+| Argument | Description                                                         | Required |
+| -------- | ------------------------------------------------------------------- | -------- |
+| `name`   | OAuth2 client name, or `<auth>/<name>` to name its Auth service too | Yes      |
 
 **Options**
 

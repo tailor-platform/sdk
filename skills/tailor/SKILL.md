@@ -15,6 +15,7 @@ Use these files as the single source of truth:
 
 - `node_modules/@tailor-platform/sdk/README.md`
 - `node_modules/@tailor-platform/sdk/docs/configuration.md`
+- `node_modules/@tailor-platform/sdk/docs/workspace.md`
 - `node_modules/@tailor-platform/sdk/docs/services/*.md`
 - `node_modules/@tailor-platform/sdk/docs/services/tailordb/*.md`
 - `node_modules/@tailor-platform/sdk/docs/cli-reference.md`
@@ -37,6 +38,7 @@ Use these files as the single source of truth:
 
 - Setup and first deploy: `docs/quickstart.md`
 - Core config shape: `docs/configuration.md`
+- One config for a whole workspace (`defineWorkspace()`, `defineApp()`): `docs/workspace.md`
 - Service details: `docs/services/*.md`; TailorDB and its migrations: `docs/services/tailordb/*.md`
 - CLI commands: `docs/cli-reference.md` and `docs/cli/*.md`
 - Testing patterns: `docs/testing.md`

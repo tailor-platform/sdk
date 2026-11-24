@@ -95,7 +95,7 @@ export async function listMachineUsers(
 
 export const listCommand = defineAppCommand({
   name: "list",
-  description: "List all machine users in the application.",
+  description: "List the machine users of the Auth services the config uses.",
   args: z.strictObject({
     ...deploymentArgs,
     ...paginationArgs(),

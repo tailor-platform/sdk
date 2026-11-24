@@ -62,6 +62,8 @@ export default defineConfig({
 
 Type-checked and autocompleted against your own Auth service name via the generated `tailor.d.ts` (the `AuthNamespaceNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining an Auth service to refresh it. Before the first generate run, `authNamespace` accepts any string.
 
+In a [`defineWorkspace()` config](../workspace.md#several-auth-services) (Beta), the AI gateway defaults to the workspace's only Auth service. With several Auth services there is none to default to, so set `authNamespace` to one of them; `deploy` and `generate` reject the config otherwise.
+
 To authenticate against a **different** application's Auth service, reference it as an [external resource](../configuration.md#external-resources) in your own config — `authNamespace` then defaults to it like any other Auth service:
 
 ```typescript

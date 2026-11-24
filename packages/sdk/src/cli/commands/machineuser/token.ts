@@ -165,7 +165,7 @@ export const tokenCommand = defineAppCommand({
     name: arg(z.string().optional(), {
       positional: true,
       description:
-        "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
+        "Machine user name, or `<auth>/<name>` to name its Auth service too. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
     }),
   }),
   run: async (args) => {

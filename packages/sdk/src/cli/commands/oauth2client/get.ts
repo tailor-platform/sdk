@@ -96,7 +96,7 @@ export const getCommand = defineAppCommand({
     ...deploymentArgs,
     name: arg(z.string(), {
       positional: true,
-      description: "OAuth2 client name",
+      description: "OAuth2 client name, or `<auth>/<name>` to name its Auth service too",
     }),
   }),
   run: async (args) => {

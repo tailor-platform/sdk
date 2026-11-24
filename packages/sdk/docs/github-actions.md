@@ -830,7 +830,9 @@ they were generated from, and their content hashes, plus the id of every app in
 the repository (see [App id](#app-id)). **Commit this file.** The SDK uses it to
 recognize its own files on re-runs and to detect hand edits. The only part
 meant for hand editing is `appIds`, and only to re-key an entry after moving an
-app directory or to delete the entry of a removed app.
+app directory or to delete the entry of a removed app. A
+[workspace config](./workspace.md) has no app id; the lock lists its path under
+`workspaces`.
 
 ### App id
 
@@ -1198,7 +1200,8 @@ tailor setup ci branch --name erp --dir apps/erp/backend --dir apps/users/backen
 ```
 
 `setup ci branch`, `setup ci tag`, and `setup ci preview` accept repeated
-`--dir`. The workflow plans and deploys every app's `tailor.config.ts` in one
+`--dir`. To deploy them from one config instead, see
+[Workspace configs](#workspace-configs-beta). The workflow plans and deploys every app's `tailor.config.ts` in one
 [multi-config deploy](./cli/application.md#deploy) from the repository root, so
 an app can reference resources of another app with `external: true`. Add
 `@tailor-platform/sdk` to the root `package.json` so the `tailor` CLI resolves
@@ -1212,6 +1215,30 @@ owns it. A namespace may be owned by only one app; the others reference it with
 
 With more than one app, the preview comment lists each application's base URL
 and Console URL.
+
+### Workspace configs (Beta)
+
+A [workspace config](./workspace.md) declares every app of the workspace in one
+`tailor.config.ts`, so pass its directory as the only `--dir` (or omit `--dir`
+for the repository root):
+
+```bash
+tailor setup ci branch --name erp --dir apps/erp
+```
+
+A `defineWorkspace()` config requires `--name`; a `defineApp()` config defaults
+to its application name. The workflow runs the generate check, seed validation,
+the migration drift check, the plan, and the deploy once for the whole
+workspace, and `.github/tailor.lock` records the config's path under
+`workspaces` instead of an app id. Moving from repeated `--dir`, use the same
+`--name` so the existing workflow is regenerated. `--erd-preview` is not
+available for a workspace config yet, and `--migration-test` needs a config
+that deploys one application listing every TailorDB namespace with migrations,
+since the migration test copies that application's data.
+
+The deploy job runs `tailor deploy --yes`, so the first deploy after moving
+from `defineConfig()` configs takes their resources over without asking; see
+[First Deploy After `defineConfig()`](./workspace.md#first-deploy-after-defineconfig).
 
 ### Running on changes outside the app directories
 

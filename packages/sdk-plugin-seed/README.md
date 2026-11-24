@@ -270,4 +270,6 @@ definePlugins(
 );
 ```
 
+In a `defineWorkspace()` config (Beta) with several Auth services, a machine user name that two of them define is ambiguous: pass `--machine-user <auth>/<name>`, or set `machineUserName: { namespace: "<auth>", machineUserName: "<name>" }`.
+
 Run `tailor seed <command> --help` for the full option reference.

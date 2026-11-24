@@ -262,7 +262,8 @@ export const testCommand = defineAppCommand({
       completion: { type: "none" },
     }),
     "machine-user": arg(z.string().min(1).optional(), {
-      description: "Machine user for seed, migration, and assertion script execution",
+      description:
+        "Machine user for seed, migration, and assertion script execution: its name, or `<auth>/<name>` to name its Auth service too",
     }),
   }),
   run: async (args) => {

@@ -707,6 +707,8 @@ tailor tailordb migration test --data clone
 
 Cloning requires editor access to both workspaces, which must be in the same region. Clone mode copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied, and unlike [`tailor data clone`](../../data-clone.md) it has no `--copy-files` or `--copy-idp-users` option. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures.
 
+Clone mode copies the data of one application. With a [`defineWorkspace()` config](../../workspace.md#commands) (Beta), the config must deploy a single application that lists every namespace with pending migrations; otherwise the command stops with `MIGRATION_TEST_CLONE_UNSUPPORTED`. Use `--data seed` for such a config.
+
 With `--target-workspace-id`, the designated target must be in the same region as the source; the command checks this before deploying anything to it.
 
 The source schema is re-verified immediately before cloning; if the source workspace was deployed or otherwise changed after the test started, the command aborts instead of cloning data that no longer matches the deployed baseline.
@@ -1001,6 +1003,8 @@ Migration scripts execute server-side under a machine user identity. The CLI sel
 2. The first entry in `auth.machineUsers` otherwise.
 
 The selected user must be defined in `auth.machineUsers`. The CLI logs the selected user before running scripts (`Using machine user: ...`).
+
+In a [`defineWorkspace()` config with several Auth services](../../workspace.md#several-auth-services) (Beta), there is no first entry to fall back to, so set `migration.machineUser` on each namespace with migration scripts; `tailor deploy` stops with `MACHINE_USER_REQUIRED` otherwise. The name must be defined by exactly one of the Auth services (`MACHINE_USER_AMBIGUOUS`), since `migration.machineUser` takes no Auth service name.
 
 When a pending migration has a `migrate.ts`, `tailor deploy` checks while planning that auth is configured, that a machine user is selected and defined in `auth.machineUsers`, and that each script can be bundled. A failure stops the deploy before anything is applied, and `tailor deploy --dry-run` reports it too. `tailor tailordb migration validate` runs the same checks for the migrations that are pending in the workspace it validates.
 

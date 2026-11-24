@@ -73,7 +73,7 @@ export const runCommand = defineAppCommand({
     "machine-user": arg(z.string().optional(), {
       alias: "m",
       description:
-        "Machine user name for authentication. Falls back to the active profile's default machine user.",
+        "Machine user name for authentication, or `<auth>/<name>` to name its Auth service too. Falls back to the active profile's default machine user.",
       env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
     }),
     interval: arg(durationArg.default("3s"), {
