@@ -1,6 +1,11 @@
 import { extractFields } from "@politty/zod";
 import { z } from "zod";
-import { commonArgs, flagTokensOf } from "#/cli/shared/args";
+import {
+  commonArgs,
+  flagTokensOf,
+  globalBooleanAliases,
+  splitOptionToken,
+} from "#/cli/shared/args";
 
 /**
  * Global option tokens that consume the following argv token as their value.
@@ -11,6 +16,8 @@ const valueTakingGlobalFlags: ReadonlySet<string> = new Set(
     .fields.filter((field) => field.type !== "boolean")
     .flatMap(flagTokensOf),
 );
+
+const booleanAliases = globalBooleanAliases({});
 
 /**
  * Detect whether a command was invoked under a given subcommand name.
@@ -38,7 +45,8 @@ export function invokedViaSubcommand(
       names.push(token);
       continue;
     }
-    if (!token.includes("=") && valueTakingGlobalFlags.has(token)) i++;
+    const { flag, value } = splitOptionToken(token, booleanAliases);
+    if (value === undefined && valueTakingGlobalFlags.has(flag)) i++;
   }
   return names[0] === parent && names[1] === name;
 }

@@ -14,6 +14,9 @@ describe("invokedViaSubcommand", () => {
     [["function", "--env-file=.env", "test-run"]],
     [["--json", "function", "test-run"]],
     [["--env-file", "function", "function", "test-run"]],
+    [["-je", ".env", "function", "test-run"]],
+    [["-je.env", "function", "test-run"]],
+    [["-jj", "function", "test-run"]],
   ])("is true when the subcommand is invoked as %j", (argv) => {
     expect(invoked(...argv)).toBe(true);
   });

@@ -422,7 +422,7 @@ const envFileArgKeyByToken: ReadonlyMap<string, keyof EnvFileArgs> = new Map(
  * @param options - Per-plugin adjustments the common arguments were built with
  * @returns Every alias of a boolean flag in the common arguments
  */
-function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
+export function globalBooleanAliases(options: CommonArgsOptions): ReadonlySet<string> {
   return new Set(
     extractFields(z.strictObject(createCommonArgs(options)))
       .fields.filter((field) => field.type === "boolean")
@@ -443,7 +443,7 @@ interface OptionToken {
  * @param booleanAliases - Short aliases of the global boolean flags
  * @returns The flag, and its value when the token carries one
  */
-function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
+export function splitOptionToken(token: string, booleanAliases: ReadonlySet<string>): OptionToken {
   if (
     token.startsWith("-") &&
     !token.startsWith("--") &&
