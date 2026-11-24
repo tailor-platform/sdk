@@ -347,7 +347,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
 
     expect(lastOrderSettings(client)).toEqual(
-      expect.objectContaining({ publishRecordEvents: false, disableGqlOperations: undefined }),
+      expect.objectContaining({ publishRecordEvents: false }),
     );
   });
 
@@ -1371,7 +1371,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       publishRecordEvents: false,
       disableGqlOperations: { create: true, update: true, delete: true, read: false },
     };
-    const released = { publishRecordEvents: true, disableGqlOperations: undefined };
+    const released = { publishRecordEvents: true };
 
     test("leaves every write unrestricted when it is false", async () => {
       using stderr = captureStderr();

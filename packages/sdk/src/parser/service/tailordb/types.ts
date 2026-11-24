@@ -29,7 +29,7 @@ export type TailorDBFieldOutput = {
     | "datetime"
     | "time"
     | "nested";
-  fields?: Record<string, TailorDBFieldOutput> | undefined;
+  fields?: Record<string, TailorDBFieldOutput>;
   metadata: DBFieldMetadataGenerated;
   rawRelation?: RawRelationConfigGenerated | undefined;
 };

@@ -64,7 +64,7 @@ describe("listFunctionRegistries", () => {
         expect.objectContaining({
           workspaceId: "workspace-1",
           sortBy: "updated_at",
-          pageDirection,
+          ...(pageDirection !== undefined && { pageDirection }),
         }),
       );
     },

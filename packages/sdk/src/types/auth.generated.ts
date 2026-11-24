@@ -1926,9 +1926,7 @@ export type AuthConfig =
                     | "datetime"
                     | "time"
                     | "nested";
-                  fields?:
-                    | Record<string, import("../parser/service/tailordb/types").TailorDBFieldOutput>
-                    | undefined;
+                  fields?: any | undefined;
                   metadata: {
                     required?: boolean | undefined;
                     array?: boolean | undefined;

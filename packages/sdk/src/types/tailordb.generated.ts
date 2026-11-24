@@ -1029,7 +1029,7 @@ export type TailorDBTypeRawInput = {
         | "datetime"
         | "time"
         | "nested";
-      fields?: Record<string, any> | undefined;
+      fields?: Record<string, any>;
       metadata: DBFieldMetadata;
       rawRelation?: RawRelationConfig | undefined;
     };
@@ -1076,7 +1076,7 @@ export type TailorDBTypeRaw = {
         | "datetime"
         | "time"
         | "nested";
-      fields?: Record<string, any> | undefined;
+      fields?: Record<string, any>;
       metadata: DBFieldMetadata;
       rawRelation?: RawRelationConfig | undefined;
     };

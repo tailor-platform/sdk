@@ -78,9 +78,7 @@ describe("fillSeedData", () => {
       for (const path of [cogs, file]) {
         const result = await fillSeedData({ path });
 
-        expect(fillFields).toHaveBeenLastCalledWith(
-          expect.objectContaining({ path, schemaDir: undefined }),
-        );
+        expect(fillFields).toHaveBeenLastCalledWith(expect.objectContaining({ path }));
         expect(result.output).toContain("run `tailor seed fill --dataset cogs`");
       }
     });
@@ -91,9 +89,7 @@ describe("fillSeedData", () => {
 
       await fillSeedData({ path: dir });
 
-      expect(fillFields).toHaveBeenCalledWith(
-        expect.objectContaining({ path: dir, schemaDir: undefined }),
-      );
+      expect(fillFields).toHaveBeenCalledWith(expect.objectContaining({ path: dir }));
     });
   });
 });

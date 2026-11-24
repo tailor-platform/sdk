@@ -16,6 +16,7 @@ import {
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createCommand, createWorkspace } from "./create";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 
@@ -720,7 +721,7 @@ describe("workspace create with user defaults", () => {
     await runCreateWithDefaults();
 
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: defaultOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: defaultOrganizationId }),
     );
   });
 
@@ -783,7 +784,7 @@ describe("workspace create with user defaults", () => {
 
     expect(result.success).toBe(true);
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: otherOrganizationId }),
     );
   });
 
@@ -858,7 +859,7 @@ describe("workspace create with user defaults", () => {
 
       expect(result.success).toBe(true);
       expect(client.createWorkspace).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId, folderId }),
+        expect.objectContaining(omitUndefined({ organizationId, folderId })),
       );
     });
 
@@ -913,7 +914,9 @@ describe("workspace create with user defaults", () => {
       const result = await runCreateWithDefaults("--env-file", envFilePath, ...args);
 
       expect(result.success).toBe(true);
-      expect(client.createWorkspace).toHaveBeenCalledWith(expect.objectContaining(expected));
+      expect(client.createWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining(omitUndefined(expected)),
+      );
     },
   );
 
@@ -946,7 +949,7 @@ describe("workspace create with user defaults", () => {
 
     expect(initOperatorClient).toHaveBeenCalledWith("profile-token", undefined);
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: profileOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: profileOrganizationId }),
     );
   });
 
@@ -1020,7 +1023,7 @@ describe("workspace create with user defaults", () => {
     });
 
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: otherOrganizationId }),
     );
   });
 

@@ -542,7 +542,6 @@ describe("planApplication", () => {
           subgraphs: [
             { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
           ],
-          disableIntrospection: undefined,
         }),
       },
     ]);
@@ -551,9 +550,6 @@ describe("planApplication", () => {
         name: "backoffice",
         request: expect.objectContaining({
           applicationName: "backoffice",
-          authNamespace: undefined,
-          authIdpConfigName: undefined,
-          cors: undefined,
           subgraphs: [
             { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
           ],
