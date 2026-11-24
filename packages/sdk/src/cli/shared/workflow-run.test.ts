@@ -1474,6 +1474,24 @@ describe("reclaimWorkflowRuns with resources that carry no run label", () => {
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
   });
 
+  test("leaves the function of an async run that is still executing alone even with the flag", async () => {
+    const client = createSweepClient([
+      orphan("function", {
+        name: `tmp-run-${runId}`,
+        functionExecutions: [FunctionExecution_Status.RUNNING],
+      }),
+    ]);
+
+    await reclaimWorkflowRuns({
+      client,
+      workspaceId: "ws",
+      now: old,
+      includeUnlabeled: true,
+    });
+
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
   test("never counts a resource an app owns as unlabeled", async () => {
     const client = createSweepClient([orphan("function", { labels: { "sdk-name": "app" } })]);
 

@@ -46,6 +46,7 @@ import {
   type CreatedTemporaryWorkflow,
 } from "#/cli/shared/temporary-workflow";
 import {
+  isFunctionRunResourceName,
   isWorkflowRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
@@ -664,6 +665,12 @@ export async function reclaimWorkflowRuns(
       );
       if (executions.some(isExecutionActive)) {
         keep(resource.name);
+        continue;
+      }
+    }
+    if (resource.kind === "function" && isFunctionRunResourceName(resource.name)) {
+      const executions = await listFunctionRunExecutions(client, workspaceId, [resource.name]);
+      if (executions.some((execution) => !isFunctionExecutionTerminalStatus(execution.status))) {
         continue;
       }
     }

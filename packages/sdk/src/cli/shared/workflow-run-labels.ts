@@ -14,6 +14,17 @@ const workflowRunLabelKey = "sdk-workflow-run-job";
 /** Base-36 digits of the start time in a run id */
 const RUN_ID_SECONDS_LENGTH = 8;
 
+/** Hex digits that tell runs of the same second apart */
+const RUN_ID_RANDOM_LENGTH = 6;
+
+/**
+ * Create the random suffix of a run id.
+ * @returns Lowercase hex string of the length a run id carries
+ */
+export function createRunIdSuffix(): string {
+  return crypto.randomBytes(RUN_ID_RANDOM_LENGTH / 2).toString("hex");
+}
+
 export interface WorkflowRunMarker {
   runId: string;
 }
@@ -54,8 +65,10 @@ export function readWorkflowRunMarker(
 
 const RESOURCE_PREFIX = "tmp-run-";
 
-/** A whole run id: what {@link createRunId} builds, with a suffix free of hyphens */
-const FUNCTION_RUN_ID = new RegExp(`^r[0-9a-z]{${RUN_ID_SECONDS_LENGTH}}-[0-9a-z]+$`);
+/** A whole run id: what {@link createRunId} builds, as {@link createRunIdSuffix} makes it */
+const FUNCTION_RUN_ID = new RegExp(
+  `^r[0-9a-z]{${RUN_ID_SECONDS_LENGTH}}-[0-9a-f]{${RUN_ID_RANDOM_LENGTH}}$`,
+);
 
 /** Longest name the Platform accepts for a job function. */
 const MAX_NAME_LENGTH = 63;

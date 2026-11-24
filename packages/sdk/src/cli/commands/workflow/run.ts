@@ -1,4 +1,3 @@
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { arg } from "@politty/zod";
@@ -28,7 +27,11 @@ import {
   startWorkflowRun,
   workflowRunHints,
 } from "#/cli/shared/workflow-run";
-import { createRunId, workflowRunJobFunctionName } from "#/cli/shared/workflow-run-labels";
+import {
+  createRunId,
+  createRunIdSuffix,
+  workflowRunJobFunctionName,
+} from "#/cli/shared/workflow-run-labels";
 import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
@@ -166,7 +169,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       authNamespace,
       machineUser,
     };
-    const runId = createRunId(new Date(), crypto.randomBytes(3).toString("hex"));
+    const runId = createRunId(new Date(), createRunIdSuffix());
     const progress = (message: string) => logger.info(message);
     progress(`Bundling job "${detected.name}" with the jobs it starts...`);
     const bundled = await bundleWorkflowRunJobs({ target, runId, jobName: detected.name });

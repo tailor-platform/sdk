@@ -5,7 +5,6 @@
  * without deploying (applying) the application.
  */
 
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { arg } from "@politty/zod";
@@ -46,7 +45,7 @@ import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertPollInterval, assertWaitTimeout, pruneHint } from "#/cli/shared/workflow-run";
-import { createRunId } from "#/cli/shared/workflow-run-labels";
+import { createRunId, createRunIdSuffix } from "#/cli/shared/workflow-run-labels";
 import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
@@ -461,7 +460,7 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
   const { target, prepared } = options;
   const { client, workspaceId } = target;
   await sweepBeforeRun({ client, workspaceId, profile: options.profile });
-  const runId = createRunId(new Date(), crypto.randomBytes(3).toString("hex"));
+  const runId = createRunId(new Date(), createRunIdSuffix());
   logger.info(`Starting run ${runId} on workspace ${styles.dim(workspaceId)}...`);
 
   const context = recoveryContextArgs({ workspaceId, profile: options.profile });

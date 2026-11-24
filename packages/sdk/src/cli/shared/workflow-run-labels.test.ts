@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   createRunId,
+  createRunIdSuffix,
   readWorkflowRunMarker,
   runIdStartedAt,
   isFunctionRunResourceName,
@@ -138,7 +139,16 @@ describe("isFunctionRunResourceName", () => {
     expect(isFunctionRunResourceName(workflowRunJobFunctionName(runId, "cleanup"))).toBe(false);
   });
 
+  test("is true for the name a freshly created run id gives its function", () => {
+    const runId = createRunId(new Date(), createRunIdSuffix());
+    expect(isFunctionRunResourceName(workflowRunResourceName(runId))).toBe(true);
+  });
+
   test("is false for a deployed job that only starts with the prefix", () => {
     expect(isFunctionRunResourceName("tmp-run-cleanup")).toBe(false);
+  });
+
+  test("is false for a deployed job named like a run id with a suffix no run makes", () => {
+    expect(isFunctionRunResourceName("tmp-run-r20261124-backfill")).toBe(false);
   });
 });
