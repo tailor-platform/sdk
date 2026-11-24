@@ -487,16 +487,18 @@ describe("show", () => {
       backoffice: { db: ["customer-db"], auth: "admin-auth" },
     }`;
 
-    function serveApplications() {
+    function serveApplications(options: { undeployed?: string[] } = {}) {
       client.getApplication.mockImplementation((request) =>
-        Promise.resolve({
-          application: {
-            ...application,
-            name: request.applicationName,
-            url: `https://${request.applicationName ?? ""}.example.com`,
-            authNamespace: request.applicationName === "shop" ? "shop-auth" : "admin-auth",
-          },
-        }),
+        options.undeployed?.includes(request.applicationName ?? "")
+          ? Promise.reject(new ConnectError("application not found", Code.NotFound))
+          : Promise.resolve({
+              application: {
+                ...application,
+                name: request.applicationName,
+                url: `https://${request.applicationName ?? ""}.example.com`,
+                authNamespace: request.applicationName === "shop" ? "shop-auth" : "admin-auth",
+              },
+            }),
       );
       client.getStaticWebsite.mockResolvedValue({
         staticwebsite: { name: "shop-front", url: "https://front.example.com", description: "" },
@@ -614,6 +616,48 @@ describe("show", () => {
       expect(result.error).toBeUndefined();
       expect(client.listAuthOAuth2Clients).toHaveBeenCalledTimes(1);
       expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    test("prints the deployed applications and warns about one that is not deployed yet", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const configPath = await writeWorkspaceConfig(twoApps);
+      serveApplications({ undeployed: ["backoffice"] });
+      using stdout = captureStdout();
+      using _json = jsonMode();
+
+      const result = await runCommand(showCommand, ["--config", configPath, "--profile", "dev"]);
+
+      expect(result.error).toBeUndefined();
+      const output = JSON.parse(stdout.output);
+      expect(output.applications.map((app: { name: string }) => app.name)).toEqual(["shop"]);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"backoffice"'));
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /`tailor deploy --workspace-id=workspace-1 --profile=dev --config=\S+`/,
+        ),
+      );
+    });
+
+    test("warns about no application when the workspace cannot be read", async () => {
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const configPath = await writeWorkspaceConfig(twoApps);
+      serveApplications({ undeployed: ["backoffice"] });
+      client.getWorkspace.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+
+      const result = await runCommand(showCommand, ["--config", configPath]);
+
+      expect(result.error).toMatchObject({ code: Code.Unavailable });
+      expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    test("fails for --app naming an application that is not deployed yet", async () => {
+      const configPath = await writeWorkspaceConfig(twoApps);
+      serveApplications({ undeployed: ["backoffice"] });
+
+      await expect(show({ configPath, app: "backoffice" })).rejects.toMatchObject({
+        code: Code.NotFound,
+      });
     });
 
     test("show() requires app when the config defines several applications", async () => {

@@ -5,7 +5,7 @@ import {
   Subgraph_ServiceType,
 } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { z } from "zod";
-import { appArg, deploymentArgs } from "#/cli/shared/args";
+import { appArg, deploymentArgs, formatConfigArg, recoveryContextArgs } from "#/cli/shared/args";
 import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
@@ -16,6 +16,7 @@ import {
   selectApplication,
 } from "#/cli/shared/config-applications";
 import { loadConfigFile } from "#/cli/shared/config-loader";
+import { formatCommandHint } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertDefined } from "#/utils/assert";
@@ -217,6 +218,7 @@ interface ShowTarget {
   client: OperatorClient;
   workspaceId: string;
   config: ConfigApplications;
+  options: ShowOptions | undefined;
 }
 
 async function loadShowTarget(options?: ShowOptions): Promise<ShowTarget> {
@@ -225,7 +227,7 @@ async function loadShowTarget(options?: ShowOptions): Promise<ShowTarget> {
     workspaceId: options?.workspaceId,
   });
   const config = configApplications(await loadConfigFile(options?.configPath));
-  return { client, workspaceId, config };
+  return { client, workspaceId, config, options };
 }
 
 async function fetchWorkspaceInfo(
@@ -258,17 +260,17 @@ interface FetchedApplication {
   oauth2Clients: ShowApplicationInfo["oauth2Clients"];
 }
 
+async function getDeployedApplication(target: ShowTarget, name: string): Promise<Application> {
+  const { client, workspaceId } = target;
+  const resp = await client.getApplication({ workspaceId, applicationName: name });
+  return assertDefined(resp.application, `application "${name}" not found in workspace`);
+}
+
 async function fetchApplication(
-  target: ShowTarget,
+  deployed: Application,
   application: ConfigApplication,
   listClients: OAuth2ClientLister,
 ): Promise<FetchedApplication> {
-  const { client, workspaceId } = target;
-  const resp = await client.getApplication({ workspaceId, applicationName: application.name });
-  const deployed = assertDefined(
-    resp.application,
-    `application "${application.name}" not found in workspace`,
-  );
   const oauth2Clients = await fetchOAuth2Clients(
     listClients,
     deployed.authNamespace,
@@ -285,10 +287,36 @@ async function showApplication(
   const [workspace, shared, fetched] = await Promise.all([
     fetchWorkspaceInfo(client, workspaceId),
     fetchSharedServices(target),
-    fetchApplication(target, application, oauth2ClientLister(client, workspaceId)),
+    getDeployedApplication(target, application.name).then((deployed) =>
+      fetchApplication(deployed, application, oauth2ClientLister(client, workspaceId)),
+    ),
   ]);
   const { name, ...info } = fetched.info;
   return { name, ...workspace, ...info, ...shared, oauth2Clients: fetched.oauth2Clients };
+}
+
+async function fetchIfDeployed(
+  target: ShowTarget,
+  application: ConfigApplication,
+  listClients: OAuth2ClientLister,
+): Promise<FetchedApplication | undefined> {
+  const deployed = await getOrNull(() => getDeployedApplication(target, application.name));
+  return deployed && fetchApplication(deployed, application, listClients);
+}
+
+function deployHint(target: ShowTarget): string {
+  const configArg = formatConfigArg(target.options?.configPath);
+  return formatCommandHint({
+    command: "tailor",
+    args: [
+      "deploy",
+      ...recoveryContextArgs({
+        workspaceId: target.workspaceId,
+        profile: target.options?.profile,
+      }),
+      ...(configArg ? [configArg] : []),
+    ],
+  });
 }
 
 async function showWorkspace(target: ShowTarget): Promise<WorkspaceShowInfo> {
@@ -298,18 +326,26 @@ async function showWorkspace(target: ShowTarget): Promise<WorkspaceShowInfo> {
     fetchWorkspaceInfo(client, workspaceId),
     fetchSharedServices(target),
     Promise.all(
-      target.config.applications.map((application) =>
-        fetchApplication(target, application, listClients),
-      ),
+      target.config.applications.map(async (application) => ({
+        name: application.name,
+        fetched: await fetchIfDeployed(target, application, listClients),
+      })),
     ),
   ]);
+  for (const { name, fetched } of applications) {
+    if (fetched === undefined) {
+      logger.warn(
+        `Skipped application "${name}": it is not deployed yet, or the current credentials cannot read it. To deploy it, run ${deployHint(target)}.`,
+      );
+    }
+  }
   return {
     ...workspace,
-    applications: applications.map(({ info, oauth2Clients }) => ({
-      ...info,
-      ...shared,
-      oauth2Clients,
-    })),
+    applications: applications.flatMap(({ fetched }) =>
+      fetched === undefined
+        ? []
+        : [{ ...fetched.info, ...shared, oauth2Clients: fetched.oauth2Clients }],
+    ),
   };
 }
 
@@ -337,7 +373,7 @@ export const showCommand = defineAppCommand({
   description: "Show information about the deployed application.",
   args: z.strictObject({
     ...deploymentArgs,
-    ...appArg("every application"),
+    ...appArg("every deployed application"),
   }),
   run: async (args) => {
     const target = await loadShowTarget({
