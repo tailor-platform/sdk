@@ -185,7 +185,12 @@ export async function awaitFunctionAsyncRun(
       if (isNotFoundError(error)) {
         return { state: "outcomeUnavailable", reason: "the execution of the run was not found" };
       }
-      if (!isRetryableWaitError(error)) throw error;
+      if (!isRetryableWaitError(error)) {
+        return {
+          state: "outcomeUnavailable",
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
     }
     const remaining = deadline === undefined ? pollInterval : deadline - Date.now();
     if (remaining <= 0) return { state: "timedOut" };

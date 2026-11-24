@@ -294,6 +294,23 @@ describe("awaitFunctionAsyncRun", () => {
     expect(outcome).toMatchObject({ state: "finished", result: { success: true } });
   });
 
+  test("keeps the function and reports the outcome as unavailable when reading fails for a reason that polling again would not fix", async () => {
+    const client = createClient();
+    client.getFunctionExecution.mockRejectedValue(
+      new ConnectError("denied", Code.PermissionDenied),
+    );
+    const outcome = await awaitFunctionAsyncRun({
+      client,
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 1000,
+    });
+
+    expect(outcome).toEqual({ state: "outcomeUnavailable", reason: "[permission_denied] denied" });
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
   test("keeps the function and reports the outcome as unavailable when the execution cannot be found", async () => {
     const client = createClient();
     client.getFunctionExecution.mockRejectedValue(new ConnectError("gone", Code.NotFound));

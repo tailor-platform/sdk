@@ -29,7 +29,12 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
-import { awaitFunctionAsyncRun, startFunctionAsyncRun } from "#/cli/shared/function-async-run";
+import {
+  awaitFunctionAsyncRun,
+  startFunctionAsyncRun,
+  type FunctionAsyncRunOutcome,
+  type StartedFunctionAsyncRun,
+} from "#/cli/shared/function-async-run";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -434,47 +439,56 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
   await sweepBeforeRun({ client, workspaceId, profile: options.profile });
   const runId = createRunId(new Date(), crypto.randomBytes(3).toString("hex"));
   logger.info(`Starting run ${runId} on workspace ${styles.dim(workspaceId)}...`);
-  const started = await startFunctionAsyncRun({
-    client,
-    workspaceId,
-    runId,
-    code: prepared.bundledCode,
-    description: `tailor function run --async ${path.basename(options.file)}`,
-    invoker: create(AuthInvokerSchema, {
-      namespace: target.authNamespace,
-      machineUserName: target.machineUser.name,
-    }),
-    arg: options.arg,
-  });
-  logger.info(`Run ID: ${started.runId}  Execution ID: ${started.executionId}`);
 
   const context = recoveryContextArgs({ workspaceId, profile: options.profile });
-  const inspect = formatCommandHint({
-    command: "tailor",
-    args: ["function", "logs", started.executionId, ...context],
-  });
   const prune = pruneHint({ workspaceId, profile: options.profile });
+  const readHint = (executionId: string) =>
+    formatCommandHint({ command: "tailor", args: ["function", "logs", executionId, ...context] });
+  let inspect: string | undefined;
   const onInterrupt = () => {
     logger.warn(
-      `Stopped waiting. Run ${started.runId} keeps running; read it with ${inspect}, then ${prune}.`,
+      inspect === undefined
+        ? `Stopped before the Platform confirmed run ${runId}. It may be running; ${prune} removes its temporary resource once it has finished.`
+        : `Stopped waiting. Run ${runId} keeps running; read it with ${inspect}, then ${prune}.`,
     );
     process.exit(130);
   };
   process.once("SIGINT", onInterrupt);
-  const outcome = await awaitFunctionAsyncRun({
-    client,
-    workspaceId,
-    started,
-    pollInterval: options.pollInterval,
-    timeoutMs: options.timeoutMs,
-  }).finally(() => process.off("SIGINT", onInterrupt));
+  let started: StartedFunctionAsyncRun;
+  let outcome: FunctionAsyncRunOutcome;
+  try {
+    started = await startFunctionAsyncRun({
+      client,
+      workspaceId,
+      runId,
+      code: prepared.bundledCode,
+      description: `tailor function run --async ${path.basename(options.file)}`,
+      invoker: create(AuthInvokerSchema, {
+        namespace: target.authNamespace,
+        machineUserName: target.machineUser.name,
+      }),
+      arg: options.arg,
+    });
+    logger.info(`Run ID: ${started.runId}  Execution ID: ${started.executionId}`);
+    inspect = readHint(started.executionId);
+    outcome = await awaitFunctionAsyncRun({
+      client,
+      workspaceId,
+      started,
+      pollInterval: options.pollInterval,
+      timeoutMs: options.timeoutMs,
+    });
+  } finally {
+    process.off("SIGINT", onInterrupt);
+  }
 
   const runContext = { runId: started.runId, executionId: started.executionId };
+  const read = readHint(started.executionId);
   if (outcome.state === "timedOut") {
     throw CLIError({
       code: "FUNCTION_RUN_WAIT_TIMEOUT",
       message: `Stopped waiting for run ${started.runId}; the function is still running.`,
-      suggestion: `Read the outcome with ${inspect}. Afterwards, ${prune} removes the temporary resource.`,
+      suggestion: `Read the outcome with ${read}. Afterwards, ${prune} removes the temporary resource.`,
       context: runContext,
     });
   }
@@ -482,7 +496,7 @@ async function runAsync(options: RunAsyncOptions): Promise<void> {
     throw CLIError({
       code: "FUNCTION_RUN_OUTCOME_UNAVAILABLE",
       message: `Run ${started.runId} could not be read to its end: ${outcome.reason}`,
-      suggestion: `Read it with ${inspect}. Afterwards, ${prune} removes the temporary resource.`,
+      suggestion: `Read it with ${read}. Afterwards, ${prune} removes the temporary resource.`,
       context: runContext,
     });
   }

@@ -498,6 +498,29 @@ describe("function run --json", () => {
       });
     });
 
+    test("says how to find the run when Ctrl+C comes before the Platform confirmed the start", async () => {
+      let release: (value: typeof asyncRun) => void = () => {};
+      vi.mocked(startFunctionAsyncRun).mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      using _stdout = captureStdout();
+      using stderr = captureStderr();
+      using _json = jsonMode();
+
+      const finished = runAsync();
+      await vi.waitFor(() => expect(startFunctionAsyncRun).toHaveBeenCalledTimes(1));
+      process.emit("SIGINT");
+      release(asyncRun);
+      await finished;
+
+      expect(exit).toHaveBeenCalledWith(130);
+      expect(stderr.output).toContain("may be running");
+      expect(stderr.output).toContain("tailor workflow prune");
+    });
+
     test("reports that the outcome could not be read, with where to read it", async () => {
       vi.mocked(awaitFunctionAsyncRun).mockResolvedValue({
         state: "outcomeUnavailable",
