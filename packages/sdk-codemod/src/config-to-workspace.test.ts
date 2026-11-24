@@ -1060,6 +1060,48 @@ describe("v3/config-to-workspace", () => {
     },
   );
 
+  test("merges configs named other than tailor.config, redirects what imports them, and reports what names them", async () => {
+    const importsSharedDb = (specifier: string) =>
+      lines(`import { sharedDb } from "${specifier}";`, "export const namespace = sharedDb;");
+    const project = createProject({
+      ...Object.fromEntries(
+        Object.entries(multiApplication).map(([file, source]) => [
+          file.replace("tailor.config", "app"),
+          source.replaceAll("tailor.config", "app"),
+        ]),
+      ),
+      "tsconfig.json": tsconfig({ paths: { "@user-config": ["./apps/user/app.ts"] } }),
+      "apps/admin/resolvers/aliased.ts": importsSharedDb("@user-config"),
+      "apps/user/labels.ts": 'export const label = "app";\n',
+      "scripts/check.ts": 'export const configPath = "apps/user/app.js";\n',
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    expect(result.filesDeleted).toEqual([
+      "apps/admin/app.ts",
+      "apps/user/app.ts",
+      "apps/user/tailor.d.ts",
+    ]);
+    expect(project.read("apps/admin/resolvers/notes.ts")).toBe(
+      importsSharedDb("../../../tailor.config"),
+    );
+    expect(project.read("apps/admin/resolvers/aliased.ts")).toBe(
+      importsSharedDb("../../../tailor.config"),
+    );
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file !== "package.json")
+        .map(({ file, line, message }) => ({ file, line, message })),
+    ).toEqual([
+      {
+        file: "scripts/check.ts",
+        line: 1,
+        message: "This names apps/user/app.ts, which the conversion merged into tailor.config.ts.",
+      },
+    ]);
+  });
+
   test("imports what configs import through their own tsconfig paths from the files the aliases name", async () => {
     const app = (name: string) => ({
       [`apps/${name}/tsconfig.json`]: tsconfig({ paths: { "@/*": ["./src/*"] } }),

@@ -172,14 +172,24 @@ export class ModuleCache {
   }
 
   private resolveFile(base: string): string | null {
-    const stem = base.replace(/\.(?:[cm]?js|jsx)$/u, "");
-    const candidates = [
-      base,
-      ...MODULE_EXTENSIONS.map((extension) => `${stem}${extension}`),
-      ...MODULE_EXTENSIONS.map((extension) => `${base}/index${extension}`),
-    ];
-    return candidates.find((candidate) => this.project.read(candidate) !== undefined) ?? null;
+    return (
+      moduleCandidates(base).find((candidate) => this.project.read(candidate) !== undefined) ?? null
+    );
   }
+}
+
+/**
+ * The files a module specifier may name, in the order an import of it tries them.
+ * @param base - Project-relative path the specifier names
+ * @returns The candidate paths
+ */
+export function moduleCandidates(base: string): string[] {
+  const stem = base.replace(/\.(?:[cm]?js|jsx)$/u, "");
+  return [
+    base,
+    ...MODULE_EXTENSIONS.map((extension) => `${stem}${extension}`),
+    ...MODULE_EXTENSIONS.map((extension) => `${base}/index${extension}`),
+  ];
 }
 
 /**
