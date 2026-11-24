@@ -1585,6 +1585,7 @@ describe("retryInterceptor", () => {
       "ExecScript", // starts another execution
       "InviteWorkspacePlatformUser", // may send another invitation
       "ResumeWorkflowExecution", // resumes the execution again
+      "StartJobFunction", // starts another execution
       "StartWorkflow", // starts another execution
       "TriggerExecutor", // triggers another job
       "TruncateTailorDBType", // also deletes records written in between
