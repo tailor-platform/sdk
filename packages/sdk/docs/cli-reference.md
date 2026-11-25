@@ -225,7 +225,9 @@ read them:
   lists the problems of each namespace, including the migration file and deploy checks above.
 - `MIGRATION_STATUS_FAILED`: `status` could not report at least one namespace, for example because
   its migration files are invalid, its migration history differs from the workspace's, or its
-  checkpoint is past the latest local migration.
+  checkpoint is past the latest local migration. A workspace still at the checkpoint and migration
+  history that the local baseline replaced is not a failure: `status` reports the reset the next
+  deploy makes.
 - `MIGRATION_IN_PROGRESS`: `rebaseline`, `sync`, or `test` found a migration in progress in the
   namespace: partially applied steps, a script run that is not settled, or an in-progress record
   that cannot be read.

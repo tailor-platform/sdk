@@ -655,19 +655,155 @@ describe("tailordb migration status --json", () => {
     expect(error).toContain("replaces the migration history ID");
   });
 
-  test("does not offer to move a checkpoint the next deploy resets to the new baseline", async () => {
-    writeRebaselineMarker(state.migrationsDir, "hlocal", { replacedHistoryId: "hprevious" });
+  test.each<{
+    name: string;
+    checkpoint: number;
+    replacedHistoryId: string | null;
+    labels: Record<string, string>;
+  }>([
+    {
+      name: "the checkpoint of the migration history the baseline replaced",
+      checkpoint: 5,
+      replacedHistoryId: "hprevious",
+      labels: { "sdk-migration": "m0005", "sdk-migration-history": "hprevious" },
+    },
+    {
+      name: "a checkpoint 0000 of the migration history the baseline replaced",
+      checkpoint: 0,
+      replacedHistoryId: "hprevious",
+      labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" },
+    },
+    {
+      name: "the checkpoint a first rebaseline replaced",
+      checkpoint: 5,
+      replacedHistoryId: null,
+      labels: { "sdk-migration": "m0005" },
+    },
+  ])(
+    "reports the reset the next deploy makes to $name, with the migrations after 0000 as pending",
+    async ({ checkpoint, replacedHistoryId, labels }) => {
+      writeRebaselineMarker(state.migrationsDir, "hlocal", {
+        replacedHistoryId,
+        replacedLatestMigration: checkpoint,
+      });
+      client.getMetadata.mockResolvedValue({ metadata: { labels } });
+      using stdout = captureStdout();
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      using _json = jsonMode();
+
+      const result = await runCommand(statusCommand, []);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toEqual([
+        {
+          status: "ok",
+          namespace: "tailordb",
+          currentMigration: checkpoint,
+          currentMigrationLabel: `000${checkpoint}`,
+          checkpointRepair: {
+            from: checkpoint,
+            to: 0,
+            fromHistoryId: replacedHistoryId,
+            toHistoryId: "hlocal",
+          },
+          pendingMigrations: [
+            { number: 1, label: "0001", description: "Add users" },
+            { number: 2, label: "0002", description: "Add orders" },
+          ],
+        },
+      ]);
+    },
+  );
+
+  test("tells that the next deploy checks the schema before resetting the checkpoint and the migration history ID", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
     client.getMetadata.mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" } },
+      metadata: { labels: { "sdk-migration": "m0005", "sdk-migration-history": "hprevious" } },
+    });
+    using stderr = captureStderr();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("Current migration: 0005");
+    expect(stderr.output).toContain(
+      "Checkpoint reset: the next deploy checks that the remote schema matches 0000, then resets the checkpoint 0005 → 0000 and the migration history ID hprevious → hlocal",
+    );
+    expect(stderr.output).toContain("- 0001: Add users");
+  });
+
+  test.each([
+    { record: "a migration in progress", inProgress: "m0006" },
+    { record: "an in-progress record the checkpoint already passed", inProgress: "m0005" },
+    { record: "an in-progress record it cannot read", inProgress: "broken" },
+  ])(
+    "reports that the next deploy cannot reset the checkpoint with $record",
+    async ({ inProgress }) => {
+      writeRebaselineMarker(state.migrationsDir, "hlocal", {
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 5,
+      });
+      client.getMetadata.mockResolvedValue({
+        metadata: {
+          labels: {
+            "sdk-migration": "m0005",
+            "sdk-migration-history": "hprevious",
+            "sdk-migration-in-progress": inProgress,
+          },
+        },
+      });
+      using stdout = captureStdout();
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      using _json = jsonMode();
+
+      const result = await runCommand(statusCommand, []);
+
+      expect(result.success).toBe(false);
+      expect(JSON.parse(stdout.output)).toEqual([
+        {
+          status: "error",
+          namespace: "tailordb",
+          error: expect.stringContaining(
+            'A migration is in progress in namespace "tailordb", so its checkpoint cannot be repaired.',
+          ),
+        },
+      ]);
+    },
+  );
+
+  test("lists the deploy that resets the checkpoint to release tables left in maintenance mode at it", async () => {
+    writeRebaselineMarker(state.migrationsDir, "hlocal", {
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 5,
+    });
+    client.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0005",
+          "sdk-migration-history": "hprevious",
+          "sdk-maintenance-mode": "m0005",
+        },
+      },
     });
     using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     using _json = jsonMode();
 
-    await runCommand(statusCommand, []);
+    const result = await runCommand(statusCommand, []);
 
-    const [{ error }] = JSON.parse(stdout.output);
-    expect(error).not.toContain("migration sync");
+    expect(result.success).toBe(true);
+    const [row] = JSON.parse(stdout.output) as Record<string, unknown>[];
+    expect(row).toMatchObject({
+      status: "ok",
+      checkpointRepair: { from: 5, to: 0 },
+      maintenanceModeCheckpoint: 5,
+      maintenanceModeCheckpointLabel: "0005",
+      maintenanceModeRelease: { via: "deploy", command: "tailor", args: ["deploy", workspaceArg] },
+    });
+    expect((row?.maintenanceModeRelease as Record<string, unknown>).fallback).toBeUndefined();
   });
 
   test("does not suggest checkpoint moves without a local snapshot", async () => {
