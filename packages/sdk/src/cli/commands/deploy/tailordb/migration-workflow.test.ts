@@ -8,6 +8,7 @@ import {
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   executeMigrationAsWorkflow,
@@ -328,7 +329,7 @@ describe("executeMigrationAsWorkflow", () => {
 
   test("keeps the workflow when the execution disappears while polling", async () => {
     const { client, calls } = createMockClient();
-    client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
+    client.getWorkflowExecution.mockResolvedValueOnce(omitUndefined({ execution: undefined }));
 
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
@@ -344,7 +345,7 @@ describe("executeMigrationAsWorkflow", () => {
     "mentions maintenance mode when the outcome is unknown only if it is on (%s)",
     async (maintenanceMode, mentioned) => {
       const { client } = createMockClient();
-      client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
+      client.getWorkflowExecution.mockResolvedValueOnce(omitUndefined({ execution: undefined }));
 
       const error: unknown = await run(client, maintenanceMode).catch(
         (rejection: unknown) => rejection,
@@ -1044,7 +1045,7 @@ describe("observing when the migration script runs", () => {
       ],
       { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
     );
-    client.getFunctionExecution.mockResolvedValueOnce({ execution: undefined });
+    client.getFunctionExecution.mockResolvedValueOnce(omitUndefined({ execution: undefined }));
 
     const { result, events } = runObserved(client);
 

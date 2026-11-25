@@ -21,7 +21,7 @@ interface Registry {
 }
 
 type GlobalWithRegistry = typeof globalThis & {
-  [WAIT_POINT_REGISTRY_KEY]?: Registry;
+  [WAIT_POINT_REGISTRY_KEY]?: Registry | undefined;
 };
 
 function registry(): Registry {

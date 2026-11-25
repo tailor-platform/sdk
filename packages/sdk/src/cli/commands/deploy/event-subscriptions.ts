@@ -16,6 +16,8 @@ import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { DependentAppsByResource, DeployDependencyReason } from "./label";
 import type { WorkflowEventSubscribers } from "./workflow";
 
+type SubscribedIdpNameTrigger = { idp?: string | undefined };
+
 /**
  * Resolve which IdP an `idpUser` trigger subscribes to. A trigger that omits the
  * `idp` option means the only configured IdP; when several exist the target is
@@ -26,7 +28,7 @@ import type { WorkflowEventSubscribers } from "./workflow";
  */
 function subscribedIdpName(
   target: BuiltDeploymentTarget,
-  trigger: { idp?: string | undefined },
+  trigger: SubscribedIdpNameTrigger,
 ): string | undefined {
   if (trigger.idp != null) {
     return trigger.idp;
@@ -556,15 +558,17 @@ function tailorDBTypeNamespaceIn(
   return target.application.tailorDBServices.find((service) => service.types[tableName])?.namespace;
 }
 
-// A namespaced resource is owned by whichever config declares it in the one
-// namespace the subscriber sees it through. An absent key means the subscriber
-// cannot see the name at all, which the missing-owner error explains.
-function narrowByVisibleNamespace(params: {
+type NarrowByVisibleNamespaceParams = {
   candidates: ReadonlyArray<BuiltDeploymentTarget>;
   visible: ReadonlyMap<string, string | undefined>;
   resourceKey: string;
   declaresIn: (target: BuiltDeploymentTarget, namespace: string) => boolean;
-}): OwnerCandidates {
+};
+
+// A namespaced resource is owned by whichever config declares it in the one
+// namespace the subscriber sees it through. An absent key means the subscriber
+// cannot see the name at all, which the missing-owner error explains.
+function narrowByVisibleNamespace(params: NarrowByVisibleNamespaceParams): OwnerCandidates {
   const { candidates, visible, resourceKey, declaresIn } = params;
   if (!visible.has(resourceKey)) return [];
   const namespace = visible.get(resourceKey);

@@ -18,7 +18,7 @@ export interface CollectedJob {
   exportName: string;
   sourceFile: string;
   /** Explicit `publishEvents` from `createWorkflowJob`, when the job set one. */
-  publishEvents?: boolean;
+  publishEvents?: boolean | undefined;
 }
 
 function stripRuntimeStart(workflow: unknown): unknown {

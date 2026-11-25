@@ -5,7 +5,7 @@ const SERVICE_NAME = "tailor-platform-cli";
 
 type TokenData = {
   accessToken: string;
-  refreshToken?: string;
+  refreshToken?: string | undefined;
 };
 
 type EntryLike = {

@@ -236,8 +236,12 @@ describe("verifyScriptSchemaSnapshot", () => {
     vi.mocked(loadTailorDBNamespaces).mockReset();
   });
 
+  interface MakeOptionsConfig {
+    db?: unknown;
+  }
+
   function makeOptions(
-    config: { db?: unknown } = {},
+    config: MakeOptionsConfig = {},
     snapshot: SchemaSnapshot = makeSnapshot(),
     source: "local" | "remote" = "remote",
     configArgValue?: string,

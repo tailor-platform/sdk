@@ -12,12 +12,18 @@ type ImportNode = {
   exported?: { name: string } | null;
 };
 
+type TransformWithTestConfig = {
+  include?: string[];
+  setupFiles?: string | string[];
+  root?: string;
+};
+
 function transformWith(
   plugin: ReturnType<typeof createBlockPlugin>,
   code: string,
   body: ImportNode[],
   id: string,
-  testConfig: { include?: string[]; setupFiles?: string | string[]; root?: string } = {
+  testConfig: TransformWithTestConfig = {
     include: [],
   },
 ) {

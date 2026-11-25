@@ -26,10 +26,10 @@ export interface Replacement extends SourceRange {
 export interface StartCallInfo {
   identifierName: string;
   callRange: SourceRange;
-  argsRange?: SourceRange;
-  optionsRange?: SourceRange;
+  argsRange?: SourceRange | undefined;
+  optionsRange?: SourceRange | undefined;
   /** The options argument as written. */
-  options?: CallExpression["arguments"][number];
+  options?: CallExpression["arguments"][number] | undefined;
 }
 
 export interface FoundProperty {
@@ -46,7 +46,7 @@ export interface FoundProperty {
  */
 export function getModuleExportName(node: unknown): string | undefined {
   if (!node || typeof node !== "object") return undefined;
-  const exportName = node as { name?: string; value?: unknown };
+  const exportName = node as { name?: string | undefined; value?: unknown };
   if (exportName.name) return exportName.name;
   return typeof exportName.value === "string" ? exportName.value : undefined;
 }
@@ -232,7 +232,7 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
         objProp.key.type === "Identifier"
           ? objProp.key.name
           : objProp.key.type === "Literal"
-            ? (objProp.key as { value?: string }).value
+            ? (objProp.key as { value?: string | undefined }).value
             : null;
       if (keyName === name) {
         return {

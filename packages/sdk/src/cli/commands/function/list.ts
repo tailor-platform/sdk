@@ -8,6 +8,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { functionRegistryInfo, type FunctionRegistryInfo } from "./transform";
 
 // strip unknown keys
@@ -50,13 +51,15 @@ export async function listFunctionRegistries(
   const registries = await fetchPaged(
     async (pageToken, pageSize) => {
       try {
-        const { functions, nextPageToken } = await client.listFunctionRegistries({
-          workspaceId,
-          pageToken,
-          pageSize,
-          sortBy: "updated_at",
-          pageDirection,
-        });
+        const { functions, nextPageToken } = await client.listFunctionRegistries(
+          omitUndefined({
+            workspaceId,
+            pageToken,
+            pageSize,
+            sortBy: "updated_at",
+            pageDirection,
+          }),
+        );
         return [functions, nextPageToken];
       } catch (error) {
         if (error instanceof ConnectError && error.code === Code.NotFound) {

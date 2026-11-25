@@ -32,6 +32,7 @@ import * as inflection from "inflection";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import { normalizeTableScriptCompatibility } from "./snapshot-script-compatibility";
 import type {
@@ -54,23 +55,25 @@ import type {
  */
 export interface GenerateManifestOptions {
   /** Whether an executor taking part in the same run subscribes to its record events */
-  subscribed?: boolean;
+  subscribed?: boolean | undefined;
   /**
    * Force record event publishing off, overriding a declared `publishEvents`.
    *
    * A table that declares `publishEvents: true` publishes no matter who
    * subscribes, so `subscribed` alone cannot silence it while migrations run.
    */
-  suppressRecordEvents?: boolean;
+  suppressRecordEvents?: boolean | undefined;
   /** Force GraphQL create, update, delete, and bulk upsert off; read keeps the snapshot's setting. */
-  suppressGqlMutations?: boolean;
+  suppressGqlMutations?: boolean | undefined;
   /** Default gqlOperations for the namespace */
-  namespaceGqlOperations?: {
-    create?: boolean;
-    update?: boolean;
-    delete?: boolean;
-    read?: boolean;
-  };
+  namespaceGqlOperations?:
+    | {
+        create?: boolean | undefined;
+        update?: boolean | undefined;
+        delete?: boolean | undefined;
+        read?: boolean | undefined;
+      }
+    | undefined;
 }
 
 /**
@@ -111,12 +114,14 @@ export function generateTailorDBTypeManifestFromSnapshot(
     maxBulkUpsertSize: bigint;
     pluralForm: string;
     publishRecordEvents: boolean;
-    disableGqlOperations?: {
-      create: boolean;
-      update: boolean;
-      delete: boolean;
-      read: boolean;
-    };
+    disableGqlOperations?:
+      | {
+          create: boolean;
+          update: boolean;
+          delete: boolean;
+          read: boolean;
+        }
+      | undefined;
   } = {
     aggregation: snapshotType.settings?.aggregation ?? false,
     bulkUpsert:
@@ -418,11 +423,11 @@ function convertActionPermissionToProto(
       throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
 
-  return {
+  return omitUndefined({
     conditions: policy.conditions.map(convertConditionToProto),
     permit,
     description: policy.description,
-  };
+  });
 }
 
 /**
@@ -504,7 +509,7 @@ function convertOperandToProto(
  */
 export interface GenerateAllManifestsOptions extends GenerateManifestOptions {
   /** Set of table names that should have publishRecordEvents enabled */
-  executorUsedTables?: ReadonlySet<string>;
+  executorUsedTables?: ReadonlySet<string> | undefined;
 }
 
 /**
@@ -633,12 +638,12 @@ function protoGqlPolicy(
     default:
       throw internalError(`Unknown permission: ${policy.permit satisfies never}`);
   }
-  return {
+  return omitUndefined({
     conditions: policy.conditions.map((cond) => protoGqlCondition(cond)),
     actions,
     permit,
     description: policy.description,
-  };
+  });
 }
 
 function protoGqlCondition(

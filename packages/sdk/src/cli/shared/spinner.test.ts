@@ -5,12 +5,14 @@ import { stripAnsi } from "./test-helpers/strip-ansi";
 
 type FakeStream = {
   isTTY: boolean;
-  columns?: number;
+  columns?: number | undefined;
   write: (chunk: string) => boolean;
   output: string;
 };
 
-function createFakeStream(opts: { isTTY: boolean; columns?: number }): FakeStream {
+type CreateFakeStreamOptions = { isTTY: boolean; columns?: number | undefined };
+
+function createFakeStream(opts: CreateFakeStreamOptions): FakeStream {
   const stream = {
     isTTY: opts.isTTY,
     columns: opts.columns,
@@ -23,12 +25,14 @@ function createFakeStream(opts: { isTTY: boolean; columns?: number }): FakeStrea
   return stream;
 }
 
-function createStartedSpinner(opts: {
+type CreateStartedSpinnerOptions = {
   isTTY: boolean;
   columns?: number;
   indent?: number;
   text?: string;
-}) {
+};
+
+function createStartedSpinner(opts: CreateStartedSpinnerOptions) {
   const stream = createFakeStream({ isTTY: opts.isTTY, columns: opts.columns });
   const spinner = new Spinner({
     stream: stream as unknown as NodeJS.WriteStream,

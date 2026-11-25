@@ -9,13 +9,13 @@ import { createCacheStore } from "./store";
  */
 type CacheManagerOptions = {
   /** Whether caching is enabled. Defaults to true. */
-  enabled?: boolean;
+  enabled?: boolean | undefined;
   /** Directory where cache artifacts are stored. Defaults to `<distDir>/cache`. */
-  cacheDir?: string;
+  cacheDir?: string | undefined;
   /** Current SDK version for cache invalidation on upgrade. */
   sdkVersion: string;
   /** Hash of the lockfile for cache invalidation on dependency changes. */
-  lockfileHash?: string;
+  lockfileHash?: string | undefined;
 };
 
 /**

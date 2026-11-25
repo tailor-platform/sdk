@@ -10,11 +10,11 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { type OAuth2ClientInfo, toOAuth2ClientInfo } from "./transform";
 
 export interface ListOAuth2ClientsOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 /**

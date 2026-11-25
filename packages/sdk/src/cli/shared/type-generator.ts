@@ -9,7 +9,7 @@ import type { AppConfig } from "#/configure/config/types";
 
 interface AttributeTypeInfo {
   type: string;
-  optional?: boolean;
+  optional?: boolean | undefined;
 }
 
 export interface AttributesConfig {
@@ -25,24 +25,26 @@ interface DateRepresentationEntry {
 }
 
 interface ExtractedAttributes {
-  attributes?: AttributesConfig;
-  attributeList?: AttributeListConfig;
-  env?: Record<string, string | number | boolean>;
-  machineUserNames?: string[];
-  idpNames?: string[];
-  connectionNames?: string[];
-  aiGatewayNames?: string[];
-  authNamespaceNames?: string[];
-  secretVaultNames?: Record<string, string[]>;
+  attributes?: AttributesConfig | undefined;
+  attributeList?: AttributeListConfig | undefined;
+  env?: Record<string, string | number | boolean> | undefined;
+  machineUserNames?: string[] | undefined;
+  idpNames?: string[] | undefined;
+  connectionNames?: string[] | undefined;
+  aiGatewayNames?: string[] | undefined;
+  authNamespaceNames?: string[] | undefined;
+  secretVaultNames?: Record<string, string[]> | undefined;
 }
 
 type AttributeFieldLike = {
-  type?: string;
-  metadata?: {
-    array?: boolean;
-    allowedValues?: Array<{ value: string }>;
-    required?: boolean;
-  };
+  type?: string | undefined;
+  metadata?:
+    | {
+        array?: boolean | undefined;
+        allowedValues?: Array<{ value: string }> | undefined;
+        required?: boolean | undefined;
+      }
+    | undefined;
 };
 
 /**
@@ -305,14 +307,16 @@ function collectAuthAttributes(auth: AppConfig["auth"]): AuthAttributes {
   }
 
   // Extract machine user names from auth.machineUsers (available regardless of userProfile vs. machineUserAttributes)
-  const machineUsersObj = (auth as { machineUsers?: Record<string, unknown> }).machineUsers;
+  const machineUsersObj = (auth as { machineUsers?: Record<string, unknown> | undefined })
+    .machineUsers;
   const machineUserNames =
     machineUsersObj && typeof machineUsersObj === "object"
       ? Object.keys(machineUsersObj)
       : undefined;
 
   // Extract connection names from auth.connections (available regardless of userProfile vs. machineUserAttributes)
-  const connectionsObj = (auth as { connections?: Record<string, unknown> }).connections;
+  const connectionsObj = (auth as { connections?: Record<string, unknown> | undefined })
+    .connections;
   const connectionNames =
     connectionsObj && typeof connectionsObj === "object" ? Object.keys(connectionsObj) : undefined;
 
@@ -346,13 +350,17 @@ function collectAuthAttributes(auth: AppConfig["auth"]): AuthAttributes {
   if ("userProfile" in auth) {
     const userProfile = (
       auth as {
-        userProfile?: {
-          type?: {
-            fields?: Record<string, AttributeFieldLike>;
-          };
-          attributes?: Record<string, true>;
-          attributeList?: AttributeListConfig;
-        };
+        userProfile?:
+          | {
+              type?:
+                | {
+                    fields?: Record<string, AttributeFieldLike> | undefined;
+                  }
+                | undefined;
+              attributes?: Record<string, true> | undefined;
+              attributeList?: AttributeListConfig | undefined;
+            }
+          | undefined;
       }
     ).userProfile;
 
@@ -380,7 +388,7 @@ function collectAuthAttributes(auth: AppConfig["auth"]): AuthAttributes {
   if ("machineUserAttributes" in auth) {
     const machineUserAttributes = (
       auth as {
-        machineUserAttributes?: Record<string, AttributeFieldLike>;
+        machineUserAttributes?: Record<string, AttributeFieldLike> | undefined;
       }
     ).machineUserAttributes;
 

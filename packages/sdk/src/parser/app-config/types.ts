@@ -18,8 +18,8 @@ import type { TailorDBOwnServiceConfigInput } from "#/configure/services/tailord
 export interface WorkspaceApplication extends ApplicationSettings {
   db: string[];
   resolver: string[];
-  auth?: string;
-  idp?: string;
+  auth?: string | undefined;
+  idp?: string | undefined;
 }
 
 /**
@@ -30,15 +30,15 @@ export interface WorkspaceRepresentation<Value = EnvEntry> extends WorkspaceSett
   env: Record<string, Value>;
   db: Record<string, TailorDBOwnServiceConfigInput>;
   resolver: Record<string, ResolverServiceConfig>;
-  executor?: ExecutorServiceConfig;
-  workflow?: WorkflowServiceConfig;
+  executor?: ExecutorServiceConfig | undefined;
+  workflow?: WorkflowServiceConfig | undefined;
   auth: Record<string, AuthOwnConfig>;
   idp: Record<string, IdPOwnConfig>;
   /** `env` values each service uses in place of the root values with the same keys. */
   envOverrides: {
     resolver: Record<string, Record<string, Value>>;
-    executor?: Record<string, Value>;
-    workflow?: Record<string, Value>;
+    executor?: Record<string, Value> | undefined;
+    workflow?: Record<string, Value> | undefined;
     auth: Record<string, Record<string, Value>>;
   };
   apps: Record<string, WorkspaceApplication>;

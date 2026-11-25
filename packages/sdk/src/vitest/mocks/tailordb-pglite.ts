@@ -131,6 +131,13 @@ export function mockTailordbWithPGlite(options: MockTailordbPGliteOptions) {
     }
   };
 
+  /**
+   * Stand in for `tailordb.Client`.
+   * @param this - Client being constructed
+   * @param config - Client configuration
+   * @param config.namespace - TailorDB namespace to connect to
+   * @param config.temporal - When `true`, top-level date, datetime, and time columns come back as `Temporal` values
+   */
   const defaultClient = function (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this: any,

@@ -6,7 +6,7 @@ interface InspectMessageJson {
   typeName: string;
   fields: InspectFieldJson[];
   /** True when truncated to break a recursive type cycle. */
-  recursive?: boolean;
+  recursive?: boolean | undefined;
 }
 
 interface InspectFieldJson {
@@ -15,9 +15,9 @@ interface InspectFieldJson {
   type: string;
   fieldKind: string;
   repeated: boolean;
-  enumValues?: string[];
+  enumValues?: string[] | undefined;
   /** Name of the proto `oneof` group this field belongs to, if any. */
-  oneof?: string;
+  oneof?: string | undefined;
   message?: InspectMessageJson | undefined;
 }
 

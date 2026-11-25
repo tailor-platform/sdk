@@ -7,6 +7,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { appInfo, type AppInfo } from "./transform";
 
 // strip unknown keys
@@ -46,12 +47,14 @@ export async function listApps(options: ListAppsOptions): Promise<AppInfo[]> {
   const pageDirection = toPageDirection(order);
   const applications = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { applications, nextPageToken } = await client.listApplications({
-        workspaceId,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { applications, nextPageToken } = await client.listApplications(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [applications, nextPageToken];
     },
     { limit },

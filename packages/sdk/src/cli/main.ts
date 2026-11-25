@@ -143,7 +143,7 @@ export const mainCommand = withCompletionCommand({
 });
 
 void runMain(mainCommand, {
-  version: packageJson.version,
+  ...(packageJson.version !== undefined && { version: packageJson.version }),
   globalArgs: z.strictObject(commonArgs),
   displayErrors: false,
   agentHelp,

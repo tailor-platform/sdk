@@ -6,8 +6,8 @@ import type { Program, CallExpression } from "@oxc-project/types";
 
 export interface WorkflowLocation {
   name: string;
-  exportName?: string;
-  isDefaultExport?: boolean;
+  exportName?: string | undefined;
+  isDefaultExport?: boolean | undefined;
 }
 
 /**
@@ -38,7 +38,7 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
             const parent = assertDefined(parents[i], `parent at index ${i} missing`);
             if (parent.type === "VariableDeclarator") {
               const declarator = parent as unknown as {
-                id?: { type?: string; name?: string };
+                id?: { type?: string | undefined; name?: string | undefined } | undefined;
               };
               if (declarator.id?.type === "Identifier") {
                 exportName = declarator.id.name;

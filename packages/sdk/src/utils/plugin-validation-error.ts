@@ -8,9 +8,9 @@ interface PluginValidationErrorOptions {
   /** What is invalid in the plugin's configuration. */
   message: string;
   /** How to fix the configuration. */
-  suggestion?: string;
+  suggestion?: string | undefined;
   /** JSON-serializable facts identifying the invalid values. */
-  context?: Readonly<Record<string, Jsonifiable | undefined>>;
+  context?: Readonly<Record<string, Jsonifiable | undefined>> | undefined;
 }
 
 /** A plugin configuration failure reported with its code and context by the CLI. */
@@ -19,7 +19,7 @@ export class PluginValidationError extends Error {
   /** Stable identifier for the validation failure. */
   readonly code: string;
   /** How to fix the configuration. */
-  readonly suggestion?: string;
+  readonly suggestion?: string | undefined;
   /** JSON-serializable facts identifying the invalid values. */
   readonly context?: PluginValidationErrorOptions["context"];
 

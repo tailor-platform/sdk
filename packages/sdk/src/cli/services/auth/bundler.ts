@@ -13,9 +13,9 @@ export interface BundleAuthHooksOptions extends FunctionBundleSettings {
   /** Auth namespace name */
   authName: string;
   /** Key of the Auth service under the config's `auth`, when the config keys its Auth services by name */
-  authKey?: string;
+  authKey?: string | undefined;
   /** Environment variables to inject into the hook args */
-  env?: Record<string, string | number | boolean>;
+  env?: Record<string, string | number | boolean> | undefined;
   /** Directory the tsconfig is resolved against */
   baseDir: string;
 }

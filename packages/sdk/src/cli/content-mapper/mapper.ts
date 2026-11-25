@@ -21,7 +21,7 @@ import { initializeResult, type ContentMapperHandlers, type PositionEncoding } f
 interface OpenProjectParams {
   configFileName: string;
   projectHandle: string;
-  options?: Record<string, unknown>;
+  options?: Record<string, unknown> | undefined;
 }
 
 interface TransformParams {
@@ -31,10 +31,10 @@ interface TransformParams {
 }
 
 interface Project {
-  registryTypes?: string;
-  kyselyTypes?: string;
-  kyselyError?: string;
-  error?: string;
+  registryTypes?: string | undefined;
+  kyselyTypes?: string | undefined;
+  kyselyError?: string | undefined;
+  error?: string | undefined;
   identity: string;
   watchedFiles: string[];
 }
@@ -58,10 +58,10 @@ function configCandidates(searchFrom: string, foundIn?: string): string[] {
 }
 
 export interface Evaluation {
-  registryTypes?: string;
-  kyselyTypes?: string;
-  kyselyError?: string;
-  error?: string;
+  registryTypes?: string | undefined;
+  kyselyTypes?: string | undefined;
+  kyselyError?: string | undefined;
+  error?: string | undefined;
   files: string[];
 }
 
@@ -119,7 +119,7 @@ async function loadProject(
   tsconfigPath: string,
   previousWatchedFiles: string[] | undefined,
   evaluate: EvaluateConfig,
-): Promise<Omit<Project, "identity"> & { configPath?: string }> {
+): Promise<Omit<Project, "identity"> & { configPath?: string | undefined }> {
   const searchFrom = path.dirname(tsconfigPath);
   const configPath = findConfigFile(searchFrom);
   if (!configPath) {
@@ -148,7 +148,7 @@ async function loadProject(
 function typesOf(
   fileName: string,
   project: Project | undefined,
-): { text: string; problem?: string } {
+): { text: string; problem?: string | undefined } {
   if (project?.registryTypes === undefined) {
     return { text: EMPTY_MODULE, problem: project?.error ?? PROJECT_NOT_OPENED };
   }

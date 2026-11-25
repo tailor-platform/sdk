@@ -3,8 +3,12 @@ import { createGetDB } from "./index";
 
 function installStubClient() {
   const constructorSpy = vi.fn();
+  interface StubClientConfig {
+    namespace: string;
+    temporal?: boolean;
+  }
   class StubClient {
-    constructor(config: { namespace: string; temporal?: boolean }) {
+    constructor(config: StubClientConfig) {
       constructorSpy(config);
     }
     async connect(): Promise<void> {}

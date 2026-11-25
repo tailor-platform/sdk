@@ -95,7 +95,12 @@ describe("query with a workspace config", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  const sql = (q: string, options: { machineUser: string; namespace?: string }) =>
+  interface SqlOptions {
+    machineUser: string;
+    namespace?: string;
+  }
+
+  const sql = (q: string, options: SqlOptions) =>
     query({ configPath, engine: "sql", query: q, ...options });
 
   test("infers a namespace no application lists, as the machine user of the Auth service that defines it", async () => {
@@ -144,7 +149,12 @@ describe("query with a workspace config", () => {
   });
 
   describe("gql", () => {
-    const gql = (options: { machineUser: string; app?: string }) =>
+    interface GqlOptions {
+      machineUser: string;
+      app?: string;
+    }
+
+    const gql = (options: GqlOptions) =>
       query({ configPath, engine: "gql", query: "{ __typename }", ...options });
 
     test("needs --app when the workspace has several applications", async () => {

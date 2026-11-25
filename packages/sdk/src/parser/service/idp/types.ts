@@ -27,7 +27,7 @@ export type StandardIdPPermissionCondition<Update extends boolean = boolean> = r
 
 export type StandardIdPActionPermission<Update extends boolean = boolean> = {
   conditions: readonly StandardIdPPermissionCondition<Update>[];
-  description?: string;
+  description?: string | undefined;
   permit: "allow" | "deny";
 };
 

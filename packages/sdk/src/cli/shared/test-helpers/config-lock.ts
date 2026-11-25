@@ -2,11 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 
 type HeldLockOwner = {
-  pid?: number;
-  hostname?: string;
-  instanceId?: string;
-  nonce?: string;
-  createdAt?: number;
+  pid?: number | undefined;
+  hostname?: string | undefined;
+  instanceId?: string | undefined;
+  nonce?: string | undefined;
+  createdAt?: number | undefined;
 };
 
 /**

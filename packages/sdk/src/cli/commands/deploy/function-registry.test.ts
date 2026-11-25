@@ -771,13 +771,15 @@ describe("collectFunctionEntries", () => {
     };
   }
 
-  function createMockApplication(overrides?: {
+  interface CreateMockApplicationOverrides {
     resolverServices?: Array<{ namespace: string; resolvers: Record<string, { name: string }> }>;
     executorService?: {
       executors: Record<string, { name: string; operation: { kind: string } }>;
     };
     authServices?: Array<{ config: { name: string; hooks?: { beforeLogin?: unknown } } }>;
-  }): Application {
+  }
+
+  function createMockApplication(overrides?: CreateMockApplicationOverrides): Application {
     const app = {
       name: "test-app",
       config: {} as Application["config"],

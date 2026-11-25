@@ -6,16 +6,16 @@ import type { InlineSourcemapProjectSources } from "#/configure/config/types";
 /** The `buildOptions.inlineSourcemapProjectSources` setting, with the absolute directory its globs are relative to. */
 export type ProjectSourcesFilter = Readonly<InlineSourcemapProjectSources> & {
   /** The directory containing the config file. The working directory when omitted. */
-  root?: string;
+  root?: string | undefined;
 };
 
 /** The fields of a sourcemap that this module reads or rewrites. */
 export interface SourcemapData {
   version: number;
-  file?: string;
-  sourceRoot?: string;
+  file?: string | undefined;
+  sourceRoot?: string | undefined;
   sources: string[];
-  sourcesContent?: (string | null)[];
+  sourcesContent?: (string | null)[] | undefined;
   names: string[];
   mappings: string;
 }
@@ -161,7 +161,7 @@ export function toInlineSourcemapCode(params: ToInlineSourcemapCodeParams): stri
 /** A bundled chunk as returned by the bundler. */
 interface BundledChunk {
   code: string;
-  map?: SourcemapData | null;
+  map?: SourcemapData | null | undefined;
 }
 
 /** Parameters for {@link chunkCodeWithSourcemap}. */
@@ -173,9 +173,9 @@ export interface ChunkCodeWithSourcemapParams {
   /** Whether the inline sourcemap embeds the source text of installed packages: all of them, or only the listed packages. */
   dependencySources: boolean | readonly string[];
   /** Which of the project's own sources keep their embedded text. All of them when omitted. */
-  projectSources?: ProjectSourcesFilter;
+  projectSources?: ProjectSourcesFilter | undefined;
   /** Absolute directory the chunk's sourcemap `sources` are relative to. Rolldown's default output folder when omitted. */
-  sourcesDir?: string;
+  sourcesDir?: string | undefined;
 }
 
 /**

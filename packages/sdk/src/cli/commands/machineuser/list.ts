@@ -12,11 +12,11 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import type { MachineUserSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ListMachineUsersOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 export interface MachineUserInfo {
@@ -26,7 +26,7 @@ export interface MachineUserInfo {
   authNamespace?: string;
   clientId: string;
   /** @deprecated since 2.30.0 — the Platform no longer returns the secret from list calls, so this is never set; use `machineuser token` instead. codemod: none (no automatic migration exists) */
-  clientSecret?: string;
+  clientSecret?: string | undefined;
   createdAt: Date | null;
   updatedAt: Date | null;
   attributes: Record<string, unknown>;

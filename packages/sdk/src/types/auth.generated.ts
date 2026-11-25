@@ -1962,17 +1962,7 @@ export type AuthConfig =
                     scale?: number | undefined;
                     default?: unknown;
                   };
-                  rawRelation?:
-                    | {
-                        type: "1-1" | "N-1" | "keyOnly" | "manyToOne" | "n-1" | "oneToOne";
-                        toward: {
-                          table: string;
-                          as?: string | undefined;
-                          key?: string | undefined;
-                        };
-                        backward?: string | undefined;
-                      }
-                    | undefined;
+                  rawRelation?: import("./tailordb.generated").RawRelationConfig | undefined;
                 };
               };
               metadata: {
@@ -1985,10 +1975,10 @@ export type AuthConfig =
                       bulkUpsert?: boolean | undefined;
                       gqlOperations?:
                         | {
-                            create?: boolean;
-                            update?: boolean;
-                            delete?: boolean;
-                            read?: boolean;
+                            create?: boolean | undefined;
+                            update?: boolean | undefined;
+                            delete?: boolean | undefined;
+                            read?: boolean | undefined;
                           }
                         | undefined;
                       publishEvents?: boolean | undefined;

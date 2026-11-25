@@ -8,9 +8,14 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 
+interface OrderAndLimitCrashReportsOptions {
+  order?: Order | undefined;
+  limit?: number | undefined;
+}
+
 export function orderAndLimitCrashReports(
   entries: string[],
-  options: { order?: Order; limit?: number },
+  options: OrderAndLimitCrashReportsOptions,
 ): string[] {
   const sorted = entries.filter((f) => f.endsWith(CRASH_LOG_EXTENSION)).toSorted();
   const ordered = options.order === "asc" ? sorted : sorted.toReversed();

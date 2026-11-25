@@ -9,12 +9,12 @@ export type ContentMapperHandlers = Record<
 export type PositionEncoding = "utf-8" | "utf-16";
 
 interface InitializeParams {
-  positionEncodings?: PositionEncoding[];
-  protocolVersion?: number;
+  positionEncodings?: PositionEncoding[] | undefined;
+  protocolVersion?: number | undefined;
 }
 
 interface InitializeResult {
-  protocolVersion?: number;
+  protocolVersion?: number | undefined;
   positionEncoding: PositionEncoding;
   diagnosticSource: string;
 }

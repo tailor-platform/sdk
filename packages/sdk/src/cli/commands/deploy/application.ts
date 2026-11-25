@@ -24,6 +24,7 @@ import { CLIError, internalError } from "#/cli/shared/errors";
 import { symbols } from "#/cli/shared/logger";
 import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
 import {
   areNormalizedEqual,
@@ -230,9 +231,9 @@ type CreateApplication = {
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
   /** Labels from the config's `metadata`, left out when the platform rejects the label count. */
-  metadata?: Record<string, string>;
+  metadata?: Record<string, string> | undefined;
   /** Per-adapter diff lines shown indented beneath the application entry. */
-  details?: string[];
+  details?: string[] | undefined;
 };
 
 type UpdateApplication = {
@@ -240,9 +241,9 @@ type UpdateApplication = {
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
   /** Labels from the config's `metadata`, left out when the platform rejects the label count. */
-  metadata?: Record<string, string>;
+  metadata?: Record<string, string> | undefined;
   /** Per-adapter diff lines shown indented beneath the application entry. */
-  details?: string[];
+  details?: string[] | undefined;
 };
 
 type DeleteApplication = {
@@ -257,7 +258,7 @@ type DesiredApplication = {
   /** The request with its `:url` CORS entries resolved as the plan resolves them. */
   comparableRequest: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
-  metadata?: Record<string, string>;
+  metadata?: Record<string, string> | undefined;
   existingLabels: Record<string, string> | undefined;
   /** Plan display lines for the `metadata` entries the stored labels lack or differ in. */
   metadataDetails: string[];
@@ -266,8 +267,8 @@ type DesiredApplication = {
 function normalizeHttpAdapter(adapter: HttpAdapter): void {
   adapter.methods.sort();
   // The platform stamps these times.
-  adapter.createTime = undefined;
-  adapter.updateTime = undefined;
+  delete adapter.createTime;
+  delete adapter.updateTime;
 }
 
 const applicationComparison = defineRequestComparison({
@@ -405,7 +406,7 @@ export async function planApplication(
           expectedLocalNames: expectedLocalWebsites,
         }),
       ]);
-      const request = {
+      const request = omitUndefined({
         workspaceId,
         applicationName: app.name,
         authNamespace: app.authNamespace,
@@ -415,7 +416,7 @@ export async function planApplication(
         allowedIpAddresses,
         disableIntrospection,
         httpAdapters,
-      };
+      });
       return {
         name: app.name,
         request,

@@ -74,7 +74,10 @@ const tablesByMigration = {
 };
 
 describe("applyTailorDB: type rename migration flow", () => {
-  function buildPlanResult(options: { withOrderUpdate?: boolean } = {}) {
+  interface BuildPlanResultOptions {
+    withOrderUpdate?: boolean;
+  }
+  function buildPlanResult(options: BuildPlanResultOptions = {}) {
     return createPlanResult({
       type: {
         creates: [typeEntry("Person", { fields: personType.fields })],
@@ -87,9 +90,12 @@ describe("applyTailorDB: type rename migration flow", () => {
     });
   }
 
+  interface MkTypeRenameMigrationOptions {
+    withOrderRetarget?: boolean;
+  }
   function mkTypeRenameMigration(
     number: number,
-    options: { withOrderRetarget?: boolean } = {},
+    options: MkTypeRenameMigrationOptions = {},
   ): PendingMigration {
     const changes = [
       {

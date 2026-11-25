@@ -14,17 +14,17 @@ import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/pl
 import type { PluginGeneratedTable } from "#/plugin/types";
 
 type FieldMetadata = {
-  required?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  description?: string;
-  allowedValues?: ReadonlyArray<{ value: string }>;
+  required?: boolean | undefined;
+  index?: boolean | undefined;
+  unique?: boolean | undefined;
+  description?: string | undefined;
+  allowedValues?: ReadonlyArray<{ value: string }> | undefined;
 };
 
 type FieldDefinition = {
-  type?: string;
-  _metadata?: FieldMetadata;
-  metadata?: FieldMetadata;
+  type?: string | undefined;
+  _metadata?: FieldMetadata | undefined;
+  metadata?: FieldMetadata | undefined;
 };
 
 function isFieldDefinition(value: unknown): value is FieldDefinition {

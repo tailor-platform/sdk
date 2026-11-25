@@ -8,7 +8,7 @@ const packageRoot = path.resolve(import.meta.dirname, "../..");
 const oxlintBin = path.join(packageRoot, "node_modules/.bin/oxlint");
 const pluginPath = path.join(packageRoot, "oxlint-plugins/index.js");
 
-type Diagnostic = { code: string; labels: { span: { line: number } }[] };
+type Diagnostic = { code: string; message: string; labels: { span: { line: number } }[] };
 
 type LintWithLocalRuleParams = {
   /** Rule name without the `local/` prefix. */
@@ -27,6 +27,17 @@ type LintWithLocalRuleParams = {
 export function lintWithLocalRule(
   params: LintWithLocalRuleParams,
 ): { rule: string; line: number }[] {
+  return lintMessagesWithLocalRule(params).map(({ rule, line }) => ({ rule, line }));
+}
+
+/**
+ * Lint a source like {@link lintWithLocalRule}, keeping each diagnostic's message.
+ * @param params - The rule, its level, and the file to lint
+ * @returns The rule, line, and message of each diagnostic
+ */
+export function lintMessagesWithLocalRule(
+  params: LintWithLocalRuleParams,
+): { rule: string; line: number; message: string }[] {
   const { rule, level, fileName, source } = params;
   const dir = mkdtempSync(path.join(tmpdir(), `${rule}-`));
   try {
@@ -47,6 +58,7 @@ export function lintWithLocalRule(
     return diagnostics.map((diagnostic) => ({
       rule: diagnostic.code,
       line: diagnostic.labels[0]?.span.line ?? 0,
+      message: diagnostic.message,
     }));
   } finally {
     rmSync(dir, { recursive: true, force: true });

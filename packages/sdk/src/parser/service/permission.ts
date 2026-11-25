@@ -3,7 +3,7 @@ type NormalizedPermit = "allow" | "deny";
 export interface NormalizedActionPermission<Condition> {
   conditions: Condition[];
   permit: NormalizedPermit;
-  description?: string;
+  description?: string | undefined;
 }
 
 /**
@@ -13,7 +13,7 @@ export interface NormalizedActionPermission<Condition> {
  */
 function isObjectPermissionFormat(
   p: unknown,
-): p is { conditions: unknown; permit?: boolean; description?: string } {
+): p is { conditions: unknown; permit?: boolean | undefined; description?: string | undefined } {
   return typeof p === "object" && p !== null && "conditions" in p;
 }
 

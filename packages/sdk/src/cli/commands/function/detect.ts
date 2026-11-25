@@ -28,7 +28,7 @@ interface InputParseArgs {
 /** Minimal schema interface for local format detection (subset of TailorField) */
 interface InputSchema {
   parse(args: InputParseArgs): {
-    issues?: readonly { message: string; path?: readonly unknown[] }[];
+    issues?: readonly { message: string; path?: readonly unknown[] | undefined }[] | undefined;
   };
 }
 
@@ -38,28 +38,28 @@ export interface DetectedFunction {
   /** Function name (resolver name, executor name, job name, or filename-derived) */
   name: string;
   /** For workflow jobs: the TypeScript export name needed for bundling */
-  exportName?: string;
+  exportName?: string | undefined;
   /** For plain functions: whether main is a named export rather than default export */
-  namedMain?: boolean;
+  namedMain?: boolean | undefined;
   /** For resolvers: whether the resolver defines an input schema */
-  hasInput?: boolean;
+  hasInput?: boolean | undefined;
   /** For resolvers with input: pre-built schema object with .parse() for local format detection */
-  inputSchema?: InputSchema;
+  inputSchema?: InputSchema | undefined;
   /** For resolvers: the resolver's `permission` config, enforced the same way as production */
-  permission?: Resolver["permission"];
+  permission?: Resolver["permission"] | undefined;
   /** For resolvers: the resolver's input and output fields, used to decide which date conversions to bundle */
-  fields?: Pick<Resolver, "input" | "output">;
+  fields?: Pick<Resolver, "input" | "output"> | undefined;
 }
 
 interface DetectFunctionOptions {
   /** Absolute path to the function file */
   filePath: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
-  jobName?: string;
+  jobName?: string | undefined;
   /** Flag the asking command selects a job with, named in the hint; without one the hint points to `workflow run` */
-  jobFlag?: string;
+  jobFlag?: string | undefined;
   /** Start from the main job of the workflow the file exports as default when no job name is given */
-  useWorkflowMainJob?: boolean;
+  useWorkflowMainJob?: boolean | undefined;
 }
 
 /**
@@ -81,7 +81,7 @@ export async function detectFunctionType(
   if (resolverResult.success) {
     // Fields built by the user's dynamically imported module match
     // FieldRuntime structurally; the cast stays at this import boundary.
-    const rawInput = (module.default as { input?: Record<string, FieldRuntime> }).input;
+    const rawInput = (module.default as { input?: Record<string, FieldRuntime> | undefined }).input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
       inputSchema = {

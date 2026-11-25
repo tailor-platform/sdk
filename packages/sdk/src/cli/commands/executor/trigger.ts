@@ -84,34 +84,34 @@ type ManualTriggerExecutor<T extends ManualTrigger = ManualTrigger> = T extends 
 
 type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
   executor: E;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 interface TriggerExecutorByNameOptions {
   executorName: string;
-  payload?: JsonObject;
-  headers?: TriggerHeaders;
-  workspaceId?: string;
-  profile?: string;
+  payload?: JsonObject | undefined;
+  headers?: TriggerHeaders | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 }
 
 export type TriggerExecutorTypedOptions<E extends ManualTriggerExecutor = ManualTriggerExecutor> =
   E extends ManualTriggerExecutor<IncomingWebhookTrigger>
     ? TriggerExecutorBaseOptions<E> & {
         /** JSON object the executor receives as `body`. */
-        payload?: JsonObject;
+        payload?: JsonObject | undefined;
         /**
          * Request headers the executor receives as `headers`, keyed by header name.
          * A value is a string, or a list of strings for a name sent on more than one line.
          * Unlike `--header`, names are sent as given, and two keys that differ only in letter case are rejected.
          */
-        headers?: TriggerHeaders;
+        headers?: TriggerHeaders | undefined;
       }
-    : TriggerExecutorBaseOptions<E> & { payload?: never; headers?: never };
+    : TriggerExecutorBaseOptions<E> & { payload?: never | undefined; headers?: never | undefined };
 
 export interface TriggerExecutorResult {
-  jobId?: string;
+  jobId?: string | undefined;
 }
 
 async function triggerExecutorByName(
@@ -126,8 +126,8 @@ async function triggerExecutorByName(
     const response = await client.triggerExecutor({
       workspaceId,
       executorName: options.executorName,
-      payload: options.payload,
-      headers: options.headers,
+      ...(options.payload !== undefined && { payload: options.payload }),
+      ...(options.headers !== undefined && { headers: options.headers }),
     });
 
     return { jobId: response.jobId };

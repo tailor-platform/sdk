@@ -4,7 +4,12 @@ import { describe, expect, test } from "vitest";
 import { displayWidth } from "#/cli/shared/ascii-table";
 import { formatNotificationBanner } from "./format";
 
-function plain(banner: { header: string; lines: string[] }) {
+interface PlainBanner {
+  header: string;
+  lines: string[];
+}
+
+function plain(banner: PlainBanner) {
   return {
     header: stripVTControlCharacters(banner.header),
     lines: banner.lines.map(stripVTControlCharacters),

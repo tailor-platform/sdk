@@ -132,9 +132,9 @@ export type LogMode = "default" | "stream" | "plain";
 
 export interface LogOptions {
   /** Output mode (default: "default") */
-  mode?: LogMode;
+  mode?: LogMode | undefined;
   /** Number of spaces to indent the entire line (default: 0) */
-  indent?: number;
+  indent?: number | undefined;
 }
 
 /** Field transformer function. null excludes the field from table output. */
@@ -142,10 +142,10 @@ export type FieldTransformer = ((value: unknown, item: object) => string) | null
 
 export interface OutOptions {
   /** Table display field transform/exclude settings. Only applied in table mode (not JSON). */
-  display?: Record<string, FieldTransformer>;
+  display?: Record<string, FieldTransformer> | undefined;
 
   /** Show null values in table output (default: false) */
-  showNull?: boolean;
+  showNull?: boolean | undefined;
 }
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
@@ -430,7 +430,7 @@ interface FormatLogLineOptions {
   indent: number;
   type: string;
   message: string;
-  timestamp?: string;
+  timestamp?: string | undefined;
 }
 
 /**

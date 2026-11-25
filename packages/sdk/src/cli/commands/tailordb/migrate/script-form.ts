@@ -23,13 +23,13 @@ export type MigrationScriptForm =
   | {
       kind: "main";
       /** The script also exports `steps`, which `main` takes precedence over. */
-      ignoredSteps?: true;
+      ignoredSteps?: true | undefined;
     }
   | {
       kind: "steps";
       order: string[];
       /** The script asks to roll back the pre-migration schema when a step fails. */
-      rollbackOnFailure?: true;
+      rollbackOnFailure?: true | undefined;
     };
 
 const STEP_KEYS = new Set(["run", "dependsOn"]);

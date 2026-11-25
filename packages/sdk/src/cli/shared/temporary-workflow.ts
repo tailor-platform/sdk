@@ -43,7 +43,7 @@ interface TemporaryResourceOwner {
   /** With no owner the resources carry only `labels`, so a deploy never claims them. */
   owner: DeployOwner | undefined;
   /** Labels written to every resource besides the owner's. */
-  labels?: Record<string, string>;
+  labels?: Record<string, string> | undefined;
 }
 
 async function temporaryLabelWrite(
@@ -66,9 +66,9 @@ export interface UploadTemporaryFunctionParams extends TemporaryResourceOwner {
   /** Registry description of the function. */
   description: string;
   /** Source placed before the script. */
-  prelude?: string;
+  prelude?: string | undefined;
   /** Whether the function is new or replaces an existing one's content. */
-  mode?: "create" | "update";
+  mode?: "create" | "update" | undefined;
 }
 
 /**
@@ -124,15 +124,15 @@ export interface TeardownTemporaryWorkflowParams {
   /** Created workflow id, when it was created. */
   workflowId: string | undefined;
   /** Job functions created under the shared name. */
-  jobFunctionNames?: readonly string[];
+  jobFunctionNames?: readonly string[] | undefined;
   /** Functions registered under the shared name (default: the shared name). */
-  functionNames?: readonly string[];
+  functionNames?: readonly string[] | undefined;
   /** What the resources run, used in warnings (e.g. `migration`). */
   subject: string;
   /** Sentence of the warning telling how a resource left behind gets removed. */
   leftoverNote: string;
   /** Receives the warning for a resource that could not be removed (default: `logger.warn`) */
-  warn?: (message: string) => void;
+  warn?: ((message: string) => void) | undefined;
 }
 
 /**
@@ -277,20 +277,20 @@ export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {
   /** Job functions to create on the uploaded function, the main one included. */
   jobFunctionNames: readonly string[];
   /** Function each job function runs, by job function name (default: the shared name). */
-  scriptRefs?: Readonly<Record<string, string>>;
+  scriptRefs?: Readonly<Record<string, string>> | undefined;
   /** Main job function of the workflow (default: the shared name). */
-  mainJobFunctionName?: string;
+  mainJobFunctionName?: string | undefined;
   /** What the resources run, used in errors (e.g. `migration`). */
   subject: string;
   /** Extra labels for the workflow. */
-  workflowLabels?: Record<string, string>;
+  workflowLabels?: Record<string, string> | undefined;
 }
 
 /** Ids of the resources {@link createTemporaryWorkflow} created, as soon as each exists. */
 export interface CreatedTemporaryWorkflow {
-  workflowId?: string;
+  workflowId?: string | undefined;
   /** Job functions this call created, so a failure rolls back only those */
-  jobFunctionNames?: string[];
+  jobFunctionNames?: string[] | undefined;
 }
 
 /**
@@ -357,9 +357,9 @@ export const POLL_DEADLINE_EXCEEDED = "WORKFLOW_POLL_DEADLINE_EXCEEDED";
 
 export interface PollExecutionOptions {
   /** Called with each polled execution that is still active. */
-  onActive?: (execution: WorkflowExecution) => void | Promise<void>;
+  onActive?: ((execution: WorkflowExecution) => void | Promise<void>) | undefined;
   /** Called for each poll whose transient error was retried. */
-  onPollFailed?: () => void;
+  onPollFailed?: (() => void) | undefined;
 }
 
 export interface PollUntilTerminalParams {
@@ -371,8 +371,8 @@ export interface PollUntilTerminalParams {
   /** What the execution runs, used in errors (e.g. `Migration`). */
   subject: string;
   /** Epoch milliseconds after which polling stops with {@link POLL_DEADLINE_EXCEEDED} */
-  deadline?: number;
-  options?: PollExecutionOptions;
+  deadline?: number | undefined;
+  options?: PollExecutionOptions | undefined;
 }
 
 /**

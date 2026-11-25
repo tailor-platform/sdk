@@ -371,7 +371,7 @@ export function formatInProgressMigrationAction(action: InProgressMigrationActio
 export type MaintenanceModeRelease = CLIErrorNextAction & {
   via: "resolve" | "deploy";
   /** For `deploy`: the command to run when the deploy stops because the tables are still restricted. */
-  fallback?: CLIErrorNextAction;
+  fallback?: CLIErrorNextAction | undefined;
 };
 
 /**

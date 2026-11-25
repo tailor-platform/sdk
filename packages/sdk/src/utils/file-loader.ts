@@ -3,7 +3,7 @@ import * as path from "pathe";
 
 export interface FileLoadConfig {
   files: string[];
-  ignores?: string[];
+  ignores?: string[] | undefined;
 }
 
 const TEST_FILE_SUFFIXES = [".test.ts", ".spec.ts"];

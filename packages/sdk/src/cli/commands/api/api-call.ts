@@ -3,9 +3,9 @@ import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context"
 import { CLIError } from "#/cli/shared/errors";
 
 export interface ApiCallOptions {
-  profile?: string;
+  profile?: string | undefined;
   endpoint: string;
-  body?: string;
+  body?: string | undefined;
 }
 
 export interface ApiCallResult {

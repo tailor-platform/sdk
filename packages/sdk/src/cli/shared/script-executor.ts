@@ -36,11 +36,11 @@ export interface ScriptExecutionOptions<T extends Jsonifiable = Jsonifiable> {
   /** Bundled script code to execute */
   code: string;
   /** Optional JSON-serializable argument to pass to the script */
-  arg?: T;
+  arg?: T | undefined;
   /** Auth invoker for script execution */
   invoker: ScriptInvoker;
   /** Polling interval in milliseconds (default: 1000ms) */
-  pollInterval?: number;
+  pollInterval?: number | undefined;
 }
 
 /**
@@ -50,7 +50,7 @@ export interface ReportingScriptExecutionOptions<
   T extends Jsonifiable = Jsonifiable,
 > extends ScriptExecutionOptions<T> {
   /** Called with the execution ID once the script is accepted, before waiting for it to finish */
-  onStart?: (executionId: string) => void;
+  onStart?: ((executionId: string) => void) | undefined;
 }
 
 /**
@@ -64,7 +64,7 @@ export interface ScriptExecutionResult {
   /** Result value from the script execution */
   result: string;
   /** Error message if execution failed */
-  error?: string;
+  error?: string | undefined;
 }
 
 /**

@@ -22,7 +22,7 @@ export interface SnapshotHook {
  * Validation configuration in schema snapshot
  */
 export interface SnapshotValidation {
-  script?: { expr: string };
+  script?: { expr: string } | undefined;
   errorMessage: string;
 }
 
@@ -31,9 +31,9 @@ export interface SnapshotValidation {
  */
 export interface SnapshotSerial {
   start: number;
-  maxValue?: number;
-  format?: string;
-  gapless?: boolean;
+  maxValue?: number | undefined;
+  format?: string | undefined;
+  gapless?: boolean | undefined;
 }
 
 /**
@@ -41,7 +41,7 @@ export interface SnapshotSerial {
  */
 export interface SnapshotEnumValue {
   value: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 /**
@@ -73,27 +73,29 @@ export type SnapshotFieldBooleanProp = (typeof SNAPSHOT_FIELD_BOOLEAN_PROPS)[num
 export interface SnapshotFieldConfig {
   type: string;
   required: boolean;
-  array?: boolean;
-  index?: boolean;
-  unique?: boolean;
-  allowedValues?: SnapshotEnumValue[];
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  description?: string;
-  vector?: boolean;
-  hooks?: {
-    create?: SnapshotHook;
-    update?: SnapshotHook;
-  };
-  validate?: SnapshotValidation[];
-  serial?: SnapshotSerial;
-  scale?: number;
+  array?: boolean | undefined;
+  index?: boolean | undefined;
+  unique?: boolean | undefined;
+  allowedValues?: SnapshotEnumValue[] | undefined;
+  foreignKey?: boolean | undefined;
+  foreignKeyType?: string | undefined;
+  foreignKeyField?: string | undefined;
+  description?: string | undefined;
+  vector?: boolean | undefined;
+  hooks?:
+    | {
+        create?: SnapshotHook | undefined;
+        update?: SnapshotHook | undefined;
+      }
+    | undefined;
+  validate?: SnapshotValidation[] | undefined;
+  serial?: SnapshotSerial | undefined;
+  scale?: number | undefined;
   default?: unknown;
   /** Recorded on remote-derived snapshots when the platform fills the value on create. */
-  optionalOnCreate?: boolean;
+  optionalOnCreate?: boolean | undefined;
   /** Nested fields (recursive) */
-  fields?: Record<string, SnapshotFieldConfig>;
+  fields?: Record<string, SnapshotFieldConfig> | undefined;
 }
 
 /**
@@ -101,7 +103,7 @@ export interface SnapshotFieldConfig {
  */
 export interface SnapshotIndexConfig {
   fields: string[];
-  unique?: boolean;
+  unique?: boolean | undefined;
 }
 
 /**
@@ -174,7 +176,7 @@ export function isSnapshotFieldRefOperand(
  */
 export interface SnapshotActionPermission {
   conditions: readonly SnapshotPermissionCondition[];
-  description?: string;
+  description?: string | undefined;
   permit: "allow" | "deny";
 }
 
@@ -207,7 +209,7 @@ export interface SnapshotGqlPermissionPolicy {
   conditions: readonly SnapshotPermissionCondition[];
   actions: readonly SnapshotGqlAction[];
   permit: "allow" | "deny";
-  description?: string;
+  description?: string | undefined;
 }
 
 /**
@@ -226,29 +228,35 @@ export type SnapshotGqlPermission = readonly SnapshotGqlPermissionPolicy[];
 export interface TailorDBSnapshotType {
   name: string;
   pluralForm: string;
-  description?: string;
+  description?: string | undefined;
   fields: Record<string, SnapshotFieldConfig>;
-  settings?: {
-    aggregation?: boolean;
-    bulkUpsert?: boolean;
-    gqlOperations?: {
-      create?: boolean;
-      update?: boolean;
-      delete?: boolean;
-      read?: boolean;
-    };
-    publishEvents?: boolean;
-  };
-  indexes?: Record<string, SnapshotIndexConfig>;
-  files?: Record<string, string>;
-  forwardRelationships?: Record<string, SnapshotRelationship>;
-  backwardRelationships?: Record<string, SnapshotRelationship>;
-  permissions?: {
-    record?: SnapshotRecordPermission;
-    gql?: SnapshotGqlPermission;
-  };
-  typeHookExpr?: { create?: string; update?: string };
-  typeValidateExpr?: string;
+  settings?:
+    | {
+        aggregation?: boolean | undefined;
+        bulkUpsert?: boolean | undefined;
+        gqlOperations?:
+          | {
+              create?: boolean | undefined;
+              update?: boolean | undefined;
+              delete?: boolean | undefined;
+              read?: boolean | undefined;
+            }
+          | undefined;
+        publishEvents?: boolean | undefined;
+      }
+    | undefined;
+  indexes?: Record<string, SnapshotIndexConfig> | undefined;
+  files?: Record<string, string> | undefined;
+  forwardRelationships?: Record<string, SnapshotRelationship> | undefined;
+  backwardRelationships?: Record<string, SnapshotRelationship> | undefined;
+  permissions?:
+    | {
+        record?: SnapshotRecordPermission | undefined;
+        gql?: SnapshotGqlPermission | undefined;
+      }
+    | undefined;
+  typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+  typeValidateExpr?: string | undefined;
 }
 
 export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
@@ -274,7 +282,7 @@ export interface SchemaSnapshot {
   namespace: string;
   createdAt: string;
   tables: Record<string, TailorDBSnapshotType>;
-  rebaseline?: RebaselineMarker;
+  rebaseline?: RebaselineMarker | undefined;
 }
 
 declare const normalizedSchemaSnapshotBrand: unique symbol;

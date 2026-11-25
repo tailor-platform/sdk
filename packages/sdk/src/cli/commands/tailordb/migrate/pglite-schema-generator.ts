@@ -89,23 +89,23 @@ export interface WriteMigrationTypeFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
   /** Field changes carried through temporary fields */
-  expandPlans?: readonly ExpandContractPlan[];
+  expandPlans?: readonly ExpandContractPlan[] | undefined;
   /**
    * Whether date/datetime/time fields in `db.ts` resolve to their Temporal column
    * types instead of their `Date`/`string` defaults. Should match whatever
    * `kyselyTypePlugin` was configured with. Defaults to `false`.
    */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 /** Outcome of writing `db.pglite.ts`: the path, or why it was skipped. */
 export interface PgliteSchemaFileResult {
   /** Undefined when the schema could not be expressed as DDL; see `pgliteSchemaError`. */
-  pgliteSchemaPath?: string;
+  pgliteSchemaPath?: string | undefined;
   /** Why `db.pglite.ts` was skipped */
-  pgliteSchemaError?: string;
+  pgliteSchemaError?: string | undefined;
 }
 
 /** Files written by {@link writeMigrationTypeFiles}. */

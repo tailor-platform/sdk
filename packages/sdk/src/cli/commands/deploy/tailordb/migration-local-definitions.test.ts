@@ -92,14 +92,16 @@ describe("migration flow: local definitions that no pending migration includes",
     });
   }
 
-  function createMockPlanResult(options: {
+  interface CreateMockPlanResultOptions {
     local: TailorDBSnapshotType[];
     creates?: Array<string | ReturnType<typeof typeEntry>>;
     updates?: string[];
     unchanged?: string[];
     deletes?: string[];
     maintenanceMode?: LoadedConfig["maintenanceMode"];
-  }) {
+  }
+
+  function createMockPlanResult(options: CreateMockPlanResultOptions) {
     return createPlanResult({
       type: {
         creates: (options.creates ?? []).map((entry) =>
@@ -143,9 +145,14 @@ describe("migration flow: local definitions that no pending migration includes",
     });
   }
 
+  interface DelayTableDeletionsRefusedDeletion {
+    tableName: string;
+    error: Error;
+  }
+
   function delayTableDeletions(
     client: MockClient,
-    refusedDeletion?: { tableName: string; error: Error },
+    refusedDeletion?: DelayTableDeletionsRefusedDeletion,
   ) {
     const deleteType = client.deleteTailorDBType.getMockImplementation();
     assert(deleteType);
@@ -216,7 +223,10 @@ describe("migration flow: local definitions that no pending migration includes",
       const postWrites = writesOf(client, "Post");
       expect(fieldNames(postWrites.at(-1))).toEqual(["body", "title"]);
       expect(postWrites.at(-1)?.tailordbType.schema?.settings).toEqual(
-        expect.objectContaining({ publishRecordEvents: false, disableGqlOperations: undefined }),
+        expect.objectContaining({ publishRecordEvents: false }),
+      );
+      expect(postWrites.at(-1)?.tailordbType.schema?.settings).not.toHaveProperty(
+        "disableGqlOperations",
       );
       const localWrites = postWrites.filter((write) => fieldNames(write).includes("body"));
       for (const write of localWrites) expect(write.order).toBeGreaterThan(lastLabelOrder());

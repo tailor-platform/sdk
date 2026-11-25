@@ -133,10 +133,12 @@ describe("applyIdP phase separation", () => {
 });
 
 describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
-  function createPlanResult(opts: {
+  interface CreatePlanResultOptions {
     op: "create" | "update";
     origins: string[];
-  }): Awaited<ReturnType<typeof planIdP>> {
+  }
+
+  function createPlanResult(opts: CreatePlanResultOptions): Awaited<ReturnType<typeof planIdP>> {
     const entry = {
       name: "test-idp",
       request: {
@@ -300,7 +302,11 @@ describe("applyIdP client updates forced by the SDK version", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  function createClient(opts: { vaultExists: boolean }) {
+  interface CreateClientOptions {
+    vaultExists: boolean;
+  }
+
+  function createClient(opts: CreateClientOptions) {
     return mockOperatorClient({
       getIdPClient: { client: { clientSecret: "secret-from-get" } },
       getSecretManagerVault: async () =>

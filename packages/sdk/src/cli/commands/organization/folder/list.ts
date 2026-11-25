@@ -7,6 +7,7 @@ import { loadAccessToken } from "#/cli/shared/context";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
 // strip unknown keys
@@ -35,13 +36,15 @@ export async function listFolders(options: ListFoldersOptions): Promise<FolderLi
   const pageDirection = toPageDirection(order);
   const folders = await fetchPaged(
     async (pageToken, pageSize) => {
-      const response = await client.listOrganizationFolders({
-        organizationId,
-        ...(parentFolderId ? { parentFolderId } : {}),
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const response = await client.listOrganizationFolders(
+        omitUndefined({
+          organizationId,
+          ...(parentFolderId ? { parentFolderId } : {}),
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [response.folders, response.nextPageToken];
     },
     { limit },

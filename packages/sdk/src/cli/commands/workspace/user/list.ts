@@ -6,6 +6,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseOptions } from "#/cli/shared/parse-options";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { userInfo, type UserInfo } from "./transform";
 
 // strip unknown keys
@@ -45,12 +46,14 @@ export async function listUsers(options: ListUsersOptions): Promise<UserInfo[]> 
   const pageDirection = toPageDirection(order);
   const users = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { workspacePlatformUsers, nextPageToken } = await client.listWorkspacePlatformUsers({
-        workspaceId,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { workspacePlatformUsers, nextPageToken } = await client.listWorkspacePlatformUsers(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [workspacePlatformUsers, nextPageToken];
     },
     { limit },

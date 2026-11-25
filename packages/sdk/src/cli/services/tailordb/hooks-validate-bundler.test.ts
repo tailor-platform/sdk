@@ -19,6 +19,9 @@ import type * as rolldown from "rolldown";
 let expectVirtualEntry = false;
 
 type RolldownModule = typeof rolldown;
+type ValueArgs = { value: string };
+type NowArgs = { now: string };
+type InputArgs = { input: Record<string, unknown> };
 
 vi.mock("rolldown", async (importOriginal) => {
   const original = await importOriginal<RolldownModule>();
@@ -120,7 +123,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, 'const prefix: string = "PREFIX";\n');
     const prefix = "unused";
-    const createHook = ({ value }: { value: string }) => prefix + value;
+    const createHook = ({ value }: ValueArgs) => prefix + value;
     const type = {
       name: "SharedType",
       fields: {
@@ -145,7 +148,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-fn-"));
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, "");
-    const sharedHook = ({ now }: { now: string }) => now;
+    const sharedHook = ({ now }: NowArgs) => now;
     const type = {
       name: "SharedType",
       fields: {
@@ -171,7 +174,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-shared-type-hook-"));
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, "");
-    const sharedTypeHook = ({ input }: { input: Record<string, unknown> }) => input;
+    const sharedTypeHook = ({ input }: InputArgs) => input;
     const type = {
       name: "SharedType",
       fields: {},
@@ -192,7 +195,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-user-property-"));
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, "");
-    const sharedHook = Object.assign(({ now }: { now: string }) => now, {
+    const sharedHook = Object.assign(({ now }: NowArgs) => now, {
       __precompiledScriptExpr: { "hooks.create": "USER_VALUE" },
     });
     const inheritedPin = {
@@ -261,7 +264,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, 'const prefix = "PREFIX";\n');
     const prefix = "unused";
-    const createHook = ({ value }: { value: string }) => prefix + value;
+    const createHook = ({ value }: ValueArgs) => prefix + value;
     const type = {
       name: "SharedType",
       fields: {
@@ -575,7 +578,7 @@ describe("precompileTailorDBTypeScripts date default", () => {
       "const mode = globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;\n",
     );
     const mode = "unused";
-    const createHook = ({ value }: { value: string }) => value + mode;
+    const createHook = ({ value }: ValueArgs) => value + mode;
     const type = {
       name: "DatedType",
       fields: { value: { type: "string", metadata: { hooks: { create: createHook } } } },
@@ -601,7 +604,7 @@ describe("precompileTailorDBTypeScripts date default", () => {
       "const mode = globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT;\n",
     );
     const mode = "unused";
-    const createHook = ({ value }: { value: string }) => value + mode;
+    const createHook = ({ value }: ValueArgs) => value + mode;
     const type = {
       name: "SharedType",
       fields: { value: { type: "string", metadata: { hooks: { create: createHook } } } },

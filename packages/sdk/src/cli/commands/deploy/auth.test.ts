@@ -56,12 +56,13 @@ describe("applyAuth phase separation", () => {
   }
 
   type CreateEntry = { name: string; request: Record<string, unknown> };
-
-  function createMockPlanResult(opts?: {
+  type CreateMockPlanResultOptions = {
     oauth2ClientReplaces?: OAuth2ClientReplace[];
     oauth2ClientCreates?: CreateEntry[];
     machineUserCreates?: CreateEntry[];
-  }) {
+  };
+
+  function createMockPlanResult(opts?: CreateMockPlanResultOptions) {
     return {
       changeSet: {
         service: deletableChangeSet("Auth Services", "test-auth", {

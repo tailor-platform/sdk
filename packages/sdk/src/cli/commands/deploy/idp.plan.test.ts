@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { planIdP } from "./idp";
 import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -70,9 +71,11 @@ type MockIdpServiceOpts = {
   permission?: Record<string, unknown>;
 };
 
-function createMockApplication(opts?: {
+type CreateMockApplicationOptions = {
   idpServices?: ReadonlyArray<MockIdpServiceOpts>;
-}): Application {
+};
+
+function createMockApplication(opts?: CreateMockApplicationOptions): Application {
   const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
@@ -130,8 +133,8 @@ type MockRemoteService = {
   publishEvents: boolean;
   userAuthPolicy?: MessageInitShape<typeof IdPUserAuthPolicySchema>;
   disableGqlOperations?: MessageInitShape<typeof IdPDisableGqlOperationsSchema>;
-  permission?: MessageInitShape<typeof IdPPermissionSchema>;
-  label?: string;
+  permission?: MessageInitShape<typeof IdPPermissionSchema> | undefined;
+  label?: string | undefined;
   sdkVersion?: string;
 };
 
@@ -149,24 +152,28 @@ function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): Mo
 
 type RemoteIdPClients = Record<string, Array<MessageInitShape<typeof IdPClientSummarySchema>>>;
 
-function createMockClient(opts?: {
+type CreateMockClientOptions = {
   services?: MockRemoteService[];
   clients?: RemoteIdPClients;
-}): OperatorClient {
+};
+
+function createMockClient(opts?: CreateMockClientOptions): OperatorClient {
   const services = opts?.services ?? [];
   const clients = opts?.clients ?? {};
 
   return mockOperatorClient({
     listIdPServices: {
-      idpServices: services.map((service): MessageInitShape<typeof IdPServiceSchema> => ({
-        namespace: { name: service.name },
-        authorization: "",
-        lang: service.lang,
-        publishUserEvents: service.publishEvents,
-        userAuthPolicy: service.userAuthPolicy,
-        disableGqlOperations: service.disableGqlOperations,
-        permission: service.permission,
-      })),
+      idpServices: services.map((service): MessageInitShape<typeof IdPServiceSchema> =>
+        omitUndefined({
+          namespace: { name: service.name },
+          authorization: "",
+          lang: service.lang,
+          publishUserEvents: service.publishEvents,
+          userAuthPolicy: service.userAuthPolicy,
+          disableGqlOperations: service.disableGqlOperations,
+          permission: service.permission,
+        }),
+      ),
       nextPageToken: "",
     },
     listIdPClients: (request) => ({

@@ -101,7 +101,7 @@ interface DiffContext {
   breakingChanges: BreakingChangeInfo[];
   warnings: WarningChangeInfo[];
   /** Confirmed table renames (old name → new name), for reference retargets. */
-  typeRenameTargets?: ReadonlyMap<string, string>;
+  typeRenameTargets?: ReadonlyMap<string, string> | undefined;
 }
 
 function addChange(
@@ -833,19 +833,19 @@ export interface CompareSnapshotsOptions {
    * `field_removed` + `field_added` pair with a single breaking
    * `field_renamed` change. Specs are validated against both snapshots.
    */
-  fieldRenames?: readonly FieldRenameSpec[];
+  fieldRenames?: readonly FieldRenameSpec[] | undefined;
   /**
    * Confirmed table renames. Each spec replaces the corresponding
    * `table_removed` + `table_added` pair with a single breaking
    * `table_renamed` change. Specs are validated against both snapshots.
    */
-  typeRenames?: readonly TypeRenameSpec[];
+  typeRenames?: readonly TypeRenameSpec[] | undefined;
   /**
    * Confirmed renames of members inside nested fields. Each spec is recorded on
    * the field's `field_modified` change as a breaking `memberRenames` entry
    * instead of a removal warning. Specs are validated against both snapshots.
    */
-  nestedMemberRenames?: readonly NestedMemberRenameSpec[];
+  nestedMemberRenames?: readonly NestedMemberRenameSpec[] | undefined;
 }
 
 /**

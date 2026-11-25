@@ -78,9 +78,13 @@ export function trackRemoteTables<C extends OperatorClientMock<RemoteTableWrite>
     if (value === undefined) map.delete(key);
     else map.set(key, value);
   };
+  interface RecordWriteNext {
+    table?: boolean | undefined;
+    permission?: boolean | undefined;
+  }
   const recordWrite = async <T>(
     key: string,
-    next: { table?: boolean; permission?: boolean },
+    next: RecordWriteNext,
     write: () => T,
   ): Promise<Awaited<T>> => {
     const before = { table: tables.get(key), permission: permissions.get(key) };
@@ -326,10 +330,11 @@ export function tailordbTypeWrites(client: OperatorClient) {
  * @returns Invocation order of each table deletion and each GraphQL permission deletion
  */
 export function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
-  const ordersOf = (
-    mock: { calls: unknown[][]; invocationCallOrder: number[] },
-    matches: (request: Record<string, unknown>) => boolean,
-  ) =>
+  interface OrdersOfMock {
+    calls: unknown[][];
+    invocationCallOrder: number[];
+  }
+  const ordersOf = (mock: OrdersOfMock, matches: (request: Record<string, unknown>) => boolean) =>
     mock.calls.flatMap((call, index) => {
       const order = mock.invocationCallOrder[index];
       return order !== undefined && matches(call[0] as Record<string, unknown>) ? [order] : [];
@@ -384,12 +389,12 @@ type ChangeEntries<Group extends TailorDBChangeSet[keyof TailorDBChangeSet]> = P
 >;
 
 interface PlanResultOptions {
-  type?: ChangeEntries<TailorDBChangeSet["type"]>;
-  gqlPermission?: ChangeEntries<TailorDBChangeSet["gqlPermission"]>;
-  application?: Partial<Application>;
-  context?: Partial<TailorDBPlanResult["context"]>;
+  type?: ChangeEntries<TailorDBChangeSet["type"]> | undefined;
+  gqlPermission?: ChangeEntries<TailorDBChangeSet["gqlPermission"]> | undefined;
+  application?: Partial<Application> | undefined;
+  context?: Partial<TailorDBPlanResult["context"]> | undefined;
   /** Local table definitions of the test namespace, as the plan reads them from the config. */
-  local?: TailorDBSnapshotType[];
+  local?: TailorDBSnapshotType[] | undefined;
 }
 
 function changeGroup(entries: ChangeEntries<TailorDBChangeSet[keyof TailorDBChangeSet]> = {}) {
@@ -451,8 +456,8 @@ export function typeMetaRequest(tableName: string, namespace = NAMESPACE) {
 }
 
 interface TypeEntryOptions {
-  namespace?: string;
-  fields?: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>;
+  namespace?: string | undefined;
+  fields?: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> | undefined;
 }
 
 export function typeEntry(tableName: string, options: TypeEntryOptions = {}) {
@@ -498,11 +503,11 @@ export function gqlPermissionDeletion(tableName: string, namespace = NAMESPACE) 
 }
 
 interface PendingMigrationOptions {
-  number?: number;
-  hasScript?: boolean;
-  namespace?: string;
-  migrationsDir?: string;
-  diff?: Partial<MigrationDiff>;
+  number?: number | undefined;
+  hasScript?: boolean | undefined;
+  namespace?: string | undefined;
+  migrationsDir?: string | undefined;
+  diff?: Partial<MigrationDiff> | undefined;
 }
 
 export function mkPendingMigration(
