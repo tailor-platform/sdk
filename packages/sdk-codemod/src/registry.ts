@@ -42,11 +42,19 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
-const SHELL_ARGUMENT_UNIT = String.raw`(?:"(?:[^"\\\0]|\\[^\0])*"|'[^'\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
+function shellArgumentUnit(quotedNewline: boolean): string {
+  const newline = quotedNewline ? "" : String.raw`\n`;
+  return String.raw`(?:"(?:[^"\\${newline}\0]|\\[^\0])*"|'[^'${newline}\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
+}
 const FUNCTION_RUN_NAME_FLAG = String.raw`(?:\r?\n[^\S\r\n]*|\s)(?:\\?["'])?(?:--name|-n)(?:\\?["'])?(?:[\s=\0\x01]|$)`;
-const FUNCTION_RUN_NAME_PATTERN = new RegExp(
-  String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
-);
+function functionRunNamePattern(quotedNewline: boolean): RegExp {
+  const unit = shellArgumentUnit(quotedNewline);
+  return new RegExp(
+    String.raw`\bfunction${unit}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${unit}*?${FUNCTION_RUN_NAME_FLAG}`,
+  );
+}
+const FUNCTION_RUN_NAME_PATTERN = functionRunNamePattern(false);
+const FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN = functionRunNamePattern(true);
 
 const FUNCTION_SCRIPT_COMMAND_PATTERN =
   /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
@@ -2331,7 +2339,7 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
-    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN],
     examples: [
       {
         before: "tailor function run workflows/sample.ts --name validate-order",

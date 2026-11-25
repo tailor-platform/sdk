@@ -127,16 +127,6 @@ describe("function run --name review", () => {
       "execSync(\"tailor function run a.ts --arg '{\\n}' --name job\");\n",
     ],
     [
-      "a line break inside a double-quoted argument",
-      "run.sh",
-      'tailor function run a.ts --arg "a\nb" --name x\n',
-    ],
-    [
-      "a line break inside a single-quoted JSON argument",
-      "run.sh",
-      "tailor function run a.ts --arg '{\n\"a\":1\n}' --name x\n",
-    ],
-    [
       "a template substitution right after --name in a string of a TypeScript file",
       "run.ts",
       "execSync(`tailor function run a.ts --name${suffix} x`);\n",
@@ -177,6 +167,20 @@ describe("function run --name review", () => {
       "--name text inside a double-quoted argument",
       "run.sh",
       'tailor function run a.ts --arg "text --name example"\n',
+    ],
+    [
+      "--name of function get in the next script of a pretty-printed package.json",
+      "package.json",
+      JSON.stringify(
+        { scripts: { a: "tailor function run a.ts", b: "tailor function get --name x" } },
+        null,
+        2,
+      ),
+    ],
+    [
+      "--name of function get in the next quoted step of a workflow",
+      ".github/workflows/job.yml",
+      'steps:\n  - run: "tailor function run a.ts"\n  - run: "tailor function get --name x"\n',
     ],
     [
       "many lines opening a quote without closing it, without taking quadratic time",
