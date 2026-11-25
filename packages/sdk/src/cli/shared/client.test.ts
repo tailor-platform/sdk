@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
@@ -51,7 +50,10 @@ import {
 import { errorToJson } from "./error-json";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
+import { mockOperatorClient } from "./test-helpers/operator-client";
 import { listSourceFiles } from "./test-helpers/source-files";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { GetStaticWebsiteResponseSchema } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 
 vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
@@ -1583,6 +1585,7 @@ describe("retryInterceptor", () => {
       "ExecScript", // starts another execution
       "InviteWorkspacePlatformUser", // may send another invitation
       "ResumeWorkflowExecution", // resumes the execution again
+      "StartJobFunction", // starts another execution
       "StartWorkflow", // starts another execution
       "TriggerExecutor", // triggers another job
       "TruncateTailorDBType", // also deletes records written in between
@@ -1909,11 +1912,9 @@ describe("staticWebsiteNameFromPlaceholder", () => {
 
 describe("resolveStaticWebsiteUrls", () => {
   function makeClient(
-    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+    impl: (name: string) => Promise<MessageInitShape<typeof GetStaticWebsiteResponseSchema>>,
   ): OperatorClient {
-    return {
-      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({ getStaticWebsite: (request) => impl(request.name ?? "") });
   }
 
   test("resolves :url patterns to fetched URLs", async () => {
@@ -2051,10 +2052,9 @@ describe("resolveStaticWebsiteUrls", () => {
   });
 
   test("looks up a site once even when multiple values reference it", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
 
     const resolved = await resolveStaticWebsiteUrls(
       client,
@@ -2064,14 +2064,13 @@ describe("resolveStaticWebsiteUrls", () => {
     );
 
     expect(resolved).toEqual(["https://site.example.com", "https://site.example.com/callback"]);
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 
   test("reuses a lookup from a shared siteLookupCache instead of calling getStaticWebsite again", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
     const siteLookupCache: NonNullable<
       Parameters<typeof resolveStaticWebsiteUrls>[4]
     >["siteLookupCache"] = new Map();
@@ -2088,17 +2087,15 @@ describe("resolveStaticWebsiteUrls", () => {
     );
 
     expect(resolved).toEqual(["https://site.example.com/callback"]);
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 
 describe("resolveStaticWebsiteUrlsInEnv", () => {
   function makeClient(
-    impl: (name: string) => Promise<{ staticwebsite?: { url?: string } }>,
+    impl: (name: string) => Promise<MessageInitShape<typeof GetStaticWebsiteResponseSchema>>,
   ): OperatorClient {
-    return {
-      getStaticWebsite: vi.fn(({ name }: { name: string }) => impl(name)),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({ getStaticWebsite: (request) => impl(request.name ?? "") });
   }
 
   test("resolves :url values and leaves every other value untouched", async () => {
@@ -2121,15 +2118,43 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
     });
   });
 
+  test("looks a site up once across records that share a lookup cache", async () => {
+    const client = makeClient(async () => ({ staticwebsite: { url: "https://site.example.com" } }));
+    const siteLookupCache = new Map();
+
+    await resolveStaticWebsiteUrlsInEnv(client, "ws-1", { A: "my-site:url" }, { siteLookupCache });
+    await resolveStaticWebsiteUrlsInEnv(client, "ws-1", { B: "my-site:url" }, { siteLookupCache });
+
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
+  });
+
+  test("names the service whose env keeps a placeholder", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const client = makeClient(async () => {
+      throw new ConnectError("not found", Code.NotFound);
+    });
+
+    await resolveStaticWebsiteUrlsInEnv(
+      client,
+      "ws-1",
+      { SITE_URL: "unknown:url" },
+      { service: 'resolver namespace "shop-api"' },
+    );
+
+    expect(warnSpy.mock.calls.map(([message]) => message)).toEqual([
+      'Static website "unknown" not found for resolver namespace "shop-api" env "SITE_URL" configuration. Leaving the resolver namespace "shop-api" env "SITE_URL" value unresolved.',
+      'resolver namespace "shop-api" env "SITE_URL" keeps the unresolved value "unknown:url". The literal pattern is passed to your code at runtime.',
+    ]);
+  });
+
   test("returns the record as-is without a lookup when no value is a placeholder", async () => {
-    const getStaticWebsite = vi.fn();
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({ getStaticWebsite: {} });
     const env = { API_URL: "https://literal.example.com", RETRIES: 3 };
 
     const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", env);
 
     expect(resolved).toBe(env);
-    expect(getStaticWebsite).not.toHaveBeenCalled();
+    expect(client.getStaticWebsite).not.toHaveBeenCalled();
   });
 
   test("keeps the placeholder instead of dropping the key when the site is missing", async () => {
@@ -2207,10 +2232,9 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
   });
 
   test("looks up a site once even when multiple env keys reference it", async () => {
-    const getStaticWebsite = vi
-      .fn()
-      .mockResolvedValue({ staticwebsite: { url: "https://site.example.com" } });
-    const client = { getStaticWebsite } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getStaticWebsite: { staticwebsite: { url: "https://site.example.com" } },
+    });
 
     const resolved = await resolveStaticWebsiteUrlsInEnv(client, "ws-1", {
       SITE_URL: "my-site:url",
@@ -2221,7 +2245,7 @@ describe("resolveStaticWebsiteUrlsInEnv", () => {
       SITE_URL: "https://site.example.com",
       CALLBACK_URL: "https://site.example.com/callback",
     });
-    expect(getStaticWebsite).toHaveBeenCalledOnce();
+    expect(client.getStaticWebsite).toHaveBeenCalledOnce();
   });
 });
 

@@ -1,16 +1,16 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError } from "#/cli/shared/errors";
 import { prompt } from "#/cli/shared/prompt";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { resolveCommand } from "./resolve";
 import { requiredFieldNullValuesError } from "./test-helpers/platform-errors";
 import {
@@ -26,16 +26,6 @@ import {
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
-  listTailorDBTypes: vi.fn(),
-  createTailorDBType: vi.fn(),
-  updateTailorDBType: vi.fn(),
-  deleteTailorDBType: vi.fn(),
-  listTailorDBGQLPermissions: vi.fn(),
-  createTailorDBGQLPermission: vi.fn(),
-  updateTailorDBGQLPermission: vi.fn(),
-  deleteTailorDBGQLPermission: vi.fn(),
-  getMetadata: vi.fn(),
-  setMetadata: vi.fn(),
   removeMigrationWorkflowResources: vi.fn(),
   assertNoActiveMigrationExecution: vi.fn(),
   readMigrationRunStatus: vi.fn(),
@@ -43,7 +33,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -95,8 +85,28 @@ vi.mock("#/cli/services/application", () => ({
   generatePluginFilesIfNeeded: vi.fn(() => []),
 }));
 
+function createClient() {
+  return mockOperatorClient({
+    listTailorDBTypes: {
+      tailordbTypes: [{ name: "User" }, { name: "Post" }, { name: "Comment" }],
+      nextPageToken: "",
+    },
+    createTailorDBType: {},
+    updateTailorDBType: {},
+    deleteTailorDBType: {},
+    listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+    createTailorDBGQLPermission: {},
+    updateTailorDBGQLPermission: {},
+    deleteTailorDBGQLPermission: {},
+    getMetadata: {},
+    setMetadata: {},
+  });
+}
+
+let client: ReturnType<typeof createClient>;
+
 function remoteLabels(labels: Record<string, string>): void {
-  state.getMetadata.mockResolvedValue({
+  client.getMetadata.mockResolvedValue({
     metadata: { labels: { "sdk-name": "my-app", ...labels } },
   });
 }
@@ -120,46 +130,25 @@ describe("tailordb migration resolve", () => {
     writeDiff(state.migrationsDir, 2, [
       { kind: "table_added", typeName: "Comment", after: snapshotType("Comment") },
     ]);
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
         db: { tailordb: { migration: { directory: state.migrationsDir } } },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     state.localTypes = {
       User: parsedType("User"),
       Post: parsedType("Post"),
       Comment: parsedType("Comment"),
     };
 
-    state.listTailorDBTypes.mockResolvedValue({
-      tailordbTypes: [{ name: "User" }, { name: "Post" }, { name: "Comment" }],
-      nextPageToken: "",
-    });
-    state.createTailorDBType.mockResolvedValue({});
-    state.updateTailorDBType.mockResolvedValue({});
-    state.deleteTailorDBType.mockResolvedValue({});
-    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
-    state.createTailorDBGQLPermission.mockResolvedValue({});
-    state.updateTailorDBGQLPermission.mockResolvedValue({});
-    state.deleteTailorDBGQLPermission.mockResolvedValue({});
-    state.setMetadata.mockResolvedValue({});
+    client = createClient();
     state.removeMigrationWorkflowResources.mockResolvedValue(undefined);
     state.assertNoActiveMigrationExecution.mockResolvedValue(undefined);
     remoteLabels({ "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listTailorDBTypes: state.listTailorDBTypes,
-      createTailorDBType: state.createTailorDBType,
-      updateTailorDBType: state.updateTailorDBType,
-      deleteTailorDBType: state.deleteTailorDBType,
-      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
-      createTailorDBGQLPermission: state.createTailorDBGQLPermission,
-      updateTailorDBGQLPermission: state.updateTailorDBGQLPermission,
-      deleteTailorDBGQLPermission: state.deleteTailorDBGQLPermission,
-      getMetadata: state.getMetadata,
-      setMetadata: state.setMetadata,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
 
     await runTest();
 
@@ -171,27 +160,218 @@ describe("tailordb migration resolve", () => {
   });
 
   function expectNothingWritten(): void {
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.updateTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.updateTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
     expect(state.removeMigrationWorkflowResources).not.toHaveBeenCalled();
   }
 
-  test("requires either --rollback or --complete", async () => {
+  test("requires one of --rollback, --complete or --maintenance", async () => {
     const result = await runCommand(resolveCommand, ["--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
     expectNothingWritten();
   });
 
-  test("rejects --rollback and --complete together", async () => {
-    const result = await runCommand(resolveCommand, ["--rollback", "--complete", "--yes"]);
+  test.each([
+    ["--rollback", "--complete"],
+    ["--rollback", "--maintenance"],
+    ["--complete", "--maintenance"],
+  ])("refuses %s together with %s", async (...flags) => {
+    const result = await runCommand(resolveCommand, [...flags, "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/--rollback or --complete/);
+    expect(String(result.error)).toMatch(/--rollback, --complete or --maintenance/);
     expectNothingWritten();
+  });
+
+  describe("--maintenance", () => {
+    function leftInMaintenanceModeAt0001(extraFields: string[] = []): void {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      client.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          restrictedRemoteType("User", ["id", "name", ...extraFields]),
+          restrictedRemoteType("Post", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+    }
+
+    test("lifts the restrictions and removes the record without moving the checkpoint", async () => {
+      using _json = jsonMode();
+      using stdout = captureStdout();
+      leftInMaintenanceModeAt0001();
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(JSON.parse(stdout.output)).toMatchObject({
+        resolution: "maintenance",
+        checkpoint: 1,
+        tables: { created: [], updated: ["User", "Post"], deleted: [] },
+      });
+      expect(
+        client.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType?.name).toSorted(),
+      ).toEqual(["Post", "User"]);
+      expect(client.setMetadata).toHaveBeenCalledWith(
+        expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
+      );
+    });
+
+    test("refuses when no maintenance mode record remains", async () => {
+      remoteLabels({ "sdk-migration": "m0001" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD" });
+      expectNothingWritten();
+    });
+
+    test("refuses when the record names a checkpoint the namespace no longer has", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0002" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD" });
+      expectNothingWritten();
+    });
+
+    test("refuses while a migration is recorded as in progress and points to --rollback and --complete", async () => {
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-migration-in-progress": "m0002",
+        "sdk-maintenance-mode": "m0001",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS",
+        suggestion: expect.stringContaining("--rollback"),
+      });
+      expectNothingWritten();
+    });
+
+    test("refuses when a table differs from the checkpoint beyond the restrictions", async () => {
+      leftInMaintenanceModeAt0001(["email"]);
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_DRIFT",
+        suggestion: expect.stringContaining("migration validate"),
+      });
+      expect(state.stderr.join("")).toContain("User");
+      expectNothingWritten();
+    });
+
+    test("points to deploy when a removed table of the committed migration is not deleted yet", async () => {
+      leftInMaintenanceModeAt0001();
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-maintenance-mode": "m0001",
+        "sdk-migration-cleanup": "m0001",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING",
+        suggestion: expect.stringContaining("tailor deploy"),
+      });
+      expectNothingWritten();
+    });
+
+    test("points to --rollback when a deploy was interrupted before it recorded the next migration", async () => {
+      remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
+      client.listTailorDBTypes.mockResolvedValue({
+        tailordbTypes: [
+          remoteType("User", ["id", "name"]),
+          remoteType("Post", ["id", "name"]),
+          restrictedRemoteType("Comment", ["id", "name"]),
+        ],
+        nextPageToken: "",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({
+        code: "MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED",
+        suggestion: expect.stringContaining("--rollback"),
+      });
+      expectNothingWritten();
+    });
+
+    test("refuses when the namespace records another migration history", async () => {
+      leftInMaintenanceModeAt0001();
+      remoteLabels({
+        "sdk-migration": "m0001",
+        "sdk-maintenance-mode": "m0001",
+        "sdk-migration-history": "hother",
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_HISTORY_MISMATCH" });
+      expectNothingWritten();
+    });
+
+    test("writes nothing when the confirmation is declined", async () => {
+      leftInMaintenanceModeAt0001();
+      vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+      const result = await runCommand(resolveCommand, ["--maintenance"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_CANCELLED" });
+      expectNothingWritten();
+    });
+
+    test("says the tables could not be compared when the checkpoint is past the local migrations", async () => {
+      remoteLabels({ "sdk-migration": "m0005", "sdk-maintenance-mode": "m0005" });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED" });
+      expectNothingWritten();
+    });
+
+    test("keeps a maintenance record another deploy wrote while the tables were being updated", async () => {
+      leftInMaintenanceModeAt0001();
+      client.updateTailorDBType.mockImplementation(async () => {
+        remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
+        return {};
+      });
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: "MIGRATION_RESOLVE_STATE_CHANGED" });
+      expect(client.setMetadata).not.toHaveBeenCalled();
+    });
+
+    test("leaves the record alone when sending the schema fails", async () => {
+      leftInMaintenanceModeAt0001();
+      client.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+
+      const result = await runCommand(resolveCommand, ["--maintenance", "--yes"]);
+
+      expect(result.success).toBe(false);
+      expect(client.updateTailorDBType).toHaveBeenCalledWith(
+        expect.objectContaining({ namespaceName: "tailordb" }),
+      );
+      expect(client.setMetadata).not.toHaveBeenCalled();
+    });
   });
 
   test("refuses when no migration is in progress", async () => {
@@ -263,11 +443,11 @@ describe("tailordb migration resolve", () => {
 
     expect(result.success).toBe(true);
     expect(
-      state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+      client.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType?.name).toSorted(),
     ).toEqual(["Post", "User"]);
-    expect(state.createTailorDBType).not.toHaveBeenCalled();
-    expect(state.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    expect(state.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
+    expect(client.deleteTailorDBType.mock.calls[0]![0]).toMatchObject({
       namespaceName: "tailordb",
       tailordbTypeName: "Comment",
     });
@@ -277,7 +457,7 @@ describe("tailordb migration resolve", () => {
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
     );
   });
@@ -290,9 +470,9 @@ describe("tailordb migration resolve", () => {
       createsPlannedResources: true,
     });
     expect(
-      state.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType.name).toSorted(),
+      client.updateTailorDBType.mock.calls.map(([call]) => call.tailordbType?.name).toSorted(),
     ).toEqual(["Comment", "Post", "User"]);
-    expect(state.deleteTailorDBType).not.toHaveBeenCalled();
+    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
   });
 
   test("removes the record of a maintenance mode a deploy left in place", async () => {
@@ -305,7 +485,7 @@ describe("tailordb migration resolve", () => {
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: expect.not.objectContaining({ "sdk-maintenance-mode": expect.anything() }),
       }),
@@ -318,19 +498,19 @@ describe("tailordb migration resolve", () => {
       "sdk-migration-in-progress": "m0002",
       "sdk-maintenance-mode": "m0001",
     });
-    state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+    client.updateTailorDBType.mockRejectedValue(new Error("update failed"));
 
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("--complete moves the checkpoint to the in-progress migration and drops its record", async () => {
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(result.success).toBe(true);
-    expect(state.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({ labels: { "sdk-migration": "m0002", "sdk-name": "my-app" } }),
     );
   });
@@ -357,18 +537,18 @@ describe("tailordb migration resolve", () => {
 
     expect(result.success).toBe(true);
     expect(state.stderr.join("")).toMatch(
-      /Could not remove the temporary resources of migration tailordb\/0002: cleanup failed\. A later deploy removes them\./,
+      /Could not remove the temporary resources of migration tailordb\/0002: cleanup failed\nA later deploy removes them\.\n/,
     );
   });
 
   test("keeps the in-progress record when sending the schema fails", async () => {
-    state.updateTailorDBType.mockRejectedValue(new Error("update failed"));
+    client.updateTailorDBType.mockRejectedValue(new Error("update failed"));
 
     const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/update failed/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
     expect(state.removeMigrationWorkflowResources).not.toHaveBeenCalled();
   });
 
@@ -401,7 +581,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test("--complete warns when tables that exist only on the remote will be deleted", async () => {
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [{ name: "User" }, { name: "Post" }, { name: "Comment" }, { name: "Legacy" }],
       nextPageToken: "",
     });
@@ -409,7 +589,7 @@ describe("tailordb migration resolve", () => {
     await runCommand(resolveCommand, ["--complete", "--yes"]);
 
     expect(state.stderr.join("")).toMatch(/Existing data in deleted tables will be lost/);
-    expect(state.deleteTailorDBType.mock.calls.map(([call]) => call.tailordbTypeName)).toEqual([
+    expect(client.deleteTailorDBType.mock.calls.map(([call]) => call.tailordbTypeName)).toEqual([
       "Legacy",
     ]);
   });
@@ -458,7 +638,7 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, [flag, "--yes"]);
 
       expect(result.success).toBe(true);
-      expect(state.setMetadata).toHaveBeenCalledWith(
+      expect(client.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({
           labels: expect.objectContaining({ "sdk-migration-history": LOCAL_HISTORY_ID }),
         }),
@@ -492,7 +672,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test("refuses when the migration state changed since it was read", async () => {
-    state.getMetadata
+    client.getMetadata
       .mockResolvedValueOnce({
         metadata: {
           labels: {
@@ -514,7 +694,7 @@ describe("tailordb migration resolve", () => {
   });
 
   test("--complete explains how to go on when records without a value reject the update", async () => {
-    state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
+    client.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
     const result = await runCommand(resolveCommand, ["--complete", "--yes"]);
 
@@ -523,7 +703,7 @@ describe("tailordb migration resolve", () => {
       code: "TAILORDB_REQUIRED_FIELD_HAS_NULL_VALUES",
       suggestion: expect.stringMatching(/run the command again.*stays in progress/s),
     });
-    expect(state.setMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   describe("a `main` run whose outcome an earlier deploy could not settle", () => {
@@ -550,7 +730,7 @@ describe("tailordb migration resolve", () => {
         { number: 2, executionId, kind: "main" },
       );
       expect(state.stderr.join("")).toMatch(/Run: succeeded/);
-      expect(state.setMetadata).toHaveBeenCalledWith(
+      expect(client.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ labels: { "sdk-migration": "m0002", "sdk-name": "my-app" } }),
       );
     });
@@ -628,7 +808,7 @@ describe("tailordb migration resolve", () => {
     });
 
     test("refuses when the record changed from a `main` run to steps while the command ran", async () => {
-      state.getMetadata
+      client.getMetadata
         .mockResolvedValueOnce({
           metadata: {
             labels: {
@@ -679,7 +859,7 @@ describe("tailordb migration resolve", () => {
      */
     function leftInPrePhaseOf0002(labels: Record<string, string> = {}): void {
       remoteLabels({ "sdk-migration": "m0001", ...labels });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           remoteType("User", ["id", "name"]),
           remoteType("Post", ["id", "name"]),
@@ -729,7 +909,7 @@ describe("tailordb migration resolve", () => {
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
       expect(result.success).toBe(true);
-      expect(state.setMetadata).toHaveBeenCalledWith(
+      expect(client.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
       );
     });
@@ -747,7 +927,7 @@ describe("tailordb migration resolve", () => {
 
     test("--rollback explains how to go on when records without a value reject the update", async () => {
       leftInPrePhaseOf0002();
-      state.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
+      client.updateTailorDBType.mockRejectedValue(requiredFieldNullValuesError());
 
       const result = await runCommand(resolveCommand, ["--rollback", "--yes"]);
 
@@ -773,7 +953,7 @@ describe("tailordb migration resolve", () => {
       using _json = jsonMode();
       using stdout = captureStdout();
       remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           restrictedRemoteType("User", ["id", "name"]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -790,14 +970,14 @@ describe("tailordb migration resolve", () => {
         interrupted: true,
         tables: { created: [], updated: ["User", "Post"], deleted: [] },
       });
-      expect(state.setMetadata).toHaveBeenCalledWith(
+      expect(client.setMetadata).toHaveBeenCalledWith(
         expect.objectContaining({ labels: { "sdk-migration": "m0001", "sdk-name": "my-app" } }),
       );
     });
 
     test("--rollback refuses when a table has neither the checkpoint's nor the pre-migration schema", async () => {
       remoteLabels({ "sdk-migration": "m0001", "sdk-maintenance-mode": "m0001" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           restrictedRemoteType("User", ["id", "name", "email"]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -815,7 +995,7 @@ describe("tailordb migration resolve", () => {
     test("--rollback refuses when the namespace records a history ID but no checkpoint", async () => {
       writeRebaselineMarker(state.migrationsDir, LOCAL_HISTORY_ID);
       remoteLabels({ "sdk-migration-history": LOCAL_HISTORY_ID, "sdk-maintenance-mode": "m0000" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           restrictedRemoteType("User", ["id", "name"]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -832,7 +1012,7 @@ describe("tailordb migration resolve", () => {
 
     test("--rollback refuses when no local migration follows the checkpoint", async () => {
       remoteLabels({ "sdk-migration": "m0002", "sdk-maintenance-mode": "m0002" });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           restrictedRemoteType("User", ["id", "name"]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -851,7 +1031,7 @@ describe("tailordb migration resolve", () => {
 
   test("--rollback refuses when the tables match the checkpoint and no migration is in progress", async () => {
     remoteLabels({ "sdk-migration": "m0001" });
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Post", ["id", "name"])],
       nextPageToken: "",
     });

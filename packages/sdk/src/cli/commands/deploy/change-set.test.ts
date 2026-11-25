@@ -117,7 +117,7 @@ describe("formatPlanSummary", () => {
     ).toBe("Plan: 0 to create, 12 to update (11 forced by SDK version), 0 to delete");
   });
 
-  test("includes the label refresh count when function labels are refreshed", () => {
+  test("includes the label refresh count when resource labels are refreshed", () => {
     expect(
       formatPlanSummary({
         create: 0,
@@ -127,6 +127,6 @@ describe("formatPlanSummary", () => {
         forcedBySdkVersion: 0,
         labelRefreshes: 22,
       }),
-    ).toBe("Plan: 0 to create, 0 to update, 0 to delete, 22 function labels to refresh");
+    ).toBe("Plan: 0 to create, 0 to update, 0 to delete, 22 to refresh labels");
   });
 });

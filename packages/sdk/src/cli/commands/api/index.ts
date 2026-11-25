@@ -3,7 +3,7 @@ import { arg } from "@politty/zod";
 import { z } from "zod";
 import { configArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { loadWorkspaceId } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { idpConfigList } from "#/cli/shared/idp-config";
@@ -20,31 +20,40 @@ import {
   listMethodChoices,
   resolveLeafField,
 } from "./proto-reflect";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { DescField } from "@bufbuild/protobuf";
 
 export { apiCall, type ApiCallOptions, type ApiCallResult } from "./api-call";
 
-function resolveNamespaceName(methodName: string, config: LoadedConfig): string | undefined {
-  if (/Auth|Tenant|UserProfile/.test(methodName)) {
-    return config.auth?.name;
-  }
-  if (/IdP/.test(methodName)) {
-    const idps = idpConfigList(config.idp);
-    if (idps.length === 1) return assertDefined(idps[0], "idp config missing").name;
-    return undefined;
-  }
-  if (/TailorDB/.test(methodName)) {
-    const keys = Object.keys(config.db ?? {});
-    if (keys.length === 1) return keys[0];
-    return undefined;
-  }
-  if (/Pipeline/.test(methodName)) {
-    const keys = Object.keys(config.resolver ?? {});
-    if (keys.length === 1) return keys[0];
-    return undefined;
-  }
+type NamespacedService = "auth" | "idp" | "db" | "resolver";
+
+function namespacedServiceOf(methodName: string): NamespacedService | undefined {
+  if (/Auth|Tenant|UserProfile/.test(methodName)) return "auth";
+  if (/IdP/.test(methodName)) return "idp";
+  if (/TailorDB/.test(methodName)) return "db";
+  if (/Pipeline/.test(methodName)) return "resolver";
   return undefined;
+}
+
+function namespaceCandidates(service: NamespacedService, loaded: LoadedConfigFile): string[] {
+  if (loaded.kind === "workspace") return Object.keys(loaded.workspace[service]);
+  const { config } = loaded;
+  switch (service) {
+    case "auth":
+      return config.auth ? [config.auth.name] : [];
+    case "idp":
+      return idpConfigList(config.idp).map(({ name }) => name);
+    case "db":
+      return Object.keys(config.db ?? {});
+    case "resolver":
+      return Object.keys(config.resolver ?? {});
+  }
+}
+
+function resolveNamespaceName(methodName: string, loaded: LoadedConfigFile): string | undefined {
+  const service = namespacedServiceOf(methodName);
+  if (!service) return undefined;
+  const [only, ...others] = namespaceCandidates(service, loaded);
+  return others.length === 0 ? only : undefined;
 }
 
 /**
@@ -300,8 +309,7 @@ Use \`--field key=value\` (repeatable) to set request body fields without writin
 
       if (fieldNames.includes("namespaceName") && !Object.hasOwn(parsedBody, "namespaceName")) {
         try {
-          const { config } = await loadConfig(args.config);
-          const ns = resolveNamespaceName(methodName, config);
+          const ns = resolveNamespaceName(methodName, await loadConfigFile(args.config));
           if (ns) {
             parsedBody.namespaceName = ns;
             mutated = true;

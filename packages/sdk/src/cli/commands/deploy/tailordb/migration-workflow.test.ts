@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as crypto from "node:crypto";
 import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -8,6 +7,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   executeMigrationAsWorkflow,
@@ -19,7 +19,13 @@ import {
 } from "./migration-workflow";
 import type { MigrationCommandContext } from "#/cli/commands/tailordb/migrate/hints";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { CreateFunctionRegistryInfoSchema } from "@tailor-platform/tailor-proto/function_registry_pb";
+import type {
+  WorkflowExecutionSchema,
+  WorkflowJobExecutionSchema,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/logger", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -58,7 +64,7 @@ interface MockClientOptions {
   /** Workflow left behind by an earlier interrupted run of the same migration. */
   leftoverWorkflowId?: string;
   /** Executions of the leftover workflow, newest first. */
-  leftoverExecutions?: { id: string; status: WorkflowExecution_Status }[];
+  leftoverExecutions?: MessageInitShape<typeof WorkflowExecutionSchema>[];
   /** Makes starting the run fail, after the platform created its execution or before. */
   startFailure?: { error: Error; afterCreating: boolean };
   /** Executions of the migration's workflow name that exist before this run starts. */
@@ -74,10 +80,12 @@ function createMockClient(options: MockClientOptions = {}) {
   let workflowExists = options.leftoverWorkflowId !== undefined;
   let startAttempted = false;
   const executions = [...(options.leftoverExecutions ?? [])];
-  const priorExecutions = (options.priorExecutionIds ?? []).map((id) => ({
-    id,
-    status: WorkflowExecution_Status.SUCCESS,
-  }));
+  const priorExecutions = (options.priorExecutionIds ?? []).map(
+    (id): MessageInitShape<typeof WorkflowExecutionSchema> => ({
+      id,
+      status: WorkflowExecution_Status.SUCCESS,
+    }),
+  );
   const pendingListFailures = [...(options.listFailuresAfterStart ?? [])];
 
   const record = <T>(name: string, value: T) => {
@@ -88,24 +96,23 @@ function createMockClient(options: MockClientOptions = {}) {
     return Promise.resolve(value);
   };
 
-  const client = {
-    getWorkflowByName: vi.fn(() => {
+  const client = mockOperatorClient({
+    getWorkflowByName: () => {
       calls.push("getWorkflowByName");
       if (options.leftoverWorkflowId === undefined) {
         return Promise.reject(new ConnectError("not found", Code.NotFound));
       }
       return Promise.resolve({ workflow: { id: options.leftoverWorkflowId } });
-    }),
-    createFunctionRegistry: vi.fn(() => record("createFunctionRegistry", {})),
-    createWorkflowJobFunction: vi.fn(() =>
+    },
+    createFunctionRegistry: () => record("createFunctionRegistry", {}),
+    createWorkflowJobFunction: () =>
       record("createWorkflowJobFunction", { jobFunction: { version: 1n } }),
-    ),
-    createWorkflow: vi.fn(() => {
+    createWorkflow: () => {
       const created = record("createWorkflow", { workflow: { id: "wf-1" } });
       if (options.failOn !== "createWorkflow") workflowExists = true;
       return created;
-    }),
-    startWorkflow: vi.fn(() => {
+    },
+    startWorkflow: () => {
       calls.push("startWorkflow");
       startAttempted = true;
       const failure = options.startFailure;
@@ -113,8 +120,8 @@ function createMockClient(options: MockClientOptions = {}) {
       executions.unshift({ id: "exec-1", status: WorkflowExecution_Status.PENDING });
       if (failure) return Promise.reject(failure.error);
       return Promise.resolve({ executionId: "exec-1" });
-    }),
-    listWorkflowExecutions: vi.fn(() => {
+    },
+    listWorkflowExecutions: () => {
       calls.push("listWorkflowExecutions");
       const failure = startAttempted ? pendingListFailures.shift() : undefined;
       if (failure) return Promise.reject(failure);
@@ -123,8 +130,8 @@ function createMockClient(options: MockClientOptions = {}) {
         executions: [...executions, ...priorExecutions],
         nextPageToken: "",
       });
-    }),
-    getWorkflowExecution: vi.fn(() => {
+    },
+    getWorkflowExecution: () => {
       calls.push("getWorkflowExecution");
       const status = statuses[Math.min(statusIndex, statuses.length - 1)]!;
       statusIndex++;
@@ -134,8 +141,8 @@ function createMockClient(options: MockClientOptions = {}) {
           jobExecutions: [{ executionId: "fn-1" }],
         },
       });
-    }),
-    getFunctionExecution: vi.fn(() =>
+    },
+    getFunctionExecution: () =>
       Promise.resolve({
         execution: {
           logEntries: (options.logs ?? "")
@@ -146,17 +153,16 @@ function createMockClient(options: MockClientOptions = {}) {
           result: options.executionResult ?? "",
         },
       }),
-    ),
-    deleteWorkflow: vi.fn(() => {
+    deleteWorkflow: () => {
       const deleted = record("deleteWorkflow", {});
       if (options.failOn !== "deleteWorkflow") executions.length = 0;
       return deleted;
-    }),
-    deleteWorkflowJobFunction: vi.fn(() => record("deleteWorkflowJobFunction", {})),
-    deleteFunctionRegistry: vi.fn(() => record("deleteFunctionRegistry", {})),
-  };
+    },
+    deleteWorkflowJobFunction: () => record("deleteWorkflowJobFunction", {}),
+    deleteFunctionRegistry: () => record("deleteFunctionRegistry", {}),
+  });
 
-  return { client: client as unknown as OperatorClient, raw: client, calls };
+  return { client, calls };
 }
 
 function deletesAfter(calls: readonly string[], marker: string): string[] {
@@ -184,8 +190,7 @@ function run(
     namespace: "tailordb",
     migrationNumber: 3,
     invoker,
-    appName: "my-app",
-    appId: "app-1",
+    owner: { kind: "application", name: "my-app", id: "app-1" },
     maintenanceMode,
     pollIntervalMs: 0,
     commandContext,
@@ -212,7 +217,7 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("registers and starts the temporary resources, and keeps them once the run finished", async () => {
-    const { client, raw, calls } = createMockClient();
+    const { client, calls } = createMockClient();
 
     const result = await run(client);
 
@@ -230,7 +235,7 @@ describe("executeMigrationAsWorkflow", () => {
       "startWorkflow",
       "getWorkflowExecution",
     ]);
-    expect(raw.createWorkflow).toHaveBeenCalledWith(
+    expect(client.createWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowName: "tailordb-migration--tailordb--0003",
         mainJobFunctionName: "tailordb-migration--tailordb--0003",
@@ -307,7 +312,7 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("polls until the execution reaches a terminal status", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       statuses: [
         WorkflowExecution_Status.PENDING,
         WorkflowExecution_Status.RUNNING,
@@ -318,12 +323,12 @@ describe("executeMigrationAsWorkflow", () => {
     const result = await run(client);
 
     expect(result.success).toBe(true);
-    expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(3);
+    expect(client.getWorkflowExecution).toHaveBeenCalledTimes(3);
   });
 
   test("keeps the workflow when the execution disappears while polling", async () => {
-    const { client, raw, calls } = createMockClient();
-    raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+    const { client, calls } = createMockClient();
+    client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
 
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
@@ -338,8 +343,8 @@ describe("executeMigrationAsWorkflow", () => {
   ])(
     "mentions maintenance mode when the outcome is unknown only if it is on (%s)",
     async (maintenanceMode, mentioned) => {
-      const { client, raw } = createMockClient();
-      raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+      const { client } = createMockClient();
+      client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
 
       const error: unknown = await run(client, maintenanceMode).catch(
         (rejection: unknown) => rejection,
@@ -353,21 +358,21 @@ describe("executeMigrationAsWorkflow", () => {
   );
 
   test("keeps polling through a transient error", async () => {
-    const { client, raw } = createMockClient();
-    raw.getWorkflowExecution.mockRejectedValueOnce(
+    const { client } = createMockClient();
+    client.getWorkflowExecution.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
 
     const result = await run(client);
 
     expect(result.success).toBe(true);
-    expect(raw.getWorkflowExecution).toHaveBeenCalledTimes(2);
+    expect(client.getWorkflowExecution).toHaveBeenCalledTimes(2);
   });
 
   test("keeps the workflow when polling fails with an error that is not transient", async () => {
-    const { client, raw, calls } = createMockClient();
+    const { client, calls } = createMockClient();
     const lost = new ConnectError("lost", Code.Internal);
-    raw.getWorkflowExecution.mockRejectedValueOnce(lost);
+    client.getWorkflowExecution.mockRejectedValueOnce(lost);
 
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
@@ -432,8 +437,8 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("reports success from the execution status when its logs cannot be read", async () => {
-    const { client, raw } = createMockClient();
-    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+    const { client } = createMockClient();
+    client.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
 
     const result = await run(client);
 
@@ -441,10 +446,10 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("reports failure from the execution status when its logs cannot be read", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       statuses: [WorkflowExecution_Status.FAILED],
     });
-    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+    client.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
 
     const result = await run(client);
 
@@ -509,7 +514,7 @@ describe("executeMigrationAsWorkflow", () => {
 
   test("gives up on the lookup after five failures and reports the last one", async () => {
     const lost = new ConnectError("lost", Code.Unavailable);
-    const { client, raw, calls } = createMockClient({
+    const { client, calls } = createMockClient({
       startFailure: { error: lost, afterCreating: true },
       listFailuresAfterStart: [
         ...Array.from({ length: 4 }, () => new ConnectError("busy", Code.Unavailable)),
@@ -524,13 +529,13 @@ describe("executeMigrationAsWorkflow", () => {
       cause: lost,
     });
     // The earlier-run check and the listing before the start, then five lookups.
-    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(7);
+    expect(client.listWorkflowExecutions).toHaveBeenCalledTimes(7);
     expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
   });
 
   test("leaves out a lookup failure that a later lookup superseded", async () => {
     const lost = new ConnectError("lost", Code.Unavailable);
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       startFailure: { error: lost, afterCreating: false },
       listFailuresAfterStart: [
         new ConnectError("first", Code.Unavailable),
@@ -541,7 +546,7 @@ describe("executeMigrationAsWorkflow", () => {
     await expect(run(client)).rejects.toMatchObject({
       message: "Could not confirm whether migration tailordb/0003 started: [unavailable] lost",
     });
-    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(7);
+    expect(client.listWorkflowExecutions).toHaveBeenCalledTimes(7);
   });
 
   test("names both ways to settle the recorded run once its outcome is known", async () => {
@@ -583,24 +588,24 @@ describe("executeMigrationAsWorkflow", () => {
   });
 
   test("refuses to replace a leftover workflow when its executions cannot be listed", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       leftoverWorkflowId: "stale-wf",
       leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
     });
     const lost = new ConnectError("lost", Code.Unavailable);
-    raw.listWorkflowExecutions.mockRejectedValueOnce(lost);
+    client.listWorkflowExecutions.mockRejectedValueOnce(lost);
 
     await expect(run(client)).rejects.toMatchObject({
       code: "MIGRATION_OUTCOME_UNKNOWN",
       message: expect.stringContaining("tailordb/0003"),
       cause: lost,
     });
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.createFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
   });
 
   test("refuses to replace a leftover workflow whose execution is still running", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       leftoverWorkflowId: "stale-wf",
       leftoverExecutions: [{ id: "exec-0", status: WorkflowExecution_Status.RUNNING }],
     });
@@ -610,8 +615,8 @@ describe("executeMigrationAsWorkflow", () => {
       message: expect.stringContaining("exec-0"),
       context: expect.objectContaining({ executionId: "exec-0" }),
     });
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.createFunctionRegistry).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.createFunctionRegistry).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -622,14 +627,14 @@ describe("executeMigrationAsWorkflow", () => {
   ])(
     "waits for the execution that a start with a lost response created ($name)",
     async ({ error }) => {
-      const { client, raw, calls } = createMockClient({
+      const { client, calls } = createMockClient({
         startFailure: { error, afterCreating: true },
       });
 
       const result = await run(client);
 
       expect(result.success).toBe(true);
-      expect(raw.getWorkflowExecution).toHaveBeenCalledWith(
+      expect(client.getWorkflowExecution).toHaveBeenCalledWith(
         expect.objectContaining({ executionId: "exec-1" }),
       );
       expect(deletesAfter(calls, "startWorkflow")).toEqual([]);
@@ -637,7 +642,7 @@ describe("executeMigrationAsWorkflow", () => {
   );
 
   test("looks for the execution again when the lookup fails with a transient error", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
       listFailuresAfterStart: [
         new ConnectError("busy", Code.Unavailable),
@@ -649,7 +654,7 @@ describe("executeMigrationAsWorkflow", () => {
 
     expect(result.success).toBe(true);
     // The earlier-run check and the listing before the start, then three lookups.
-    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(5);
+    expect(client.listWorkflowExecutions).toHaveBeenCalledTimes(5);
   });
 
   test.each([
@@ -657,7 +662,7 @@ describe("executeMigrationAsWorkflow", () => {
     ["an internal error", new ConnectError("broken", Code.Internal)],
     ["a dropped connection", new TypeError("fetch failed")],
   ])("looks for the execution again when the lookup fails with %s", async (_label, failure) => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
       listFailuresAfterStart: [failure],
     });
@@ -665,23 +670,23 @@ describe("executeMigrationAsWorkflow", () => {
     const result = await run(client);
 
     expect(result.success).toBe(true);
-    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(4);
+    expect(client.listWorkflowExecutions).toHaveBeenCalledTimes(4);
   });
 
   test("does not retry the lookup when the platform refuses it", async () => {
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       startFailure: { error: new ConnectError("lost", Code.Unavailable), afterCreating: true },
       listFailuresAfterStart: [new ConnectError("denied", Code.PermissionDenied)],
     });
 
     await expect(run(client)).rejects.toMatchObject({ code: "MIGRATION_OUTCOME_UNKNOWN" });
 
-    expect(raw.listWorkflowExecutions).toHaveBeenCalledTimes(3);
+    expect(client.listWorkflowExecutions).toHaveBeenCalledTimes(3);
   });
 
   test("does not take an execution that existed before the start for the one it started", async () => {
     const error = new ConnectError("lost", Code.Unavailable);
-    const { client, raw } = createMockClient({
+    const { client } = createMockClient({
       startFailure: { error, afterCreating: false },
       priorExecutionIds: ["exec-old"],
     });
@@ -691,27 +696,27 @@ describe("executeMigrationAsWorkflow", () => {
       cause: error,
     });
 
-    expect(raw.getWorkflowExecution).not.toHaveBeenCalled();
+    expect(client.getWorkflowExecution).not.toHaveBeenCalled();
   });
 
   test("does not attempt to delete a workflow that was never created", async () => {
-    const { client, raw } = createMockClient({ failOn: "createWorkflow" });
+    const { client } = createMockClient({ failOn: "createWorkflow" });
 
     await expect(run(client)).rejects.toThrow("createWorkflow failed");
 
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.deleteWorkflowJobFunction).toHaveBeenCalledTimes(2);
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteWorkflowJobFunction).toHaveBeenCalledTimes(2);
   });
 
   test("reclaims an interrupted run's leftovers before recreating them", async () => {
-    const { client, raw, calls } = createMockClient({ leftoverWorkflowId: "stale-wf" });
+    const { client, calls } = createMockClient({ leftoverWorkflowId: "stale-wf" });
 
     const result = await run(client);
 
     expect(result.success).toBe(true);
     // The stale workflow is deleted by id before the create path runs, so
     // `createFunctionRegistry` cannot fail on a name collision.
-    expect(raw.deleteWorkflow).toHaveBeenNthCalledWith(1, {
+    expect(client.deleteWorkflow).toHaveBeenNthCalledWith(1, {
       workspaceId: "ws-1",
       workflowId: "stale-wf",
     });
@@ -740,13 +745,13 @@ describe("executeMigrationAsWorkflow", () => {
 describe("observing when the migration script runs", () => {
   interface PollSpec {
     status: WorkflowExecution_Status;
-    jobs: { executionId: string; status: WorkflowJobExecution_Status }[];
+    jobs: MessageInitShape<typeof WorkflowJobExecutionSchema>[];
   }
 
   function observedClient(polls: PollSpec[], logsByCall: Record<string, string[][]>) {
-    const { client, raw } = createMockClient();
+    const { client } = createMockClient();
     let poll = 0;
-    raw.getWorkflowExecution.mockImplementation(() => {
+    client.getWorkflowExecution.mockImplementation(() => {
       const spec = polls[Math.min(poll, polls.length - 1)]!;
       poll++;
       return Promise.resolve({
@@ -754,7 +759,8 @@ describe("observing when the migration script runs", () => {
       });
     });
     const fetched = new Map<string, number>();
-    raw.getFunctionExecution.mockImplementation((({ executionId }: { executionId: string }) => {
+    client.getFunctionExecution.mockImplementation((request) => {
+      const executionId = request.executionId ?? "";
       const sequence = logsByCall[executionId] ?? [[]];
       const index = fetched.get(executionId) ?? 0;
       fetched.set(executionId, index + 1);
@@ -762,8 +768,8 @@ describe("observing when the migration script runs", () => {
       return Promise.resolve({
         execution: { logEntries: messages.map((message) => ({ message })), result: "" },
       });
-    }) as never);
-    return { client, raw };
+    });
+    return { client };
   }
 
   function runObserved(client: OperatorClient) {
@@ -775,8 +781,7 @@ describe("observing when the migration script runs", () => {
       namespace: "tailordb",
       migrationNumber: 3,
       invoker,
-      appName: "my-app",
-      appId: "app-1",
+      owner: { kind: "application", name: "my-app", id: "app-1" },
       maintenanceMode: true,
       pollIntervalMs: 0,
       commandContext: {},
@@ -793,7 +798,7 @@ describe("observing when the migration script runs", () => {
   const succeeded = WorkflowJobExecution_Status.SUCCESS;
 
   async function upload(code: string) {
-    const { client, raw } = createMockClient();
+    const { client } = createMockClient();
     await executeMigrationAsWorkflow({
       client,
       workspaceId: "ws-1",
@@ -801,21 +806,19 @@ describe("observing when the migration script runs", () => {
       namespace: "tailordb",
       migrationNumber: 3,
       invoker,
-      appName: "my-app",
-      appId: "app-1",
+      owner: { kind: "application", name: "my-app", id: "app-1" },
       maintenanceMode: true,
       pollIntervalMs: 0,
       commandContext: {},
       ...recordsNothing,
     });
-    const [stream] = raw.createFunctionRegistry.mock.calls[0] as unknown as [
-      AsyncIterable<{ payload: { case: string; value: unknown } }>,
-    ];
-    let info: { sizeBytes: bigint; contentHash: string } | undefined;
+    const [stream] = client.createFunctionRegistry.mock.calls[0]!;
+    let info: MessageInitShape<typeof CreateFunctionRegistryInfoSchema> | undefined;
     const chunks: Uint8Array[] = [];
     for await (const message of stream) {
-      if (message.payload.case === "info") info = message.payload.value as typeof info;
-      else chunks.push(message.payload.value as Uint8Array);
+      if (message.payload?.case === "info") info = message.payload.value;
+      else if (message.payload?.case === "chunk") chunks.push(message.payload.value);
+      else throw new Error(`unexpected upload payload: ${message.payload?.case}`);
     }
     return { content: Buffer.concat(chunks).toString("utf-8"), info };
   }
@@ -911,7 +914,7 @@ describe("observing when the migration script runs", () => {
   });
 
   test("reads a job's logs only until it is seen running the script", async () => {
-    const { client, raw } = observedClient(
+    const { client } = observedClient(
       [
         {
           status: WorkflowExecution_Status.RUNNING,
@@ -936,7 +939,7 @@ describe("observing when the migration script runs", () => {
     await runObserved(client).result;
 
     // One read while polling, one for the final logs.
-    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(2);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(2);
   });
 
   test("notices a script that ran between two polls", async () => {
@@ -974,7 +977,7 @@ describe("observing when the migration script runs", () => {
   });
 
   test("reports a finished run whose script was never seen starting", async () => {
-    const { client, raw } = observedClient(
+    const { client } = observedClient(
       [
         {
           status: WorkflowExecution_Status.SUCCESS,
@@ -988,11 +991,11 @@ describe("observing when the migration script runs", () => {
 
     expect(await result).toMatchObject({ success: true, logs: "INFO done" });
     expect(events).toEqual(["waiting", "finished:false"]);
-    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(3);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(3);
   });
 
   test("does not reread the logs of a failed run", async () => {
-    const { client, raw } = observedClient(
+    const { client } = observedClient(
       [
         {
           status: WorkflowExecution_Status.FAILED,
@@ -1006,7 +1009,7 @@ describe("observing when the migration script runs", () => {
 
     expect(await result).toMatchObject({ success: false });
     expect(events).toEqual(["waiting", "finished:false"]);
-    expect(raw.getFunctionExecution).toHaveBeenCalledTimes(1);
+    expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
   });
 
   test("reports a poll that finds a running job without an execution as unknown", async () => {
@@ -1028,7 +1031,7 @@ describe("observing when the migration script runs", () => {
   });
 
   test("reports a poll whose job execution came back empty as unknown", async () => {
-    const { client, raw } = observedClient(
+    const { client } = observedClient(
       [
         {
           status: WorkflowExecution_Status.RUNNING,
@@ -1041,7 +1044,7 @@ describe("observing when the migration script runs", () => {
       ],
       { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG, "INFO done"]] },
     );
-    raw.getFunctionExecution.mockResolvedValueOnce({ execution: undefined } as never);
+    client.getFunctionExecution.mockResolvedValueOnce({ execution: undefined });
 
     const { result, events } = runObserved(client);
 
@@ -1050,7 +1053,7 @@ describe("observing when the migration script runs", () => {
   });
 
   test("keeps polling when a job's logs cannot be read", async () => {
-    const { client, raw } = observedClient(
+    const { client } = observedClient(
       [
         {
           status: WorkflowExecution_Status.RUNNING,
@@ -1071,7 +1074,7 @@ describe("observing when the migration script runs", () => {
       ],
       { "fn-1": [[MIGRATION_SCRIPT_STARTED_LOG]] },
     );
-    raw.getFunctionExecution
+    client.getFunctionExecution
       .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
       .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable));
 
@@ -1090,7 +1093,7 @@ describe("readMigrationRunStatus", () => {
     { status: WorkflowExecution_Status.RUNNING, expected: "running" },
     { status: WorkflowExecution_Status.PENDING, expected: "running" },
   ])("reads $expected from the recorded execution", async ({ status, expected }) => {
-    const { client, raw } = createMockClient({ statuses: [status] });
+    const { client } = createMockClient({ statuses: [status] });
 
     await expect(
       readMigrationRunStatus(client, "ws-1", "tailordb", {
@@ -1099,7 +1102,7 @@ describe("readMigrationRunStatus", () => {
         kind: "main",
       }),
     ).resolves.toBe(expected);
-    expect(raw.getWorkflowExecution).toHaveBeenCalledWith({
+    expect(client.getWorkflowExecution).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       executionId: "exec-1",
     });
@@ -1133,8 +1136,8 @@ describe("readMigrationRunStatus", () => {
   });
 
   test("reports a run whose executions cannot be listed as unknown", async () => {
-    const { client, raw } = createMockClient();
-    raw.listWorkflowExecutions.mockRejectedValueOnce(
+    const { client } = createMockClient();
+    client.listWorkflowExecutions.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
 
@@ -1158,8 +1161,8 @@ describe("readMigrationRunStatus", () => {
     ["is gone", new ConnectError("not found", Code.NotFound)],
     ["cannot be read", new ConnectError("unavailable", Code.Unavailable)],
   ])("reports a recorded execution that %s as unknown", async (_label, error) => {
-    const { client, raw } = createMockClient();
-    raw.getWorkflowExecution.mockRejectedValueOnce(error);
+    const { client } = createMockClient();
+    client.getWorkflowExecution.mockRejectedValueOnce(error);
 
     await expect(
       readMigrationRunStatus(client, "ws-1", "tailordb", {

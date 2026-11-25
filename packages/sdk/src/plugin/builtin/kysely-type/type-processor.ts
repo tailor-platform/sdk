@@ -420,3 +420,31 @@ export async function generateKyselyTypesSource(
   }
   return generateUnifiedKyselyTypes(namespaceData, temporal);
 }
+
+const CREATE_SCOPED_GET_DB_SOURCE = multiline /* ts */ `
+  /**
+   * **Beta:** Get a \`getDB\` that accepts only the given TailorDB namespaces, such as
+   * \`createScopedGetDB<"customer-db" | "order-db">()\`. The returned \`getDB\` is the one this
+   * module exports.
+   */
+  export function createScopedGetDB<N extends keyof Namespace = never>(): <const M extends N>(
+    namespace: M,
+    config?: Parameters<typeof getDB>[1],
+  ) => DB<M> {
+    return getDB;
+  }
+`;
+
+/**
+ * Generate the Kysely types the content mapper gives `@tailor-platform/sdk/plugin/kysely-type/db`:
+ * the unified types file plus `createScopedGetDB`, which narrows `getDB` to some namespaces.
+ * @param namespaces - Each namespace's loaded tables
+ * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @returns Contents of the content-mapped module
+ */
+export async function generateContentMappedKyselyTypes(
+  namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
+  temporal: boolean,
+): Promise<string> {
+  return `${await generateKyselyTypesSource(namespaces, temporal)}\n${CREATE_SCOPED_GET_DB_SOURCE}\n`;
+}

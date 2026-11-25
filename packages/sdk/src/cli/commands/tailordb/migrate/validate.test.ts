@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -15,10 +14,11 @@ import {
   bundleSingleStepMigration,
 } from "#/cli/commands/tailordb/migrate/bundler";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import {
   parsedType,
   remoteType,
@@ -30,6 +30,8 @@ import {
 } from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
 import type { CLIError } from "#/cli/shared/errors";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { WorkflowJobExecutionSchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 const LEGACY_REVIEW_MARKER = "TODO(tailor-migration-review)";
 
@@ -38,15 +40,19 @@ const state = vi.hoisted(() => ({
   localTypes: {} as Record<string, unknown>,
   extraServices: [] as unknown[],
   authService: undefined as unknown,
-  listTailorDBTypes: vi.fn(),
-  listTailorDBGQLPermissions: vi.fn(),
-  getMetadata: vi.fn(),
-  getWorkflowExecution: vi.fn(),
-  getFunctionExecution: vi.fn(),
 }));
 
-vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+const client = mockOperatorClient({
+  listTailorDBTypes: {},
+  listTailorDBGQLPermissions: {},
+  getMetadata: {},
+  getWorkflowExecution: {},
+  getFunctionExecution: {},
+});
+
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -68,7 +74,7 @@ vi.mock("#/cli/commands/tailordb/migrate/bundler", () => ({
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
     env: {},
-    authService: state.authService,
+    authServices: state.authService === undefined ? [] : [state.authService],
     tailorDBServices: [
       {
         namespace: "tailordb",
@@ -86,13 +92,14 @@ vi.mock("#/cli/services/application", () => ({
 }));
 
 function mockConfig(migration: { machineUser?: string } = {}): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: {
       path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
       db: { tailordb: { migration: { directory: state.migrationsDir, ...migration } } },
     },
     plugins: [],
-  } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+  } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 }
 
 function writeMigrationFile(number: number, fileName: string, content: string): void {
@@ -119,25 +126,19 @@ describe("tailordb migration validate", () => {
     vi.mocked(bundleMigrationSteps).mockReset();
     vi.mocked(bundleSingleStepMigration).mockReset();
 
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
-    state.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
-    state.getMetadata.mockResolvedValue({
+    client.listTailorDBGQLPermissions.mockResolvedValue({ permissions: [], nextPageToken: "" });
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0000" },
       },
     });
-    state.getWorkflowExecution.mockReset();
-    state.getFunctionExecution.mockReset();
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      listTailorDBTypes: state.listTailorDBTypes,
-      listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
-      getMetadata: state.getMetadata,
-      getWorkflowExecution: state.getWorkflowExecution,
-      getFunctionExecution: state.getFunctionExecution,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    client.getWorkflowExecution.mockReset();
+    client.getFunctionExecution.mockReset();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
   });
@@ -170,7 +171,7 @@ describe("tailordb migration validate", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
@@ -191,7 +192,7 @@ describe("tailordb migration validate", () => {
   test("fails when a field in the migration snapshot is missing on the remote", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id"])],
       nextPageToken: "",
     });
@@ -229,13 +230,13 @@ describe("tailordb migration validate", () => {
         error: expect.stringMatching(/Migration file validation failed/),
       },
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("verifies a namespace without a migration label against 0000", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    client.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
 
     const result = await runCommand(validateCommand, []);
 
@@ -252,7 +253,7 @@ describe("tailordb migration validate", () => {
 
   test("reports that the tables of a namespace without a migration label match 0000", async () => {
     using stderr = captureStderr();
-    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    client.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
 
     const result = await runCommand(validateCommand, []);
 
@@ -263,8 +264,8 @@ describe("tailordb migration validate", () => {
   test("fails when the tables of a namespace without a migration label differ from 0000", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
-    state.listTailorDBTypes.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
       nextPageToken: "",
     });
@@ -291,8 +292,8 @@ describe("tailordb migration validate", () => {
 
   test("explains that a namespace without a migration label must match 0000", async () => {
     using stderr = captureStderr();
-    state.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
-    state.listTailorDBTypes.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name", "legacyCode"])],
       nextPageToken: "",
     });
@@ -309,7 +310,7 @@ describe("tailordb migration validate", () => {
   test("treats out-of-range migration labels as unset", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m10000" } },
     });
 
@@ -329,10 +330,10 @@ describe("tailordb migration validate", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
@@ -358,10 +359,10 @@ describe("tailordb migration validate", () => {
   test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
     writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
@@ -382,10 +383,10 @@ describe("tailordb migration validate", () => {
       writeDiff(state.migrationsDir, 1, [
         { kind: "table_removed", tableName: "Legacy", before: snapshotType("Legacy") },
       ]);
-      state.getMetadata.mockResolvedValue({
+      client.getMetadata.mockResolvedValue({
         metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-cleanup": "m0001" } },
       });
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [remoteType("User", ["id", "name"]), remoteType("Legacy", ["id", "name"])],
         nextPageToken: "",
       });
@@ -427,7 +428,7 @@ describe("tailordb migration validate", () => {
         { kind: "table_added", tableName: "Post", after: snapshotType("Post") },
       ]);
       state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
-      state.listTailorDBTypes.mockResolvedValue({
+      client.listTailorDBTypes.mockResolvedValue({
         tailordbTypes: [
           remoteType("User", ["id", "name"]),
           restrictedRemoteType("Post", ["id", "name"]),
@@ -472,7 +473,7 @@ describe("tailordb migration validate", () => {
       replacedHistoryId: "hprevious",
       replacedLatestMigration: 5,
     });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
       },
@@ -492,7 +493,7 @@ describe("tailordb migration validate", () => {
       localLatestMigration: 0,
       historyIdMismatch: true,
     });
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("does not report rebaseline-pending when the checkpoint is already past the replaced migration", async () => {
@@ -502,7 +503,7 @@ describe("tailordb migration validate", () => {
       replacedHistoryId: "hprevious",
       replacedLatestMigration: 5,
     });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
       },
@@ -531,7 +532,7 @@ describe("tailordb migration validate", () => {
         replacedHistoryId: "hprevious",
         replacedLatestMigration: 5,
       });
-      state.getMetadata.mockResolvedValue({
+      client.getMetadata.mockResolvedValue({
         metadata: {
           labels: { "sdk-migration": "m0007", "sdk-migration-history": "hprevious" },
         },
@@ -560,7 +561,7 @@ describe("tailordb migration validate", () => {
   test("does not suggest checkpoint moves without a local migration", async () => {
     fs.rmSync(state.migrationsDir, { recursive: true });
     fs.mkdirSync(state.migrationsDir);
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0007" } },
     });
 
@@ -578,7 +579,7 @@ describe("tailordb migration validate", () => {
       replacedHistoryId: "hprevious",
       replacedLatestMigration: 5,
     });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: {
         labels: { "sdk-migration": "m0003", "sdk-migration-history": "hprevious" },
       },
@@ -597,7 +598,7 @@ describe("tailordb migration validate", () => {
 
   test("retains drift guidance when the remote checkpoint is available locally", async () => {
     using stderr = captureStderr();
-    state.listTailorDBTypes.mockResolvedValue({
+    client.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id"])],
       nextPageToken: "",
     });
@@ -621,13 +622,13 @@ describe("tailordb migration validate", () => {
     const [report] = JSON.parse(stdout.output);
     expect(report.valid).toBe(false);
     expect(report.migrationFiles.valid).toBe(false);
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("skips remote verification for an undeployed namespace", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    state.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+    client.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(validateCommand, []);
 
@@ -635,7 +636,7 @@ describe("tailordb migration validate", () => {
     const [report] = JSON.parse(stdout.output);
     expect(report.valid).toBe(true);
     expect(report.remoteSchema.skipped).toBe("not_deployed");
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("fails when a migration requiring a script has no migrate.ts", async () => {
@@ -744,7 +745,7 @@ describe("tailordb migration validate", () => {
     expect(report.migrationFiles.valid).toBe(false);
     expect(report.migrationFiles.error).toContain("0001");
     expect(report.migrationFiles.error).toContain("TODO()");
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("fails when a migration script still has the review marker earlier versions generated", async () => {
@@ -792,7 +793,7 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     const [report] = JSON.parse(stdout.output);
     expect(report.migrationFiles.error).toContain('depends on undefined step "backfill"');
-    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("accepts a multi-step migration script", async () => {
@@ -863,7 +864,7 @@ describe("tailordb migration validate", () => {
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
     writeMigrationFile(1, "migrate.ts", "export async function main() {}");
-    state.getMetadata.mockRejectedValue(new ConnectError("boom", Code.Internal));
+    client.getMetadata.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
     const result = await runCommand(validateCommand, []);
 
@@ -1086,7 +1087,7 @@ describe("tailordb migration validate", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
-    state.getMetadata.mockResolvedValue({
+    client.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0001" } },
     });
 
@@ -1101,7 +1102,7 @@ describe("tailordb migration validate", () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
-    state.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+    client.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
 
     const result = await runCommand(validateCommand, ["--strict"]);
 
@@ -1138,30 +1139,30 @@ describe("tailordb migration validate", () => {
     }
 
     function recordLabels(labels: Record<string, string>): void {
-      state.getMetadata.mockResolvedValue({ metadata: { labels } });
+      client.getMetadata.mockResolvedValue({ metadata: { labels } });
     }
 
     function earlierRunWithFailedRecompute(): void {
-      state.getWorkflowExecution.mockResolvedValue({
+      client.getWorkflowExecution.mockResolvedValue({
         execution: {
           id: EXECUTION_ID,
           status: WorkflowExecution_Status.FAILED,
-          jobExecutions: ["backfill", "recompute"].map((step, callIndex) => ({
-            executionId: `fn-${step}`,
-            status:
-              step === "backfill"
-                ? WorkflowJobExecution_Status.SUCCESS
-                : WorkflowJobExecution_Status.FAILED,
-            position: { callIndex, depth: 1 },
-            kind: { case: "jobFunction", value: { name: STEP_RUNNER } },
-          })),
+          jobExecutions: ["backfill", "recompute"].map(
+            (step, callIndex): MessageInitShape<typeof WorkflowJobExecutionSchema> => ({
+              executionId: `fn-${step}`,
+              status:
+                step === "backfill"
+                  ? WorkflowJobExecution_Status.SUCCESS
+                  : WorkflowJobExecution_Status.FAILED,
+              position: { callIndex, depth: 1 },
+              kind: { case: "jobFunction", value: { name: STEP_RUNNER } },
+            }),
+          ),
         },
       });
-      state.getFunctionExecution.mockImplementation(
-        async ({ executionId }: { executionId: string }) => ({
-          execution: { result: JSON.stringify({ step: executionId.slice("fn-".length) }) },
-        }),
-      );
+      client.getFunctionExecution.mockImplementation(async (request) => ({
+        execution: { result: JSON.stringify({ step: request.executionId?.slice("fn-".length) }) },
+      }));
     }
 
     test("reports a record that names a migration other than the next pending one", async () => {
@@ -1249,7 +1250,7 @@ describe("tailordb migration validate", () => {
         "sdk-migration-in-progress": "m0001-main",
         "sdk-migration-execution": EXECUTION_LABEL,
       });
-      state.getWorkflowExecution.mockResolvedValue({
+      client.getWorkflowExecution.mockResolvedValue({
         execution: { id: EXECUTION_ID, status: WorkflowExecution_Status.FAILED, jobExecutions: [] },
       });
 
@@ -1455,7 +1456,7 @@ describe("tailordb migration validate", () => {
       test("keeps the other checks when the earlier run cannot be read", async () => {
         using stdout = captureStdout();
         using _json = jsonMode();
-        state.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
+        client.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
         const result = await runCommand(validateCommand, [
           "--migration-skip-steps",
@@ -1480,7 +1481,7 @@ describe("tailordb migration validate", () => {
 
       test("shows a check that could not run as not checked", async () => {
         using stderr = captureStderr();
-        state.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
+        client.getWorkflowExecution.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
         const result = await runCommand(validateCommand, [
           "--migration-skip-steps",
@@ -1515,7 +1516,7 @@ describe("tailordb migration validate", () => {
           ),
           context: { namespace: "other", requested: ["backfill"], namespaces: ["tailordb"] },
         });
-        expect(state.getMetadata).not.toHaveBeenCalled();
+        expect(client.getMetadata).not.toHaveBeenCalled();
       });
 
       test("rejects a namespace without migrations", async () => {
@@ -1545,7 +1546,8 @@ describe("tailordb migration validate", () => {
       test("rejects a namespace that --namespace leaves out", async () => {
         const auditMigrationsDir = path.join(tmpDir, "audit-migrations");
         writeInitialSchema(auditMigrationsDir, {});
-        vi.mocked(loadConfig).mockResolvedValue({
+        vi.mocked(loadConfigFile).mockResolvedValue({
+          kind: "config",
           config: {
             path: path.join(tmpDir, "tailor.config.ts"),
             db: {
@@ -1554,7 +1556,7 @@ describe("tailordb migration validate", () => {
             },
           },
           plugins: [],
-        } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+        } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
         state.extraServices = [
           {
             namespace: "audit",
@@ -1659,7 +1661,12 @@ describe("tailordb migration validate", () => {
         pendingMigrationScripts: {
           valid: false,
           migrationNumbers: [1],
-          error: { code: row.code },
+          error: {
+            code: row.code,
+            context: expect.objectContaining({
+              file: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+            }),
+          },
         },
       });
       expect(bundleMigrationScript).not.toHaveBeenCalled();
@@ -1728,8 +1735,12 @@ describe("tailordb migration validate", () => {
       const result = await runCommand(validateCommand, []);
 
       expect(result.success).toBe(false);
+      const configFile = path.relative(
+        process.cwd(),
+        path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+      );
       expect(stderr.output).toContain(
-        "Pending migration scripts: Auth configuration is required to execute migration scripts.",
+        `Pending migration scripts: ${configFile}: Auth configuration is required to execute migration scripts.`,
       );
       expect(stderr.output).toContain(
         "Define auth with machine users in this config; migration scripts run as one of them.",
@@ -1745,7 +1756,7 @@ describe("tailordb migration validate", () => {
         "migrate.ts",
         "export const steps = { backfill: { run: async () => {} } };",
       );
-      state.getMetadata.mockResolvedValue({
+      client.getMetadata.mockResolvedValue({
         metadata: { labels: { "sdk-migration": "m0000", "sdk-migration-in-progress": "m0001" } },
       });
 
@@ -1761,7 +1772,7 @@ describe("tailordb migration validate", () => {
       using _json = jsonMode();
       writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
       writeMainMigration(1);
-      state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
+      client.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
 
       const result = await runCommand(validateCommand, []);
 
@@ -1779,7 +1790,7 @@ describe("tailordb migration validate", () => {
       using stdout = captureStdout();
       using _json = jsonMode();
       writeMainMigration(1);
-      state.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
+      client.getMetadata.mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0005" } } });
 
       const result = await runCommand(validateCommand, []);
 

@@ -26,7 +26,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock(import("./deployment-target"), async (original) => ({
   ...(await original()),
   loadDeployConfigs: async () => [
-    { config: mocks.target.config, plugins: [...mocks.target.plugins] },
+    mocks.target.source.kind === "workspace"
+      ? {
+          kind: "workspace",
+          workspace: mocks.target.source.workspace,
+          plugins: [...mocks.target.plugins],
+        }
+      : {
+          kind: "config",
+          config: mocks.target.config as never,
+          plugins: [...mocks.target.plugins],
+        },
   ],
   buildDeploymentTargets: async () => [mocks.target],
 }));
@@ -128,15 +138,23 @@ beforeEach(() => {
     externalTailorDBNamespaces: [],
     resolverServices: [],
     idpServices: [],
+    authServices: [],
     staticWebsiteServices: [{ name: "web" }],
     aiGatewayServices: [],
     secrets: [],
     env: {},
-    applications: [],
   };
   mocks.target = {
+    source: {
+      kind: "config",
+      config: { path: "/repo/tailor.config.ts", name: "app" },
+      application: { ...application, name: "app" },
+    },
     config: { path: "/repo/tailor.config.ts", name: "app" },
     application,
+    envOverrides: { resolver: {}, auth: {} },
+    owner: { kind: "application", name: "app", id: undefined },
+    applications: [{ name: "app", subgraphs: [], authNamespace: undefined, settings: {} }],
     plugins: [],
     bundledScripts: {
       resolvers: new Map(),
@@ -147,7 +165,8 @@ beforeEach(() => {
   } as unknown as BuiltDeploymentTarget;
   mocks.results = emptyPlanResults();
   mocks.planTailorDB.mockImplementation(async () => mocks.results.tailorDB);
-  mocks.apply.mockResolvedValue({ maintenance: [], labelRejections: [] });
+  mocks.apply.mockResolvedValue({ maintenance: [], labelRejections: [], droppedOnAppLabels: [] });
+  mocks.prerequisite.mockResolvedValue({ droppedOnAppLabels: [] });
   mocks.fetchMissingDependentApps.mockResolvedValue([]);
   client.getApplication.mockResolvedValue({ application: { url: "https://app", domain: "app" } });
   client.getStaticWebsite.mockResolvedValue({ staticwebsite: { url: "https://web" } });
@@ -318,6 +337,7 @@ function referenceWebsiteUrlFromEnv(onPrerequisite?: () => void) {
       application: { ...mocks.target.application, env: { website: "https://web" } },
     };
     onPrerequisite?.();
+    return { droppedOnAppLabels: [] };
   });
 }
 
@@ -427,6 +447,7 @@ function rejectApplicationLabels() {
   mocks.apply.mockResolvedValueOnce({
     maintenance: [],
     labelRejections: [applicationLabelRejection("app")],
+    droppedOnAppLabels: [],
   });
 }
 
@@ -514,7 +535,11 @@ test("includes how long TailorDB migrations kept tables in maintenance mode in J
     },
     migrations: [],
   };
-  mocks.apply.mockResolvedValueOnce({ maintenance: [maintenance], labelRejections: [] });
+  mocks.apply.mockResolvedValueOnce({
+    maintenance: [maintenance],
+    labelRejections: [],
+    droppedOnAppLabels: [],
+  });
 
   await deploy({ yes: true, noValidate: true });
 
@@ -550,15 +575,17 @@ test("includes a static website in JSON when the config has no application", asy
 test("includes AI Gateway URLs and public OAuth clients without client secrets in JSON", async () => {
   using _logger = silenceLogger("info", "warn", "success", "out", "log");
   using _json = jsonMode();
-  mocks.target.config.aiGateways = [
-    { name: "ai" },
-  ] as BuiltDeploymentTarget["config"]["aiGateways"];
   mocks.target.application = {
     ...mocks.target.application,
-    authService: {
-      config: { name: "auth" },
-    } as BuiltDeploymentTarget["application"]["authService"],
+    aiGatewayServices: [{ name: "ai" }],
+    authServices: [
+      {
+        config: { name: "auth" },
+        connections: {},
+      } as BuiltDeploymentTarget["application"]["authServices"][number],
+    ],
   };
+  mocks.target.applications = [{ name: "app", subgraphs: [], authNamespace: "auth", settings: {} }];
   await deploy({ yes: true, noValidate: true });
   expect(logger.out).toHaveBeenLastCalledWith(
     expect.objectContaining({
@@ -593,9 +620,8 @@ test("reports skipped hooks when loading their context in JSON mode fails", asyn
   client.getApplication.mockRejectedValueOnce(new Error("application lookup failed"));
   await expect(deploy({ yes: true, noValidate: true })).rejects.toMatchObject({
     code: "DEPLOYED_HOOK_FAILED",
-    message: expect.stringMatching(
-      /loading the deployed information.*application lookup failed.*Hooks not run: hook \(app: app\)/s,
-    ),
+    message: expect.stringMatching(/loading the deployed information.*application lookup failed$/s),
+    details: "Hooks not run: hook (app: app)",
   });
 });
 
@@ -676,6 +702,159 @@ test("--json dry-run lists a missing dependent application in warnings without a
           name: "Order",
           appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
           reason: "publish-events",
+        },
+      ],
+    }),
+  );
+});
+
+function useWorkspaceTarget() {
+  const subgraphs = [{ Type: "tailordb", Name: "main" }];
+  mocks.target = {
+    ...mocks.target,
+    source: { kind: "workspace", workspace: { path: "/repo/tailor.config.ts", apps: {} } },
+    owner: { kind: "workspace" },
+    applications: [
+      { name: "shop", subgraphs, authNamespace: undefined, settings: {} },
+      { name: "admin", subgraphs, authNamespace: undefined, settings: {} },
+    ],
+  } as unknown as BuiltDeploymentTarget;
+}
+
+test("runs the onDeployed hooks of a workspace config and reports their outputs without an application", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  register(() => ({ outputs: { published: true } }));
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      deployedHooks: [{ pluginId: "hook", outputs: { published: true } }],
+    }),
+  );
+});
+
+test("lists the pending hooks of a workspace config without an application", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  register(vi.fn());
+  await deploy({ dryRun: true, noValidate: true });
+  expect(logger.info).toHaveBeenCalledWith('Hook to run after apply: "hook"');
+  vi.mocked(logger.info).mockClear();
+  {
+    using _json = jsonMode();
+    await deploy({ dryRun: true, noValidate: true });
+  }
+  expect(logger.out).toHaveBeenLastCalledWith(
+    expect.objectContaining({ pendingDeployedHooks: [{ pluginId: "hook" }] }),
+  );
+});
+
+test("deploys a workspace config without looking up applications it depends on", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  await deploy({ yes: true, noValidate: true });
+  expect(mocks.apply).toHaveBeenCalledOnce();
+  expect(mocks.fetchMissingDependentApps).not.toHaveBeenCalled();
+});
+
+test("reports every application of a workspace config in JSON", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  await deploy({ yes: true, noValidate: true });
+  const result = vi.mocked(logger.out).mock.lastCall?.[0] as { applications: object[] };
+  expect(result.applications).toEqual([
+    expect.objectContaining({
+      name: "shop",
+      url: "https://app",
+      configPath: "/repo/tailor.config.ts",
+    }),
+    expect.objectContaining({ name: "admin", url: "https://app" }),
+  ]);
+  expect(result.applications).toEqual([
+    expect.not.objectContaining({ id: expect.anything() }),
+    expect.not.objectContaining({ id: expect.anything() }),
+  ]);
+});
+
+test("stops a defineApp() config before checking resources in use when it would take over two configs' resources", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  Object.assign(mocks.target.source, {
+    workspace: { path: "/repo/tailor.config.ts", apps: {}, definedBy: "defineApp" },
+  });
+  const takeover = (resourceName: string, currentOwner: string, currentAppId: string) => ({
+    resourceType: "tailordb.service" as const,
+    resourceName,
+    resourceLabel: "TailorDB namespace",
+    action: "delete" as const,
+    currentOwner,
+    currentAppId,
+  });
+  mocks.results.tailorDB.takeovers.push(
+    takeover("shop-db", "shop", "8d6f1e2a-4b3c-4d5e-9f60-7a8b9c0d1e2f"),
+    takeover("admin-db", "admin", "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81"),
+  );
+  await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+  });
+  expect(mocks.assertResourcesNotInUse).not.toHaveBeenCalled();
+});
+
+test("stops a defineApp() config that would delete an application another workspace config deployed", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  useWorkspaceTarget();
+  Object.assign(mocks.target, {
+    source: {
+      kind: "workspace",
+      workspace: { path: "/repo/tailor.config.ts", apps: {}, definedBy: "defineApp" },
+    },
+    applications: [mocks.target.applications[0]],
+  });
+  mocks.results.app.deletes.push(
+    ...["shop", "admin"].map((name) => ({
+      name,
+      request: { workspaceId: "ws", applicationName: name },
+    })),
+  );
+  await expect(deploy({ dryRun: true, noValidate: true })).rejects.toMatchObject({
+    code: "DEPLOY_OTHER_CONFIG_RESOURCES",
+    context: expect.objectContaining({ deletedApplications: ["admin"] }),
+  });
+});
+
+test("reports the sdk-on-app labels the Platform had no room for in the JSON result", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  useWorkspaceTarget();
+  mocks.prerequisite.mockResolvedValueOnce({
+    droppedOnAppLabels: [
+      { resourceType: "auth.service", name: "shop-auth", applications: ["ops"] },
+    ],
+  });
+  mocks.apply.mockResolvedValueOnce({
+    maintenance: [],
+    labelRejections: [],
+    droppedOnAppLabels: [
+      { resourceType: "tailordb.service", name: "shared-db", applications: ["ops", "web"] },
+    ],
+  });
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      warnings: [
+        {
+          type: "onAppLabelsDropped",
+          resourceType: "auth.service",
+          name: "shop-auth",
+          applications: ["ops"],
+        },
+        {
+          type: "onAppLabelsDropped",
+          resourceType: "tailordb.service",
+          name: "shared-db",
+          applications: ["ops", "web"],
         },
       ],
     }),

@@ -1,7 +1,7 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "#/utils/brand";
 import { dispatchStartWorkflow } from "./registry";
-import type { MachineUserName } from "#/configure/types/machine-user";
+import type { MachineUserInvoker } from "#/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "#/types/workflow.generated";
 import type { WorkflowJob } from "./job";
 
@@ -17,6 +17,12 @@ export interface WorkflowConfig<
   publishEvents?: boolean;
 }
 
+/** Options of a workflow's `.start()`. */
+interface WorkflowStartOptions {
+  /** Machine user the workflow execution runs as. */
+  invoker: MachineUserInvoker;
+}
+
 export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
   name: string;
   mainJob: Job;
@@ -24,11 +30,8 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   concurrencyPolicy?: ConcurrencyPolicy;
   publishEvents?: boolean;
   start: [Parameters<Job["start"]>[0]] extends [undefined]
-    ? (args?: undefined, options?: { invoker: MachineUserName }) => Promise<string>
-    : (
-        args: Parameters<Job["start"]>[0],
-        options?: { invoker: MachineUserName },
-      ) => Promise<string>;
+    ? (args?: undefined, options?: WorkflowStartOptions) => Promise<string>
+    : (args: Parameters<Job["start"]>[0], options?: WorkflowStartOptions) => Promise<string>;
 }
 
 interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
@@ -88,10 +91,7 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
           // the bundler rewrite, which forwards the literal `undefined` from the
           // AST as a third argument. Without this, local execution and bundled
           // workflows would hand mocks different call shapes.
-          async function start(
-            args: Parameters<Job["start"]>[0],
-            options?: { invoker: MachineUserName },
-          ) {
+          async function start(args: Parameters<Job["start"]>[0], options?: WorkflowStartOptions) {
             // oxlint-disable-next-line prefer-rest-params
             return arguments.length >= 2
               ? await dispatchStartWorkflow(config.name, args, options)

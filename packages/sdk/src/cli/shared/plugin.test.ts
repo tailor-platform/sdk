@@ -21,7 +21,10 @@ const contextMocks = vi.hoisted(() => ({
   readPlatformConfig: vi.fn(),
 }));
 
-vi.mock("./context", () => contextMocks);
+vi.mock("./context", async (importOriginal) => ({
+  ...(await importOriginal()),
+  ...contextMocks,
+}));
 
 const isWindows = process.platform === "win32";
 const CLI = "tailor-sdk";
@@ -252,10 +255,20 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_VERSION).toBeTruthy();
   });
 
-  test("injects the active profile's platform URL and OAuth client", async () => {
+  test("injects the active profile's platform URL, OAuth client, and user", async () => {
     contextMocks.loadPlatformClientConfig.mockResolvedValue({
       platformUrl: "https://api.staging.example.com",
       oauth2ClientId: "cpoc_staging",
+    });
+    contextMocks.readPlatformConfig.mockResolvedValue({
+      users: {
+        u1: { email: "me@example.com" },
+        "https://api.staging.example.com|sub-staging": { email: "staging@example.com" },
+      },
+      profiles: {
+        staging: { user: "sub-staging", platform_url: "https://api.staging.example.com" },
+      },
+      current_user: "u1",
     });
     const project = path.join(tempDir, "project");
     writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
@@ -273,6 +286,49 @@ describe("dispatchPlugin", () => {
     const { env } = readCapture();
     expect(env.TAILOR_PLATFORM_URL).toBe("https://api.staging.example.com");
     expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe("cpoc_staging");
+    expect(env.TAILOR_PLATFORM_USER).toBe("staging@example.com");
+  });
+
+  test("injects the user ID when the profile's user has only an unscoped entry and its platform differs from TAILOR_PLATFORM_URL or the default", async () => {
+    contextMocks.readPlatformConfig.mockResolvedValue({
+      users: { u1: { email: "me@example.com" } },
+      profiles: {
+        staging: { user: "u1", platform_url: "https://api.staging.example.com" },
+      },
+      current_user: "u1",
+    });
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: [],
+      cliName: CLI,
+      profile: "staging",
+    });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_PLATFORM_USER).toBe("u1");
+  });
+
+  test("injects the email of the current user on the platform TAILOR_PLATFORM_URL selects", async () => {
+    process.env.TAILOR_PLATFORM_URL = "https://api.env.example.com";
+    contextMocks.readPlatformConfig.mockResolvedValue({
+      users: { "https://api.env.example.com|sub-env": { email: "env@example.com" } },
+      profiles: {},
+      current_user: "sub-env",
+    });
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({ name: "hello", args: [], cliName: CLI });
+
+    expect(code).toBe(0);
+    expect(readCapture().env.TAILOR_PLATFORM_USER).toBe("env@example.com");
   });
 
   test("resolves injected context from an explicit --profile in forwarded args", async () => {

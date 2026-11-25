@@ -1,9 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { getMachineUserToken, tokenCommand } from "./token";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -18,30 +18,34 @@ vi.mock("#/cli/shared/client", () => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
+function createClient() {
+  return mockOperatorClient({
+    getApplication: {
+      application: { authNamespace: "auth-ns", url: "https://app.example.com" },
+    },
+    getAuthMachineUser: {
+      machineUser: { clientId: "client-id", clientSecret: "client-secret" },
+    },
+  });
+}
+
 describe("getMachineUserToken", () => {
-  let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
+  let client: ReturnType<typeof createClient>;
 
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    vi.mocked(loadConfig).mockResolvedValue({
-      config: {
-        name: "my-app",
-      },
-    } as Awaited<ReturnType<typeof loadConfig>>);
-
-    getAuthMachineUserMock = vi.fn().mockResolvedValue({
-      machineUser: { clientId: "client-id", clientSecret: "client-secret" },
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
+      config: { name: "my-app" } as LoadedConfig,
+      plugins: [],
     });
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getApplication: vi.fn().mockResolvedValue({
-        application: { authNamespace: "auth-ns", url: "https://app.example.com" },
-      }),
-      getAuthMachineUser: getAuthMachineUserMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+
+    client = createClient();
+    vi.mocked(initOperatorClient).mockResolvedValue(client);
     vi.mocked(fetchMachineUserToken).mockResolvedValue({
       token_type: "Bearer",
       access_token: "machine-token",
@@ -63,7 +67,7 @@ describe("getMachineUserToken", () => {
       machineUserSource: undefined,
       profile: undefined,
     });
-    expect(getAuthMachineUserMock).toHaveBeenCalledWith(
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-bot" }),
     );
   });
@@ -73,7 +77,7 @@ describe("getMachineUserToken", () => {
 
     const token = await getMachineUserToken({});
 
-    expect(getAuthMachineUserMock).toHaveBeenCalledWith(
+    expect(client.getAuthMachineUser).toHaveBeenCalledWith(
       expect.objectContaining({ name: "profile-bot" }),
     );
     expect(token.accessToken).toBe("machine-token");

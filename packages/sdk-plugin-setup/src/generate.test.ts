@@ -2489,7 +2489,7 @@ describe("setupTarget (integration)", () => {
     const before = fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8");
     await setupTarget(baseOptions({ workspaceName: "my-app" }));
     const lock = readLock(testDir);
-    expect(lock?.version).toBe(LOCK_VERSION);
+    expect(lock?.version).toBe(2);
     expect(lock?.appIds?.["tailor.config.ts"]).toMatch(UUID);
     expect(fs.readFileSync(path.join(testDir, "tailor.config.ts"), "utf-8")).toBe(before);
   });
@@ -4283,6 +4283,212 @@ export default defineConfig({
         "apps/erp/backend/tailor.config.ts",
         "apps/users/backend/tailor.config.ts",
       ]);
+    });
+  });
+
+  describe("workspace config", () => {
+    const writeWorkspaceConfig = (
+      dir: string,
+      kind: "workspace-config" | "app-config",
+      source: string,
+    ): void => {
+      fs.mkdirSync(path.join(testDir, dir), { recursive: true });
+      fs.writeFileSync(
+        path.join(testDir, dir, "tailor.config.ts"),
+        `export default Object.defineProperty(${source}, Symbol.for("tailor-platform/sdk"), { value: ${JSON.stringify(kind)} });\n`,
+      );
+    };
+    const TWO_APPS = `{
+      db: { "main-db": { files: [] } },
+      apps: { shop: { db: ["main-db"] }, admin: { db: ["main-db"] } },
+    }`;
+    const MIGRATED_DB = `{ files: [], migration: { directory: "./migrations/main" } }`;
+    const configLoaders = { loadConfigName: undefined, loadConfigId: undefined };
+    // Config modules are cached by path, so each test writes its config to a directory of its own.
+    let appDirCount = 0;
+    const nextAppDir = (): string => `apps/workspace-${String((appDirCount += 1))}`;
+
+    test("deploys the whole workspace from one step at its directory and records the config under workspaces", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+
+      const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-shop.yml"), "utf-8");
+      expect(wf).not.toContain("TAILOR_CONFIG_PATH");
+      expect(wf.match(/id: tailor-plan$/gm)).toHaveLength(1);
+      expect(wf.match(/id: tailor-generate-check$/gm)).toHaveLength(1);
+      const lock = readLock(testDir);
+      expect(lock).toMatchObject({
+        version: 3,
+        workspaces: [`${dir}/tailor.config.ts`],
+        appIds: {},
+      });
+      expect(lock?.targets[0]?.inputs).not.toHaveProperty("apps");
+    });
+
+    test("keeps the recorded workspace configs and version 3 when it sets up a defineConfig() target", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+
+      await setupTarget(baseOptions({ workspaceName: "legacy" }));
+
+      expect(readLock(testDir)).toMatchObject({
+        version: 3,
+        workspaces: [`${dir}/tailor.config.ts`],
+      });
+      expect(Object.keys(readLock(testDir)?.appIds ?? {})).toEqual(["tailor.config.ts"]);
+    });
+
+    test("checks migration drift once when a namespace of the workspace has migrations", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(
+        dir,
+        "workspace-config",
+        `{
+          db: {
+            "main-db": { files: [] },
+            "ledger-db": { files: [], migration: { directory: "./migrations/ledger" } },
+          },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+      );
+
+      await setupTarget(baseOptions({ ...configLoaders, workspaceName: "shop", dir }));
+
+      const wf = fs.readFileSync(path.join(testDir, ".github/workflows/tailor-shop.yml"), "utf-8");
+      expect(wf.match(/id: tailor-migration-drift-check$/gm)).toHaveLength(1);
+    });
+
+    test("requires --name for a defineWorkspace() config, which names no workspace", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+
+      await expect(setupTarget(baseOptions({ ...configLoaders, dir }))).rejects.toThrow(
+        /Pass --name.*defineWorkspace\(\)/s,
+      );
+    });
+
+    test("names the workspace after the application of a defineApp() config", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(
+        dir,
+        "app-config",
+        `{ name: "storefront", db: { "main-db": { files: [] } } }`,
+      );
+
+      await setupTarget(baseOptions({ ...configLoaders, dir }));
+
+      expect(fs.existsSync(path.join(testDir, ".github/workflows/tailor-storefront.yml"))).toBe(
+        true,
+      );
+      expect(readLock(testDir)).toMatchObject({
+        version: 3,
+        workspaces: [`${dir}/tailor.config.ts`],
+      });
+    });
+
+    test("rejects --erd-preview for a workspace config", async () => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+
+      await expect(
+        setupTarget(
+          baseOptions({ ...configLoaders, erdPreview: true, workspaceName: "shop", dir }),
+        ),
+      ).rejects.toThrow(
+        "A defineWorkspace() or defineApp() config does not support --erd-preview yet.",
+      );
+      expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
+    });
+
+    test.each([
+      {
+        name: "a defineApp() config",
+        kind: "app-config",
+        source: `{ name: "shop", db: { "main-db": ${MIGRATED_DB} } }`,
+      },
+      {
+        name: "a defineWorkspace() config whose only application lists every namespace with migrations",
+        kind: "workspace-config",
+        source: `{
+          db: { "main-db": ${MIGRATED_DB}, "cache-db": { files: [] } },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+      },
+    ] as const)("adds the migration test job for $name", async ({ kind, source }) => {
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, kind, source);
+
+      await setupTarget(
+        baseOptions({ ...configLoaders, migrationTest: true, workspaceName: "shop", dir }),
+      );
+
+      const wf = parseYAML(
+        fs.readFileSync(path.join(testDir, ".github/workflows/tailor-shop.yml"), "utf-8"),
+      ) as Workflow;
+      expect(wf.jobs["tailor-migration-test"]).toBeDefined();
+      expect(readLock(testDir)?.targets[0]).toMatchObject({ inputs: { migrationTest: true } });
+    });
+
+    test.each([
+      {
+        name: "deploys several applications",
+        source: `{
+          db: { "main-db": ${MIGRATED_DB} },
+          apps: { shop: { db: ["main-db"] }, admin: { db: ["main-db"] } },
+        }`,
+        message:
+          "The --migration-test job copies the data of one application, but the workspace config deploys 2 applications. " +
+          "Generate the target without --migration-test.",
+      },
+      {
+        name: "has an application that does not list a namespace with migrations",
+        source: `{
+          db: { "main-db": { files: [] }, "ledger-db": ${MIGRATED_DB} },
+          apps: { shop: { db: ["main-db"] } },
+        }`,
+        message:
+          "The --migration-test job copies the data of application shop, which does not list ledger-db. " +
+          "Generate the target without --migration-test.",
+      },
+    ])(
+      "rejects --migration-test for a workspace config that $name",
+      async ({ source, message }) => {
+        const dir = nextAppDir();
+        writeWorkspaceConfig(dir, "workspace-config", source);
+
+        await expect(
+          setupTarget(
+            baseOptions({ ...configLoaders, migrationTest: true, workspaceName: "shop", dir }),
+          ),
+        ).rejects.toThrow(message);
+        expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
+      },
+    );
+
+    test("rejects a workspace config deployed together with another --dir", async () => {
+      fs.writeFileSync(
+        path.join(testDir, "package.json"),
+        JSON.stringify({ private: true, devDependencies: { "@tailor-platform/sdk": "1.0.0" } }),
+      );
+      const dir = nextAppDir();
+      writeWorkspaceConfig(dir, "workspace-config", TWO_APPS);
+      const legacyDir = nextAppDir();
+      fs.mkdirSync(path.join(testDir, legacyDir), { recursive: true });
+      fs.writeFileSync(
+        path.join(testDir, legacyDir, "tailor.config.ts"),
+        `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "legacy" });\n`,
+      );
+
+      await expect(
+        setupTarget(
+          baseOptions({ ...configLoaders, workspaceName: "shop", dir: [dir, legacyDir] }),
+        ),
+      ).rejects.toThrow(new RegExp(`${dir}.*only --dir`, "s"));
+      expect(fs.existsSync(path.join(testDir, ".github/tailor.lock"))).toBe(false);
     });
   });
 });

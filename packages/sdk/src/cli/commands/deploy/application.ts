@@ -34,7 +34,7 @@ import {
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
-  isOwnedByApp,
+  isOwnedBy,
   labelCountViolation,
   type MetadataLabelWrite,
   resourceTrn,
@@ -44,7 +44,7 @@ import {
 import { createOwnershipTracker } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
 
 /**
@@ -258,6 +258,9 @@ type DesiredApplication = {
   comparableRequest: MessageInitShape<typeof UpdateApplicationRequestSchema>;
   metaRequest: MetadataLabelWrite;
   metadata?: Record<string, string>;
+  existingLabels: Record<string, string> | undefined;
+  /** Plan display lines for the `metadata` entries the stored labels lack or differ in. */
+  metadataDetails: string[];
 };
 
 function normalizeHttpAdapter(adapter: HttpAdapter): void {
@@ -291,7 +294,7 @@ const applicationComparison = defineRequestComparison({
  *   re-querying the platform (the application resource itself isn't touched between a deploy's
  *   first plan and its conditional rebuild's replan)
  * @param previous.existingApplications - The prior call's fetched application list
- * @param previous.existingLabels - The prior call's fetched labels for this application
+ * @param previous.existingLabels - The prior call's fetched labels, by application name
  * @returns Planned changes
  */
 export async function planApplication(
@@ -299,11 +302,11 @@ export async function planApplication(
   httpAdapterBuildResult?: HttpAdapterBundleResult,
   previous?: {
     existingApplications: ReadonlyArray<ProtoApplication>;
-    existingLabels: Record<string, string> | undefined;
+    existingLabels: ReadonlyMap<string, Record<string, string> | undefined>;
   },
 ) {
-  const { client, workspaceId, application, forRemoval } = context;
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const { client, workspaceId, application, applications, owner, forRemoval } = context;
+  const ownership = createOwnershipTracker(owner);
   const changeSet = createChangeSet<
     CreateApplication,
     UpdateApplication,
@@ -328,15 +331,14 @@ export async function planApplication(
       return [applications, nextPageToken];
     }));
 
-  const ownedByConfig = (labels: Record<string, string> | undefined) =>
-    isOwnedByApp(labels, application.name, application.id);
+  const ownedByConfig = (labels: Record<string, string> | undefined) => isOwnedBy(labels, owner);
   const scheduleOwnedAppDeletes = async (
     candidates: ReadonlyArray<ProtoApplication>,
-    owns: (labels: Record<string, string> | undefined) => boolean,
+    owns: (labels: Record<string, string> | undefined, name: string) => boolean,
   ) => {
     const owned = await Promise.all(
       candidates.map(async (app) =>
-        owns(await fetchAppLabels(client, workspaceId, app.name)) ? app.name : null,
+        owns(await fetchAppLabels(client, workspaceId, app.name), app.name) ? app.name : null,
       ),
     );
     for (const name of owned) {
@@ -352,124 +354,103 @@ export async function planApplication(
     }
   };
 
-  // The platform rejects an application without subgraphs, so a config with
-  // none (e.g. only static web hosting) is planned like a removal.
-  if (forRemoval || application.subgraphs.length === 0) {
-    // A same-named app in a shared workspace may belong to another user, so
-    // never delete by name alone. Without an id only the same-name app can be
-    // ours; with an id, scan all apps to also clean up renamed-away ones.
-    const candidates = application.id
-      ? existingApplications
-      : existingApplications.filter((app) => app.name === application.name);
-    // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
-    await scheduleOwnedAppDeletes(candidates, (labels) =>
-      forRemoval ? ownership.ownsRemaining(labels) : ownedByConfig(labels),
-    );
+  // The platform rejects an application without subgraphs, so an application
+  // with none (e.g. a config with only static web hosting) is planned like a removal.
+  const planned = forRemoval ? [] : applications.filter((app) => app.subgraphs.length > 0);
+  const plannedNames = new Set(planned.map((app) => app.name));
+  const unplannedNames = new Set(
+    applications.map((app) => app.name).filter((name) => !plannedNames.has(name)),
+  );
+  const scansOtherNames = owner.kind === "workspace" || Boolean(owner.id);
+  // A same-named app in a shared workspace may belong to another user, so
+  // never delete by name alone. Without an id only the same-name app can be
+  // ours; with an id or the workspace mark, scan all apps to also clean up
+  // renamed-away ones and the ones a workspace config no longer lists.
+  // A deploy must not record other apps as owners: that blocks renamed-app cleanup.
+  await scheduleOwnedAppDeletes(
+    existingApplications.filter((app) =>
+      scansOtherNames ? !plannedNames.has(app.name) : unplannedNames.has(app.name),
+    ),
+    (labels, name) =>
+      forRemoval || owner.kind === "workspace"
+        ? ownership.ownsRemaining(labels, { resourceType: "application", resourceName: name })
+        : ownedByConfig(labels),
+  );
+  if (planned.length === 0) {
     return Object.assign(changeSet, ownership.result, {
       existingApplications,
-      existingLabels: undefined,
+      existingLabels: new Map<string, Record<string, string> | undefined>(),
     });
   }
 
-  let authNamespace: string | undefined;
-  let authIdpConfigName: string | undefined;
-  if (application.authService) {
-    authNamespace = application.authService.config.name;
-
-    const idProvider = application.authService.config.idProvider;
-    if (idProvider) {
-      authIdpConfigName = idProvider.name;
-    }
-  } else if (application.config.auth) {
-    // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
-    authNamespace = application.config.auth.name;
-    if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
-      authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
-    } else {
-      const idpConfigs = await listAuthIDPConfigsTolerant(client, workspaceId, authNamespace);
-      if (idpConfigs.length > 0) {
-        const [firstConfig] = idpConfigs;
-        if (firstConfig) {
-          authIdpConfigName = firstConfig.name;
-        }
-      }
-    }
-  }
-  const metaRequest = await buildMetaRequest({
-    trn: resourceTrn(workspaceId, "application", application.name),
-    appName: application.name,
-    appId: application.id,
-  });
-  const { metadata } = application.config;
-  // `previous.existingLabels` can legitimately be `undefined` (no metadata
-  // found on the first fetch), so branch on `previous` itself -- `??` would
-  // treat that cached `undefined` as a cache miss and re-fetch needlessly.
-  const existingLabels = previous
-    ? previous.existingLabels
-    : await fetchAppLabels(client, workspaceId, application.name);
-  const metadataDetails = diffMetadataDisplay(existingLabels, metadata);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
-  const resolvedCors = await resolveStaticWebsiteUrls(
-    client,
-    workspaceId,
-    application.config.cors,
-    "CORS",
-    { expectedLocalNames: expectedLocalWebsites },
-  );
   const httpAdapters = buildHttpAdapters(application, httpAdapterBuildResult);
-  const request = {
-    workspaceId,
-    applicationName: application.name,
-    authNamespace,
-    authIdpConfigName,
-    cors: application.config.cors,
-    subgraphs: application.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
-    allowedIpAddresses: application.config.allowedIpAddresses,
-    disableIntrospection: application.config.disableIntrospection,
-    httpAdapters,
-  };
-  const existing = existingApplications.find((app) => app.name === application.name);
-
-  // Detect renames: other apps owned by our id should be deleted before
-  // creating/updating the current name (so the old name is freed up).
-  if (application.id) {
-    await scheduleOwnedAppDeletes(
-      existingApplications.filter((app) => app.name !== application.name),
-      ownedByConfig,
-    );
-  }
-
-  const nonEmpty = (lines: string[]) => (lines.length > 0 ? lines : undefined);
-  await diffKeyed({
-    changeSet,
-    desired: [
-      {
-        name: application.name,
+  const desired = await Promise.all(
+    planned.map(async (app) => {
+      const { cors, allowedIpAddresses, disableIntrospection, metadata } = app.settings;
+      const [authIdpConfigName, metaRequest, existingLabels, resolvedCors] = await Promise.all([
+        app.authNamespace ? authIdpConfigNameOf(context, app.authNamespace) : undefined,
+        buildMetaRequest({
+          trn: resourceTrn(workspaceId, "application", app.name),
+          owner,
+          onApps: [app.name],
+        }),
+        // `previous.existingLabels` can legitimately hold `undefined` (no metadata
+        // found on the first fetch), so branch on `has` -- `??` would treat that
+        // cached `undefined` as a cache miss and re-fetch needlessly.
+        previous?.existingLabels.has(app.name)
+          ? previous.existingLabels.get(app.name)
+          : fetchAppLabels(client, workspaceId, app.name),
+        resolveStaticWebsiteUrls(client, workspaceId, cors, "CORS", {
+          expectedLocalNames: expectedLocalWebsites,
+        }),
+      ]);
+      const request = {
+        workspaceId,
+        applicationName: app.name,
+        authNamespace: app.authNamespace,
+        authIdpConfigName,
+        cors,
+        subgraphs: app.subgraphs.map((subgraph) => protoSubgraph(subgraph)),
+        allowedIpAddresses,
+        disableIntrospection,
+        httpAdapters,
+      };
+      return {
+        name: app.name,
         request,
         comparableRequest: { ...request, cors: resolvedCors },
         metaRequest,
         metadata,
-      },
-    ],
-    existing: existing
-      ? [[existing.name, { resource: existing, allLabels: existingLabels }] as const]
-      : [],
+        existingLabels,
+        metadataDetails: diffMetadataDisplay(existingLabels, metadata),
+      } satisfies DesiredApplication;
+    }),
+  );
+
+  const nonEmpty = (lines: string[]) => (lines.length > 0 ? lines : undefined);
+  await diffKeyed({
+    changeSet,
+    desired,
+    existing: desired.flatMap((app) => {
+      const resource = existingApplications.find((existing) => existing.name === app.name);
+      return resource
+        ? [[resource.name, { resource, allLabels: app.existingLabels }] as const]
+        : [];
+    }),
     keyOf: (app) => app.name,
-    ...labeledResourceChecks(ownership, (app: DesiredApplication) => ({
-      resourceType: "application",
-      resourceName: app.name,
-    })),
+    ...labeledResourceChecks(ownership, "application"),
     isConfigUnchanged: (app, { resource }) =>
-      metadataDetails.length === 0 &&
+      app.metadataDetails.length === 0 &&
       isRequestUnchanged(applicationComparison, app.comparableRequest, resource),
-    create: ({ name, request, metaRequest, metadata }) => ({
+    create: ({ name, request, metaRequest, metadata, metadataDetails }) => ({
       name,
       request,
       metaRequest,
       metadata,
       details: nonEmpty([...diffHttpAdapterDisplay(undefined, httpAdapters), ...metadataDetails]),
     }),
-    update: ({ name, request, metaRequest, metadata }, { resource }) => {
+    update: ({ name, request, metaRequest, metadata, metadataDetails }, { resource }) => {
       const details = nonEmpty([
         ...diffHttpAdapterDisplay(resource.httpAdapters, httpAdapters),
         ...metadataDetails,
@@ -489,8 +470,30 @@ export async function planApplication(
 
   return Object.assign(changeSet, ownership.result, {
     existingApplications,
-    existingLabels,
+    existingLabels: new Map(desired.map((app) => [app.name, app.existingLabels])),
   });
+}
+
+async function authIdpConfigNameOf(
+  context: PlanContext,
+  authNamespace: string,
+): Promise<string | undefined> {
+  const authService = context.application.authServices.find(
+    (service) => service.config.name === authNamespace,
+  );
+  if (authService) {
+    return authService.config.idProvider?.name;
+  }
+  // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
+  if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
+    return context.externalAuthIdpConfigNames.get(authNamespace);
+  }
+  const [firstConfig] = await listAuthIDPConfigsTolerant(
+    context.client,
+    context.workspaceId,
+    authNamespace,
+  );
+  return firstConfig?.name;
 }
 
 async function fetchAppLabels(
@@ -566,7 +569,7 @@ function diffMetadataDisplay(
 }
 
 function buildHttpAdapters(
-  application: Readonly<Application>,
+  application: Pick<ConfigServices, "httpAdapterService">,
   httpAdapterBuildResult: HttpAdapterBundleResult | undefined,
 ): MessageInitShape<typeof HttpAdapterSchema>[] {
   const adapters = application.httpAdapterService?.adapters ?? [];

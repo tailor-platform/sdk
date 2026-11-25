@@ -18,6 +18,18 @@ export interface UnmanagedResource {
   resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
+  /** Set when a workspace config manages the resource. */
+  managedBy?: "workspace";
+}
+
+/** A resource an application deployed, which a workspace config takes over or deletes. */
+export interface WorkspaceTakeover extends UnmanagedResource {
+  /** `update` for a resource the config has, `delete` for one it no longer has. */
+  action: "update" | "delete";
+  /** Name of the application that deployed it, when it records one. */
+  currentOwner?: string;
+  /** Id of the application config that deployed it, when it records one. */
+  currentAppId?: string;
 }
 
 /** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
@@ -208,60 +220,159 @@ async function confirmNameMismatch(
   }
 }
 
+/** A resource a workspace config takes over or deletes, with what deleting it deletes too. */
+export interface TakeoverConfirmation extends WorkspaceTakeover {
+  /** Whether deleting the resource itself needs confirmation, as for any important deletion. */
+  losesData?: boolean;
+  /** Deletions inside the deleted resource that need confirmation on their own. */
+  nestedDeletions?: ReadonlyArray<ImportantResourceDeletion>;
+}
+
+/**
+ * Confirm moving resources that applications deployed under the workspace config's management:
+ * taking over the ones the config has and deleting the ones it no longer has.
+ * @param takeovers - Resources to take over or delete, with what each delete deletes too
+ * @param mode - Whether to prompt, auto-confirm, or only report
+ * @returns Promise that resolves when confirmation completes
+ */
+export async function confirmWorkspaceTakeover(
+  takeovers: ReadonlyArray<TakeoverConfirmation>,
+  mode: ConfirmMode,
+): Promise<void> {
+  if (takeovers.length === 0) return;
+
+  const describe = (takeover: WorkspaceTakeover) =>
+    `    • ${styles.bold(takeover.resourceLabel)} ${styles.info(`"${takeover.resourceName}"`)}${
+      takeover.currentOwner ? styles.dim(` (application "${takeover.currentOwner}")`) : ""
+    }`;
+  const updates = takeovers.filter((takeover) => takeover.action === "update");
+  const deletes = takeovers.filter((takeover) => takeover.action === "delete");
+
+  logger.warn("Resources deployed by an application config were found:");
+  if (updates.length > 0) {
+    logger.log(`  ${styles.info("Taken over by this workspace config")}:`);
+    for (const takeover of updates) logger.log(describe(takeover));
+  }
+  if (deletes.length > 0) {
+    logger.log(`  ${styles.error("Deleted, since this workspace config does not have them")}:`);
+    for (const takeover of deletes) {
+      logger.log(describe(takeover));
+      for (const nested of takeover.nestedDeletions ?? []) {
+        logger.log(
+          `        - ${styles.bold(nested.resourceLabel)} ${styles.error(`"${nested.resourceName}"`)}`,
+        );
+      }
+    }
+  }
+  if (deletes.some((takeover) => takeover.losesData || takeover.nestedDeletions?.length)) {
+    logger.newline();
+    logger.log(styles.warning(DATA_LOSS_WARNING));
+  }
+
+  if (mode === "dry-run") return;
+  if (mode === "yes") {
+    logger.success(
+      deletes.length > 0
+        ? "Taking over these resources and deleting the ones listed as deleted (--yes flag specified)..."
+        : "Moving these resources under this workspace config (--yes flag specified)...",
+      { mode: "plain" },
+    );
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message:
+      deletes.length > 0
+        ? "Take over these resources and delete the ones listed as deleted?"
+        : "Move these resources under this workspace config's management?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw CLIError({
+      code: "DEPLOY_CANCELLED",
+      message: "Apply cancelled: the workspace config did not take over these resources.",
+      suggestion: "Run the deploy again and confirm, or pass --yes.",
+    });
+  }
+}
+
 /**
  * Confirm allowing tailor to manage previously unmanaged resources.
  * @param resources - Unmanaged resources
- * @param appName - Target application name
+ * @param appName - Target application name, or undefined for a workspace config
  * @param mode - Whether to prompt, auto-confirm, or only report
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmUnmanagedResources(
   resources: UnmanagedResource[],
-  appName: string,
+  appName: string | undefined,
   mode: ConfirmMode,
 ): Promise<void> {
   if (resources.length === 0) return;
 
-  logger.warn("Existing resources not tracked by tailor were found:");
-
-  logger.log(`  ${styles.info("Resources")}:`);
-  for (const r of resources) {
-    logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.info(`"${r.resourceName}"`)}`);
+  const listResources = (listed: readonly UnmanagedResource[]) => {
+    logger.log(`  ${styles.info("Resources")}:`);
+    for (const r of listed) {
+      logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.info(`"${r.resourceName}"`)}`);
+    }
+    logger.newline();
+  };
+  const workspaceManaged = resources.filter((r) => r.managedBy === "workspace");
+  const untracked = resources.filter((r) => r.managedBy !== "workspace");
+  if (workspaceManaged.length > 0) {
+    logger.warn("Resources managed by a workspace config were found:");
+    listResources(workspaceManaged);
+    logger.log(
+      `  Continuing moves them to ${managerOf(appName)}, and the workspace config's next deploy asks to take them back.`,
+    );
+    logger.log("  To stop moving them back and forth, deploy them from one config only.");
   }
-  logger.newline();
-  logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
-  logger.log("  To continue, confirm that tailor should manage them.");
-  logger.log(
-    "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
-  );
+  if (untracked.length > 0) {
+    logger.warn("Existing resources not tracked by tailor were found:");
+    listResources(untracked);
+    logger.log("  These resources may have been created by older SDK versions, Terraform, or CUE.");
+    logger.log("  To continue, confirm that tailor should manage them.");
+    logger.log(
+      "  If they are managed by another tool (e.g., Terraform), cancel and manage them there instead.",
+    );
+  }
 
   if (mode === "dry-run") return;
   if (mode === "yes") {
-    logger.success(`Adding to "${appName}" (--yes flag specified)...`, {
+    logger.success(`Adding to ${managerOf(appName)} (--yes flag specified)...`, {
       mode: "plain",
     });
     return;
   }
 
   const confirmed = await prompt.confirm({
-    message: `Allow tailor to manage these resources for "${appName}"?`,
+    message: `Allow tailor to manage these resources for ${managerOf(appName)}?`,
     default: false,
   });
   if (!confirmed) {
     throw CLIError({
       code: "DEPLOY_CANCELLED",
       message: ml`
-      Apply cancelled. Resources remain unmanaged.
+      Apply cancelled. Resources were left as they are.
       To override, run again and confirm, or use --yes flag.
     `,
     });
   }
 }
 
+function managerOf(appName: string | undefined): string {
+  return appName === undefined ? "this workspace config" : `"${appName}"`;
+}
+
 export interface ImportantResourceDeletion {
+  resourceType: ManagedResourceType;
   resourceLabel: string;
   resourceName: string;
+  /** The service namespace the resource is in, when it is in one. */
+  parent?: { resourceType: ManagedResourceType; resourceName: string };
 }
+
+const DATA_LOSS_WARNING = "  Deleting these resources will permanently remove all associated data.";
 
 /**
  * Confirm deletion of important resources.
@@ -282,9 +393,7 @@ export async function confirmImportantResourceDeletion(
     logger.log(`    • ${styles.bold(r.resourceLabel)} ${styles.error(`"${r.resourceName}"`)}`);
   }
   logger.newline();
-  logger.log(
-    styles.warning("  Deleting these resources will permanently remove all associated data."),
-  );
+  logger.log(styles.warning(DATA_LOSS_WARNING));
 
   if (mode === "dry-run") return;
   if (mode === "yes") {

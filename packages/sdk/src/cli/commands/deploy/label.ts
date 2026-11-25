@@ -2,9 +2,11 @@ import { ViolationsSchema } from "@bufbuild/protovalidate/gen/buf/validate/valid
 import { Code, ConnectError } from "@connectrpc/connect";
 import { getOrNull } from "#/cli/shared/client";
 import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { CLIError, isCLIError, toError } from "#/cli/shared/errors";
+import { CLIError, internalError, isCLIError, toError } from "#/cli/shared/errors";
 import { plainRedacted } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
+import { assertDefined } from "#/utils/assert";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   BulkSetMetadataRequestSchema,
@@ -103,6 +105,17 @@ export function resolverTrn(workspaceId: string, namespace: string, resolverName
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
+export const sdkManagedLabelKey = "sdk-managed";
+export const sdkManagedLabelValue = "workspace";
+const onAppLabelPrefix = "sdk-on-app-";
+
+/**
+ * Who a deploy manages resources for: one application of a `defineConfig()` config, identified by
+ * its name and id, or the whole workspace of a `defineWorkspace()` or `defineApp()` config.
+ */
+export type DeployOwner =
+  | { kind: "application"; name: string; id: string | undefined }
+  | { kind: "workspace" };
 
 // The metadata label value regex requires a leading lowercase letter, while
 // the auto-generated app id is a plain UUID (which may start with a digit).
@@ -112,6 +125,15 @@ const appIdLabelPrefix = "app-";
 
 export function sdkAppIdLabelValue(appId: string): string {
   return `${appIdLabelPrefix}${appId}`;
+}
+
+/**
+ * Application id an `sdk-app-id` label value records.
+ * @param value - Label value written by {@link sdkAppIdLabelValue}
+ * @returns The id without the label prefix
+ */
+export function appIdOfLabelValue(value: string): string {
+  return value.startsWith(appIdLabelPrefix) ? value.slice(appIdLabelPrefix.length) : value;
 }
 
 /**
@@ -125,6 +147,102 @@ export function hasMatchingSdkVersion(
   desiredLabels: Record<string, string> | undefined,
 ): boolean {
   return existingLabels?.[sdkVersionLabelKey] === desiredLabels?.[sdkVersionLabelKey];
+}
+
+/**
+ * Marks an unchanged resource whose SDK labels differ from the ones deploy writes. The
+ * application, IdP service, and workflow applies write every unchanged item's labels anyway, so
+ * for them it is only counted.
+ */
+export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
+
+/**
+ * Plan a label refresh for an unchanged resource whose labels differ from the ones a write sets
+ * and removes. Dependency records are left out: they are reconciled against the labels read at
+ * write time.
+ * @param existingLabels - Labels currently stored on the remote resource
+ * @param write - Labels the current apply run would set and remove
+ * @returns The write as `labelRefresh` when it would change a label, otherwise no annotation
+ */
+export function labelRefreshOf(
+  existingLabels: Record<string, string> | undefined,
+  write: MetadataLabelWrite,
+): UnchangedAnnotation {
+  const { dependencies: _dependencies, ...compared } = write;
+  const current = existingLabels ?? {};
+  return areSameLabels(current, applyMetadataLabelWrite(current, compared))
+    ? {}
+    : { labelRefresh: write };
+}
+
+/**
+ * Describe a `defineConfig()` application as the owner of the resources it deploys.
+ * @param application - Application name and id
+ * @param application.name - Application name
+ * @param application.id - Stable application id, when the config resolves one
+ * @returns The application owner
+ */
+export function applicationOwner(application: {
+  name: string;
+  id: string | undefined;
+}): DeployOwner {
+  return { kind: "application", name: application.name, id: application.id };
+}
+
+/**
+ * Get the stable id of an application config's owner.
+ * @param owner - Owner of the resources a deploy manages
+ * @returns The application id, or undefined for a workspace config or a config with no id
+ */
+export function applicationIdOf(owner: DeployOwner): string | undefined {
+  return owner.kind === "application" ? owner.id : undefined;
+}
+
+/**
+ * Determine whether a remote resource is managed by the deploy's owner.
+ * @param labels - Labels currently stored on the remote resource
+ * @param owner - Owner of the resources the deploy manages
+ * @returns True when the resource belongs to the owner
+ */
+export function isOwnedBy(labels: Record<string, string> | undefined, owner: DeployOwner): boolean {
+  if (owner.kind === "workspace") {
+    return isWorkspaceManaged(labels);
+  }
+  return isOwnedByApp(labels, owner.name, owner.id);
+}
+
+/**
+ * Determine whether the deploy manages a resource, or, for the workspace, takes it over from the
+ * application config that deployed it.
+ * @param labels - Labels currently stored on the remote resource
+ * @param owner - Owner of the resources the deploy manages
+ * @returns True when the deploy plans the resource's contents
+ */
+export function ownsOrTakesOver(
+  labels: Record<string, string> | undefined,
+  owner: DeployOwner,
+): boolean {
+  return isOwnedBy(labels, owner) || (owner.kind === "workspace" && deployedByApplication(labels));
+}
+
+/**
+ * Determine whether an application config deployed a resource the workspace does not manage yet.
+ * @param labels - Labels currently stored on the remote resource
+ * @returns True when the resource carries an application's labels and no workspace mark
+ */
+export function deployedByApplication(labels: Record<string, string> | undefined): boolean {
+  return Boolean(
+    labels && !isWorkspaceManaged(labels) && (labels[sdkNameLabelKey] || labels[sdkAppIdLabelKey]),
+  );
+}
+
+/**
+ * Determine whether a resource carries the mark of a workspace config.
+ * @param labels - Labels currently stored on the remote resource
+ * @returns True when a workspace config manages the resource
+ */
+export function isWorkspaceManaged(labels: Record<string, string> | undefined): boolean {
+  return labels?.[sdkManagedLabelKey] === sdkManagedLabelValue;
 }
 
 /**
@@ -324,15 +442,17 @@ export function dependencyLabelWrite(
 
 export interface BuildMetaRequestParams {
   trn: string;
-  appName: string;
-  appId?: string;
+  owner: DeployOwner;
+  /** For a workspace owner, the applications that list the resource, each labelled `sdk-on-app-<name>`. */
+  onApps?: readonly string[];
 }
 
 /**
  * Build metadata request with SDK labels.
  *
  * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
- * from the labels it reads at write time.
+ * from the labels it reads at write time. Each owner removes the other
+ * owner's labels, so the deploy leaves only its own owner's mark.
  *
  * Without an app id the id label is removed rather than merely left unset,
  * because {@link isOwnedByApp} decides ownership by that label alone: one left
@@ -340,28 +460,42 @@ export interface BuildMetaRequestParams {
  * later deploy would ask to re-tag the same resources again.
  * @param params - Parameters for building the metadata request
  * @param params.trn - Target TRN
- * @param params.appName - Application name label
- * @param params.appId - Stable application id label (when managed by SDK)
+ * @param params.owner - Owner of the resources the deploy manages
+ * @param params.onApps - For a workspace owner, the applications that list the resource
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
-  const { trn, appName, appId } = params;
+  const { trn, owner, onApps = [] } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
     ? `v${packageJson.version.replace(/\./g, "-")}`
     : "unknown";
 
+  if (owner.kind === "workspace") {
+    return {
+      trn,
+      labels: {
+        [sdkManagedLabelKey]: sdkManagedLabelValue,
+        [sdkVersionLabelKey]: sdkVersion,
+        ...Object.fromEntries(onApps.map((app) => [`${onAppLabelPrefix}${app}`, ""])),
+      },
+      remove: [sdkNameLabelKey, sdkAppIdLabelKey],
+      removePrefixes: [dependedByAppLabelPrefix, jobDependedByAppLabelPrefix, onAppLabelPrefix],
+    };
+  }
+  const { name, id } = owner;
   return {
     trn,
     labels: {
-      [sdkNameLabelKey]: appName,
+      [sdkNameLabelKey]: name,
       [sdkVersionLabelKey]: sdkVersion,
-      ...(appId ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(appId) } : {}),
+      ...(id ? { [sdkAppIdLabelKey]: sdkAppIdLabelValue(id) } : {}),
     },
-    remove: appId ? undefined : [sdkAppIdLabelKey],
+    remove: id ? [sdkManagedLabelKey] : [sdkAppIdLabelKey, sdkManagedLabelKey],
+    removePrefixes: [onAppLabelPrefix],
   };
 }
 
@@ -385,15 +519,114 @@ export function withExtraLabels(
  * @returns The violation message, or undefined for any other error
  */
 export function labelCountViolation(error: unknown): string | undefined {
-  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return undefined;
+  return labelCountViolations(error)[0]?.message;
+}
+
+function labelCountViolations(error: unknown) {
+  if (!(error instanceof ConnectError) || error.code !== Code.InvalidArgument) return [];
   return error
     .findDetails(ViolationsSchema)
     .flatMap(({ violations }) => violations)
-    .find(({ ruleId }) => ruleId === "map.max_pairs")?.message;
+    .filter(({ ruleId }) => ruleId === "map.max_pairs");
+}
+
+function labelCountViolationIndices(error: unknown): number[] | undefined {
+  const indices = labelCountViolations(error)
+    .map(({ field }) => field?.elements[0]?.subscript)
+    .map((subscript) => (subscript?.case === "index" ? Number(subscript.value) : undefined));
+  if (indices.length === 0 || indices.some((index) => index === undefined)) return undefined;
+  return [...new Set(indices as number[])];
+}
+
+/** `sdk-on-app-*` labels a resource could not hold because the Platform allows no more labels on it. */
+export interface DroppedOnAppLabels {
+  trn: string;
+  /** Applications whose `sdk-on-app-<name>` label was left off. */
+  applications: string[];
+}
+
+/** Receives the `sdk-on-app-*` labels a write left off. */
+export type DroppedOnAppLabelsSink = (dropped: DroppedOnAppLabels) => void;
+
+const onAppLabelledResourceTypes = {
+  tailordb: "tailordb.service",
+  pipeline: "pipeline.service",
+  auth: "auth.service",
+  idp: "idp.service",
+  function_registry: "function_registry",
+} as const satisfies Partial<Record<ResourceKind, ManagedResourceType>>;
+
+/**
+ * The resource of a TRN that `sdk-on-app-*` labels go on.
+ * @param trn - TRN of a namespace, resolver function, or application
+ * @returns Its resource type and name
+ */
+export function onAppLabelledResourceOf(trn: string): {
+  resourceType: ManagedResourceType;
+  name: string;
+} {
+  const [, , , , kind, name, ...nested] = trn.split(":");
+  const resourceType =
+    kind !== undefined && Object.hasOwn(onAppLabelledResourceTypes, kind)
+      ? onAppLabelledResourceTypes[kind as keyof typeof onAppLabelledResourceTypes]
+      : undefined;
+  if (resourceType === undefined || name === undefined || nested.length > 0) {
+    throw internalError(`${trn} carries no sdk-on-app labels`);
+  }
+  return { resourceType, name };
+}
+
+/**
+ * Write a resource's labels after the Platform rejected them for their count: every label but the
+ * `sdk-on-app-*` ones, and as many of those as the Platform accepts, in name order.
+ * @param client - Operator client instance
+ * @param trn - Target TRN
+ * @param labels - Labels the Platform rejected
+ * @returns Applications whose `sdk-on-app-*` label was left off
+ */
+async function setLabelsDroppingOnAppLabels(
+  client: MetadataLabelClient,
+  trn: string,
+  labels: Readonly<Record<string, string>>,
+): Promise<string[]> {
+  const onAppEntries = Object.entries(labels)
+    .filter(([key]) => key.startsWith(onAppLabelPrefix))
+    .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const onAppKeys = onAppEntries.map(([key]) => key);
+  const others = Object.fromEntries(
+    Object.entries(labels).filter(([key]) => !key.startsWith(onAppLabelPrefix)),
+  );
+  let fitting = -1;
+  let low = 0;
+  let high = onAppEntries.length - 1;
+  while (low <= high) {
+    const count = Math.ceil((low + high) / 2);
+    const kept = Object.fromEntries(onAppEntries.slice(0, count));
+    try {
+      await client.setMetadata({ trn, labels: { ...others, ...kept } });
+      fitting = count;
+      low = count + 1;
+    } catch (error) {
+      if (labelCountViolation(error) === undefined) throw error;
+      high = count - 1;
+    }
+  }
+  if (fitting < 0) {
+    const { resourceType, name } = onAppLabelledResourceOf(trn);
+    throw CLIError({
+      code: "METADATA_LABEL_LIMIT_EXCEEDED",
+      message: `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" holds more labels than the Platform allows, even without the labels that name the applications listing it.`,
+      suggestion: "Remove labels that tailor does not set from the resource, then deploy again.",
+      context: { resourceType, name, trn },
+    });
+  }
+  return onAppKeys.slice(fitting).map((key) => key.slice(onAppLabelPrefix.length));
 }
 
 /** What a planner knows about the resource it is recording dependencies for. */
 export type ResourceDependencyParams = {
+  /** Owner of the resources the deploy manages. */
+  owner: DeployOwner;
   /** Key identifying the resource, e.g. `workflow:nightly`. */
   key: string;
   /** Dependents the run resolved, keyed by resource. */
@@ -412,6 +645,7 @@ export type ResourceDependencyParams = {
  * The reconciliation is attached rather than computed, so it runs against the
  * labels read at write time. Whatever {@link buildMetaRequest} asked for —
  * dropping a stale `sdk-app-id`, for instance — still happens alongside it.
+ * A workspace config is the only config of its workspace, so it records none.
  * @param write - The resource's planned metadata write, mutated in place
  * @param params - The resource's key and the run's inputs
  * @returns The same write, for use as an expression
@@ -420,7 +654,8 @@ export function addDependencyRecords(
   write: MetadataLabelWrite,
   params: ResourceDependencyParams,
 ): MetadataLabelWrite {
-  const { key, dependentApps, runAppIds, pinned, scope } = params;
+  const { owner, key, dependentApps, runAppIds, pinned, scope } = params;
+  if (owner.kind === "workspace") return write;
   write.dependencies = [
     ...(write.dependencies ?? []),
     { dependentApps: dependentApps?.get(key), runAppIds, pinned, scope },
@@ -449,6 +684,8 @@ export interface MetadataLabelWrite {
   labels?: Record<string, string>;
   /** Label keys to delete. Absent keys are ignored. */
   remove?: ReadonlyArray<string>;
+  /** Prefixes of label keys to delete, except keys this same write sets. */
+  removePrefixes?: ReadonlyArray<string>;
   /**
    * Dependency records to reconcile against the labels found at write time.
    *
@@ -470,25 +707,38 @@ interface MetadataWriteBatchClient extends MetadataLabelClient {
   [metadataWriteBatch]?: MetadataWriteBatch;
 }
 
+type LabelRequest = { trn: string; labels: Record<string, string> };
+
 class MetadataWriteBatch {
   readonly #client: MetadataLabelBulkClient;
+  readonly #onDropped: DroppedOnAppLabelsSink | undefined;
   readonly #writesByTrn = new Map<string, MetadataLabelWrite[]>();
   #flushPromise: Promise<void> | undefined;
 
-  constructor(client: MetadataLabelBulkClient) {
+  constructor(client: MetadataLabelBulkClient, onDropped?: DroppedOnAppLabelsSink) {
     this.#client = client;
+    this.#onDropped = onDropped;
   }
 
   async enqueue(write: MetadataLabelWrite): Promise<void> {
     if (this.#flushPromise) {
       // The wrapper reports a flush failure; a late apply sibling must still attempt its write.
       await this.#flushPromise.catch(() => undefined);
-      await writeMetadataLabelsDirect(this.#client, write);
+      await writeMetadataLabelsDroppingOnAppLabels(this.#client, write, this.#onDropped);
       return;
     }
     const writes = this.#writesByTrn.get(write.trn) ?? [];
     writes.push(write);
     this.#writesByTrn.set(write.trn, writes);
+  }
+
+  /**
+   * Queue a write that runs before the writes already queued for its resource, so they win.
+   * @param write - Write to run first; ignored once the flush has started
+   */
+  enqueueFirst(write: MetadataLabelWrite): void {
+    if (this.#flushPromise) return;
+    this.#writesByTrn.set(write.trn, [write, ...(this.#writesByTrn.get(write.trn) ?? [])]);
   }
 
   flush(): Promise<void> {
@@ -508,8 +758,7 @@ class MetadataWriteBatch {
     let cursor = 0;
 
     while (cursor < queued.length || candidates.length > 0) {
-      let freshRequests: MessageInitShape<typeof SetMetadataRequestSchema>[] | undefined =
-        candidates.length === 0 ? [] : undefined;
+      let freshRequests: LabelRequest[] | undefined = candidates.length === 0 ? [] : undefined;
       while (cursor < queued.length && candidates.length < metadataWriteBatchSize) {
         // Fixed-width waves keep a nearly full batch from serializing a long no-op tail.
         if (candidates.length > 0) freshRequests = undefined;
@@ -536,7 +785,24 @@ class MetadataWriteBatch {
           (request) => request !== undefined,
         );
       if (latestRequests.length > 0) {
-        await this.#client.bulkSetMetadata({ requests: latestRequests });
+        await this.#bulkSet(latestRequests);
+      }
+    }
+  }
+
+  async #bulkSet(requests: LabelRequest[]): Promise<void> {
+    try {
+      await this.#client.bulkSetMetadata({ requests });
+      return;
+    } catch (error) {
+      const rejected = labelCountViolationIndices(error);
+      if (!rejected?.every((index) => hasOnAppLabels(requests[index]?.labels ?? {}))) throw error;
+      const rest = requests.filter((_, index) => !rejected.includes(index));
+      if (rest.length > 0) await this.#client.bulkSetMetadata({ requests: rest });
+      for (const index of rejected) {
+        const { trn, labels } = assertDefined(requests[index], "Rejected request missing");
+        const applications = await setLabelsDroppingOnAppLabels(this.#client, trn, labels);
+        this.#onDropped?.({ trn, applications });
       }
     }
   }
@@ -544,7 +810,10 @@ class MetadataWriteBatch {
 
 function hasMetadataLabelChange(write: MetadataLabelWrite): boolean {
   return Boolean(
-    Object.keys(write.labels ?? {}).length || write.remove?.length || write.dependencies?.length,
+    Object.keys(write.labels ?? {}).length ||
+    write.remove?.length ||
+    write.removePrefixes?.length ||
+    write.dependencies?.length,
   );
 }
 
@@ -552,15 +821,20 @@ function applyMetadataLabelWrite(
   currentLabels: Record<string, string>,
   write: MetadataLabelWrite,
 ): Record<string, string> {
-  const { labels, remove, dependencies } = write;
+  const { labels, remove, removePrefixes, dependencies } = write;
   const resolved = (dependencies ?? []).map((pending) =>
     dependencyLabelWrite({ ...pending, existingLabels: currentLabels }),
   );
-  const merged: Record<string, string> = {
-    ...currentLabels,
+  const set: Record<string, string> = {
     ...labels,
     ...Object.assign({}, ...resolved.map((records) => records.labels)),
   };
+  const merged: Record<string, string> = { ...currentLabels, ...set };
+  for (const key of Object.keys(merged)) {
+    if (!(key in set) && removePrefixes?.some((prefix) => key.startsWith(prefix))) {
+      delete merged[key];
+    }
+  }
   for (const key of [...(remove ?? []), ...resolved.flatMap((records) => records.remove)]) {
     delete merged[key];
   }
@@ -590,13 +864,15 @@ function metadataRecoveryError(applyError: unknown, flushError: unknown): Aggreg
  * @template TClient, T
  * @param client - Operator client instance
  * @param apply - Resource apply callback using the batch-aware client
+ * @param onDropped - Receives the `sdk-on-app-*` labels a resource could not hold
  * @returns The apply callback result
  */
 export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkClient, T>(
   client: TClient,
   apply: (client: TClient) => Promise<T>,
+  onDropped?: DroppedOnAppLabelsSink,
 ): Promise<T> {
-  const batch = new MetadataWriteBatch(client);
+  const batch = new MetadataWriteBatch(client, onDropped);
   const batchClient = new Proxy(client, {
     get(target, property, receiver) {
       return property === metadataWriteBatch ? batch : Reflect.get(target, property, receiver);
@@ -651,6 +927,21 @@ export async function writeMetadataLabels(
 }
 
 /**
+ * Rewrite the labels of the unchanged resources whose SDK labels differ.
+ * @param client - Operator client instance
+ * @param unchanged - Unchanged items of a change set
+ * @returns One pending write per item with a label refresh
+ */
+export function writeLabelRefreshes(
+  client: MetadataLabelClient,
+  unchanged: ReadonlyArray<UnchangedAnnotation>,
+): Promise<void>[] {
+  return unchanged.flatMap(({ labelRefresh }) =>
+    labelRefresh ? [writeMetadataLabels(client, labelRefresh)] : [],
+  );
+}
+
+/**
  * Write one metadata change immediately, bypassing deploy resource batching.
  * This is reserved for callers that continue only after the label is durable,
  * such as migration checkpoints, or that handle the write's own rejection,
@@ -659,9 +950,48 @@ export async function writeMetadataLabels(
  * @param write - TRN, labels to set, and label keys to delete
  * @returns Whether the labels changed
  */
-export async function writeMetadataLabelsDirect(
+export function writeMetadataLabelsDirect(
   client: MetadataLabelClient,
   write: MetadataLabelWrite,
+): Promise<boolean> {
+  return writeMergedLabels(client, write);
+}
+
+/**
+ * Write one metadata change immediately like {@link writeMetadataLabelsDirect}, except that when
+ * the Platform rejects the labels for their count and they include `sdk-on-app-*` labels, it
+ * writes every other label and as many of those as fit. Under a deploy's write batch, the ones
+ * left off are queued to be put back when the batch flushes, which reports those that still do
+ * not fit; otherwise `onDropped` receives them.
+ * @param client - Operator client instance
+ * @param write - TRN, labels to set, and label keys to delete
+ * @param onDropped - Receives the `sdk-on-app-*` labels the resource could not hold, outside a batch
+ * @returns Whether the labels changed
+ */
+export function writeMetadataLabelsDroppingOnAppLabels(
+  client: MetadataLabelClient,
+  write: MetadataLabelWrite,
+  onDropped?: DroppedOnAppLabelsSink,
+): Promise<boolean> {
+  return writeMergedLabels(client, write, async (trn, labels) => {
+    const applications = await setLabelsDroppingOnAppLabels(client, trn, labels);
+    const batch = (client as MetadataWriteBatchClient)[metadataWriteBatch];
+    if (batch) {
+      // Queued first, so the deploy's own write for the resource still drops a stale one.
+      batch.enqueueFirst({
+        trn,
+        labels: Object.fromEntries(applications.map((app) => [`${onAppLabelPrefix}${app}`, ""])),
+      });
+    } else {
+      onDropped?.({ trn, applications });
+    }
+  });
+}
+
+async function writeMergedLabels(
+  client: MetadataLabelClient,
+  write: MetadataLabelWrite,
+  onLabelCountViolation?: (trn: string, labels: Record<string, string>) => Promise<void>,
 ): Promise<boolean> {
   if (!hasMetadataLabelChange(write)) return false;
   const { trn } = write;
@@ -669,8 +999,23 @@ export async function writeMetadataLabelsDirect(
   const currentLabels = current?.metadata?.labels ?? {};
   const merged = applyMetadataLabelWrite(currentLabels, write);
   if (areSameLabels(currentLabels, merged)) return false;
-  await client.setMetadata({ trn, labels: merged });
+  try {
+    await client.setMetadata({ trn, labels: merged });
+  } catch (error) {
+    if (
+      !onLabelCountViolation ||
+      labelCountViolation(error) === undefined ||
+      !hasOnAppLabels(merged)
+    ) {
+      throw error;
+    }
+    await onLabelCountViolation(trn, merged);
+  }
   return true;
+}
+
+function hasOnAppLabels(labels: Readonly<Record<string, string>>): boolean {
+  return Object.keys(labels).some((key) => key.startsWith(onAppLabelPrefix));
 }
 
 function areSameLabels(a: Record<string, string>, b: Record<string, string>): boolean {

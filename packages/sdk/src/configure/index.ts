@@ -23,7 +23,12 @@ export {
   type AttributeList,
   type Env,
 } from "#/runtime/types";
-export { type MachineUserNameRegistry, type MachineUserName } from "#/configure/types/machine-user";
+export {
+  type AuthMachineUser,
+  type MachineUserInvoker,
+  type MachineUserNameRegistry,
+  type MachineUserName,
+} from "#/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "#/configure/types/idp-name";
 export {
   type ConnectionNameRegistry,

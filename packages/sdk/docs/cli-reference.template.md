@@ -162,11 +162,11 @@ read them:
   `steps` are not valid.
 - `MIGRATION_SCRIPT_BUNDLE_FAILED`: a pending migration's `migrate.ts` could not be bundled.
 - `AUTH_CONFIG_REQUIRED`: a pending migration has a `migrate.ts`, but the config defines no auth to
-  run it.
+  run it. `error.context.file` names the config.
 - `MACHINE_USER_REQUIRED`: a pending migration has a `migrate.ts`, but no machine user is selected
-  to run the scripts of its namespace.
+  to run the scripts of its namespace. `error.context.file` names the config.
 - `MACHINE_USER_NOT_FOUND`: the machine user selected to run a pending migration's `migrate.ts` is
-  not defined in auth.
+  not defined in auth. `error.context.file` names the config.
 - `MIGRATION_OUTCOME_UNSETTLED`: an earlier deploy could not confirm whether a migration's script
   ran, and the migration has not been settled since.
 - `MIGRATION_IN_PROGRESS_INVALID`: the migration recorded as in progress cannot be read, is not the
@@ -233,8 +233,23 @@ read them:
 - `MIGRATION_SYNC_HISTORY_MISMATCH`: the namespace records a different migration history ID, or one
   that cannot be read, and `sync` was run without `--force`.
 - `MIGRATION_SYNC_CANCELLED`: the `sync` confirmation was declined.
-- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was given neither or both of `--rollback` and
-  `--complete`.
+- `MIGRATION_RESOLVE_DIRECTION_REQUIRED`: `resolve` was not given exactly one of `--rollback`,
+  `--complete`, and `--maintenance`.
+- `MIGRATION_MAINTENANCE_MODE_RECORDED`: `rebaseline` found a record of tables a deploy left in
+  maintenance mode; remove it with `resolve --maintenance` first, or with `deploy` (or `sync` when
+  the deploy stops on `MIGRATION_REMOTE_DRIFT`) when it names a checkpoint other than the current one.
+- `MIGRATION_RESOLVE_NO_MAINTENANCE_RECORD`: `resolve --maintenance` found no record of tables left
+  in maintenance mode at the namespace's current checkpoint.
+- `MIGRATION_RESOLVE_MAINTENANCE_IN_PROGRESS`: `resolve --maintenance` found a migration in
+  progress; settle it with `--rollback` or `--complete`.
+- `MIGRATION_RESOLVE_MAINTENANCE_DRIFT`: with `--maintenance`, a table differs from the checkpoint
+  in more than maintenance mode; the command prints the difference.
+- `MIGRATION_RESOLVE_MAINTENANCE_CLEANUP_PENDING`: with `--maintenance`, a table that the committed
+  migration removes is not deleted yet; a deploy deletes it.
+- `MIGRATION_RESOLVE_MAINTENANCE_INTERRUPTED`: with `--maintenance`, a deploy was interrupted before
+  it recorded the next migration; settle it with `--rollback`.
+- `MIGRATION_RESOLVE_MAINTENANCE_UNVERIFIED`: with `--maintenance`, the tables could not be compared
+  with the checkpoint, for example because the local migration files do not reach it.
 - `MIGRATION_RESOLVE_NO_IN_PROGRESS`: `resolve` found nothing to settle: no migration is in
   progress in the namespace, and with `--rollback`, no interrupted deploy left the pre-migration
   schema of a migration either.
@@ -342,7 +357,10 @@ offending JSONL file and line, including a line that is not valid JSON. `seed ap
 seed row that is not valid JSON or not a JSON object. `seed apply` and `seed validate --upsert` do
 the same for a row that lacks `id` or a required field with `--upsert`, and for a row defined in
 more than one of the data directories applied together. A rejected config or a TailorDB type,
-resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. A `.ts` or
+resolver, executor, workflow, or HTTP adapter file that fails to load reports its file. `deploy`
+and `tailordb migration test` report the config, or the resolver or executor file, whichever
+holds what to change when an Auth service, IdP, invoker, machine user, or trigger target cannot
+be resolved. A `.ts` or
 `.mts` file that cannot be parsed — one of those files, the file passed to `function run`, or a
 file one of them imports — reports that file and the line it failed on.
 Locations are written relative to `GITHUB_WORKSPACE`; a file outside it is annotated without a

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { getApplicationAuthNamespace, requireApplicationAuthNamespace } from "./auth-namespace";
+import { getApplicationAuthNamespace } from "./auth-namespace";
 
 describe("getApplicationAuthNamespace", () => {
   test("uses the local auth service name first", () => {
     expect(
       getApplicationAuthNamespace({
-        authService: { config: { name: "local-auth" } },
+        authServices: [{ config: { name: "local-auth" } }],
         config: { auth: { name: "external-auth", external: true } },
       }),
     ).toBe("local-auth");
@@ -14,28 +14,21 @@ describe("getApplicationAuthNamespace", () => {
   test("uses external auth config name when no local auth service exists", () => {
     expect(
       getApplicationAuthNamespace({
+        authServices: [],
         config: { auth: { name: "external-auth", external: true } },
       }),
     ).toBe("external-auth");
   });
 
   test("returns undefined when no auth is configured", () => {
-    expect(getApplicationAuthNamespace({ config: {} })).toBeUndefined();
+    expect(getApplicationAuthNamespace({ authServices: [], config: {} })).toBeUndefined();
   });
-});
 
-describe("requireApplicationAuthNamespace", () => {
-  test("rejects an application without auth as AUTH_CONFIG_REQUIRED", () => {
-    let error: unknown;
-    try {
-      requireApplicationAuthNamespace({ config: {} });
-    } catch (thrown) {
-      error = thrown;
-    }
-    expect(error).toMatchObject({
-      code: "AUTH_CONFIG_REQUIRED",
-      message: "No Auth service configured",
-      suggestion: "Ensure tailor.config.ts has an auth config.",
-    });
+  test("refuses to pick one of several Auth services", () => {
+    expect(() =>
+      getApplicationAuthNamespace({
+        authServices: [{ config: { name: "corp-auth" } }, { config: { name: "partner-auth" } }],
+      }),
+    ).toThrow("An application has one Auth service at most, but 2 were defined");
   });
 });

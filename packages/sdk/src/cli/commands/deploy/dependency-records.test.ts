@@ -1,8 +1,7 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { fetchMissingDependentApps } from "./dependency-records";
 import type { Application } from "#/cli/services/application";
-import type { OperatorClient } from "#/cli/shared/client";
 
 const workspaceId = "ws";
 const buyer = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
@@ -64,19 +63,13 @@ function application(spec: AppSpec): Readonly<Application> {
  * @param scope - Which namespace the record sits in
  * @returns Operator client stub exposing its getMetadata mock
  */
-function clientRecording(
-  trns: string[],
-  scope: "resource" | "jobs" = "resource",
-): OperatorClient & { getMetadata: ReturnType<typeof vi.fn> } {
+function clientRecording(trns: string[], scope: "resource" | "jobs" = "resource") {
   const set = new Set(trns);
   const key = scope === "jobs" ? `sdk-job-depended-by-app-${buyer}` : buyerKey;
-  return {
-    getMetadata: vi
-      .fn()
-      .mockImplementation(({ trn }: { trn: string }) =>
-        set.has(trn) ? { metadata: { labels: { [key]: "publish-events" } } } : {},
-      ),
-  } as unknown as OperatorClient & { getMetadata: ReturnType<typeof vi.fn> };
+  return mockOperatorClient({
+    getMetadata: (request) =>
+      set.has(request.trn ?? "") ? { metadata: { labels: { [key]: "publish-events" } } } : {},
+  });
 }
 
 describe("fetchMissingDependentApps", () => {

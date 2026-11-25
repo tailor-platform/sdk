@@ -319,7 +319,28 @@ export default createResolver({
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
-`tailor deploy` checks the string `invoker` of every resolver and executor against the machine users of the Auth service it resolves to, and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the name does not exist. The `invoker` passed to `workflow.start()` is not checked at deploy time. When a config deployed in the same run defines the Auth service, the machine users it lists are the ones checked, because deploy removes the machine users it no longer lists. When the Auth service is only referenced as external, the machine users that exist in the workspace are checked. `deploy` also stops with `AUTH_MACHINE_USER_NOT_FOUND` when `scim.machineUserName` or `hooks.beforeLogin.invoker` names a machine user that the same `defineAuth` does not list in `machineUsers`. `deploy` and `remove` also stop with `SERVICE_IN_USE` instead of deleting a machine user that an executor or resolver of another application uses as `invoker`.
+A plain string names a machine user of the config's own Auth service. To name the Auth service too, pass an `AuthMachineUser` object (the option's type is `MachineUserInvoker`, a string or an `AuthMachineUser`):
+
+```typescript
+invoker: { namespace: "my-auth", machineUserName: "admin-machine-user" },
+```
+
+The generated `AuthNamespaceName` and `MachineUserName` types narrow `namespace` and `machineUserName` to the config's Auth service. To name a machine user of another Auth service in the workspace, add that Auth service and machine user to the registries:
+
+```typescript
+declare module "@tailor-platform/sdk" {
+  interface AuthNamespaceNameRegistry {
+    "other-auth": true;
+  }
+  interface MachineUserNameRegistry {
+    "other-admin": true;
+  }
+}
+```
+
+The added names also pass type checking wherever the registries apply, such as a string `invoker` or an AI gateway's `authNamespace`; `tailor deploy` still checks each one.
+
+`tailor deploy` checks the `invoker` of every resolver and executor against the machine users of its Auth service (the config's Auth service for a string, the named one for an object) and stops with `INVOKER_MACHINE_USER_NOT_FOUND` when the machine user does not exist, or with `INVOKER_AUTH_NOT_FOUND` when the Auth service does not exist. In a config with an Auth service, the machine user of the `invoker` passed to `workflow.start()` is not checked at deploy time; for a config without one, see [Starting a Workflow from a Resolver](./workflow.md#starting-a-workflow-from-a-resolver). When a config deployed in the same run defines the Auth service, the machine users it lists are the ones checked, because deploy removes the machine users it no longer lists. Otherwise, the machine users that exist in the workspace are checked. `deploy` also stops with `AUTH_MACHINE_USER_NOT_FOUND` when `scim.machineUserName` or `hooks.beforeLogin.invoker` names a machine user that the same `defineAuth` does not list in `machineUsers`. `deploy` and `remove` also stop with `SERVICE_IN_USE` instead of deleting a machine user that an executor or resolver of another application uses as `invoker`.
 
 When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. For resolvers and executors, the deploy-time check is what catches a misspelled name in that case.
 

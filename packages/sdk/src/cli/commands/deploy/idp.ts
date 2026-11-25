@@ -44,11 +44,13 @@ import {
   emptyMessageAsUnset,
   isRequestUnchanged,
 } from "./compare";
+import { applicationsListing } from "./deploy-application";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
+  type DeployOwner,
   eventSourceKey,
   type MetadataLabelWrite,
   resourceTrn,
@@ -64,6 +66,7 @@ import type {
   StandardIdPPermissionCondition,
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -244,6 +247,7 @@ export async function planIdP(context: PlanContext) {
     client,
     workspaceId,
     application,
+    owner,
     forRemoval,
     forceApplyAll = false,
     idpUserTriggerTargets,
@@ -256,12 +260,13 @@ export async function planIdP(context: PlanContext) {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
   } = await planServices(
     client,
     workspaceId,
-    application.name,
-    application.id,
+    owner,
+    context.applications,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
@@ -283,6 +288,7 @@ export async function planIdP(context: PlanContext) {
     },
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
   };
 }
@@ -356,8 +362,8 @@ const idpServiceComparison = defineRequestComparison({
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
@@ -373,7 +379,7 @@ async function planServices(
     never,
     UnchangedService
   >("IdP services");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const existingServices = await fetchExistingResourcesWithLabels({
     client,
@@ -395,10 +401,11 @@ async function planServices(
     const metaRequest = addDependencyRecords(
       await buildMetaRequest({
         trn: resourceTrn(workspaceId, "idp", namespaceName),
-        appName,
-        appId,
+        owner,
+        onApps: applicationsListing(applications, "idp", namespaceName),
       }),
       {
+        owner,
         key: eventSourceKey.idp(namespaceName),
         dependentApps: records.dependentApps,
         runAppIds: records.runAppIds,
@@ -484,10 +491,7 @@ async function planServices(
     desired,
     existing: Object.entries(existingServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "idp.service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "idp.service"),
     isConfigUnchanged: (service, existing) =>
       isRequestUnchanged(idpServiceComparison, service.comparableRequest, existing.resource),
     create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),

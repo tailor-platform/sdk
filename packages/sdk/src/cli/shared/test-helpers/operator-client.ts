@@ -31,7 +31,8 @@ type MethodMock<K extends OperatorMethod> =
 /** Mocks of the methods `K`, as {@link mockOperatorClient} takes them. */
 export type OperatorClientMocks<K extends OperatorMethod> = { [P in K]: MethodMock<P> };
 
-type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
+/** A client whose methods `K` are `vi.fn` spies, as {@link mockOperatorClient} returns it. */
+export type OperatorClientMock<K extends OperatorMethod> = OperatorClient & {
   [P in K]: Mock<MethodImpl<P>>;
 };
 
@@ -55,4 +56,18 @@ export function mockOperatorClient<K extends OperatorMethod>(
     Object.entries(methods).map(([name, mock]) => [name, vi.fn(implementationOf(mock))]),
   );
   return spies as unknown as OperatorClientMock<K>;
+}
+
+/**
+ * Copy a client with `methods` mocked on top of its methods, keeping the spy types of both, which a
+ * spread loses.
+ * @param client - The client to copy, such as one from {@link mockOperatorClient}
+ * @param methods - The methods to mock or replace, as {@link mockOperatorClient} takes them; none when undefined
+ * @returns A new client, with each method in `methods` as a `vi.fn` spy
+ */
+export function withOperatorClientMocks<C extends OperatorClient, K extends OperatorMethod = never>(
+  client: C,
+  methods: OperatorClientMocks<K> | undefined,
+): C & OperatorClientMock<K> {
+  return Object.assign({}, client, methods && mockOperatorClient(methods));
 }

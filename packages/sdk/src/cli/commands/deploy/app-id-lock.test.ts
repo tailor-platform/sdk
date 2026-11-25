@@ -30,7 +30,8 @@ vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn() },
 }));
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
 }));
 
@@ -140,6 +141,19 @@ describe("app-id-lock", () => {
     test("reads a version 1 lock as having no app ids", () => {
       writeLock({ version: 1, targets: [] });
       expect(readAppIdLock(root)).toEqual({ root, appIds: {} });
+    });
+
+    test("reads the app ids of a version 3 lock that records workspace configs", () => {
+      writeLock({
+        version: 3,
+        targets: [],
+        workspaces: ["tailor.config.ts"],
+        appIds: { "apps/old/tailor.config.ts": ID_A },
+      });
+      expect(readAppIdLock(root)).toEqual({
+        root,
+        appIds: { "apps/old/tailor.config.ts": ID_A },
+      });
     });
 
     test.each([
@@ -575,10 +589,21 @@ describe("app-id-lock", () => {
       expect(raw.endsWith("\n")).toBe(true);
       expect(Object.keys(readRawLock())).toEqual(["version", "targets", "extra", "appIds"]);
       expect(readRawLock()).toEqual({
-        version: TAILOR_LOCK_VERSION,
+        version: 2,
         targets: [{ kind: "branch" }],
         extra: true,
         appIds: { "tailor.config.ts": ID_A },
+      });
+    });
+
+    test("keeps version 3 and the workspace configs of a lock that records them", () => {
+      writeLock({ version: 3, targets: [], workspaces: ["tailor.config.ts"] });
+      writeAppIds({ lock: lockWith({}), appIds: { "apps/old/tailor.config.ts": ID_A } });
+      expect(readRawLock()).toEqual({
+        version: 3,
+        targets: [],
+        workspaces: ["tailor.config.ts"],
+        appIds: { "apps/old/tailor.config.ts": ID_A },
       });
     });
 
@@ -623,7 +648,7 @@ export default defineConfig({
       });
       expect(plan.entries[0]?.id).toBe(ID_A);
       expect(readRawLock()).toEqual({
-        version: TAILOR_LOCK_VERSION,
+        version: 2,
         targets: [],
         appIds: { "tailor.config.ts": ID_A },
       });

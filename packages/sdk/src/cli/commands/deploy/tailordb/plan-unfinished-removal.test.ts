@@ -85,6 +85,8 @@ function plan({ withPermission }: { withPermission: boolean }) {
     client,
     workspaceId: "test-workspace",
     application,
+    applications: [],
+    owner: { kind: "application", name: "test-app", id: undefined },
     forRemoval: false,
     config,
     migrationTestSnapshots: new Map([

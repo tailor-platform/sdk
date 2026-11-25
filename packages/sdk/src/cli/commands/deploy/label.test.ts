@@ -14,19 +14,28 @@ import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { listSourceFiles } from "#/cli/shared/test-helpers/source-files";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import {
+  addDependencyRecords,
   buildMetaRequest,
   hasMatchingSdkVersion,
+  isOwnedBy,
   isOwnedByApp,
   labelCountViolation,
+  labelRefreshOf,
   resolverTrn,
   resourceTrn,
   tailorDBTypeTrn,
   withExtraLabels,
   withMetadataWriteBatch,
   writeMetadataLabels,
+  writeMetadataLabelsDirect,
+  writeMetadataLabelsDroppingOnAppLabels,
 } from "./label";
-import { labelCountRejection } from "./test-helpers/label-count-rejection";
-import type { MetadataLabelClient } from "./label";
+import { bulkLabelCountRejection, labelCountRejection } from "./test-helpers/label-count-rejection";
+import type { DeployOwner, MetadataLabelClient } from "./label";
+
+function appOwner(name: string, id?: string): DeployOwner {
+  return { kind: "application", name, id };
+}
 
 describe("isOwnedByApp", () => {
   test("returns false when labels are undefined", () => {
@@ -78,6 +87,143 @@ describe("hasMatchingSdkVersion", () => {
   });
 });
 
+describe("isOwnedBy", () => {
+  test.each<{
+    case: string;
+    labels: Record<string, string> | undefined;
+    owner: DeployOwner;
+    owned: boolean;
+  }>([
+    {
+      case: "workspace mark, workspace owner",
+      labels: { "sdk-managed": "workspace" },
+      owner: { kind: "workspace" },
+      owned: true,
+    },
+    {
+      case: "application labels, workspace owner",
+      labels: { "sdk-name": "my-app", "sdk-app-id": "app-id-1" },
+      owner: { kind: "workspace" },
+      owned: false,
+    },
+    {
+      case: "no labels, workspace owner",
+      labels: undefined,
+      owner: { kind: "workspace" },
+      owned: false,
+    },
+    {
+      case: "application id, application owner",
+      labels: { "sdk-app-id": "app-id-1" },
+      owner: appOwner("my-app", "id-1"),
+      owned: true,
+    },
+    {
+      case: "workspace mark, application owner",
+      labels: { "sdk-managed": "workspace" },
+      owner: appOwner("my-app", "id-1"),
+      owned: false,
+    },
+  ])("$case: $owned", ({ labels, owner, owned }) => {
+    expect(isOwnedBy(labels, owner)).toBe(owned);
+  });
+});
+
+describe("labelRefreshOf", () => {
+  const stored = { "sdk-name": "my-app", "sdk-version": "v1-0-0", owner: "team-a" };
+
+  describe("for the applications that list a workspace resource", () => {
+    const workspaceWrite = (onApps: string[]) =>
+      buildMetaRequest({ trn: "trn:a", owner: { kind: "workspace" }, onApps });
+    const storedFor = async (onApps: string[]) => ({ ...(await workspaceWrite(onApps)).labels });
+
+    test("plans no refresh when the stored sdk-on-app labels name the same applications", async () => {
+      expect(
+        labelRefreshOf(await storedFor(["shop", "admin"]), await workspaceWrite(["admin", "shop"])),
+      ).toEqual({});
+    });
+
+    test.each([
+      { case: "an application starts listing it", stored: ["shop"], listing: ["shop", "admin"] },
+      { case: "an application stops listing it", stored: ["shop", "admin"], listing: ["shop"] },
+    ])("plans a refresh with the new labels when $case", async ({ stored: before, listing }) => {
+      const write = await workspaceWrite(listing);
+      expect(labelRefreshOf(await storedFor(before), write)).toEqual({ labelRefresh: write });
+    });
+  });
+
+  test("plans no refresh when every label to set is stored and no label to remove is", () => {
+    expect(
+      labelRefreshOf(stored, {
+        trn: "trn:a",
+        labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
+        remove: ["sdk-app-id"],
+      }),
+    ).toEqual({});
+  });
+
+  test.each<{ case: string; labels: Record<string, string>; remove: string[] }>([
+    { case: "a label to set has another value", labels: { "sdk-name": "renamed" }, remove: [] },
+    { case: "a label to set is missing", labels: { "sdk-app-id": "app-id-1" }, remove: [] },
+    { case: "a label to remove is stored", labels: {}, remove: ["owner"] },
+  ])("plans the write as the refresh when $case", ({ labels, remove }) => {
+    const write = { trn: "trn:a", labels, remove };
+    expect(labelRefreshOf(stored, write)).toEqual({ labelRefresh: write });
+  });
+
+  test("plans a refresh when the only stale label is one a prefix removes", () => {
+    const write = {
+      trn: "trn:a",
+      labels: { "sdk-managed": "workspace" },
+      removePrefixes: ["sdk-on-app-"],
+    };
+    expect(labelRefreshOf({ "sdk-managed": "workspace", "sdk-on-app-old": "" }, write)).toEqual({
+      labelRefresh: write,
+    });
+  });
+
+  test("plans no refresh for a prefixed label the write itself sets", () => {
+    const write = {
+      trn: "trn:a",
+      labels: { "sdk-on-app-shop": "" },
+      removePrefixes: ["sdk-on-app-"],
+    };
+    expect(labelRefreshOf({ "sdk-on-app-shop": "" }, write)).toEqual({});
+  });
+
+  test("plans a refresh for a resource without labels", () => {
+    const write = { trn: "trn:a", labels: { "sdk-name": "my-app" } };
+    expect(labelRefreshOf(undefined, write)).toEqual({ labelRefresh: write });
+  });
+});
+
+describe("addDependencyRecords", () => {
+  const params = {
+    key: "workflow:nightly",
+    dependentApps: new Map([
+      [
+        "workflow:nightly",
+        new Map([["11111111-1111-4111-8111-111111111111", "publish-events" as const]]),
+      ],
+    ]),
+    runAppIds: new Set(["11111111-1111-4111-8111-111111111111"]),
+    pinned: false,
+  };
+
+  test("records the dependents of an application config", () => {
+    const write = addDependencyRecords({ trn: "trn:x" }, { ...params, owner: appOwner("my-app") });
+    expect(write.dependencies).toHaveLength(1);
+  });
+
+  test("records none for a workspace config, whose deploy has no other config", () => {
+    const write = addDependencyRecords(
+      { trn: "trn:x" },
+      { ...params, owner: { kind: "workspace" } },
+    );
+    expect(write.dependencies).toBeUndefined();
+  });
+});
+
 describe("buildMetaRequest", () => {
   function createClient(labels: Record<string, string>) {
     return mockOperatorClient({ getMetadata: { metadata: { labels } }, setMetadata: {} });
@@ -93,7 +239,7 @@ describe("buildMetaRequest", () => {
       team: "billing",
     });
 
-    const write = await buildMetaRequest({ trn: "trn:x", appName: "my-app" });
+    const write = await buildMetaRequest({ trn: "trn:x", owner: appOwner("my-app") });
     await writeMetadataLabels(client, write);
 
     const written = client.setMetadata.mock.calls[0]?.[0].labels;
@@ -104,7 +250,7 @@ describe("buildMetaRequest", () => {
   test("replaces an app id from a previous deploy with the current one", async () => {
     const client = createClient({ "sdk-app-id": "app-id-1", "sdk-name": "my-app" });
 
-    const write = await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-2" });
+    const write = await buildMetaRequest({ trn: "trn:x", owner: appOwner("my-app", "id-2") });
     await writeMetadataLabels(client, write);
 
     expect(client.setMetadata.mock.calls[0]?.[0].labels).toMatchObject({
@@ -116,7 +262,7 @@ describe("buildMetaRequest", () => {
     const client = createClient({ "sdk-name": "my-app", team: "billing" });
 
     const write = withExtraLabels(
-      await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
+      await buildMetaRequest({ trn: "trn:x", owner: appOwner("my-app", "id-1") }),
       { "erp-kit-version": "v1-2-3", tier: "gold" },
     );
     await writeMetadataLabels(client, write);
@@ -130,9 +276,84 @@ describe("buildMetaRequest", () => {
     });
   });
 
+  test("labels a workspace resource with each application that lists it, dropping the others", async () => {
+    const client = createClient({
+      "sdk-managed": "workspace",
+      "sdk-on-app-gone": "",
+      "sdk-on-app-shop": "",
+      team: "billing",
+    });
+
+    await writeMetadataLabels(
+      client,
+      await buildMetaRequest({
+        trn: "trn:x",
+        owner: { kind: "workspace" },
+        onApps: ["shop", "admin"],
+      }),
+    );
+
+    const written = client.setMetadata.mock.calls[0]?.[0].labels;
+    expect(written).toMatchObject({
+      "sdk-managed": "workspace",
+      "sdk-on-app-shop": "",
+      "sdk-on-app-admin": "",
+      team: "billing",
+    });
+    expect(written).not.toHaveProperty("sdk-on-app-gone");
+  });
+
+  test("drops the workspace labels of a resource an application takes back", async () => {
+    const client = createClient({
+      "sdk-managed": "workspace",
+      "sdk-on-app-shop": "",
+      "sdk-version": "v1-0-0",
+      team: "billing",
+    });
+
+    await writeMetadataLabels(
+      client,
+      await buildMetaRequest({ trn: "trn:x", owner: appOwner("my-app", "id-1") }),
+    );
+
+    const written = client.setMetadata.mock.calls[0]?.[0].labels;
+    expect(written).not.toHaveProperty("sdk-managed");
+    expect(written).not.toHaveProperty("sdk-on-app-shop");
+    expect(written).toMatchObject({
+      "sdk-name": "my-app",
+      "sdk-app-id": "app-id-1",
+      team: "billing",
+    });
+  });
+
+  test("marks a resource as managed by the workspace and drops the application labels", async () => {
+    const client = createClient({
+      "sdk-app-id": "app-id-1",
+      "sdk-name": "my-app",
+      "sdk-version": "v1-0-0",
+      "sdk-depended-by-app-11111111-1111-4111-8111-111111111111": "publish-events",
+      "sdk-job-depended-by-app-11111111-1111-4111-8111-111111111111": "publish-events",
+      "sdk-on-app-old": "",
+      "sdk-migration": "m0003",
+      team: "billing",
+    });
+
+    await writeMetadataLabels(
+      client,
+      await buildMetaRequest({ trn: "trn:x", owner: { kind: "workspace" } }),
+    );
+
+    expect(client.setMetadata.mock.calls[0]?.[0].labels).toEqual({
+      "sdk-managed": "workspace",
+      "sdk-version": expect.any(String),
+      "sdk-migration": "m0003",
+      team: "billing",
+    });
+  });
+
   test("keeps the SDK labels when config metadata names one of them", async () => {
     const write = withExtraLabels(
-      await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-1" }),
+      await buildMetaRequest({ trn: "trn:x", owner: appOwner("my-app", "id-1") }),
       { "sdk-name": "other", "sdk-app-id": "app-other" },
     );
 
@@ -156,7 +377,7 @@ describe("config metadata against the platform's label rules", () => {
   }
 
   async function labelsFor(metadata: Record<string, string>): Promise<Record<string, string>> {
-    const write = await buildMetaRequest({ trn, appName: "my-app", appId: "id-1" });
+    const write = await buildMetaRequest({ trn, owner: appOwner("my-app", "id-1") });
     return withExtraLabels(write, metadata).labels ?? {};
   }
 
@@ -206,6 +427,38 @@ describe("labelCountViolation", () => {
 });
 
 describe("writeMetadataLabels", () => {
+  test("removes labels by prefix, keeping the ones the same write sets", async () => {
+    const client = mockOperatorClient({
+      getMetadata: {
+        metadata: { labels: { "sdk-on-app-old": "", "sdk-on-app-shop": "", team: "billing" } },
+      },
+      setMetadata: {},
+    });
+
+    await writeMetadataLabels(client, {
+      trn: "trn:x",
+      labels: { "sdk-on-app-shop": "" },
+      removePrefixes: ["sdk-on-app-"],
+    });
+
+    expect(client.setMetadata.mock.calls).toEqual([
+      [{ trn: "trn:x", labels: { "sdk-on-app-shop": "", team: "billing" } }],
+    ]);
+  });
+
+  test("writes a change that only removes labels by prefix", async () => {
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: { "sdk-on-app-old": "", team: "billing" } } },
+      setMetadata: {},
+    });
+
+    await writeMetadataLabels(client, { trn: "trn:x", removePrefixes: ["sdk-on-app-"] });
+
+    expect(client.setMetadata.mock.calls).toEqual([
+      [{ trn: "trn:x", labels: { team: "billing" } }],
+    ]);
+  });
+
   function createClient(labels: Record<string, string> | undefined) {
     return mockOperatorClient({
       getMetadata: labels ? { metadata: { labels } } : {},
@@ -763,5 +1016,211 @@ describe("nested resource TRNs", () => {
   test("keeps a namespace TRN distinct from a type TRN inside it", () => {
     expect(tailorDBTypeTrn(ws, "db", "Order")).not.toBe(resourceTrn(ws, "tailordb", "db"));
     expect(tailorDBTypeTrn(ws, "db", "Order")).toContain(`${resourceTrn(ws, "tailordb", "db")}:`);
+  });
+});
+
+describe("labels the Platform allows no more of", () => {
+  const limit = 4;
+  const onApp = (...apps: string[]) =>
+    Object.fromEntries(apps.map((app) => [`sdk-on-app-${app}`, ""]));
+  function limitedClient(labelsByTrn: Map<string, Record<string, string>>) {
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: {} } },
+      setMetadata: {},
+      bulkSetMetadata: { results: [] },
+    });
+    client.getMetadata.mockImplementation(async ({ trn }) => ({
+      metadata: { labels: { ...labelsByTrn.get(trn ?? "") } },
+    }));
+    client.setMetadata.mockImplementation(async ({ trn, labels }) => {
+      if (Object.keys(labels ?? {}).length > limit) throw labelCountRejection();
+      labelsByTrn.set(trn ?? "", { ...labels });
+      return {};
+    });
+    client.bulkSetMetadata.mockImplementation(async ({ requests }) => {
+      if (requests?.some(({ labels }) => Object.keys(labels ?? {}).length > limit)) {
+        throw new Error("bulk over the limit");
+      }
+      for (const { trn, labels } of requests ?? []) labelsByTrn.set(trn ?? "", { ...labels });
+      return { results: [] };
+    });
+    return client;
+  }
+
+  describe("dropped while a deploy batches label writes", () => {
+    const migrating = async (batchClient: MetadataLabelClient) => {
+      await writeMetadataLabelsDroppingOnAppLabels(batchClient, {
+        trn: "trn:db",
+        labels: { "sdk-migration-in-progress": "m0002" },
+      });
+      await writeMetadataLabelsDirect(batchClient, {
+        trn: "trn:db",
+        remove: ["sdk-migration-in-progress"],
+      });
+    };
+
+    test("puts the sdk-on-app labels a migration write dropped back once there is room", async () => {
+      const labelsByTrn = new Map([
+        ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+      ]);
+      const client = limitedClient(labelsByTrn);
+
+      await withMetadataWriteBatch(client, migrating);
+
+      expect(labelsByTrn.get("trn:db")).toEqual({
+        "sdk-managed": "workspace",
+        ...onApp("a", "b", "c"),
+      });
+    });
+
+    test("leaves out a dropped label that the deploy's own write for the resource removes", async () => {
+      const labelsByTrn = new Map([
+        ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+      ]);
+      const client = limitedClient(labelsByTrn);
+
+      await withMetadataWriteBatch(client, async (batchClient) => {
+        await writeMetadataLabels(batchClient, {
+          trn: "trn:db",
+          labels: { "sdk-managed": "workspace", ...onApp("a", "b") },
+          removePrefixes: ["sdk-on-app-"],
+        });
+        await migrating(batchClient);
+      });
+
+      expect(labelsByTrn.get("trn:db")).toEqual({ "sdk-managed": "workspace", ...onApp("a", "b") });
+    });
+  });
+
+  test("writes the rest of a rejected bulk and as many sdk-on-app labels as fit on each rejected resource", async () => {
+    const labelsByTrn = new Map<string, Record<string, string>>();
+    const client = limitedClient(labelsByTrn);
+    client.bulkSetMetadata
+      .mockRejectedValueOnce(bulkLabelCountRejection())
+      .mockImplementationOnce(async ({ requests }) => {
+        for (const { trn, labels } of requests ?? []) labelsByTrn.set(trn ?? "", { ...labels });
+        return { results: [] };
+      });
+    const dropped = vi.fn();
+    const write = (trn: string, labels: Record<string, string>) => ({
+      trn,
+      labels: { "sdk-managed": "workspace", ...labels },
+    });
+
+    await withMetadataWriteBatch(
+      client,
+      async (batchClient) => {
+        await writeMetadataLabels(batchClient, write("trn:a", onApp("e", "d", "c", "b", "a")));
+        await writeMetadataLabels(batchClient, write("trn:b", onApp("shop")));
+        await writeMetadataLabels(batchClient, write("trn:c", onApp("x", "y", "z", "w")));
+      },
+      dropped,
+    );
+
+    expect(client.bulkSetMetadata.mock.calls[1]?.[0].requests?.map(({ trn }) => trn)).toEqual([
+      "trn:b",
+    ]);
+    expect(labelsByTrn.get("trn:a")).toEqual({
+      "sdk-managed": "workspace",
+      ...onApp("a", "b", "c"),
+    });
+    expect(labelsByTrn.get("trn:b")).toEqual({ "sdk-managed": "workspace", ...onApp("shop") });
+    expect(labelsByTrn.get("trn:c")).toEqual({
+      "sdk-managed": "workspace",
+      ...onApp("w", "x", "y"),
+    });
+    expect(dropped.mock.calls).toEqual([
+      [{ trn: "trn:a", applications: ["d", "e"] }],
+      [{ trn: "trn:c", applications: ["z"] }],
+    ]);
+  });
+
+  test("reports the sdk-on-app labels left off a write queued after the flush started", async () => {
+    const labelsByTrn = new Map([
+      ["trn:late", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+    ]);
+    const client = limitedClient(labelsByTrn);
+    let bulkStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      bulkStarted = resolve;
+    });
+    let releaseBulk!: () => void;
+    const released = new Promise<void>((resolve) => {
+      releaseBulk = resolve;
+    });
+    client.bulkSetMetadata.mockImplementationOnce(async () => {
+      bulkStarted();
+      await released;
+      return { results: [] };
+    });
+    const dropped = vi.fn();
+    let late!: Promise<void>;
+
+    await withMetadataWriteBatch(
+      client,
+      async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:early", labels: { mine: "early" } });
+        late = (async () => {
+          await started;
+          const write = writeMetadataLabels(batchClient, { trn: "trn:late", labels: onApp("d") });
+          releaseBulk();
+          await write;
+        })();
+      },
+      dropped,
+    );
+    await late;
+
+    expect(dropped).toHaveBeenCalledExactlyOnceWith({ trn: "trn:late", applications: ["d"] });
+  });
+
+  test("rethrows a rejected bulk whose rejected request has no sdk-on-app labels", async () => {
+    const client = limitedClient(new Map());
+    client.bulkSetMetadata.mockRejectedValueOnce(bulkLabelCountRejection());
+
+    await expect(
+      withMetadataWriteBatch(client, async (batchClient) => {
+        await writeMetadataLabels(batchClient, { trn: "trn:a", labels: { mine: "a" } });
+        await writeMetadataLabels(batchClient, { trn: "trn:b", labels: { mine: "b" } });
+        await writeMetadataLabels(batchClient, { trn: "trn:c", labels: onApp("shop") });
+      }),
+    ).rejects.toThrow("requests[0].labels");
+    expect(client.bulkSetMetadata).toHaveBeenCalledOnce();
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("keeps a migration label that does not fit by dropping sdk-on-app labels", async () => {
+    const labelsByTrn = new Map([
+      ["trn:db", { "sdk-managed": "workspace", ...onApp("a", "b", "c") }],
+    ]);
+    const client = limitedClient(labelsByTrn);
+
+    await writeMetadataLabelsDroppingOnAppLabels(client, {
+      trn: "trn:db",
+      labels: { "sdk-migration-in-progress": "m0002" },
+    });
+
+    expect(labelsByTrn.get("trn:db")).toEqual({
+      "sdk-managed": "workspace",
+      "sdk-migration-in-progress": "m0002",
+      ...onApp("a", "b"),
+    });
+  });
+
+  test("fails when the other labels alone are more than the Platform allows", async () => {
+    const trn = "trn:v1:workspace:ws:tailordb:db";
+    const labelsByTrn = new Map([[trn, { a: "1", b: "2", c: "3", d: "4" }]]);
+    const client = limitedClient(labelsByTrn);
+
+    await expect(
+      writeMetadataLabelsDroppingOnAppLabels(client, {
+        trn,
+        labels: { "sdk-managed": "workspace", ...onApp("shop") },
+      }),
+    ).rejects.toMatchObject({
+      code: "METADATA_LABEL_LIMIT_EXCEEDED",
+      message: expect.stringContaining('TailorDB namespace "db" holds more labels'),
+      context: { resourceType: "tailordb.service", name: "db", trn },
+    });
   });
 });

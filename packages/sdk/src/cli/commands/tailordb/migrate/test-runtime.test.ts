@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
@@ -8,6 +7,7 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { errorToJson } from "#/cli/shared/error-json";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -22,11 +22,15 @@ import {
   resolveAssertionNamespace,
   resolveTemporaryWorkspaceLocation,
   sortSeedTypesForSnapshot,
+  migrationTestCloneApplication,
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { LoadedConfigFile } from "#/cli/shared/config-loader";
 import type { PreparedMigrationTest } from "./test-types";
 import type { RemoteSchemaVerificationResult } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MetadataSchema } from "@tailor-platform/tailor-proto/metadata_resource_pb";
 
 vi.mock("./config", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -197,10 +201,10 @@ describe("migration test runtime", () => {
       createdAt: "2026-08-05T00:00:00.000Z",
       tables: {},
     });
-    const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
-      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
+      listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+    });
 
     const snapshots = await createMigrationTestBaselineSnapshots({
       client,
@@ -300,12 +304,11 @@ describe("migration test runtime", () => {
   });
 
   test("polls a clone operation until it completes", async () => {
-    const getOperation = vi
-      .fn()
+    const client = mockOperatorClient({ getCloneApplicationDataOperation: {} });
+    client.getCloneApplicationDataOperation
       .mockResolvedValueOnce({ status: CloneOperationStatus.PENDING, errorMessage: "" })
       .mockResolvedValueOnce({ status: CloneOperationStatus.PROCESSING, errorMessage: "" })
       .mockResolvedValueOnce({ status: CloneOperationStatus.COMPLETED, errorMessage: "" });
-    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
 
     await expect(
       waitForCloneApplicationData(client, {
@@ -316,15 +319,14 @@ describe("migration test runtime", () => {
         timeout: 1_000,
       }),
     ).resolves.toBeUndefined();
-    expect(getOperation).toHaveBeenCalledTimes(3);
+    expect(client.getCloneApplicationDataOperation).toHaveBeenCalledTimes(3);
   });
 
   test("sends status checks without a request timeout when the wait is unlimited", async () => {
-    const getOperation = vi
-      .fn()
+    const client = mockOperatorClient({ getCloneApplicationDataOperation: {} });
+    client.getCloneApplicationDataOperation
       .mockResolvedValueOnce({ status: CloneOperationStatus.PROCESSING, errorMessage: "" })
       .mockResolvedValueOnce({ status: CloneOperationStatus.COMPLETED, errorMessage: "" });
-    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
 
     await waitForCloneApplicationData(client, {
       sourceWorkspaceId: "source",
@@ -334,19 +336,18 @@ describe("migration test runtime", () => {
       timeout: Infinity,
     });
 
-    expect(getOperation.mock.calls.map(([, callOptions]) => callOptions)).toEqual([
-      undefined,
-      undefined,
-    ]);
+    expect(
+      client.getCloneApplicationDataOperation.mock.calls.map(([, callOptions]) => callOptions),
+    ).toEqual([undefined, undefined]);
   });
 
   test("reports a failed clone operation", async () => {
-    const client = {
-      getCloneApplicationDataOperation: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: {
         status: CloneOperationStatus.FAILED,
         errorMessage: "namespace mismatch",
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
 
     await expect(
       waitForCloneApplicationData(client, {
@@ -360,11 +361,9 @@ describe("migration test runtime", () => {
   });
 
   test("reports a clone timeout under the given error code prefix", async () => {
-    const client = {
-      getCloneApplicationDataOperation: vi
-        .fn()
-        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: { status: CloneOperationStatus.PENDING, errorMessage: "" },
+    });
 
     await expect(
       waitForCloneApplicationData(client, {
@@ -386,7 +385,7 @@ describe("migration test runtime", () => {
   });
 
   test("does not claim the clone keeps running when the caller has no step to resume it", async () => {
-    const client = { getCloneApplicationDataOperation: vi.fn() } as unknown as OperatorClient;
+    const client = mockOperatorClient({ getCloneApplicationDataOperation: {} });
 
     const error = await waitForCloneApplicationData(client, {
       sourceWorkspaceId: "source",
@@ -399,17 +398,20 @@ describe("migration test runtime", () => {
   });
 
   test("bounds a poll that never answers by the remaining timeout", async () => {
-    const client = {
-      getCloneApplicationDataOperation: vi.fn(
-        (_request: unknown, callOptions: { timeoutMs: number }) =>
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new ConnectError("deadline exceeded", Code.DeadlineExceeded)),
-              callOptions.timeoutMs,
-            ),
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: (_request, callOptions) => {
+        const timeoutMs = callOptions?.timeoutMs;
+        if (timeoutMs === undefined) {
+          return Promise.reject(new Error("poll sent without a timeout"));
+        }
+        return new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new ConnectError("deadline exceeded", Code.DeadlineExceeded)),
+            timeoutMs,
           ),
-      ),
-    } as unknown as OperatorClient;
+        );
+      },
+    });
 
     const startedAt = Date.now();
     await expect(
@@ -432,11 +434,10 @@ describe("migration test runtime", () => {
       CloneOperationStatus.PROCESSING,
       CloneOperationStatus.COMPLETED,
     ];
-    const getOperation = vi.fn();
+    const client = mockOperatorClient({ getCloneApplicationDataOperation: {} });
     for (const status of statuses) {
-      getOperation.mockResolvedValueOnce({ status, errorMessage: "" });
+      client.getCloneApplicationDataOperation.mockResolvedValueOnce({ status, errorMessage: "" });
     }
-    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
     const reported: CloneOperationStatus[] = [];
 
     await waitForCloneApplicationData(client, {
@@ -451,10 +452,12 @@ describe("migration test runtime", () => {
   });
 
   test("waits up to 30 minutes when no timeout is given", async () => {
-    const getOperation = vi
-      .fn()
-      .mockResolvedValue({ status: CloneOperationStatus.COMPLETED, errorMessage: "" });
-    const client = { getCloneApplicationDataOperation: getOperation } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: {
+        status: CloneOperationStatus.COMPLETED,
+        errorMessage: "",
+      },
+    });
 
     await waitForCloneApplicationData(client, {
       sourceWorkspaceId: "source",
@@ -462,17 +465,16 @@ describe("migration test runtime", () => {
       operationId: "operation",
     });
 
-    const [, callOptions] = getOperation.mock.calls[0] as [unknown, { timeoutMs: number }];
-    expect(callOptions.timeoutMs).toBeGreaterThan(29 * 60 * 1_000);
-    expect(callOptions.timeoutMs).toBeLessThanOrEqual(30 * 60 * 1_000);
+    const [, callOptions] = client.getCloneApplicationDataOperation.mock.calls[0]!;
+    expect(callOptions?.timeoutMs).toBeGreaterThan(29 * 60 * 1_000);
+    expect(callOptions?.timeoutMs).toBeLessThanOrEqual(30 * 60 * 1_000);
   });
 
   test("rethrows a deadline error that arrives long before the wait budget is spent", async () => {
-    const client = {
-      getCloneApplicationDataOperation: vi
-        .fn()
-        .mockRejectedValue(new ConnectError("server deadline", Code.DeadlineExceeded)),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: () =>
+        Promise.reject(new ConnectError("server deadline", Code.DeadlineExceeded)),
+    });
 
     await expect(
       waitForCloneApplicationData(client, {
@@ -486,11 +488,9 @@ describe("migration test runtime", () => {
   });
 
   test("does not sleep past the deadline between polls", async () => {
-    const client = {
-      getCloneApplicationDataOperation: vi
-        .fn()
-        .mockResolvedValue({ status: CloneOperationStatus.PENDING, errorMessage: "" }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getCloneApplicationDataOperation: { status: CloneOperationStatus.PENDING, errorMessage: "" },
+    });
 
     const startedAt = Date.now();
     await expect(
@@ -508,15 +508,22 @@ describe("migration test runtime", () => {
     expect(Date.now() - startedAt).toBeLessThan(1_000);
   });
 
-  function runtimeState(client: OperatorClient, services: unknown[] = []) {
+  function runtimeState(
+    client: OperatorClient,
+    services: unknown[] = [],
+  ): Parameters<typeof assertSourceBaselineFresh>[0] {
     return {
       client,
       loaded: {
         config: { path: "/project/tailor.config.ts" },
-        application: { tailorDBServices: services, authService: { config: { name: "auth-ns" } } },
-      },
-      options: {},
-    } as unknown as Parameters<typeof assertSourceBaselineFresh>[0];
+        application: {
+          tailorDBServices: services,
+          authServices: [{ config: { name: "auth-ns" } }],
+        },
+      } as unknown as Parameters<typeof assertSourceBaselineFresh>[0]["loaded"],
+      options: { data: "seed" },
+      seeds: [],
+    };
   }
 
   function preparedMigrationTest(
@@ -550,11 +557,9 @@ describe("migration test runtime", () => {
     vi.mocked(verifyRemoteSchema).mockResolvedValue([
       { namespace: "main", remoteMigrationNumber: 1, drifts: [], hasDrift: false },
     ]);
-    const client = {
-      getMetadata: vi
-        .fn()
-        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0001" } } }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: { "sdk-migration": "m0001" } } },
+    });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
@@ -576,7 +581,7 @@ describe("migration test runtime", () => {
     const prepared = preparedMigrationTest();
 
     await expect(
-      assertSourceBaselineFresh(runtimeState({} as OperatorClient), prepared, "source"),
+      assertSourceBaselineFresh(runtimeState(mockOperatorClient({})), prepared, "source"),
     ).rejects.toThrow('Source namespace "main" changed after migration test preparation');
   });
 
@@ -587,11 +592,9 @@ describe("migration test runtime", () => {
     vi.mocked(verifyRemoteSchema).mockResolvedValue([
       { namespace: "main", remoteMigrationNumber: 2, drifts: [], hasDrift: false },
     ]);
-    const client = {
-      getMetadata: vi
-        .fn()
-        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0002" } } }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getMetadata: { metadata: { labels: { "sdk-migration": "m0002" } } },
+    });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
@@ -610,11 +613,11 @@ describe("migration test runtime", () => {
     vi.mocked(verifyRemoteSchema).mockResolvedValue([
       { namespace: "main", remoteMigrationNumber: 1, drifts: [], hasDrift: false },
     ]);
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({
+    const client = mockOperatorClient({
+      getMetadata: {
         metadata: { labels: { "sdk-migration": "m0001", "sdk-migration-in-progress": "m0002" } },
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
@@ -629,10 +632,10 @@ describe("migration test runtime", () => {
   test("rejects an unmigrated clone namespace whose schema changed after preparation", async () => {
     vi.mocked(getNamespacesWithMigrations).mockReturnValue([]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([]);
-    const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
-      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
+      listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+    });
     const state = runtimeState(client, [{ namespace: "audit", config: { files: [] }, types: {} }]);
     const prepared = preparedMigrationTest({
       baselineSnapshots: new Map([
@@ -662,15 +665,12 @@ describe("migration test runtime", () => {
     const otherFolder = "44444444-4444-4444-8444-444444444444";
 
     function folderClient(found = true) {
-      return {
-        getOrganizationFolder: vi
-          .fn()
-          .mockImplementation(async () =>
-            found
-              ? { folder: { id: "folder" } }
-              : Promise.reject(new ConnectError("not found", Code.NotFound)),
-          ),
-      } as unknown as OperatorClient;
+      return mockOperatorClient({
+        getOrganizationFolder: async () =>
+          found
+            ? { folder: { id: "folder" } }
+            : Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
     }
 
     const source = { organizationId: sourceOrganization, folderId: sourceFolder };
@@ -844,14 +844,15 @@ describe("migration test runtime", () => {
     };
   }
 
-  function unlabeledBaselineCase(check: RemoteSchemaVerificationResult, metadata: unknown) {
+  function unlabeledBaselineCase(
+    check: RemoteSchemaVerificationResult,
+    metadata: MessageInitShape<typeof MetadataSchema> | undefined,
+  ) {
     vi.mocked(getNamespacesWithMigrations).mockReturnValue([
       { namespace: "main", migrationsDir: "/project/migrations/main" },
     ]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([check]);
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({ metadata }),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({ getMetadata: { metadata } });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],
@@ -990,10 +991,10 @@ describe("migration test runtime", () => {
   });
 
   test("deletes a retained target's existing user profile config", async () => {
-    const client = {
-      getUserProfileConfig: vi.fn().mockResolvedValue({ userProfileConfig: {} }),
-      deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getUserProfileConfig: { userProfileProviderConfig: {} },
+      deleteUserProfileConfig: {},
+    });
 
     await deleteExistingUserProfileConfig(runtimeState(client), "target");
 
@@ -1004,13 +1005,81 @@ describe("migration test runtime", () => {
   });
 
   test("skips user profile config deletion when the target has none", async () => {
-    const client = {
-      getUserProfileConfig: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      deleteUserProfileConfig: vi.fn(),
-    } as unknown as OperatorClient;
+    const client = mockOperatorClient({
+      getUserProfileConfig: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      deleteUserProfileConfig: {},
+    });
 
     await deleteExistingUserProfileConfig(runtimeState(client), "target");
 
     expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
+  });
+
+  test("deletes the user profile config of every Auth service of a workspace config", async () => {
+    const client = mockOperatorClient({
+      getUserProfileConfig: { userProfileProviderConfig: {} },
+      deleteUserProfileConfig: {},
+    });
+    const state = runtimeState(client);
+    const withTwoAuths = {
+      ...state,
+      loaded: {
+        ...state.loaded,
+        application: {
+          ...state.loaded.application,
+          authServices: [{ config: { name: "corp-auth" } }, { config: { name: "partner-auth" } }],
+        },
+      },
+    } as unknown as typeof state;
+
+    await deleteExistingUserProfileConfig(withTwoAuths, "target");
+
+    expect(
+      client.deleteUserProfileConfig.mock.calls.map(([request]) => request.namespaceName),
+    ).toEqual(["corp-auth", "partner-auth"]);
+  });
+});
+
+describe("migrationTestCloneApplication", () => {
+  const workspaceFile = (apps: Record<string, { db: string[] }>) =>
+    ({
+      kind: "workspace",
+      workspace: {
+        apps: Object.fromEntries(Object.entries(apps).map(([n, a]) => [n, { ...a, resolver: [] }])),
+      },
+      plugins: [],
+    }) as unknown as LoadedConfigFile;
+
+  test("clones the application of a defineConfig() config", () => {
+    const file = {
+      kind: "config",
+      config: { name: "app" },
+      plugins: [],
+    } as unknown as LoadedConfigFile;
+    expect(migrationTestCloneApplication(file, ["main"])).toBe("app");
+  });
+
+  test("clones the only application of a workspace config when it lists every pending namespace", () => {
+    expect(
+      migrationTestCloneApplication(workspaceFile({ shop: { db: ["order-db", "ledger-db"] } }), [
+        "ledger-db",
+      ]),
+    ).toBe("shop");
+  });
+
+  test.each([
+    [
+      "several applications",
+      { shop: { db: ["ledger-db"] }, admin: { db: ["ledger-db"] } },
+      ["shop", "admin"],
+    ],
+    ["a pending namespace no application lists", { shop: { db: ["order-db"] } }, ["shop"]],
+  ])("rejects a workspace config with %s", (_, apps, applications) => {
+    expect(() => migrationTestCloneApplication(workspaceFile(apps), ["ledger-db"])).toThrow(
+      expect.objectContaining({
+        code: "MIGRATION_TEST_CLONE_UNSUPPORTED",
+        context: { applications, pendingNamespaces: ["ledger-db"] },
+      }),
+    );
   });
 });

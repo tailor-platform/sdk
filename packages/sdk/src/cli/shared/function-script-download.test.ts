@@ -1,24 +1,22 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { describe, test, expect, vi } from "vitest";
+import { describe, test, expect } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
+import { createRunId, functionRunResourceName } from "./workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { DownloadFunctionRegistryScriptResponseSchema } from "@tailor-platform/tailor-proto/function_registry_pb";
 
-interface DownloadResponse {
-  payload:
-    | { case: "metadata"; value: unknown }
-    | { case: "chunk"; value: Uint8Array }
-    | { case: undefined; value?: undefined };
-}
+type DownloadResponse = MessageInitShape<typeof DownloadFunctionRegistryScriptResponseSchema>;
 
 function makeStreamingClient(responses: DownloadResponse[]): OperatorClient {
-  return {
-    downloadFunctionRegistryScript: vi.fn(async function* () {
+  return mockOperatorClient({
+    async *downloadFunctionRegistryScript() {
       for (const r of responses) {
         yield r;
       }
-    }),
-  } as unknown as OperatorClient;
+    },
+  });
 }
 
 describe("downloadFunctionScript", () => {
@@ -50,11 +48,11 @@ describe("downloadFunctionScript", () => {
   });
 
   test("returns null when the streaming RPC throws", async () => {
-    const client = {
-      downloadFunctionRegistryScript: vi.fn(() => {
+    const client = mockOperatorClient({
+      downloadFunctionRegistryScript: () => {
         throw new Error("not found");
-      }),
-    } as unknown as OperatorClient;
+      },
+    });
 
     const result = await downloadFunctionScript({
       client,
@@ -70,10 +68,11 @@ describe("downloadFunctionScript", () => {
     // scriptNameToRegistryName before calling. This test verifies the
     // raw `name` field is forwarded as-is so the translation contract
     // is enforced at the call site.
-    const fn = vi.fn(async function* () {
-      yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
+    const client = mockOperatorClient({
+      async *downloadFunctionRegistryScript() {
+        yield { payload: { case: "chunk", value: new TextEncoder().encode("x") } };
+      },
     });
-    const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;
 
     await downloadFunctionScript({
       client,
@@ -81,7 +80,7 @@ describe("downloadFunctionScript", () => {
       name: "resolver--ns--myFn",
     });
 
-    expect(fn).toHaveBeenCalledWith({
+    expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       name: "resolver--ns--myFn",
       contentHash: undefined,
@@ -89,10 +88,11 @@ describe("downloadFunctionScript", () => {
   });
 
   test("forwards contentHash to the RPC request", async () => {
-    const fn = vi.fn(async function* () {
-      yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
+    const client = mockOperatorClient({
+      async *downloadFunctionRegistryScript() {
+        yield { payload: { case: "chunk", value: new TextEncoder().encode("x") } };
+      },
     });
-    const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;
 
     await downloadFunctionScript({
       client,
@@ -101,7 +101,7 @@ describe("downloadFunctionScript", () => {
       contentHash: "abc123",
     });
 
-    expect(fn).toHaveBeenCalledWith({
+    expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       name: "my-fn",
       contentHash: "abc123",
@@ -138,6 +138,23 @@ describe("scriptNameToRegistryName", () => {
   test("translates workflow job scriptName (no dots) under JOB type", () => {
     expect(scriptNameToRegistryName("validate-order", FunctionExecution_Type.JOB)).toBe(
       "workflow--validate-order",
+    );
+  });
+
+  test("keeps the name of the temporary function that `function run --async` registers", () => {
+    const name = functionRunResourceName(createRunId(new Date(), "c0a100"));
+    expect(scriptNameToRegistryName(name, FunctionExecution_Type.JOB)).toBe(name);
+  });
+
+  test("still maps a deployed job whose name starts with tmp-fn- to its workflow function", () => {
+    expect(scriptNameToRegistryName("tmp-fn-cleanup", FunctionExecution_Type.JOB)).toBe(
+      "workflow--tmp-fn-cleanup",
+    );
+  });
+
+  test("maps the function a workflow run registers to its workflow function", () => {
+    expect(scriptNameToRegistryName("tmp-run-r1-main", FunctionExecution_Type.JOB)).toBe(
+      "workflow--tmp-run-r1-main",
     );
   });
 

@@ -1,11 +1,11 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
-import { loadDeployedApplications, runDeployedHooks } from "./deployed-hooks";
-import type { OperatorClient } from "#/cli/shared/client";
+import { loadDeployedTargets, runDeployedHooks } from "./deployed-hooks";
 import type { DeployedContext, Plugin } from "#/plugin/types";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 
@@ -30,15 +30,43 @@ vi.mock("../staticwebsite/deploy", () => ({
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 
 function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
+  const configPath = `/repo/${name}/tailor.config.ts`;
+  const application = {
+    staticWebsiteServices: [{ name: `${name}-web` }],
+    aiGatewayServices: [{ name: "ai" }],
+    authServices: [{ config: { name: "auth" } }],
+  };
   return {
-    config: { path: `/repo/${name}/tailor.config.ts`, aiGateways: [{ name: "ai" }] },
-    application: {
-      id: `${name}-id`,
+    source: {
+      kind: "config",
+      config: { path: configPath, name },
+      application: { ...application, id: `${name}-id`, name },
+    },
+    config: { path: configPath },
+    application,
+    owner: { kind: "application", name, id: `${name}-id` },
+    applications: [{ name, subgraphs: [{}], authNamespace: "auth", settings: {} }],
+    plugins,
+  } as unknown as BuiltDeploymentTarget;
+}
+function workspaceTarget(plugins: Plugin[], apps: readonly string[]): BuiltDeploymentTarget {
+  const configPath = "/repo/tailor.config.ts";
+  const application = {
+    staticWebsiteServices: [{ name: "front" }, { name: "console" }],
+    aiGatewayServices: [],
+    authServices: [{ config: { name: "auth" } }],
+  };
+  return {
+    source: { kind: "workspace", workspace: { path: configPath } },
+    config: { path: configPath },
+    application,
+    owner: { kind: "workspace" },
+    applications: apps.map((name) => ({
       name,
       subgraphs: [{}],
-      staticWebsiteServices: [{ name: `${name}-web` }],
-      authService: { config: { name: "auth" } },
-    },
+      authNamespace: "auth",
+      settings: {},
+    })),
     plugins,
   } as unknown as BuiltDeploymentTarget;
 }
@@ -48,20 +76,17 @@ function sparseArray(): unknown[] {
   return list;
 }
 function clientMock() {
-  const methods = {
-    getApplication: vi
-      .fn()
-      .mockResolvedValue({ application: { url: "https://app", domain: "app.example" } }),
-    getStaticWebsite: vi.fn().mockImplementation(async ({ name }) => ({
-      staticwebsite: { name, url: `https://${name}` },
-    })),
-    getAIGateway: vi.fn().mockResolvedValue({ aigateway: { name: "ai", url: "https://ai" } }),
-    listAuthOAuth2Clients: vi.fn().mockResolvedValue({
-      oauth2Clients: [{ name: "web", clientId: "public", clientSecret: "secret" }],
-      nextPageToken: "",
+  return mockOperatorClient({
+    getApplication: { application: { url: "https://app", domain: "app.example" } },
+    getStaticWebsite: async (request) => ({
+      staticwebsite: { name: request.name, url: `https://${request.name}` },
     }),
-  };
-  return { methods, client: methods as unknown as OperatorClient };
+    getAIGateway: { aigateway: { name: "ai", url: "https://ai" } },
+    listAuthOAuth2Clients: {
+      oauth2Clients: [{ name: "web", clientId: "public", description: "Web client" }],
+      nextPageToken: "",
+    },
+  });
 }
 function plugin(onDeployed: NonNullable<Plugin["onDeployed"]>, id = "hook"): Plugin {
   return { id, description: "test", pluginConfig: { setting: true }, onDeployed };
@@ -69,17 +94,17 @@ function plugin(onDeployed: NonNullable<Plugin["onDeployed"]>, id = "hook"): Plu
 
 describe("deployed hooks", () => {
   test("does not fetch deployed information when there are no hooks", async () => {
-    const { client, methods } = clientMock();
+    const client = clientMock();
     await expect(
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([])] }),
     ).resolves.toEqual([]);
-    expect(methods.getApplication).not.toHaveBeenCalled();
-    expect(methods.getStaticWebsite).not.toHaveBeenCalled();
-    expect(methods.getAIGateway).not.toHaveBeenCalled();
-    expect(methods.listAuthOAuth2Clients).not.toHaveBeenCalled();
+    expect(client.getApplication).not.toHaveBeenCalled();
+    expect(client.getStaticWebsite).not.toHaveBeenCalled();
+    expect(client.getAIGateway).not.toHaveBeenCalled();
+    expect(client.listAuthOAuth2Clients).not.toHaveBeenCalled();
   });
   test("passes deployed URLs and public OAuth client fields to the hook", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const hook = vi.fn();
     await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
     expect(hook).toHaveBeenCalledExactlyOnceWith(
@@ -103,7 +128,7 @@ describe("deployed hooks", () => {
     );
   });
   test("passes the profile the deploy ran with to the hook", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const hook = vi.fn();
     await runDeployedHooks({
       client,
@@ -115,7 +140,7 @@ describe("deployed hooks", () => {
   });
 
   test("leaves the profile out of the hook context when the deploy was run without one", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const hook = vi.fn();
     await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
     expect(hook).toHaveBeenCalledExactlyOnceWith(
@@ -124,7 +149,7 @@ describe("deployed hooks", () => {
   });
 
   test("lets the hook run shell commands on the deploying machine", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const [stored] = await runDeployedHooks({
       client,
       workspaceId: "ws",
@@ -145,7 +170,7 @@ describe("deployed hooks", () => {
   test("gives the hook Node's fs and path to work with files on the deploying machine", async () => {
     const dir = await mkdtemp(join(tmpdir(), "deployed-hooks-node-"));
     try {
-      const { client } = clientMock();
+      const client = clientMock();
       const [stored] = await runDeployedHooks({
         client,
         workspaceId: "ws",
@@ -165,14 +190,14 @@ describe("deployed hooks", () => {
     }
   });
   test("collects every OAuth client page", async () => {
-    const { client, methods } = clientMock();
-    methods.listAuthOAuth2Clients.mockResolvedValueOnce({
+    const client = clientMock();
+    client.listAuthOAuth2Clients.mockResolvedValueOnce({
       oauth2Clients: [],
       nextPageToken: "page2",
     });
     const hook = vi.fn();
     await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
-    expect(methods.listAuthOAuth2Clients).toHaveBeenNthCalledWith(
+    expect(client.listAuthOAuth2Clients).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ pageToken: "page2" }),
     );
@@ -181,12 +206,12 @@ describe("deployed hooks", () => {
     ]);
   });
   test("awaits hooks in target and registration order with all applications available", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const seen: string[] = [];
     const hook = (id: string) =>
       plugin(async (ctx) => {
         await Promise.resolve();
-        seen.push(`${ctx.application.name}:${id}`);
+        seen.push(`${path.basename(path.dirname(ctx.configPath))}:${id}`);
         expect(ctx.applications).toHaveLength(2);
         expect(ctx.applications.map((app) => Object.keys(app.staticWebsites))).toEqual([
           ["a-web"],
@@ -201,7 +226,7 @@ describe("deployed hooks", () => {
     expect(seen).toEqual(["a:1", "a:2", "b:3"]);
   });
   test("returns only hooks that supplied outputs", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs = { result: "done" };
     expect(
       await runDeployedHooks({
@@ -212,7 +237,7 @@ describe("deployed hooks", () => {
     ).toEqual([{ application: "app", pluginId: "hook", outputs }]);
   });
   test("stops after a failed hook and identifies unapplied hooks in the error", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const later = vi.fn();
     await expect(
       runDeployedHooks({
@@ -221,7 +246,7 @@ describe("deployed hooks", () => {
         targets: [
           target([
             plugin(() => {
-              throw new Error("build failed");
+              throw new Error("Build failed.");
             }),
             plugin(later, "later"),
           ]),
@@ -229,18 +254,22 @@ describe("deployed hooks", () => {
       }),
     ).rejects.toMatchObject({
       code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*hook.*app.*build failed.*later/s),
+      message:
+        'Platform resources were applied successfully, but the onDeployed hook of plugin "hook" failed for app "app": Build failed.',
+      details: "Hooks not run: later (app: app)",
     });
     expect(later).not.toHaveBeenCalled();
   });
   test("resolves public OAuth clients for an external Auth namespace", async () => {
-    const { client, methods } = clientMock();
+    const client = clientMock();
     const hook = vi.fn();
     const external = target([plugin(hook)]);
-    Object.assign(external.application, { authService: undefined });
-    Object.assign(external.config, { auth: { name: "shared-auth", external: true } });
+    Object.assign(external.application, { authServices: [] });
+    Object.assign(external, {
+      applications: [{ name: "app", subgraphs: [{}], authNamespace: "shared-auth", settings: {} }],
+    });
     await runDeployedHooks({ client, workspaceId: "ws", targets: [external] });
-    expect(methods.listAuthOAuth2Clients).toHaveBeenCalledWith(
+    expect(client.listAuthOAuth2Clients).toHaveBeenCalledWith(
       expect.objectContaining({ namespaceName: "shared-auth" }),
     );
     expect(hook.mock.calls[0]?.[0].application.auth).toEqual({
@@ -249,19 +278,20 @@ describe("deployed hooks", () => {
     });
   });
   test("reports applied resources when loading the hook context fails", async () => {
-    const { client, methods } = clientMock();
-    methods.getApplication.mockRejectedValue(new Error("network down"));
+    const client = clientMock();
+    client.getApplication.mockRejectedValue(new Error("network down"));
     const hook = vi.fn();
     await expect(
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
     ).rejects.toMatchObject({
       code: "DEPLOYED_HOOK_FAILED",
-      message: expect.stringMatching(/applied successfully.*network down.*Hooks not run: hook/s),
+      message: expect.stringMatching(/applied successfully.*network down$/s),
+      details: "Hooks not run: hook (app: app)",
     });
     expect(hook).not.toHaveBeenCalled();
   });
   test("rejects hook outputs that cannot be serialized to JSON", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs = { size: 1n } as unknown as Record<string, never>;
     await expect(
       runDeployedHooks({
@@ -290,7 +320,7 @@ describe("deployed hooks", () => {
       "outputs.item",
     ],
   ])("rejects hook outputs containing %s and names its path", async (_, outputs, where) => {
-    const { client } = clientMock();
+    const client = clientMock();
     await expect(
       runDeployedHooks({
         client,
@@ -305,7 +335,7 @@ describe("deployed hooks", () => {
     });
   });
   test("validates and stores the outputs value it read once", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     let reads = 0;
     const result = {
       get outputs() {
@@ -319,7 +349,7 @@ describe("deployed hooks", () => {
     expect(reads).toBe(1);
   });
   test("rejects cyclic hook outputs instead of recursing forever", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs: Record<string, unknown> = {};
     outputs.self = outputs;
     await expect(
@@ -334,7 +364,7 @@ describe("deployed hooks", () => {
     });
   });
   test("keeps a __proto__ key in hook outputs as data", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, never>;
     const [stored] = await runDeployedHooks({
       client,
@@ -345,7 +375,7 @@ describe("deployed hooks", () => {
     expect(Object.hasOwn(stored?.outputs ?? {}, "__proto__")).toBe(true);
   });
   test("accepts nested JSON values in hook outputs", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs = { list: [1, "a", true, null, { deep: [] }], empty: {} };
     await expect(
       runDeployedHooks({
@@ -360,7 +390,7 @@ describe("deployed hooks", () => {
     ["a string", "url"],
     ["null", null],
   ])("rejects hook outputs whose root is %s", async (_, outputs) => {
-    const { client } = clientMock();
+    const client = clientMock();
     await expect(
       runDeployedHooks({
         client,
@@ -379,7 +409,7 @@ describe("deployed hooks", () => {
       when: Date;
     }
     const event: Event = { when: new Date(0) };
-    const { client } = clientMock();
+    const client = clientMock();
     await expect(
       runDeployedHooks({
         client,
@@ -392,7 +422,7 @@ describe("deployed hooks", () => {
     });
   });
   test("names the application of each hook not run after a hook fails", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     await expect(
       runDeployedHooks({
         client,
@@ -410,12 +440,12 @@ describe("deployed hooks", () => {
         ],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: admin)",
     });
   });
   test("names the application of each hook not run when loading the hook context fails", async () => {
-    const { client, methods } = clientMock();
-    methods.getApplication.mockRejectedValue(new Error("network down"));
+    const client = clientMock();
+    client.getApplication.mockRejectedValue(new Error("network down"));
     await expect(
       runDeployedHooks({
         client,
@@ -423,12 +453,12 @@ describe("deployed hooks", () => {
         targets: [target([plugin(vi.fn())], "web"), target([plugin(vi.fn())], "admin")],
       }),
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/Hooks not run: hook \(app: web\), hook \(app: admin\)$/),
+      details: "Hooks not run: hook (app: web), hook (app: admin)",
     });
   });
   test("fails before running hooks when a static website has no URL assigned yet", async () => {
-    const { client, methods } = clientMock();
-    methods.getStaticWebsite.mockResolvedValue({ staticwebsite: { name: "app-web", url: "" } });
+    const client = clientMock();
+    client.getStaticWebsite.mockResolvedValue({ staticwebsite: { name: "app-web", url: "" } });
     const hook = vi.fn();
     await expect(
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
@@ -439,16 +469,16 @@ describe("deployed hooks", () => {
     expect(hook).not.toHaveBeenCalled();
   });
   test("lists the OAuth clients of an Auth namespace shared by several apps once", async () => {
-    const { client, methods } = clientMock();
+    const client = clientMock();
     await runDeployedHooks({
       client,
       workspaceId: "ws",
       targets: [target([plugin(vi.fn())], "a"), target([], "b")],
     });
-    expect(methods.listAuthOAuth2Clients).toHaveBeenCalledOnce();
+    expect(client.listAuthOAuth2Clients).toHaveBeenCalledOnce();
   });
   test("reads each nested outputs value once so validation and storage agree", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     let reads = 0;
     const outputs = {
       nested: {
@@ -467,7 +497,7 @@ describe("deployed hooks", () => {
     expect(reads).toBe(1);
   });
   test("keeps the validated outputs even if the hook mutates them afterwards", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const outputs: Record<string, never | string> = { value: "validated" };
     const [stored] = await runDeployedHooks({
       client,
@@ -478,8 +508,8 @@ describe("deployed hooks", () => {
     expect(stored?.outputs).toEqual({ value: "validated" });
   });
   test("fails when a configured AI Gateway is missing after deploy", async () => {
-    const { client, methods } = clientMock();
-    methods.getAIGateway.mockResolvedValue({ aigateway: undefined });
+    const client = clientMock();
+    client.getAIGateway.mockResolvedValue({ aigateway: undefined });
     const hook = vi.fn();
     await expect(
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),
@@ -489,15 +519,8 @@ describe("deployed hooks", () => {
     });
     expect(hook).not.toHaveBeenCalled();
   });
-  test("exposes only the static websites the config declares", async () => {
-    const { client } = clientMock();
-    const hook = vi.fn();
-    await runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] });
-    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
-    expect(application.staticWebsites["toString"]).toBeUndefined();
-  });
   test("rejects missing publish directories with an absolute path", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     await runDeployedHooks({
       client,
       workspaceId: "ws",
@@ -505,7 +528,7 @@ describe("deployed hooks", () => {
         target([
           plugin(async (ctx) => {
             await expect(
-              ctx.application.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
+              ctx.staticWebsites["app-web"]?.publish("/missing/deployed-hook-build"),
             ).rejects.toThrow("/missing/deployed-hook-build");
           }),
         ]),
@@ -514,7 +537,7 @@ describe("deployed hooks", () => {
     expect(deployStaticWebsite).not.toHaveBeenCalled();
   });
   test("reports stat failures other than a missing directory as they are", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const dir = "/restricted/deployed-hook-build";
     statFailure.next = permissionDenied(dir);
     await runDeployedHooks({
@@ -523,9 +546,7 @@ describe("deployed hooks", () => {
       targets: [
         target([
           plugin(async (ctx) => {
-            await expect(ctx.application.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow(
-              "EACCES",
-            );
+            await expect(ctx.staticWebsites["app-web"]?.publish(dir)).rejects.toThrow("EACCES");
           }),
         ]),
       ],
@@ -533,7 +554,7 @@ describe("deployed hooks", () => {
     expect(deployStaticWebsite).not.toHaveBeenCalled();
   });
   test("lists another application's static websites with their URLs but no publish", async () => {
-    const { client } = clientMock();
+    const client = clientMock();
     const hook = vi.fn();
     await runDeployedHooks({
       client,
@@ -545,29 +566,18 @@ describe("deployed hooks", () => {
       "web-app-web": { name: "web-app-web", url: "https://web-app-web" },
     });
   });
-  test("keeps other applications' static websites out of the registering application", async () => {
-    const { client } = clientMock();
-    const hook = vi.fn();
-    await runDeployedHooks({
-      client,
-      workspaceId: "ws",
-      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
-    });
-    const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
-    expect(Object.keys(application.staticWebsites)).toEqual(["admin-app-web"]);
-  });
   test("publishes an existing directory to the static website", async () => {
     using _logger = silenceLogger();
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
     try {
-      const { client } = clientMock();
+      const client = clientMock();
       await runDeployedHooks({
         client,
         workspaceId: "ws",
         targets: [
           target([
             plugin(async (ctx: DeployedContext) => {
-              expect(await ctx.application.staticWebsites["app-web"]?.publish(dir)).toEqual({
+              expect(await ctx.staticWebsites["app-web"]?.publish(dir)).toEqual({
                 url: "https://published",
                 skippedFiles: [],
               });
@@ -586,21 +596,114 @@ describe("deployed hooks", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+  test("gives the hook every static website of its config with publish", async () => {
+    const client = clientMock();
+    const hook = vi.fn();
+    await runDeployedHooks({
+      client,
+      workspaceId: "ws",
+      targets: [target([], "web-app"), target([plugin(hook)], "admin-app")],
+    });
+    const { staticWebsites } = hook.mock.calls[0]?.[0] as DeployedContext;
+    expect(staticWebsites).toEqual({
+      "admin-app-web": {
+        name: "admin-app-web",
+        url: "https://admin-app-web",
+        publish: expect.any(Function),
+      },
+    });
+    expect(staticWebsites["toString"]).toBeUndefined();
+  });
+
+  describe("for a workspace config", () => {
+    test("gives the hook its static websites and every application", async () => {
+      const client = clientMock();
+      const hook = vi.fn();
+      await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [workspaceTarget([plugin(hook)], ["shop", "admin"])],
+      });
+      const context = hook.mock.calls[0]?.[0] as DeployedContext;
+      expect(Object.keys(context.staticWebsites)).toEqual(["front", "console"]);
+      expect(context.staticWebsites["front"]?.publish).toEqual(expect.any(Function));
+      expect(context.applications.map(({ name }) => name)).toEqual(["shop", "admin"]);
+      expect(context.applications[0]).not.toHaveProperty("id");
+    });
+
+    test("fails the hook that reads application when the config deploys several", async () => {
+      const client = clientMock();
+      const later = vi.fn();
+      const error = await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [
+          workspaceTarget(
+            [
+              // oxlint-disable-next-line typescript/no-deprecated -- Reading the deprecated field is what this test covers.
+              plugin((ctx) => void ctx.application.name),
+              plugin(later, "later"),
+            ],
+            ["shop", "admin"],
+          ),
+        ],
+      }).catch((thrown: unknown) => thrown);
+      expect(error).toMatchObject({
+        code: "DEPLOYED_HOOK_FAILED",
+        message: expect.stringContaining('hook of plugin "hook" failed for the workspace config: '),
+        details: "Hooks not run: later (workspace config)",
+        cause: {
+          code: "PLUGIN_CONTEXT_FIELD_AMBIGUOUS",
+          context: {
+            field: "application",
+            replacement: ["applications", "staticWebsites"],
+            candidates: ["shop", "admin"],
+          },
+        },
+      });
+      expect(later).not.toHaveBeenCalled();
+    });
+
+    test("gives the hook its only application, with publishable static websites", async () => {
+      const client = clientMock();
+      const hook = vi.fn();
+      await runDeployedHooks({
+        client,
+        workspaceId: "ws",
+        targets: [workspaceTarget([plugin(hook)], ["shop"])],
+      });
+      // oxlint-disable-next-line typescript/no-deprecated -- The deprecated field keeps working for one application.
+      const { application } = hook.mock.calls[0]?.[0] as DeployedContext;
+      expect(application.name).toBe("shop");
+      expect(application.staticWebsites["front"]?.publish).toEqual(expect.any(Function));
+    });
+
+    test("reports hook outputs without an application", async () => {
+      const client = clientMock();
+      const outputs = { published: true };
+      expect(
+        await runDeployedHooks({
+          client,
+          workspaceId: "ws",
+          targets: [workspaceTarget([plugin(() => ({ outputs }))], ["shop", "admin"])],
+        }),
+      ).toEqual([{ pluginId: "hook", outputs }]);
+    });
+  });
+
   test("rejects a publish path that is a file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "deployed-hook-"));
     try {
       const file = join(dir, "file");
       await writeFile(file, "data");
-      const { client } = clientMock();
+      const client = clientMock();
       await runDeployedHooks({
         client,
         workspaceId: "ws",
         targets: [
           target([
             plugin(async (ctx) => {
-              await expect(
-                ctx.application.staticWebsites["app-web"]?.publish(file),
-              ).rejects.toThrow(file);
+              await expect(ctx.staticWebsites["app-web"]?.publish(file)).rejects.toThrow(file);
             }),
           ]),
         ],
@@ -613,12 +716,13 @@ describe("deployed hooks", () => {
 });
 
 test("loads serializable deployed information for every application without hooks", async () => {
-  const { client, methods } = clientMock();
-  const applications = await loadDeployedApplications({
+  const client = clientMock();
+  const deployed = await loadDeployedTargets({
     client,
     workspaceId: "ws",
     targets: [target([], "a"), target([], "b")],
   });
+  const applications = deployed.flatMap((entry) => entry.applications);
   expect(JSON.parse(JSON.stringify(applications))).toEqual([
     {
       id: "a-id",
@@ -641,5 +745,5 @@ test("loads serializable deployed information for every application without hook
       auth: { namespace: "auth", oauth2Clients: [{ name: "web", clientId: "public" }] },
     },
   ]);
-  expect(methods.listAuthOAuth2Clients).toHaveBeenCalledOnce();
+  expect(client.listAuthOAuth2Clients).toHaveBeenCalledOnce();
 });

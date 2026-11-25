@@ -2,6 +2,8 @@
 // (yet) provide natively. Loaded by oxlint as a JS plugin (alpha). See
 // packages/sdk/.oxlintrc.json `jsPlugins`.
 
+import path from "node:path";
+
 function jsdocBlockBefore(sourceCode, node) {
   const comments = sourceCode.getCommentsBefore(node);
   if (!comments?.length) return null;
@@ -315,10 +317,14 @@ export default {
         type: "problem",
         docs: {
           description:
-            "Require operator client mocks in tests to go through mockOperatorClient() so their responses are type-checked.",
+            "Require operator client mocks in tests to go through mockOperatorClient() and keep their requests and responses type-checked.",
         },
         messages: {
           cast: "Build the operator client mock with mockOperatorClient(); a cast leaves its requests and responses unchecked.",
+          response:
+            "Give the mocked operator client method a response of its RPC's type; an `as never` or `as any` response goes unchecked.",
+          request:
+            "Leave the mocked operator client method's request parameter unannotated so it takes the RPC's request type.",
         },
         schema: [],
       },
@@ -365,15 +371,79 @@ export default {
           }
           return (type?.typeArguments?.params ?? []).some(namesOperatorClient);
         }
-        function isMockedClientFactory(node) {
-          const mocked = node?.type === "MemberExpression" ? node.object : undefined;
-          return (
+        const responseSetters = new Set([
+          "mockResolvedValue",
+          "mockResolvedValueOnce",
+          "mockReturnValue",
+          "mockReturnValueOnce",
+        ]);
+        const implementationSetters = new Set(["mockImplementation", "mockImplementationOnce"]);
+        const methodMocksArgument = new Map([
+          ["mockOperatorClient", 0],
+          ["withOperatorClientMocks", 1],
+        ]);
+        const functionTypes = new Set([
+          "FunctionDeclaration",
+          "FunctionExpression",
+          "ArrowFunctionExpression",
+        ]);
+        function calledMember(callee) {
+          return callee?.type === "MemberExpression" && !callee.computed
+            ? callee.property.name
+            : undefined;
+        }
+        function mockedTarget(node) {
+          let mocked = node;
+          while (
+            mocked?.type === "CallExpression" &&
+            /^mock[A-Z]/.test(calledMember(mocked.callee))
+          ) {
+            mocked = mocked.callee.object;
+          }
+          const viMocked =
             mocked?.type === "CallExpression" &&
             mocked.callee.type === "MemberExpression" &&
             mocked.callee.object.name === "vi" &&
-            mocked.callee.property.name === "mocked" &&
-            clientFactories.has(exportedName(mocked.arguments[0]))
+            mocked.callee.property.name === "mocked";
+          return { target: viMocked ? mocked.arguments[0] : mocked, viMocked };
+        }
+        function isMockedClientFactory(callee) {
+          if (callee?.type !== "MemberExpression") return false;
+          const { target, viMocked } = mockedTarget(callee.object);
+          return viMocked && clientFactories.has(exportedName(target));
+        }
+        function isClientMethod(node) {
+          const { target } = mockedTarget(node);
+          if (target?.type !== "MemberExpression" || target.computed) return false;
+          if (clientFactories.has(target.property.name)) return false;
+          const receiver =
+            target.object.type === "MemberExpression" ? target.object.property : target.object;
+          return receiver.type === "Identifier" && /client$/i.test(receiver.name);
+        }
+        function isMethodMocks(node) {
+          const call = node?.parent;
+          return (
+            node.type === "ObjectExpression" &&
+            call?.type === "CallExpression" &&
+            call.arguments[methodMocksArgument.get(exportedName(call.callee))] === node
           );
+        }
+        function isMockImplementation(fn) {
+          const parent = fn?.parent;
+          if (parent?.type === "Property") {
+            return parent.value === fn && isMethodMocks(parent.parent);
+          }
+          return (
+            parent?.type === "CallExpression" &&
+            parent.arguments.includes(fn) &&
+            implementationSetters.has(calledMember(parent.callee)) &&
+            isClientMethod(parent.callee.object)
+          );
+        }
+        function enclosingFunction(node) {
+          let current = node.parent;
+          while (current && !functionTypes.has(current.type)) current = current.parent;
+          return current;
         }
         function isUncheckedCast(node) {
           return (
@@ -387,13 +457,102 @@ export default {
             context.report({ node, messageId: "cast" });
           }
         }
+        function checkResponse(node) {
+          let response = node;
+          while (response?.type === "ParenthesizedExpression") response = response.expression;
+          if (response && isUncheckedCast(response)) {
+            context.report({ node: response, messageId: "response" });
+          }
+        }
+        function checkImplementation(fn) {
+          if (!isMockImplementation(fn)) return;
+          for (const param of fn.params) {
+            if ((param.type === "AssignmentPattern" ? param.left : param).typeAnnotation) {
+              context.report({ node: param, messageId: "request" });
+            }
+          }
+          if (fn.body.type !== "BlockStatement") checkResponse(fn.body);
+        }
+        function checkReturned(node) {
+          if (isMockImplementation(enclosingFunction(node))) checkResponse(node.argument);
+        }
         return {
           TSAsExpression: checkCast,
           TSTypeAssertion: checkCast,
           CallExpression(node) {
-            if (!isMockedClientFactory(node.callee)) return;
-            for (const argument of node.arguments.filter(isUncheckedCast)) {
-              context.report({ node: argument, messageId: "cast" });
+            if (isMockedClientFactory(node.callee)) {
+              for (const argument of node.arguments.filter(isUncheckedCast)) {
+                context.report({ node: argument, messageId: "cast" });
+              }
+            } else if (
+              responseSetters.has(calledMember(node.callee)) &&
+              isClientMethod(node.callee.object)
+            ) {
+              checkResponse(node.arguments[0]);
+            }
+          },
+          Property(node) {
+            if (isMethodMocks(node.parent)) checkResponse(node.value);
+          },
+          ArrowFunctionExpression: checkImplementation,
+          FunctionExpression: checkImplementation,
+          ReturnStatement: checkReturned,
+          YieldExpression: checkReturned,
+        };
+      },
+    },
+
+    "logger-mock-import-original": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require logger mock factories in tests to take importOriginal, so the mock keeps the logger module's other exports.",
+        },
+        messages: {
+          factory:
+            "Take importOriginal in the logger mock factory and spread its result; a factory without it drops the logger module's other exports, which modules this test imports indirectly may read.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const loggerModule = "src/cli/shared/logger";
+        function specifier(node) {
+          const literal = node?.type === "ImportExpression" ? node.source : node;
+          return literal?.type === "Literal" && typeof literal.value === "string"
+            ? literal.value
+            : undefined;
+        }
+        function isLoggerModule(spec) {
+          let resolved;
+          if (spec.startsWith("#/")) resolved = `src/${spec.slice(2)}`;
+          else if (spec.startsWith("."))
+            resolved = path.resolve(path.dirname(context.filename), spec);
+          else return false;
+          const normalized = resolved.replaceAll("\\", "/").replace(/\.[cm]?[jt]s$/, "");
+          return normalized === loggerModule || normalized.endsWith(`/${loggerModule}`);
+        }
+        return {
+          CallExpression(node) {
+            const { callee } = node;
+            if (
+              callee.type !== "MemberExpression" ||
+              callee.computed ||
+              callee.object.type !== "Identifier" ||
+              callee.object.name !== "vi" ||
+              (callee.property.name !== "mock" && callee.property.name !== "doMock")
+            ) {
+              return;
+            }
+            const [target, factory] = node.arguments;
+            const spec = specifier(target);
+            if (spec === undefined || !isLoggerModule(spec)) return;
+            if (
+              (factory?.type === "ArrowFunctionExpression" ||
+                factory?.type === "FunctionExpression") &&
+              factory.params.length === 0
+            ) {
+              context.report({ node: factory, messageId: "factory" });
             }
           },
         };

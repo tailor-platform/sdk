@@ -1,14 +1,16 @@
 import { describe, expect, test } from "vitest";
 import { createChangeSet } from "./change-set";
-import { diffKeyed, type KeyedDiffOwnership } from "./keyed-diff";
+import { diffKeyed, labeledResourceChecks, type KeyedDiffOwnership } from "./keyed-diff";
+import { createOwnershipTracker } from "./owned-resource";
+import type { MetadataLabelWrite } from "./label";
 
 type Desired = { name: string; config: string; kind?: string };
 type Existing = { config: string; kind?: string; owner?: string; version: string };
 
 const currentVersion = "v2";
-const ownership: KeyedDiffOwnership<Desired, Existing> = {
-  ownsDesired: (_desired, existing) => existing.owner === "app",
-  ownsRemaining: (existing) => existing.owner === "app",
+const ownership: KeyedDiffOwnership<Existing> = {
+  ownsDesired: (_key, existing) => existing.owner === "app",
+  ownsRemaining: (_key, existing) => existing.owner === "app",
 };
 
 async function plan(
@@ -107,5 +109,102 @@ describe("diffKeyed", () => {
 
     expect(changeSet.unchanged.map((item) => item.name)).toEqual(["a:unchanged"]);
     expect(changeSet.deletes.map((item) => item.name)).toEqual(["b:delete"]);
+  });
+});
+
+describe("labeledResourceChecks", () => {
+  type LabeledDesired = { name: string; metaRequest: MetadataLabelWrite };
+  type LabeledExisting = { allLabels?: Record<string, string> };
+
+  const desired: LabeledDesired = {
+    name: "a",
+    metaRequest: {
+      trn: "trn:a",
+      labels: { "sdk-name": "renamed", "sdk-version": "v2", "sdk-app-id": "app-id-1" },
+    },
+  };
+
+  async function planLabeled(allLabels: Record<string, string>) {
+    const changeSet = createChangeSet<{ name: string }, { name: string }, { name: string }>(
+      "Items",
+    );
+    await diffKeyed({
+      changeSet,
+      desired: [desired],
+      existing: [["a", { allLabels } satisfies LabeledExisting]],
+      keyOf: (item) => item.name,
+      ...labeledResourceChecks(
+        createOwnershipTracker({ kind: "application", name: "renamed", id: "id-1" }),
+        "executor",
+      ),
+      isConfigUnchanged: () => true,
+      create: ({ name }) => ({ name }),
+      update: ({ name }) => ({ name }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name }),
+    });
+    return changeSet;
+  }
+
+  test("refreshes the labels of an owned unchanged resource whose SDK labels differ", async () => {
+    const changeSet = await planLabeled({
+      "sdk-name": "old-name",
+      "sdk-version": "v2",
+      "sdk-app-id": "app-id-1",
+    });
+
+    expect(changeSet.updates).toEqual([]);
+    expect(changeSet.unchanged).toEqual([{ name: "a", labelRefresh: desired.metaRequest }]);
+  });
+
+  test("leaves the labels of an unchanged resource that already carries them", async () => {
+    const changeSet = await planLabeled({ ...desired.metaRequest.labels, owner: "team-a" });
+
+    expect(changeSet.unchanged).toEqual([{ name: "a" }]);
+  });
+
+  test("takes over, for the workspace, a matching resource and a leftover an application deployed", async () => {
+    const tracker = createOwnershipTracker({ kind: "workspace" });
+    const changeSet = createChangeSet<{ name: string }, { name: string }, { name: string }>(
+      "Items",
+    );
+    const legacy = { "sdk-name": "shop", "sdk-version": "v2", "sdk-app-id": "app-id-1" };
+
+    await diffKeyed({
+      changeSet,
+      desired: [desired],
+      existing: [
+        ["a", { allLabels: legacy }],
+        ["b", { allLabels: legacy }],
+      ],
+      keyOf: (item) => item.name,
+      ...labeledResourceChecks(tracker, "executor"),
+      isConfigUnchanged: () => true,
+      create: ({ name }) => ({ name }),
+      update: ({ name }) => ({ name }),
+      unchanged: ({ name }) => ({ name }),
+      delete: (name) => ({ name }),
+    });
+
+    expect(changeSet.updates).toEqual([{ name: "a" }]);
+    expect(changeSet.deletes).toEqual([{ name: "b" }]);
+    expect(tracker.result.takeovers).toEqual([
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "a",
+        action: "update",
+        currentOwner: "shop",
+        currentAppId: "id-1",
+      },
+      {
+        resourceType: "executor",
+        resourceLabel: "Executor",
+        resourceName: "b",
+        action: "delete",
+        currentOwner: "shop",
+        currentAppId: "id-1",
+      },
+    ]);
   });
 });

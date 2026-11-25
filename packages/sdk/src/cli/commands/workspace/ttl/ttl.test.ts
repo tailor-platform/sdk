@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
@@ -8,6 +7,7 @@ import { writePlatformConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { decodeExpiresAt, encodeExpiresAt, expiresAtLabelKey } from "../expiry";
@@ -56,13 +56,11 @@ function seedConfig() {
 }
 
 function stubClient(labels: Record<string, string> = {}) {
-  const client = {
-    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
-    setMetadata: vi.fn().mockResolvedValue({}),
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(
-    client as unknown as Awaited<ReturnType<typeof initOperatorClient>>,
-  );
+  const client = mockOperatorClient({
+    getMetadata: { metadata: { labels } },
+    setMetadata: {},
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
 }
 
@@ -94,12 +92,9 @@ describe("workspace ttl", () => {
       const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "24h"]);
 
       expect(result.success).toBe(true);
-      const written = client.setMetadata.mock.calls[0]?.[0] as {
-        trn: string;
-        labels: Record<string, string>;
-      };
-      expect(written.trn).toBe(workspaceTrn);
-      const expiresAt = decodeExpiresAt(written.labels[expiresAtLabelKey]);
+      const written = client.setMetadata.mock.calls[0]?.[0];
+      expect(written?.trn).toBe(workspaceTrn);
+      const expiresAt = decodeExpiresAt(written?.labels?.[expiresAtLabelKey]);
       expect(expiresAt).toBeDefined();
       // Truncated to whole seconds, so allow the second the write straddled.
       expect(expiresAt?.getTime()).toBeGreaterThanOrEqual(before + 86_400_000 - 1000);
@@ -112,9 +107,9 @@ describe("workspace ttl", () => {
 
       await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
 
-      const written = client.setMetadata.mock.calls[0]?.[0] as { labels: Record<string, string> };
-      expect(written.labels["sdk-name"]).toBe("keep-me");
-      expect(written.labels[expiresAtLabelKey]).not.toBe("s-1");
+      const written = client.setMetadata.mock.calls[0]?.[0];
+      expect(written?.labels?.["sdk-name"]).toBe("keep-me");
+      expect(written?.labels?.[expiresAtLabelKey]).not.toBe("s-1");
     });
 
     test("recovers a workspace whose recorded value this CLI could not have written", async () => {
@@ -124,8 +119,8 @@ describe("workspace ttl", () => {
       const result = await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
 
       expect(result.success).toBe(true);
-      const written = client.setMetadata.mock.calls[0]?.[0] as { labels: Record<string, string> };
-      expect(decodeExpiresAt(written.labels[expiresAtLabelKey])).toBeDefined();
+      const written = client.setMetadata.mock.calls[0]?.[0];
+      expect(decodeExpiresAt(written?.labels?.[expiresAtLabelKey])).toBeDefined();
     });
 
     test("prints the workspace and the expiry it records under JSON output", async () => {
@@ -138,10 +133,8 @@ describe("workspace ttl", () => {
 
         await runCommand(setCommand, ["--workspace-id", workspaceId, "--ttl", "1h"]);
 
-        const written = client.setMetadata.mock.calls[0]?.[0] as {
-          labels: Record<string, string>;
-        };
-        expect(decodeExpiresAt(written.labels[expiresAtLabelKey])?.toISOString()).toBe(
+        const written = client.setMetadata.mock.calls[0]?.[0];
+        expect(decodeExpiresAt(written?.labels?.[expiresAtLabelKey])?.toISOString()).toBe(
           "2026-10-04T01:00:00.000Z",
         );
         expect(JSON.parse(stdout.output)).toEqual({
@@ -218,10 +211,10 @@ describe("workspace ttl", () => {
       const result = await runCommand(clearCommand, ["--workspace-id", workspaceId]);
 
       expect(result.success).toBe(true);
-      const written = client.setMetadata.mock.calls[0]?.[0] as { labels: Record<string, string> };
+      const written = client.setMetadata.mock.calls[0]?.[0];
       expect(written).toBeDefined();
-      expect(expiresAtLabelKey in written.labels).toBe(false);
-      expect(written.labels["sdk-name"]).toBe("keep-me");
+      expect(expiresAtLabelKey in (written?.labels ?? {})).toBe(false);
+      expect(written?.labels?.["sdk-name"]).toBe("keep-me");
     });
 
     test.each<{ name: string; labels: Record<string, string>; changed: boolean }>([

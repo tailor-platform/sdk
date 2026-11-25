@@ -42,6 +42,15 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
+const SHELL_ARGUMENT_UNIT = String.raw`(?:"(?:[^"\\\n\0]|\\[^\0])*"|'[^'\n\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
+const FUNCTION_RUN_NAME_FLAG = String.raw`(?:\r?\n[^\S\r\n]*|\s)(?:--name|-n)(?:[\s=\0]|$)`;
+const FUNCTION_RUN_NAME_PATTERN = new RegExp(
+  String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
+);
+
+const FUNCTION_SCRIPT_COMMAND_PATTERN =
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -1748,6 +1757,39 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/function-script-rename",
+    name: "function script → function scaffold",
+    description:
+      "Rename `tailor function script` invocations to `tailor function scaffold`. `script` remains as a deprecated alias until it is removed in v3.",
+    since: "2.5.0",
+    until: "3.0.0",
+    scriptPath: "v3/function-script-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor function script scripts/fix-prices.ts --namespace tailordb",
+        after: "tailor function scaffold scripts/fix-prices.ts --namespace tailordb",
+      },
+    ],
+    prompt: [
+      "The `tailor function script` subcommand is renamed to `tailor function scaffold`;",
+      "the old name is removed in v3. Replace any remaining `function script`",
+      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
+      "through a package runner such as `npx @tailor-platform/sdk`) with",
+      "`function scaffold`. Leave prose that merely mentions the old subcommand name",
+      "unchanged unless it documents a command to type, and leave `tailordb migrate",
+      "script` and other commands named `script` as they are.",
+    ].join("\n"),
+  },
+  {
     id: "v3/relation-toward-table",
     name: "relation() toward.type → toward.table",
     description:
@@ -2123,6 +2165,98 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/plugin-context-auths",
+    name: "Generation hook context auth → auths",
+    description:
+      "The `auth` field of the context that `onTailorDBReady`, `onResolverReady`, and `onExecutorReady` receive is replaced by `auths`, which holds every Auth service of the config keyed by its name. `auth` keeps returning the config's Auth service until it is removed in v3, but reading it fails when the config has several Auth services. Plugins that read `auth` are reported for a manual change.",
+    since: "1.18.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      "onTailorDBReady",
+      "onResolverReady",
+      "onExecutorReady",
+      "TailorDBReadyContext",
+      "ResolverReadyContext",
+      "ExecutorReadyContext",
+    ],
+    examples: [
+      {
+        before: [
+          "async onTailorDBReady(ctx) {",
+          "  const machineUsers = Object.keys(ctx.auth?.machineUsers ?? {});",
+          "  return { files: [] };",
+          "}",
+        ].join("\n"),
+        after: [
+          "async onTailorDBReady(ctx) {",
+          "  const machineUsers = Object.values(ctx.auths).flatMap((auth) =>",
+          "    Object.keys(auth.machineUsers ?? {}),",
+          "  );",
+          "  return { files: [] };",
+          "}",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `auth` field of the context passed to the plugin hooks",
+      "`onTailorDBReady`, `onResolverReady`, and `onExecutorReady` (types",
+      "`TailorDBReadyContext`, `ResolverReadyContext`, `ExecutorReadyContext`) is",
+      "removed in favor of `auths`, a record of every Auth service of the config keyed",
+      "by its name. For each flagged plugin that reads `auth` from such a context,",
+      "including through destructuring, read `auths` instead: iterate",
+      "`Object.values(ctx.auths)` when the plugin should handle every Auth service, or",
+      "pick one by name when it needs a specific one. An empty `auths` means the",
+      "config has no Auth service, as an undefined `auth` did. Leave files that only",
+      "define these hooks without reading `auth` unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/plugin-context-application",
+    name: "onDeployed context application → applications / staticWebsites",
+    description:
+      "The `application` field of the context that `onDeployed` receives is removed in v3. Read the static websites of the registering config, which the plugin can publish, from `staticWebsites`, and the deployed applications from `applications`. `application` keeps returning the registering application until then, but reading it fails when the config deploys several applications. Plugins that read `application` are reported for a manual change.",
+    since: "2.25.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      "onDeployed",
+      "DeployedContext",
+      "frontendPlugin",
+      "FrontendEnvContext",
+      "FrontendBuildContext",
+    ],
+    examples: [
+      {
+        before: [
+          "async onDeployed(ctx) {",
+          '  await ctx.application.staticWebsites["web"]?.publish(dir);',
+          "  return { outputs: { url: ctx.application.url } };",
+          "}",
+        ].join("\n"),
+        after: [
+          "async onDeployed(ctx) {",
+          '  await ctx.staticWebsites["web"]?.publish(dir);',
+          "  const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);",
+          "  return { outputs: { url: app?.url } };",
+          "}",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `application` field of the context passed to the plugin hook",
+      "`onDeployed` (type `DeployedContext`) is removed; `application` in the context of",
+      "`frontendPlugin`'s `env` and `build` callbacks (`FrontendEnvContext`,",
+      "`FrontendBuildContext`) is deprecated as well. For each flagged file that reads",
+      "`application` from such a context, including through destructuring: read a static website of the registering",
+      "config, including one to `publish` to, from `staticWebsites` keyed by its name; read",
+      "an application's `url`, `domain`, `id`, `auth`, or `aiGateways` from its `applications`",
+      "entry: the registering config's own applications are those whose `configPath` equals",
+      "the context's `configPath`, or pick one by `name`. Leave files that only define these hooks",
+      "without reading `application` unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v3/idp-array-to-single",
     name: "defineConfig idp array → single IdP",
     description:
@@ -2181,6 +2315,47 @@ export const allCodemods: CodemodPackage[] = [
       "",
       "When `idp` is built from a variable, a spread, or a helper, change it where the",
       "array is defined. Leave the `idp` options of other tools unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/function-run-name-to-workflow-run",
+    name: "function run --name → workflow run --job",
+    description:
+      "Replace `tailor function run <file> --name <job>` with `tailor workflow run <file> --job <job>`. `--name` is deprecated and removed in v3. It has no mechanical replacement: `function run --name` runs only the job's body and skips the jobs it starts with `.start()`, while `workflow run` runs those jobs too and accepts only a JSON object or `null` as its argument, so `tailor upgrade` reports each use for a manual change.",
+    since: "1.22.0",
+    until: "3.0.0",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
+    examples: [
+      {
+        before: "tailor function run workflows/sample.ts --name validate-order",
+        after: "tailor workflow run workflows/sample.ts --job validate-order",
+        lang: "sh",
+        caption:
+          "The jobs that `validate-order` starts with `.start()` now run too, and `--arg` must be a JSON object or `null`.",
+      },
+    ],
+    prompt: [
+      "`tailor function run --name` (and `function test-run --name`) is removed in v3.",
+      "Replace each flagged invocation with `tailor workflow run <file> --job <job>`.",
+      "",
+      "Check these differences before replacing:",
+      "- `function run --name` runs only the job's body; the jobs it starts with",
+      "  `.start()` are not executed. `workflow run` runs those jobs as well, so a",
+      "  script that relied on the started jobs being skipped now runs them.",
+      "- `workflow run` accepts only a JSON object or `null` as its `--arg` /",
+      "  `--arg-file`. A number, string, boolean, or array is refused; wrap it in an",
+      "  object and read it from the job's input.",
+      "- `workflow run` has no `--watch`. Replace a `function run --watch --name`",
+      "  call with a file watcher that runs `workflow run` after each change.",
+      "- Leave `--name` of other commands unchanged (`function get`, `workspace`,",
+      "  and so on).",
     ].join("\n"),
   },
 ];

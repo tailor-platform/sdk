@@ -1,16 +1,20 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageInitShape } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
-import { sdkNameLabelKey } from "./label";
+import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Executor } from "#/types/executor.generated";
 import type { PlanContext } from "./types";
+import type { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 // Mock node:fs to avoid file system access
 vi.mock("node:fs", () => ({
@@ -105,44 +109,53 @@ describe("planExecutor", () => {
     existingExecutors: Array<{
       name: string;
       label?: string;
-      resource?: Record<string, unknown>;
+      resource?: MessageInitShape<typeof ExecutorExecutorSchema>;
       sdkVersion?: string;
     }>,
     workspaceMachineUsers: string[] = [],
   ): OperatorClient {
-    return {
-      listAuthMachineUsers: vi.fn().mockResolvedValue({
-        machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+    return mockOperatorClient({
+      listAuthMachineUsers: {
+        machineUsers: workspaceMachineUsers.map(
+          (name): MessageInitShape<typeof MachineUserSummarySchema> => ({ name }),
+        ),
         nextPageToken: "",
-      }),
-      listExecutorExecutors: vi.fn().mockResolvedValue({
-        executors: existingExecutors.map((e) => ({ name: e.name })),
+      },
+      listExecutorExecutors: {
+        executors: existingExecutors.map((e): MessageInitShape<typeof ExecutorExecutorSchema> => ({
+          name: e.name,
+        })),
         nextPageToken: "",
-      }),
-      getExecutorExecutor: vi.fn().mockImplementation(({ name }: { name: string }) => {
+      },
+      getExecutorExecutor: (request) => {
+        const executor = existingExecutors.find((e) => e.name === request.name);
+        return { executor: executor?.resource ?? { name: request.name } };
+      },
+      getMetadata: (request) => {
+        const name = request.trn?.split(":").pop();
         const executor = existingExecutors.find((e) => e.name === name);
-        return { executor: executor?.resource ?? { name } };
-      }),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-        const name = trn.split(":").pop();
-        const executor = existingExecutors.find((e) => e.name === name);
-        return {
-          metadata: {
-            labels: executor?.label
-              ? {
-                  [sdkNameLabelKey]: executor.label,
-                  "sdk-version": executor.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
+        const labels: Record<string, string> = executor?.label
+          ? {
+              [sdkNameLabelKey]: executor.label,
+              "sdk-version": executor.sdkVersion ?? "v1-0-0",
+            }
+          : {};
+        return { metadata: { labels } };
+      },
+    });
+  }
+
+  function executorFile(name: string): string {
+    return `/test/executors/${name}.ts`;
+  }
+
+  async function planError(context: PlanContext): Promise<Error> {
+    return (await planExecutor(context).catch((error: unknown) => error)) as Error;
   }
 
   // Helper to create mock executor service
   function createMockExecutorService(executors: Executor[]): ExecutorService {
-    const executorMap = Object.fromEntries(executors.map((e) => [e.name, e]));
+    const executorMap = Object.fromEntries(executors.map((e) => [executorFile(e.name), e]));
     return {
       config: {},
       executors: executorMap,
@@ -186,16 +199,18 @@ describe("planExecutor", () => {
       tailorDBServices,
       resolverServices,
       idpServices,
-      authService: options?.authName
-        ? {
-            config: {
-              name: options.authName,
-              machineUsers: Object.fromEntries(
-                (options.authMachineUsers ?? []).map((name) => [name, {}]),
-              ),
+      authServices: options?.authName
+        ? [
+            {
+              config: {
+                name: options.authName,
+                machineUsers: Object.fromEntries(
+                  (options.authMachineUsers ?? []).map((name) => [name, {}]),
+                ),
+              },
             },
-          }
-        : undefined,
+          ]
+        : [],
       config: options?.externalAuthName
         ? { auth: { name: options.externalAuthName, external: true } }
         : {},
@@ -210,6 +225,8 @@ describe("planExecutor", () => {
       client: createMockClient([]),
       workspaceId,
       application,
+      applications: [deployApplicationOf(application)],
+      owner: applicationOwner(application),
       forRemoval: false,
       config: mockConfig,
       ...overrides,
@@ -387,6 +404,32 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
+    test("existing executor whose other SDK labels differ stays unchanged with a label refresh", async () => {
+      const executor = createMockExecutor("existing-executor");
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
+      const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+      const client = createMockClient([
+        { name: "existing-executor", label: appName, resource: desiredExecutor },
+      ]);
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
+
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.unchanged).toEqual([
+        {
+          name: "existing-executor",
+          labelRefresh: expect.objectContaining({ labels: desiredLabels }),
+        },
+      ]);
+    });
+
     test("existing executor is compared against its fetched detail, not its list row", async () => {
       const executor = createMockExecutor("existing-executor");
       const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
@@ -553,6 +596,9 @@ describe("planExecutor", () => {
       const loadExecutors = vi.fn();
       const application = {
         name: appName,
+        config: {},
+        subgraphs: [],
+        authServices: [],
         env: {},
         executorService: { loadExecutors },
       } as unknown as Application;
@@ -591,6 +637,29 @@ describe("planExecutor", () => {
       const variablesExpr = variablesExprOf(result.changeSet.creates[0]!);
       expect(variablesExpr).toContain('"SITE_URL":"my-site:url"');
       expect(variablesExpr).toContain('"RETRIES":3');
+    });
+
+    test("embeds the root env with the executor override of a workspace config", async () => {
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("executor-a")]),
+        env: { region: "jp", tier: "root" },
+      };
+
+      const result = await planExecutor(
+        buildPlanContext(application, {
+          envOverrides: {
+            resolver: { api: { tier: "api" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const variablesExpr = variablesExprOf(result.changeSet.creates[0]!);
+      expect(variablesExpr).toContain('"region":"jp"');
+      expect(variablesExpr).toContain('"tier":"jobs"');
+      expect(variablesExpr).not.toContain('"tier":"root"');
+      expect(variablesExpr).not.toContain('"tier":"api"');
     });
   });
 
@@ -645,8 +714,10 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("error: args.failed?.error");
     });
 
-    describe("string invoker", () => {
-      function createInvokerExecutor(invoker: string): Executor {
+    describe("invoker", () => {
+      function createInvokerExecutor(
+        invoker: string | { namespace: string; machineUserName: string },
+      ): Executor {
         return {
           name: "test-executor",
           description: "Executor test-executor",
@@ -685,16 +756,69 @@ describe("planExecutor", () => {
           externalAuthName: "external-auth",
         });
 
-        await expect(
-          planExecutor(
-            buildPlanContext(application, {
-              client: createMockClient([], ["batch-user"]),
-            }),
-          ),
-        ).rejects.toMatchObject({
+        const error = await planError(
+          buildPlanContext(application, {
+            client: createMockClient([], ["batch-user"]),
+          }),
+        );
+
+        expect(error).toMatchObject({
           code: "INVOKER_MACHINE_USER_NOT_FOUND",
           message: expect.stringContaining('Executor "test-executor"'),
+          context: { executor: "test-executor", file: executorFile("test-executor") },
         });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("test-executor"),
+        });
+      });
+
+      test("points a string invoker without Auth at the executor", async () => {
+        const application = createMockApplication([createInvokerExecutor("batch-user")]);
+
+        const error = await planError(buildPlanContext(application));
+
+        expect(error).toMatchObject({
+          code: "INVOKER_AUTH_REQUIRED",
+          context: {
+            invoker: "batch-user",
+            executor: "test-executor",
+            file: executorFile("test-executor"),
+          },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("test-executor"),
+        });
+      });
+
+      test.for([
+        {
+          label: "a string invoker whose external Auth is missing at the config",
+          invoker: "batch-user",
+          file: mockConfig.path,
+        },
+        {
+          label: "an object invoker whose Auth is missing at the executor",
+          invoker: { namespace: "external-auth", machineUserName: "batch-user" },
+          file: executorFile("test-executor"),
+        },
+      ])("points $label", async ({ invoker, file }) => {
+        const application = createMockApplication([createInvokerExecutor(invoker)], {
+          externalAuthName: "external-auth",
+        });
+        const client = mockOperatorClient({
+          listAuthMachineUsers: () => {
+            throw new ConnectError("auth namespace not found", Code.NotFound);
+          },
+          listExecutorExecutors: { executors: [], nextPageToken: "" },
+        });
+
+        const error = await planError(buildPlanContext(application, { client }));
+
+        expect(error).toMatchObject({
+          code: "INVOKER_AUTH_NOT_FOUND",
+          context: { invoker: "batch-user", executor: "test-executor", file },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({ file });
       });
 
       test("accepts a machine user that another config in the same deploy creates", async () => {
@@ -739,6 +863,150 @@ describe("planExecutor", () => {
           ),
         ).rejects.toMatchObject({ code: "INVOKER_MACHINE_USER_NOT_FOUND" });
       });
+
+      test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
+        const application = createMockApplication([
+          createInvokerExecutor({ namespace: "other-auth", machineUserName: "batch-usr" }),
+        ]);
+
+        await expect(
+          planExecutor(
+            buildPlanContext(application, {
+              client: createMockClient([], ["batch-user"]),
+            }),
+          ),
+        ).rejects.toMatchObject({
+          code: "INVOKER_MACHINE_USER_NOT_FOUND",
+          context: {
+            invoker: "batch-usr",
+            authNamespace: "other-auth",
+            machineUsers: ["batch-user"],
+            executor: "test-executor",
+            file: executorFile("test-executor"),
+          },
+        });
+      });
+    });
+  });
+
+  describe("a workspace config with two applications and two Auth services", () => {
+    function workspaceContext(executor: Executor) {
+      const application = {
+        ...createMockApplication([executor]),
+        authServices: [
+          { config: { name: "shop-auth" } },
+          { config: { name: "admin-auth" } },
+        ] as unknown as Application["authServices"],
+      };
+      return {
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        owner: { kind: "workspace" },
+        applications: [
+          { name: "shop", subgraphs: [], authNamespace: "shop-auth", settings: {} },
+          { name: "admin", subgraphs: [], authNamespace: "admin-auth", settings: {} },
+        ],
+        plannedMachineUsers: new Map([
+          ["shop-auth", new Set(["kiosk"])],
+          ["admin-auth", new Set(["batch"])],
+        ]),
+      } satisfies PlanContext;
+    }
+
+    function executorWith(
+      trigger: Executor["trigger"],
+      operation: Executor["operation"] = { kind: "function", body: () => {} },
+    ): Executor {
+      return { name: "on-event", description: "test", disabled: false, trigger, operation };
+    }
+
+    test("asks for the Auth service of an authAccessToken trigger that names none", async () => {
+      const executor = executorWith({
+        kind: "authAccessToken",
+        events: ["auth.access_token.issued"],
+      });
+
+      const error = await planError(workspaceContext(executor));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_AUTH_AMBIGUOUS",
+        context: {
+          executor: "on-event",
+          available: ["shop-auth", "admin-auth"],
+          file: executorFile("on-event"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
+    });
+
+    test("subscribes an authAccessToken trigger to the Auth service it names", async () => {
+      const executor = executorWith({
+        kind: "authAccessToken",
+        events: ["auth.access_token.issued"],
+        auth: "admin-auth",
+      });
+
+      const result = await planExecutor(workspaceContext(executor));
+
+      const triggerConfig = result.changeSet.creates[0]!.request.executor?.triggerConfig
+        ?.config as {
+        value: { typedConfig: { value: { namespaceName: string } } };
+      };
+      expect(triggerConfig.value.typedConfig.value.namespaceName).toBe("admin-auth");
+    });
+
+    test("runs as the machine user of the Auth service that defines a string invoker", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "function", body: () => {}, invoker: "batch" },
+      );
+
+      const result = await planExecutor(workspaceContext(executor));
+
+      const targetConfig = result.changeSet.creates[0]!.request.executor?.targetConfig?.config as {
+        value: { invoker: unknown };
+      };
+      expect(targetConfig.value.invoker).toEqual({
+        namespace: "admin-auth",
+        machineUserName: "batch",
+      });
+    });
+
+    test("needs an application for a GraphQL operation of a workspace config that deploys none", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "graphql", query: "query { ok }" },
+      );
+
+      const error = await planError({ ...workspaceContext(executor), applications: [] });
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_APP_NAME_REQUIRED",
+        context: { executor: "on-event", available: [], file: executorFile("on-event") },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
+    });
+
+    test("asks for the application of a GraphQL operation that names none", async () => {
+      const executor = executorWith(
+        { kind: "schedule", timezone: "UTC", cron: "0 * * * *" },
+        { kind: "graphql", query: "query { ok }" },
+      );
+
+      const error = await planError(workspaceContext(executor));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_APP_NAME_AMBIGUOUS",
+        context: {
+          executor: "on-event",
+          available: ["shop", "admin"],
+          file: executorFile("on-event"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: executorFile("on-event") });
     });
   });
 
@@ -995,6 +1263,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         tailorDBTypeNamespaces: new Map([["User", "shared-db"]]),
@@ -1026,6 +1296,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1056,6 +1328,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         resolverNamespaces: new Map([["myResolver", "shared-pipeline"]]),
@@ -1084,6 +1358,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1109,6 +1385,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         idpNames: new Set(["peer-idp"]),
@@ -1136,6 +1414,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1163,9 +1443,57 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('TailorDB table "Unknown" not found in any namespace');
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NOT_FOUND",
+        message:
+          'Executor "on-record-created" triggers on TailorDB table "Unknown", which is not found in any namespace. Available namespaces: my-tailordb',
+        context: {
+          executor: "on-record-created",
+          resource: "Unknown",
+          available: ["my-tailordb"],
+          file: executorFile("on-record-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-record-created"),
+      });
+    });
+
+    test("recordCreated throws when several namespaces of the deploy run define the table", async () => {
+      const executor: Executor = {
+        name: "on-record-created",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
+          tableName: "Order",
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor]);
+
+      const error = await planError(
+        buildPlanContext(application, {
+          tailorDBTypeNamespaces: new Map([["Order", undefined]]),
+        }),
+      );
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+        message:
+          'Executor "on-record-created" triggers on TailorDB table "Order", which several namespaces in this deploy run define.',
+        context: {
+          executor: "on-record-created",
+          resource: "Order",
+          file: executorFile("on-record-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-record-created"),
+      });
     });
 
     test("resolverExecuted throws when resolver not found in any namespace", async () => {
@@ -1181,9 +1509,22 @@ describe("planExecutor", () => {
         resolverNames: { myResolver: "my-pipeline" },
       });
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('Resolver "unknown" not found in any namespace');
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NOT_FOUND",
+        message:
+          'Executor "on-resolver-exec" triggers on Resolver "unknown", which is not found in any namespace. Available namespaces: my-pipeline',
+        context: {
+          executor: "on-resolver-exec",
+          resource: "unknown",
+          available: ["my-pipeline"],
+          file: executorFile("on-resolver-exec"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-resolver-exec"),
+      });
     });
 
     test("idpUserCreated throws when no IdP service configured", async () => {
@@ -1197,9 +1538,14 @@ describe("planExecutor", () => {
       };
       const application = createMockApplication([executor]);
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/no IdP is configured/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_REQUIRED",
+        message: expect.stringMatching(/no IdP is configured/),
+        context: { executor: "on-idp-user-created", file: mockConfig.path },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
     });
 
     test("idpUserCreated throws when multiple IdPs are configured and idp is omitted", async () => {
@@ -1215,9 +1561,20 @@ describe("planExecutor", () => {
         idpNames: ["idp-a", "idp-b"],
       });
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/multiple IdPs/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_AMBIGUOUS",
+        message: expect.stringMatching(/multiple IdPs/),
+        context: {
+          executor: "on-idp-user-created",
+          available: ["idp-a", "idp-b"],
+          file: executorFile("on-idp-user-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-idp-user-created"),
+      });
     });
 
     test("idpUserCreated throws when specified idp does not exist", async () => {
@@ -1233,29 +1590,101 @@ describe("planExecutor", () => {
         idpNames: ["idp-a", "idp-b"],
       });
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/no IdP with that name is configured/);
+      const error = await planError(buildPlanContext(application, { client }));
+
+      expect(error).toMatchObject({
+        code: "EXECUTOR_IDP_NOT_FOUND",
+        message: expect.stringMatching(/no IdP with that name is configured/),
+        context: {
+          executor: "on-idp-user-created",
+          idp: "missing",
+          available: ["idp-a", "idp-b"],
+          file: executorFile("on-idp-user-created"),
+        },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({
+        file: executorFile("on-idp-user-created"),
+      });
     });
 
-    test("authAccessTokenIssued throws when no Auth service configured", async () => {
-      const client = createMockClient([]);
+    test.for([undefined, "my-auth"])(
+      "authAccessTokenIssued with auth %s names the executor and its config when no Auth service configured",
+      async (auth) => {
+        const executor: Executor = {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"], auth },
+          operation: { kind: "function", body: () => {} },
+        };
+        const application = createMockApplication([executor]);
+
+        const error = await planError(buildPlanContext(application));
+
+        expect(error).toMatchObject({
+          code: "AUTH_CONFIG_REQUIRED",
+          message:
+            'Executor "on-auth-token-issued" uses an authAccessToken trigger, but its config uses no Auth service.',
+          suggestion: expect.stringContaining('auth: { name: "<auth-name>", external: true }'),
+          context: { executor: "on-auth-token-issued", file: mockConfig.path },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({ file: mockConfig.path });
+      },
+    );
+
+    test.for([
+      { label: "its own Auth", appOptions: { authName: "my-auth" } },
+      { label: "the external Auth it references", appOptions: { externalAuthName: "my-auth" } },
+    ])("authAccessToken trigger plans auth naming $label", async ({ appOptions }) => {
       const executor: Executor = {
         name: "on-auth-token-issued",
         description: "test",
         disabled: false,
-        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"], auth: "my-auth" },
         operation: { kind: "function", body: () => {} },
       };
-      const application = createMockApplication([executor]);
+      const application = createMockApplication([executor], appOptions);
 
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toMatchObject({
-        code: "AUTH_CONFIG_REQUIRED",
-        message: "No Auth service configured",
-      });
+      const result = await planExecutor(buildPlanContext(application));
+
+      expect(getEventConfig(result).value.namespaceName).toBe("my-auth");
     });
+
+    test.for([
+      { label: "its own Auth", appOptions: { authName: "my-auth" } },
+      { label: "the external Auth it references", appOptions: { externalAuthName: "my-auth" } },
+    ])(
+      "authAccessToken trigger rejects auth naming an Auth other than $label",
+      async ({ appOptions }) => {
+        const executor: Executor = {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "authAccessToken",
+            events: ["auth.access_token.issued"],
+            auth: "other-auth",
+          },
+          operation: { kind: "function", body: () => {} },
+        };
+        const application = createMockApplication([executor], appOptions);
+
+        const error = await planError(buildPlanContext(application));
+
+        expect(error).toMatchObject({
+          code: "EXECUTOR_AUTH_NOT_FOUND",
+          context: {
+            executor: "on-auth-token-issued",
+            auth: "other-auth",
+            available: ["my-auth"],
+            file: executorFile("on-auth-token-issued"),
+          },
+        });
+        expect(getErrorDiagnostics(error).location).toEqual({
+          file: executorFile("on-auth-token-issued"),
+        });
+      },
+    );
 
     test("multi-event record trigger emits multiple eventTypes", async () => {
       const client = createMockClient([]);
@@ -1278,6 +1707,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1313,6 +1744,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1343,6 +1776,8 @@ describe("planExecutor", () => {
         client,
         workspaceId,
         application,
+        applications: [deployApplicationOf(application)],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
       });
@@ -1388,118 +1823,31 @@ describe("planExecutor", () => {
       ]);
       expect(typedConfig.value.condition).toBeDefined();
     });
-
-    test.each([
-      {
-        name: "recordCreated throws when typeName not found in any TailorDB service",
-        executor: {
-          name: "on-record-created",
-          description: "test",
-          disabled: false,
-          trigger: {
-            kind: "tailordb",
-            events: ["tailordb.type_record.created"],
-            tableName: "Unknown",
-          },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { tailorDBTypes: { User: "my-tailordb" } },
-        errorPattern: 'TailorDB table "Unknown" not found in any namespace',
-      },
-      {
-        name: "resolverExecuted throws when resolver not found in any namespace",
-        executor: {
-          name: "on-resolver-exec",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "resolverExecuted", resolverName: "unknown" },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { resolverNames: { myResolver: "my-pipeline" } },
-        errorPattern: 'Resolver "unknown" not found in any namespace',
-      },
-      {
-        name: "idpUserCreated throws when no IdP service configured",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: undefined,
-        errorPattern: /no IdP is configured/,
-      },
-      {
-        name: "idpUserCreated throws when multiple IdPs are configured and idp is omitted",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { idpNames: ["idp-a", "idp-b"] },
-        errorPattern: /multiple IdPs/,
-      },
-      {
-        name: "idpUserCreated throws when specified idp does not exist",
-        executor: {
-          name: "on-idp-user-created",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "missing" },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: { idpNames: ["idp-a", "idp-b"] },
-        errorPattern: /no IdP with that name is configured/,
-      },
-      {
-        name: "authAccessTokenIssued throws when no Auth service configured",
-        executor: {
-          name: "on-auth-token-issued",
-          description: "test",
-          disabled: false,
-          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
-          operation: { kind: "function", body: () => {} },
-        } satisfies Executor,
-        appOptions: undefined,
-        errorPattern: "No Auth service configured",
-      },
-    ])("$name", async ({ executor, appOptions, errorPattern }) => {
-      const application = createMockApplication([executor], appOptions);
-
-      await expect(planExecutor(buildPlanContext(application))).rejects.toThrow(errorPattern);
-    });
   });
 
   describe("previousExisting reuse", () => {
     test("skips re-listing executors when a prior fetch is provided", async () => {
-      const listExecutorExecutors = vi.fn().mockResolvedValue({
-        executors: [{ name: "existing-executor" }],
-        nextPageToken: "",
+      const client = mockOperatorClient({
+        listExecutorExecutors: {
+          executors: [{ name: "existing-executor" }],
+          nextPageToken: "",
+        },
+        getExecutorExecutor: { executor: { name: "existing-executor" } },
+        getMetadata: { metadata: { labels: {} } },
       });
-      const getExecutorExecutor = vi
-        .fn()
-        .mockResolvedValue({ executor: { name: "existing-executor" } });
-      const client = {
-        listExecutorExecutors,
-        getExecutorExecutor,
-        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      } as unknown as OperatorClient;
 
       const application = createMockApplication([createMockExecutor("existing-executor")]);
       const first = await planExecutor(buildPlanContext(application, { client }));
-      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
-      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
+      expect(client.listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(client.getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(first.changeSet.creates).toHaveLength(0);
       expect(first.changeSet.updates).toHaveLength(1);
 
       const second = await planExecutor(buildPlanContext(application, { client }), first);
 
       // Not called a second time: the platform list and details are reused as-is.
-      expect(listExecutorExecutors).toHaveBeenCalledTimes(1);
-      expect(getExecutorExecutor).toHaveBeenCalledTimes(1);
+      expect(client.listExecutorExecutors).toHaveBeenCalledTimes(1);
+      expect(client.getExecutorExecutor).toHaveBeenCalledTimes(1);
       expect(second.changeSet.creates).toHaveLength(0);
       expect(second.changeSet.updates).toHaveLength(1);
     });

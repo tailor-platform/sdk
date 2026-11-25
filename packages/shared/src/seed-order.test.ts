@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { sortBySelfReference } from "./seed-order";
+import { groupBySelfReference, sortBySelfReference } from "./seed-order";
 
 describe("sortBySelfReference", () => {
   test("orders a parent before children that land in reverse (dump) order", () => {
@@ -138,5 +138,86 @@ describe("sortBySelfReference", () => {
     // no data is dropped.
     const sorted = sortBySelfReference(records, ["parentCode"]);
     expect(sorted.map((r) => r.id)).toEqual(expect.arrayContaining(["child-id", "parent-id"]));
+  });
+});
+
+describe("groupBySelfReference", () => {
+  const ids = (groups: { id?: string }[][]) => groups.map((group) => group.map((r) => r.id));
+
+  test("puts rows whose parents are all in earlier groups into the same group", () => {
+    const records = [
+      { id: "e", parentId: "c" },
+      { id: "d", parentId: "b" },
+      { id: "c", parentId: "a" },
+      { id: "b", parentId: "a" },
+      { id: "a", parentId: null },
+    ];
+    expect(ids(groupBySelfReference(records, ["parentId"]))).toEqual([
+      ["a"],
+      ["c", "b"],
+      ["e", "d"],
+    ]);
+  });
+
+  test("places a row after the deepest of its parents", () => {
+    const records = [
+      { id: "c", links: [{ parentID: "a" }, { parentID: "b" }] },
+      { id: "b", links: [{ parentID: "a" }] },
+      { id: "a", links: [] },
+    ];
+    expect(ids(groupBySelfReference(records, ["links.parentID"]))).toEqual([["a"], ["b"], ["c"]]);
+  });
+
+  test("keeps rows that reference nothing in the batch, or only themselves, in one group", () => {
+    const records = [
+      { id: "outside", parentId: "not-in-batch" },
+      { id: "self", parentId: "self" },
+      { id: "root", parentId: null },
+    ];
+    expect(ids(groupBySelfReference(records, ["parentId"]))).toEqual([["outside", "self", "root"]]);
+  });
+
+  test("resolves references through a non-id target key", () => {
+    const records = [
+      { id: "child-id", code: "child", parentCode: "parent" },
+      { id: "parent-id", code: "parent", parentCode: null },
+    ];
+    const groups = groupBySelfReference(records, ["parentCode"], { parentCode: "code" });
+    expect(groups.map((group) => group.map((r) => r.code))).toEqual([["parent"], ["child"]]);
+  });
+
+  test("returns one group per row, in input order, when there are no self-reference fields", () => {
+    const records = [{ id: "a" }, { id: "b" }];
+    expect(ids(groupBySelfReference(records, []))).toEqual([["a"], ["b"]]);
+  });
+
+  test("returns one group per row, in input order, when ids are duplicated", () => {
+    const records = [
+      { id: "dup", parentId: null },
+      { id: "dup", parentId: null },
+    ];
+    expect(ids(groupBySelfReference(records, ["parentId"]))).toEqual([["dup"], ["dup"]]);
+  });
+
+  test("returns one group per row, in input order, when a single row has no id", () => {
+    const records = [
+      { code: "parent", parentCode: null },
+      { id: "child", code: "child", parentCode: "parent" },
+    ];
+    const groups = groupBySelfReference(records, ["parentCode"], { parentCode: "code" });
+    expect(groups.map((group) => group.map((r) => r.code))).toEqual([["parent"], ["child"]]);
+  });
+
+  test("returns a cycle as one group per row after the rows that can be grouped", () => {
+    const records = [
+      { id: "a", parentId: "b" },
+      { id: "b", parentId: "a" },
+      { id: "root", parentId: null },
+    ];
+    expect(ids(groupBySelfReference(records, ["parentId"]))).toEqual([["root"], ["a"], ["b"]]);
+  });
+
+  test("returns no groups for no rows", () => {
+    expect(groupBySelfReference([], ["parentId"])).toEqual([]);
   });
 });

@@ -90,8 +90,14 @@ export interface ResolverNamespaceData {
 export interface TailorDBReadyContext<PluginConfig = unknown> {
   /** All TailorDB namespaces with their tables and metadata */
   tailordb: TailorDBNamespaceData[];
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */
@@ -111,8 +117,14 @@ export interface ResolverReadyContext<PluginConfig = unknown> {
   tailordb: TailorDBNamespaceData[];
   /** All resolver namespaces with their resolvers */
   resolvers: ResolverNamespaceData[];
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */
@@ -134,8 +146,14 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   resolvers: ResolverNamespaceData[];
   /** All executors, keyed by executor name */
   executors: Record<string, Executor>;
-  /** Auth configuration */
+  /**
+   * The config's Auth service. Reading it throws when the config has several Auth services, and
+   * a copy made with `{ ...ctx }` then leaves it out.
+   * @deprecated since 2.47.0 — use `auths` instead. codemod: v3/plugin-context-auths
+   */
   auth?: GeneratorAuthInput;
+  /** Every Auth service of the config, keyed by its name */
+  auths: Record<string, GeneratorAuthInput>;
   /** Base directory for generated files */
   baseDir: string;
   /** Path to tailor.config.ts */
@@ -144,7 +162,6 @@ export interface ExecutorReadyContext<PluginConfig = unknown> {
   pluginConfig: PluginConfig;
 }
 
-/** @lintignore kept exported for the zinfer-generated reference in src/types/plugin-config.generated.ts */
 export type TableConfigRequired<PluginConfig = unknown> =
   | boolean
   | ((pluginConfig: PluginConfig | undefined) => boolean);
@@ -497,10 +514,15 @@ export interface DeployedContext<PluginConfig = unknown> {
   workspaceId: string;
   /** Profile `tailor deploy` ran with (`--profile`). Absent when the deploy was run without one. */
   profile?: string;
-  /** Application whose config registers this plugin. Only its static websites can be published. */
+  /**
+   * Application whose config registers this plugin.
+   * @deprecated since NEXT_RELEASE — use `applications`, or `staticWebsites` to publish, instead. codemod: v3/plugin-context-application
+   */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */
   applications: readonly DeployedApplication[];
+  /** Static websites declared in the config that registers this plugin, keyed by name. Only these can be published. */
+  staticWebsites: Readonly<Partial<Record<string, PublishableStaticWebsite>>>;
   /** Absolute path of the config registering this plugin. */
   configPath: string;
   pluginConfig: PluginConfig;

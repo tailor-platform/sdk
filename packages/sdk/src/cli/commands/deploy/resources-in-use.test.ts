@@ -23,16 +23,19 @@ import {
 } from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
 import { describe, expect, test } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner } from "./label";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
 import { assertResourcesNotInUse } from "./resources-in-use";
 import { emptyPlanResults } from "./test-helpers/plan-results";
+import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanResults, PlannedDeployment } from "./apply-phases";
 
 type ApplicationShape = {
   name: string;
   subgraphs?: Array<{ Type: string; Name: string }>;
-  authService?: { config: { name: string } };
+  authServices?: Array<{ config: { name: string } }>;
   config?: { auth: { name: string; external: true } };
 };
 
@@ -63,8 +66,16 @@ function check(
 }
 
 function deployment(application: ApplicationShape, results: PlanResults) {
+  const full = {
+    subgraphs: [],
+    authServices: [],
+    config: {},
+    ...application,
+  } as unknown as Application;
   return {
-    application: { subgraphs: [], ...application },
+    owner: applicationOwner(full),
+    application: full,
+    applications: [deployApplicationOf(full)],
     ...results,
   } as unknown as PlannedDeployment;
 }
@@ -172,6 +183,32 @@ describe("assertResourcesNotInUse", () => {
       expect.objectContaining({
         code: "SERVICE_IN_USE",
         message: expect.stringContaining('application "portal"'),
+      }),
+    );
+  });
+
+  test("names each application of a config that still uses a deleted Auth service", async () => {
+    const results = plannedApplication("shop");
+    results.app.unchanged.push({ name: "backoffice", request: {} } as never);
+    const twoApplications = {
+      ...deployment({ name: "shop" }, results),
+      applications: [
+        { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+        { name: "backoffice", subgraphs: [], authNamespace: "shared-auth", settings: {} },
+      ],
+    };
+
+    await expect(
+      check(
+        [deployment({ name: "core" }, ownerDeleting("shared-auth")), twoApplications],
+        "deploy",
+      ),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: "SERVICE_IN_USE",
+        context: {
+          uses: [{ resourceType: "auth.service", name: "shared-auth", application: "backoffice" }],
+        },
       }),
     );
   });
@@ -788,6 +825,48 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
         message: `${ADMIN} cannot be deleted: executor "notify" still uses it.`,
         suggestion: expect.stringContaining("outside the SDK"),
         context: { uses: [{ ...ADMIN_USE, usedBy: { resourceType: "executor", name: "notify" } }] },
+      }),
+    );
+  });
+
+  test("names the workspace config as the owner of an executor that it deploys", async () => {
+    const results = deletingAdmin();
+    results.executor.existingExecutors.notify = {
+      resource: create(ExecutorExecutorSchema, { name: "notify", targetConfig: FUNCTION_TARGET }),
+      allLabels: { "sdk-managed": "workspace" },
+    };
+
+    await expect(check([deployment({ name: "core" }, results)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        message: `${ADMIN} cannot be deleted: executor "notify" of the workspace config still uses it.`,
+        suggestion: expect.not.stringContaining("outside the SDK"),
+        context: {
+          uses: [
+            { ...ADMIN_USE, workspace: true, usedBy: { resourceType: "executor", name: "notify" } },
+          ],
+        },
+      }),
+    );
+    await expect(check([deployment({ name: "core" }, results)], "deploy")).rejects.toThrow(
+      expect.objectContaining({
+        suggestion: expect.stringContaining("remove its reference to the resource there"),
+      }),
+    );
+  });
+
+  test("names the workspace config as the owner of an executor it plans", async () => {
+    const results = deletingAdmin();
+    results.executor.changeSet.creates.push({
+      name: "notify",
+      request: { workspaceId: "ws", executor: { name: "notify", targetConfig: FUNCTION_TARGET } },
+      metaRequest: { trn: "trn" },
+    });
+
+    await expect(
+      check([{ ...deployment({ name: "core" }, results), owner: { kind: "workspace" } }], "deploy"),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        message: `${ADMIN} cannot be deleted: executor "notify" of the workspace config still uses it.`,
       }),
     );
   });

@@ -17,12 +17,14 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger, symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
+import { applicationOwner, buildMetaRequest } from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { SCIMAuthorization } from "#/types/auth.generated";
@@ -89,39 +91,41 @@ function createMockApplication(): Application {
   return {
     name: appName,
     staticWebsiteServices: [],
-    authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      connections: {},
-      config: {
-        name: "auth-a",
-        publishSessionEvents: true,
-        oauth2Clients: {
-          sample: {
-            description: "Sample client",
-            grantTypes: ["authorization_code", "refresh_token"],
-            redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
-            clientType: "confidential",
-            requireDpop: false,
+    authServices: [
+      {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          publishSessionEvents: true,
+          oauth2Clients: {
+            sample: {
+              description: "Sample client",
+              grantTypes: ["authorization_code", "refresh_token"],
+              redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
+              clientType: "confidential",
+              requireDpop: false,
+            },
           },
-        },
-        machineUsers: {
-          "manager-machine-user": {
-            attributeList: ["department", "role"],
-            attributes: {
-              department: "sales",
-              role: "manager",
+          machineUsers: {
+            "manager-machine-user": {
+              attributeList: ["department", "role"],
+              attributes: {
+                department: "sales",
+                role: "manager",
+              },
+            },
+          },
+          hooks: {
+            beforeLogin: {
+              handler: async () => undefined,
+              invoker: "manager-machine-user",
             },
           },
         },
-        hooks: {
-          beforeLogin: {
-            handler: async () => undefined,
-            invoker: "manager-machine-user",
-          },
-        },
+        userProfile: undefined,
       },
-      userProfile: undefined,
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -134,16 +138,18 @@ function createMockApplicationWithUserProfile(options: MockUserProfileOptions = 
   const includeAttributes = options.includeAttributes ?? true;
   return {
     ...application,
-    authService: {
-      ...application.authService,
-      userProfile: {
-        namespace: "tailordb",
-        type: { name: "User" },
-        usernameField: "email",
-        attributeList: includeAttributes ? ["email"] : [],
-        attributes: includeAttributes ? { email: true } : undefined,
+    authServices: [
+      {
+        ...application.authServices[0],
+        userProfile: {
+          namespace: "tailordb",
+          type: { name: "User" },
+          usernameField: "email",
+          attributeList: includeAttributes ? ["email"] : [],
+          attributes: includeAttributes ? { email: true } : undefined,
+        },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -156,38 +162,40 @@ function createMockApplicationWithSCIM(authorization: SCIMAuthorization): Applic
   const application = createMockApplication();
   return {
     ...application,
-    authService: {
-      ...application.authService,
-      config: {
-        ...application.authService?.config,
-        scim: {
-          machineUserName: "manager-machine-user",
-          authorization,
-          resources: [
-            {
-              name: "User",
-              tailorDBNamespace: "tailordb",
-              tailorDBType: "User",
-              coreSchema: {
-                name: "urn:ietf:params:scim:schemas:core:2.0:User",
-                attributes: [
-                  { type: "string", name: "userName", required: true },
-                  {
-                    type: "complex",
-                    name: "name",
-                    subAttributes: [{ type: "string", name: "givenName" }],
-                  },
+    authServices: [
+      {
+        ...application.authServices[0],
+        config: {
+          ...application.authServices[0]?.config,
+          scim: {
+            machineUserName: "manager-machine-user",
+            authorization,
+            resources: [
+              {
+                name: "User",
+                tailorDBNamespace: "tailordb",
+                tailorDBType: "User",
+                coreSchema: {
+                  name: "urn:ietf:params:scim:schemas:core:2.0:User",
+                  attributes: [
+                    { type: "string", name: "userName", required: true },
+                    {
+                      type: "complex",
+                      name: "name",
+                      subAttributes: [{ type: "string", name: "givenName" }],
+                    },
+                  ],
+                },
+                attributeMapping: [
+                  { tailorDBField: "email", scimPath: "userName" },
+                  { tailorDBField: "givenName", scimPath: "name.givenName" },
                 ],
               },
-              attributeMapping: [
-                { tailorDBField: "email", scimPath: "userName" },
-                { tailorDBField: "givenName", scimPath: "name.givenName" },
-              ],
-            },
-          ],
+            ],
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -246,26 +254,28 @@ function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
   return {
     name: appName,
     staticWebsiteServices: [],
-    authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      connections: {},
-      config: {
-        name: "auth-a",
-        oauth2Clients: {
-          sample: {
-            description: "Sample client",
-            grantTypes: ["authorization_code", "refresh_token"],
-            redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
-            clientType: "confidential",
-            // config holds parse output: lifetimes are Duration, not numbers.
-            accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
-            refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
-            requireDpop: false,
+    authServices: [
+      {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          oauth2Clients: {
+            sample: {
+              description: "Sample client",
+              grantTypes: ["authorization_code", "refresh_token"],
+              redirectURIs: ["https://b.example.com/callback", "https://a.example.com/callback"],
+              clientType: "confidential",
+              // config holds parse output: lifetimes are Duration, not numbers.
+              accessTokenLifetimeSeconds: { seconds: 3600n, nanos: 0 },
+              refreshTokenLifetimeSeconds: { seconds: 7200n, nanos: 0 },
+              requireDpop: false,
+            },
           },
         },
+        userProfile: undefined,
       },
-      userProfile: undefined,
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -273,20 +283,22 @@ function createMockApplicationWithBuiltInIdP(): Application {
   return {
     name: appName,
     staticWebsiteServices: [],
-    authService: {
-      resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-      connections: {},
-      config: {
-        name: "auth-a",
-        idProvider: {
-          name: "default",
-          kind: "BuiltInIdP",
-          namespace: "my-idp",
-          clientName: "default-idp-client",
+    authServices: [
+      {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          idProvider: {
+            name: "default",
+            kind: "BuiltInIdP",
+            namespace: "my-idp",
+            clientName: "default-idp-client",
+          },
         },
+        userProfile: undefined,
       },
-      userProfile: undefined,
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -294,18 +306,20 @@ function createMockApplicationWithSamlIdP(): Application {
   const application = createMockApplication();
   return {
     ...application,
-    authService: {
-      ...application.authService,
-      config: {
-        ...application.authService?.config,
-        idProvider: {
-          name: "saml",
-          kind: "SAML",
-          enableSignRequest: false,
-          rawMetadata: "<EntityDescriptor />",
+    authServices: [
+      {
+        ...application.authServices[0],
+        config: {
+          ...application.authServices[0]?.config,
+          idProvider: {
+            name: "saml",
+            kind: "SAML",
+            enableSignRequest: false,
+            rawMetadata: "<EntityDescriptor />",
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -313,17 +327,19 @@ function createMockApplicationWithTenantProvider(): Application {
   const application = createMockApplication();
   return {
     ...application,
-    authService: {
-      ...application.authService,
-      config: {
-        ...application.authService?.config,
-        tenantProvider: {
-          namespace: "tailordb",
-          type: "Tenant",
-          signatureField: "signature",
+    authServices: [
+      {
+        ...application.authServices[0],
+        config: {
+          ...application.authServices[0]?.config,
+          tenantProvider: {
+            namespace: "tailordb",
+            type: "Tenant",
+            signatureField: "signature",
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -349,19 +365,21 @@ function createMockApplicationNamingMachineUsers(references: MachineUserReferenc
   const application = createMockApplication();
   return {
     ...application,
-    authService: {
-      ...application.authService,
-      config: {
-        ...application.authService?.config,
-        machineUsers: Object.fromEntries(machineUsers.map((name) => [name, {}])),
-        hooks: hookInvoker
-          ? { beforeLogin: { handler: async () => undefined, invoker: hookInvoker } }
-          : undefined,
-        scim: scimMachineUser
-          ? { machineUserName: scimMachineUser, authorization: { type: "oauth2" }, resources: [] }
-          : undefined,
+    authServices: [
+      {
+        ...application.authServices[0],
+        config: {
+          ...application.authServices[0]?.config,
+          machineUsers: Object.fromEntries(machineUsers.map((name) => [name, {}])),
+          hooks: hookInvoker
+            ? { beforeLogin: { handler: async () => undefined, invoker: hookInvoker } }
+            : undefined,
+          scim: scimMachineUser
+            ? { machineUserName: scimMachineUser, authorization: { type: "oauth2" }, resources: [] }
+            : undefined,
+        },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
@@ -467,8 +485,10 @@ function createContext(
     client,
     workspaceId,
     application,
+    applications: [],
+    owner: applicationOwner(application),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -525,6 +545,53 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("labels a workspace Auth service with the applications that use it", async () => {
+    await planAuth({
+      ...createContext(createMockClient()),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        {
+          name: "admin",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:auth:auth-a$/),
+        onApps: ["shop", "admin"],
+      }),
+    );
+  });
+
+  test("refreshes the labels of an unchanged auth service whose SDK labels differ", async () => {
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+    });
+    const desiredLabels = { "sdk-name": appName, "sdk-version": sdkVersion, "sdk-app-id": "app-1" };
+    vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+      trn,
+      labels: desiredLabels,
+    }));
+
+    const result = await planAuth(createContext(client));
+
+    expect(result.changeSet.service.updates).toEqual([]);
+    expect(result.changeSet.service.unchanged).toEqual([
+      { name: "auth-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+    ]);
   });
 
   test("marks an oauth2 client unchanged when the Platform returns its generated credentials and default lifetimes", async () => {
@@ -622,20 +689,22 @@ describe("planAuth", () => {
     const application = {
       name: appName,
       staticWebsiteServices: [],
-      authService: {
-        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-        connections: {},
-        config: {
-          name: "auth-a",
-          publishSessionEvents: true,
-          machineUsers: {
-            // parse output for a machine user whose attributes were all
-            // omitted or normalized away (null/undefined values)
-            "bare-machine-user": { attributes: undefined },
+      authServices: [
+        {
+          resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+          connections: {},
+          config: {
+            name: "auth-a",
+            publishSessionEvents: true,
+            machineUsers: {
+              // parse output for a machine user whose attributes were all
+              // omitted or normalized away (null/undefined values)
+              "bare-machine-user": { attributes: undefined },
+            },
           },
+          userProfile: undefined,
         },
-        userProfile: undefined,
-      },
+      ],
     } as unknown as Application;
 
     const client = createMockClient({
@@ -823,13 +892,15 @@ describe("planAuth", () => {
     const profileApplication = createMockApplicationWithUserProfile({ includeAttributes: false });
     const combined = {
       ...application,
-      authService: {
-        ...profileApplication.authService,
-        config: {
-          ...application.authService?.config,
-          idProvider: samlApplication.authService?.config.idProvider,
+      authServices: [
+        {
+          ...profileApplication.authServices[0],
+          config: {
+            ...application.authServices[0]?.config,
+            idProvider: samlApplication.authServices[0]?.config.idProvider,
+          },
         },
-      },
+      ],
     } as unknown as Application;
     const createResult = await planAuth(createContext(createMockClient(), combined));
     const idpConfig = createResult.changeSet.idpConfig.creates[0]?.request.idpConfig;
@@ -919,8 +990,10 @@ describe("planAuth", () => {
       client,
       workspaceId,
       application,
+      applications: [],
+      owner: applicationOwner(application),
       forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      config: { path: "/test/tailor.config.ts" },
     });
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
@@ -978,8 +1051,10 @@ describe("planAuth", () => {
         client,
         workspaceId,
         application,
+        applications: [],
+        owner: applicationOwner(application),
         forRemoval: false,
-        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+        config: { path: "/test/tailor.config.ts" },
       });
 
       expect(
@@ -995,21 +1070,23 @@ describe("planAuth", () => {
     const app = {
       name: appName,
       staticWebsiteServices: [],
-      authService: {
-        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-        connections: {},
-        config: {
-          name: "auth-a",
-          oauth2Clients: {
-            sample: {
-              grantTypes: ["authorization_code", "refresh_token"],
-              redirectURIs: ["https://a.example.com/callback"],
-              clientType: "confidential",
+      authServices: [
+        {
+          resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+          connections: {},
+          config: {
+            name: "auth-a",
+            oauth2Clients: {
+              sample: {
+                grantTypes: ["authorization_code", "refresh_token"],
+                redirectURIs: ["https://a.example.com/callback"],
+                clientType: "confidential",
+              },
             },
           },
+          userProfile: undefined,
         },
-        userProfile: undefined,
-      },
+      ],
     } as unknown as Application;
 
     const client = createMockClient({
@@ -1146,14 +1223,22 @@ describe("planAuth", () => {
       machineUsers: remoteMachineUsers.map((name) => ({ name, attributes: [], attributeMap: {} })),
     });
 
-    await expect(
-      planAuth(createContext(client, createMockApplicationNamingMachineUsers(references))),
-    ).rejects.toMatchObject({
+    const error = (await planAuth(
+      createContext(client, createMockApplicationNamingMachineUsers(references)),
+    ).catch((error: unknown) => error)) as Error;
+
+    expect(error).toMatchObject({
       code: "AUTH_MACHINE_USER_NOT_FOUND",
       message,
       suggestion,
-      context: { authNamespace: "auth-a", missing, machineUsers: references.machineUsers },
+      context: {
+        authNamespace: "auth-a",
+        missing,
+        machineUsers: references.machineUsers,
+        file: "/test/tailor.config.ts",
+      },
     });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/test/tailor.config.ts" });
   });
 
   test("does not mark a forceApplyAll idpConfig update that has nothing to compare against, and deletes a stale config beside it", async () => {
@@ -1177,23 +1262,25 @@ describe("planAuth", () => {
       return {
         name: appName,
         staticWebsiteServices: [{ name: "my-frontend" }],
-        authService: {
-          resolveNamespaces: vi.fn().mockResolvedValue(undefined),
-          connections: {},
-          config: {
-            name: "auth-a",
-            oauth2Clients: {
-              sample: {
-                description: "Sample client",
-                grantTypes: ["authorization_code", "refresh_token"],
-                redirectURIs: ["my-frontend:url/callback"],
-                clientType: "confidential",
-                requireDpop: false,
+        authServices: [
+          {
+            resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+            connections: {},
+            config: {
+              name: "auth-a",
+              oauth2Clients: {
+                sample: {
+                  description: "Sample client",
+                  grantTypes: ["authorization_code", "refresh_token"],
+                  redirectURIs: ["my-frontend:url/callback"],
+                  clientType: "confidential",
+                  requireDpop: false,
+                },
               },
             },
+            userProfile: undefined,
           },
-          userProfile: undefined,
-        },
+        ],
       } as unknown as Application;
     }
 

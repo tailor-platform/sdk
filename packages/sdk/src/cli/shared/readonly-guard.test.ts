@@ -75,7 +75,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "function/logs.ts",
   "function/run.ts",
   // Scaffolds local files; only --remote reads the deployed schema.
-  "function/script.ts",
+  "function/scaffold.ts",
   // Generate (local code generation)
   "generate/index.ts",
   // Machine user (read-only; token retrieval only fetches, does not mutate)
@@ -142,6 +142,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "workflow/get.ts",
   "workflow/list.ts",
   "workflow/resume.ts",
+  // Scaffolds a local file; never writes to the workspace.
+  "workflow/scaffold.ts",
   "workflow/start.ts",
   "workflow/wait.ts",
   // Workspace (read-only branches)

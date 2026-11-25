@@ -448,7 +448,7 @@ export const pruneCommand = defineAppCommand({
       }
       for (const { workspace, reason } of partition.unreadable) {
         result.skipped.unreadableExpiry.push(workspace.name);
-        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}.`);
+        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}`);
       }
       logger.info(
         `${partition.pending.length} workspace(s) have not expired and ${partition.unset.length} record no expiry; both were kept.`,
@@ -457,7 +457,7 @@ export const pruneCommand = defineAppCommand({
     for (const { key, selection: group, reason } of KEPT_REASONS) {
       for (const workspace of selection[group]) {
         result.skipped[key].push(workspace.name);
-        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}.`);
+        logger.warn(`Keeping ${workspace.name} (${workspace.id}): ${reason}`);
       }
     }
     if (selection.tooYoung.length > 0) {
@@ -529,7 +529,7 @@ export const pruneCommand = defineAppCommand({
         const staleReason = current ? staleCandidateReason(current, criteria) : undefined;
         if (staleReason) {
           result.skipped.changed.push(workspace.name);
-          logger.warn(`Keeping ${displayName} (${workspace.id}): ${staleReason}.`);
+          logger.warn(`Keeping ${displayName} (${workspace.id}): ${staleReason}`);
           continue;
         }
         if (args.expired) {

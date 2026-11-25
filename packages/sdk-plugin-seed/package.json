@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@lines-db/studio": "0.16.7",
-    "@politty/zod": "0.7.5",
+    "@politty/zod": "0.7.8",
     "lines-db": "0.19.2",
     "open": "11.0.4",
     "pathe": "2.0.3",
@@ -47,11 +47,11 @@
     "@tailor-platform/sdk": "workspace:^",
     "@tailor-platform/shared": "workspace:^",
     "@types/node": "26.6.6",
-    "oxlint": "1.93.0",
+    "oxlint": "1.94.0",
     "tsdown": "0.23.7",
     "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "6.0.3",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"

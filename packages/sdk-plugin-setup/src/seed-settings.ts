@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { loadConfig } from "@tailor-platform/sdk/cli";
+import { loadConfigFile } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 
 /** The seedPlugin settings a seeding workflow depends on. */
@@ -20,7 +20,7 @@ export const SEED_DATASET_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
  * @returns The settings, or null when the config does not use seedPlugin
  */
 export async function defaultLoadSeedSettings(configPath: string): Promise<SeedSettings | null> {
-  const { plugins } = await loadConfig(configPath);
+  const { plugins } = await loadConfigFile(configPath);
   const seedPlugin = plugins.find((p) => p.id === "@tailor-platform/seed");
   if (!seedPlugin) return null;
   const options = (seedPlugin.pluginConfig ?? {}) as {
@@ -29,8 +29,7 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
     datasets?: unknown;
   };
   return {
-    machineUserName:
-      typeof options.machineUserName === "string" ? options.machineUserName : undefined,
+    machineUserName: machineUserValue(options.machineUserName),
     datasets:
       typeof options.datasets === "object" && options.datasets !== null
         ? (options.datasets as Record<string, unknown>)
@@ -40,6 +39,15 @@ export async function defaultLoadSeedSettings(configPath: string): Promise<SeedS
         ? path.resolve(path.dirname(configPath), options.distPath, "data")
         : undefined,
   };
+}
+
+function machineUserValue(machineUser: unknown): string | undefined {
+  if (typeof machineUser === "string") return machineUser;
+  if (typeof machineUser !== "object" || machineUser === null) return undefined;
+  const { namespace, machineUserName } = machineUser as Record<string, unknown>;
+  return typeof namespace === "string" && typeof machineUserName === "string"
+    ? `${namespace}/${machineUserName}`
+    : undefined;
 }
 
 function isDirectory(dirPath: string): boolean {

@@ -3,15 +3,15 @@ import { z } from "zod";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { type initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractOwnedNamespaces } from "#/cli/shared/config";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { ownedNamespaces } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { resolveTableNamespaces } from "#/cli/shared/tailordb-namespace";
+import { resolveUniqueTableNamespaces } from "#/cli/shared/tailordb-namespace";
 import { assertDefined } from "#/utils/assert";
 
 export interface TruncateOptions {
@@ -94,27 +94,26 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
   const hasNamespace = !!options.namespace;
   const hasAll = !!options.all;
 
-  // All options are mutually exclusive
-  const optionCount = [hasAll, hasNamespace, hasTables].filter(Boolean).length;
-  if (optionCount === 0) {
+  if (!hasAll && !hasNamespace && !hasTables) {
     throw CLIError({
       code: "TRUNCATE_TARGET_REQUIRED",
       message: "Please specify one of: --all, --namespace <name>, or table names",
       command: "tailordb truncate",
     });
   }
-  if (optionCount > 1) {
+  if (hasAll && (hasNamespace || hasTables)) {
     throw CLIError({
       code: "TRUNCATE_OPTIONS_CONFLICT",
-      message:
-        "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.",
+      message: "--all truncates every table, so it takes neither --namespace nor table names.",
+      suggestion: "Pass --all alone, or --namespace and table names without --all.",
       command: "tailordb truncate",
     });
   }
 
   // Validate config and get namespaces before confirmation
-  const { config } = await loadConfig(options.configPath);
-  const namespaces = extractOwnedNamespaces(config);
+  const loaded = await loadConfigFile(options.configPath);
+  const namespaces = ownedNamespaces(loaded);
+  const isWorkspace = loaded.kind === "workspace";
 
   // Handle --all flag
   if (hasAll) {
@@ -126,7 +125,9 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     if (!options.yes) {
       const namespaceList = namespaces.join(", ");
       const confirmation = await prompt.confirm({
-        message: `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
+        message: isWorkspace
+          ? `This will truncate ALL tables in every namespace of the workspace: ${namespaceList}. Continue?`
+          : `This will truncate ALL tables in the following owned namespaces (external namespaces are excluded): ${namespaceList}. Continue?`,
         default: false,
       });
       if (!confirmation) {
@@ -137,30 +138,35 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     for (const namespace of namespaces) {
       await truncateNamespace(workspaceId, namespace, client);
     }
-    logger.success("Truncated all tables in all owned namespaces");
+    logger.success(
+      isWorkspace
+        ? "Truncated all tables in every namespace"
+        : "Truncated all tables in all owned namespaces",
+    );
     return { changed: true, workspaceId, namespaces, tables: [] };
   }
 
-  // Handle --namespace flag
-  if (hasNamespace) {
-    const namespace = assertDefined(options.namespace, "namespace option missing");
-
-    // Validate namespace exists in config and is not external
-    if (!namespaces.includes(namespace)) {
-      const dbConfig = config.db?.[namespace];
-      if (dbConfig && "external" in dbConfig) {
-        throw CLIError({
-          code: "TAILORDB_NAMESPACE_EXTERNAL",
-          message: `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here.`,
-          suggestion: "Run truncate from the app that owns the namespace.",
-        });
-      }
+  const namespace = options.namespace;
+  // Validate namespace exists in config and is not external
+  if (namespace && !namespaces.includes(namespace)) {
+    const dbConfig = loaded.kind === "config" ? loaded.config.db?.[namespace] : undefined;
+    if (dbConfig && "external" in dbConfig) {
       throw CLIError({
-        code: "TAILORDB_NAMESPACE_NOT_FOUND",
-        message: `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
+        code: "TAILORDB_NAMESPACE_EXTERNAL",
+        message: `Namespace "${namespace}" is declared as external in this app's config and cannot be truncated from here.`,
+        suggestion: "Run truncate from the app that owns the namespace.",
       });
     }
+    throw CLIError({
+      code: "TAILORDB_NAMESPACE_NOT_FOUND",
+      message: isWorkspace
+        ? `Namespace "${namespace}" not found in config. Available namespaces: ${namespaces.join(", ")}`
+        : `Namespace "${namespace}" not found in config. Available owned namespaces (external namespaces are excluded): ${namespaces.join(", ")}`,
+    });
+  }
 
+  // Handle --namespace flag
+  if (namespace && !hasTables) {
     if (!options.yes) {
       const confirmation = await prompt.confirm({
         message: `This will truncate ALL tables in namespace "${namespace}". Continue?`,
@@ -181,9 +187,9 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     const tableNames = assertDefined(options.tables, "tables option missing");
 
     // Validate all tables exist and get their namespaces before confirmation
-    const tableNamespaceMap = await resolveTableNamespaces({
+    const tableNamespaceMap = await resolveUniqueTableNamespaces({
       workspaceId,
-      namespaces,
+      namespaces: namespace ? [namespace] : namespaces,
       tableNames,
       client,
     });
@@ -192,7 +198,9 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     if (notFoundTables.length > 0) {
       throw CLIError({
         code: "TAILORDB_TABLE_NOT_FOUND",
-        message: `The following tables were not found in any namespace: ${notFoundTables.join(", ")}`,
+        message: namespace
+          ? `The following tables were not found in namespace "${namespace}": ${notFoundTables.join(", ")}`
+          : `The following tables were not found in any namespace: ${notFoundTables.join(", ")}`,
       });
     }
 
@@ -208,20 +216,20 @@ async function $truncate(options: InternalTruncateOptions = {}): Promise<Truncat
     }
 
     for (const tableName of tableNames) {
-      const namespace = tableNamespaceMap.get(tableName);
-      if (!namespace) {
+      const tableNamespace = tableNamespaceMap.get(tableName);
+      if (!tableNamespace) {
         continue;
       }
 
       await truncateSingleType(
         {
           workspaceId,
-          namespaceName: namespace,
+          namespaceName: tableNamespace,
           tableName,
         },
         client,
       );
-      truncatedTables.push({ namespace, name: tableName });
+      truncatedTables.push({ namespace: tableNamespace, name: tableName });
     }
   }
   return {
@@ -248,7 +256,8 @@ export const truncateCommand = defineAppCommand({
     }),
     namespace: arg(z.string().optional(), {
       alias: "n",
-      description: "Truncate all tables in specified namespace",
+      description:
+        "Truncate all tables in specified namespace, or with table names, look them up in this namespace only",
     }),
   }),
   run: async (args) => {

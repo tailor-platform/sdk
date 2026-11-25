@@ -62,7 +62,7 @@ import {
   resolveStaticWebsiteUrls,
   type OperatorClient,
 } from "#/cli/shared/client";
-import { CLIError, internalError } from "#/cli/shared/errors";
+import { CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
   DEFAULT_ACCESS_TOKEN_LIFETIME_SECONDS,
@@ -72,6 +72,7 @@ import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
+import { applicationsListing } from "./deploy-application";
 import { authHookFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -82,8 +83,10 @@ import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
 import {
   buildMetaRequest,
+  type DeployOwner,
   type MetadataLabelWrite,
   resourceTrn,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
@@ -100,6 +103,7 @@ import type {
   SCIMResource,
   TenantProvider as TenantProviderConfig,
 } from "#/types/auth.generated";
+import type { ListingApplication } from "./deploy-application";
 
 type AuthApplyPhase =
   | Exclude<ApplyPhase, "delete">
@@ -129,6 +133,7 @@ export async function applyAuth(
         await client.updateAuthService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...writeLabelRefreshes(client, changeSet.service.unchanged),
     ]);
   };
 
@@ -343,7 +348,10 @@ export async function applyAuth(
   }
 }
 
-function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]): void {
+function assertAuthMachineUsersDefined(
+  config: Readonly<AuthService>["config"],
+  configPath: string,
+): void {
   const machineUsers = Object.keys(config.machineUsers ?? {}).toSorted();
   const missing = [
     { field: "scim.machineUserName", machineUserName: config.scim?.machineUserName },
@@ -354,19 +362,22 @@ function assertAuthMachineUsersDefined(config: Readonly<AuthService>["config"]):
       : [{ field, machineUserName }],
   );
   if (missing.length === 0) return;
-  throw CLIError({
-    code: "AUTH_MACHINE_USER_NOT_FOUND",
-    message: missing
-      .map(
-        ({ field, machineUserName }) =>
-          `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
-      )
-      .join("\n"),
-    suggestion: machineUsers.length
-      ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
-      : "Add each listed machine user to machineUsers.",
-    context: { authNamespace: config.name, missing, machineUsers },
-  });
+  throw locatedCLIError(
+    { file: configPath },
+    {
+      code: "AUTH_MACHINE_USER_NOT_FOUND",
+      message: missing
+        .map(
+          ({ field, machineUserName }) =>
+            `Auth service "${config.name}" names machine user "${machineUserName}" in ${field}, but defines no machine user with that name.`,
+        )
+        .join("\n"),
+      suggestion: machineUsers.length
+        ? `Add each listed machine user to machineUsers, or name a defined one instead: ${machineUsers.join(", ")}.`
+        : "Add each listed machine user to machineUsers.",
+      context: { authNamespace: config.name, missing, machineUsers },
+    },
+  );
 }
 
 /** An auth namespace whose child resources deploy plans; `auth` is undefined when its service is deleted. */
@@ -381,27 +392,23 @@ type AuthNamespace = {
  * @returns Planned auth changes and metadata
  */
 export async function planAuth(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
+  const { client, workspaceId, application, owner, forRemoval, forceApplyAll = false } = context;
   const auths: Readonly<AuthService>[] = [];
-  if (!forRemoval && application.authService) {
-    await application.authService.resolveNamespaces();
-    assertAuthMachineUsersDefined(application.authService.config);
-    auths.push(application.authService);
+  if (!forRemoval) {
+    for (const authService of application.authServices) {
+      await authService.resolveNamespaces();
+      assertAuthMachineUsersDefined(authService.config, context.config.path);
+      auths.push(authService);
+    }
   }
   const {
     changeSet: serviceChangeSet,
     conflicts,
     unmanaged,
+    takeovers,
     resourceOwners,
     existingServices,
-  } = await planServices(
-    client,
-    workspaceId,
-    application.name,
-    application.id,
-    auths,
-    forceApplyAll,
-  );
+  } = await planServices(client, workspaceId, owner, context.applications, auths, forceApplyAll);
   const namespaces: AuthNamespace[] = [
     ...auths.map((auth) => ({ namespaceName: auth.config.name, auth })),
     ...serviceChangeSet.deletes.map((del) => ({ namespaceName: del.name, auth: undefined })),
@@ -426,7 +433,7 @@ export async function planAuth(context: PlanContext) {
     planOAuth2Clients(client, workspaceId, namespaces, expectedLocalWebsites, forceApplyAll),
     planSCIMConfigs(client, workspaceId, namespaces, forceApplyAll),
     planSCIMResources(client, workspaceId, namespaces, forceApplyAll),
-    planAuthConnections(client, secretsStateScope(context), auths),
+    planAuthConnections(client, secretsStateScope(context), owner, auths),
   ]);
   return {
     changeSet: {
@@ -443,6 +450,7 @@ export async function planAuth(context: PlanContext) {
     },
     conflicts: [...conflicts, ...connectionResult.conflicts],
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
+    takeovers: [...takeovers, ...connectionResult.takeovers],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
     connectionStateScope: connectionResult.stateScope,
     existingServices,
@@ -481,13 +489,13 @@ const authServiceComparison = defineRequestComparison({
 async function planServices(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
+  applications: ReadonlyArray<ListingApplication>,
   auths: ReadonlyArray<Readonly<AuthService>>,
   forceApplyAll = false,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("Auth services");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const fetchedServices = await fetchExistingResourcesWithLabels({
     client,
@@ -514,8 +522,8 @@ async function planServices(
       },
       metaRequest: await buildMetaRequest({
         trn: resourceTrn(workspaceId, "auth", config.name),
-        appName,
-        appId,
+        owner,
+        onApps: applicationsListing(applications, "auth", config.name),
       }),
     });
   }
@@ -524,10 +532,7 @@ async function planServices(
     desired,
     existing: Object.entries(fetchedServices),
     keyOf: (service) => service.name,
-    ...labeledResourceChecks(ownership, (service: DesiredService) => ({
-      resourceType: "auth.service",
-      resourceName: service.name,
-    })),
+    ...labeledResourceChecks(ownership, "auth.service"),
     versionMatches: () => !forceApplyAll,
     isConfigUnchanged: (service, existing) =>
       isRequestUnchanged(authServiceComparison, service.request, existing.resource),

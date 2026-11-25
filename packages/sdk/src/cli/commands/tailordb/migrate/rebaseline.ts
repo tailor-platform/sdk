@@ -9,14 +9,14 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf, defineConfigFileServices } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
@@ -28,6 +28,7 @@ import {
   type MigrationSubcommandArgs,
 } from "./hints";
 import {
+  assertNoMaintenanceModeRecord,
   assertNoMigrationInProgress,
   fetchRemoteMigrationState,
   migrationHistoryMismatchError,
@@ -140,8 +141,8 @@ type RebaselineResult = {
 async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult> {
   logBetaWarning("tailordb migration");
 
-  const loaded = await loadConfig(options.configPath);
-  const { config, plugins } = loaded;
+  const loaded = await loadConfigFile(options.configPath);
+  const config = configOf(loaded);
   const configDir = path.dirname(config.path);
   const target = selectTargetNamespace(
     getNamespacesWithMigrations(config, configDir),
@@ -166,9 +167,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
     reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
   const initialFileState = captureMigrationFileState([target])[target.namespace];
 
-  const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const { defineApplication } = await import("#/cli/services/application");
-  const application = defineApplication({ config, pluginManager });
+  const application = await defineConfigFileServices(loaded);
   for (const service of application.tailorDBServices) {
     await service.loadTypes();
     await service.processNamespacePlugins();
@@ -240,6 +239,7 @@ async function rebaseline(options: RebaselineOptions): Promise<RebaselineResult>
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
     assertNoMigrationInProgress(remoteState, target.namespace, commandContext);
+    assertNoMaintenanceModeRecord(remoteState, target.namespace, commandContext);
     const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);

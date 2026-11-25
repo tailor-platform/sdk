@@ -1,8 +1,10 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { stripVTControlCharacters } from "node:util";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { NotificationSeverity } from "@tailor-platform/tailor-proto/notification_resource_pb";
+import {
+  NotificationSeverity,
+  type NotificationSchema,
+} from "@tailor-platform/tailor-proto/notification_resource_pb";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -14,6 +16,10 @@ import {
 } from "#/cli/shared/context";
 import { CLIError } from "#/cli/shared/errors";
 import { CIPromptError, logger, setJsonDefaultAgent } from "#/cli/shared/logger";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { readBannerState, writeBannerState } from "./backoff";
 import {
@@ -22,6 +28,8 @@ import {
   resetNotificationLookupForTests,
   startNotificationLookup,
 } from "./index";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { ListMyNotificationsResponseSchema } from "@tailor-platform/tailor-proto/notification_pb";
 
 const ciState = vi.hoisted(() => ({ isCI: false }));
 vi.mock("std-env", async (importOriginal) => ({
@@ -73,21 +81,25 @@ function captureStderr() {
   };
 }
 
-const warning = (id: string, title: string) => ({
+const warning = (id: string, title: string): MessageInitShape<typeof NotificationSchema> => ({
   id,
   severity: NotificationSeverity.WARNING,
   title,
 });
 
-function mockLookup(impl: ReturnType<typeof vi.fn>) {
-  vi.mocked(initOperatorClient).mockResolvedValue({
-    listMyNotifications: impl,
-  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  return impl;
+function mockLookup(
+  listMyNotifications: OperatorClientMocks<"listMyNotifications">["listMyNotifications"],
+) {
+  const client = mockOperatorClient({ listMyNotifications });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
+  return client.listMyNotifications;
 }
 
-function resolved(notifications: ReturnType<typeof warning>[], totalCount = notifications.length) {
-  return mockLookup(vi.fn().mockResolvedValue({ notifications, nextPageToken: "", totalCount }));
+function resolved(
+  notifications: ReturnType<typeof warning>[],
+  totalCount = BigInt(notifications.length),
+) {
+  return mockLookup({ notifications, nextPageToken: "", totalCount });
 }
 
 describe("notification banner", () => {
@@ -126,7 +138,7 @@ describe("notification banner", () => {
   test("prints the unread WARNING+ notifications after an ordinary command", async () => {
     const list = resolved(
       [warning("a", "Region degraded"), warning("b", "Executor retries exceeded")],
-      5,
+      5n,
     );
     using stderr = captureStderr();
 
@@ -301,8 +313,8 @@ describe("notification banner", () => {
   });
 
   test("swallows a failed lookup and backs off before trying again", async () => {
-    const list = mockLookup(
-      vi.fn().mockRejectedValue(new ConnectError("unavailable", Code.Unavailable)),
+    const list = mockLookup(() =>
+      Promise.reject(new ConnectError("unavailable", Code.Unavailable)),
     );
     using stderr = captureStderr();
 
@@ -319,14 +331,12 @@ describe("notification banner", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     try {
       let signal: AbortSignal | undefined;
-      mockLookup(
-        vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
-          signal = options.signal;
-          return new Promise((_resolve, reject) => {
-            options.signal.addEventListener("abort", () => reject(new Error("aborted")));
-          });
-        }),
-      );
+      mockLookup((_req, options) => {
+        signal = options?.signal;
+        return new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        });
+      });
       startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
       for (let i = 0; i < 50 && !signal; i++) await new Promise((r) => setImmediate(r));
 
@@ -356,7 +366,7 @@ describe("notification banner", () => {
   });
 
   test("persists the backoff as soon as a lookup fails, before the command ends", async () => {
-    mockLookup(vi.fn().mockRejectedValue(new ConnectError("unavailable", Code.Unavailable)));
+    mockLookup(() => Promise.reject(new ConnectError("unavailable", Code.Unavailable)));
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
 
     await lookupSettledForTests();
@@ -383,12 +393,10 @@ describe("notification banner", () => {
 
   test("waits up to 150 ms for a request still in flight, then aborts it without backing off", async () => {
     let signal: AbortSignal | undefined;
-    mockLookup(
-      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
-        signal = options.signal;
-        return new Promise(() => {});
-      }),
-    );
+    mockLookup((_req, options) => {
+      signal = options?.signal;
+      return new Promise(() => {});
+    });
     using stderr = captureStderr();
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
     await vi.waitFor(() => expect(signal).toBeDefined());
@@ -413,14 +421,14 @@ describe("notification banner", () => {
   });
 
   test("prints a lookup that answers during the wait", async () => {
-    let answer: ((value: unknown) => void) | undefined;
+    let answer:
+      | ((value: MessageInitShape<typeof ListMyNotificationsResponseSchema>) => void)
+      | undefined;
     mockLookup(
-      vi.fn().mockImplementation(
-        () =>
-          new Promise((resolve) => {
-            answer = resolve;
-          }),
-      ),
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
     );
     using stderr = captureStderr();
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
@@ -430,7 +438,7 @@ describe("notification banner", () => {
     answer?.({
       notifications: [warning("a", "Region degraded")],
       nextPageToken: "",
-      totalCount: 1,
+      totalCount: 1n,
     });
     await printing;
 
@@ -439,12 +447,10 @@ describe("notification banner", () => {
 
   test("does not wait when the banner would not be printed anyway", async () => {
     let signal: AbortSignal | undefined;
-    mockLookup(
-      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
-        signal = options.signal;
-        return new Promise(() => {});
-      }),
-    );
+    mockLookup((_req, options) => {
+      signal = options?.signal;
+      return new Promise(() => {});
+    });
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
     await vi.waitFor(() => expect(signal).toBeDefined());
 
@@ -459,14 +465,12 @@ describe("notification banner", () => {
 
   test("does not back off when the command's end aborts a request that is still in flight", async () => {
     let signal: AbortSignal | undefined;
-    mockLookup(
-      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
-        signal = options.signal;
-        return new Promise((_resolve, reject) => {
-          options.signal.addEventListener("abort", () => reject(new Error("aborted")));
-        });
-      }),
-    );
+    mockLookup((_req, options) => {
+      signal = options?.signal;
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      });
+    });
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
     await vi.waitFor(() => expect(signal).toBeDefined());
 
@@ -524,12 +528,10 @@ describe("notification banner", () => {
 
   test("does not wait for a lookup the environment made stale", async () => {
     let signal: AbortSignal | undefined;
-    mockLookup(
-      vi.fn().mockImplementation((_req, options: { signal: AbortSignal }) => {
-        signal = options.signal;
-        return new Promise(() => {});
-      }),
-    );
+    mockLookup((_req, options) => {
+      signal = options?.signal;
+      return new Promise(() => {});
+    });
     startNotificationLookup(["workspace", "list"], { configDir: tmp.dir });
     await vi.waitFor(() => expect(signal).toBeDefined());
     vi.stubEnv("TAILOR_NOTIFICATION_BANNER", "off");

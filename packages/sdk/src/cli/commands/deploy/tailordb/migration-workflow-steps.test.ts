@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as vm from "node:vm";
 import { Code, ConnectError } from "@connectrpc/connect";
 import {
@@ -7,6 +6,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   assertNoActiveMigrationExecution,
@@ -19,7 +19,12 @@ import {
   type MigrationStepsWorkflowOptions,
 } from "./migration-workflow";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type {
+  WorkflowExecutionSchema,
+  WorkflowJobExecutionSchema,
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/logger", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -93,15 +98,21 @@ function createStepsClient(options: StepsClientOptions = {}) {
   let polls = 0;
   let activeRunId: string | undefined;
 
-  const toExecution = (spec: ExecutionSpec, status: WorkflowExecution_Status) => ({
+  const toExecution = (
+    spec: ExecutionSpec,
+    status: WorkflowExecution_Status,
+  ): MessageInitShape<typeof WorkflowExecutionSchema> => ({
     id: spec.id,
     status,
-    jobExecutions: (spec.jobs ?? []).map((job, index) => ({
-      executionId: `${spec.id}-fn-${index}`,
-      status: job.status,
-      position: job.callIndex === undefined ? { depth: 0 } : { callIndex: job.callIndex, depth: 1 },
-      kind: { case: "jobFunction", value: { name: job.name ?? NAME } },
-    })),
+    jobExecutions: (spec.jobs ?? []).map(
+      (job, index): MessageInitShape<typeof WorkflowJobExecutionSchema> => ({
+        executionId: `${spec.id}-fn-${index}`,
+        status: job.status,
+        position:
+          job.callIndex === undefined ? { depth: 0 } : { callIndex: job.callIndex, depth: 1 },
+        kind: { case: "jobFunction", value: { name: job.name ?? NAME } },
+      }),
+    ),
   });
 
   const functionExecutions = new Map<string, JobSpec>();
@@ -118,49 +129,58 @@ function createStepsClient(options: StepsClientOptions = {}) {
     remember(spec);
   };
 
-  const raw = {
-    getWorkflowByName: vi.fn(async () => {
+  const client = mockOperatorClient({
+    getWorkflowByName: async () => {
       calls.push("getWorkflowByName");
       if (!options.existingWorkflow) throw new ConnectError("not found", Code.NotFound);
       return { workflow: { id: options.existingWorkflow.id } };
-    }),
-    getMetadata: vi.fn(async ({ trn }: { trn: string }) => {
-      calls.push(`getMetadata ${trn}`);
+    },
+    getMetadata: async (request) => {
+      calls.push(`getMetadata ${request.trn}`);
       const plan = options.existingWorkflow?.plan;
-      return { metadata: { labels: plan ? { "sdk-migration-plan": plan } : {} } };
-    }),
-    listWorkflowExecutions: vi.fn(async () => {
+      const labels: Record<string, string> = plan ? { "sdk-migration-plan": plan } : {};
+      return { metadata: { labels } };
+    },
+    listWorkflowExecutions: async () => {
       calls.push("listWorkflowExecutions");
       if (!options.existingWorkflow) throw new ConnectError("not found", Code.NotFound);
       return {
         executions: (options.listed ?? []).map((spec) => toExecution(spec, spec.status)),
         nextPageToken: "",
       };
-    }),
-    createFunctionRegistry: vi.fn(async () => calls.push("createFunctionRegistry")),
-    updateFunctionRegistry: vi.fn(async () => calls.push("updateFunctionRegistry")),
-    createWorkflowJobFunction: vi.fn(async ({ jobFunctionName }: { jobFunctionName: string }) => {
-      calls.push(`createWorkflowJobFunction ${jobFunctionName}`);
-      return { jobFunction: { version: jobFunctionName === RUNNER ? 2n : 1n } };
-    }),
-    createWorkflow: vi.fn(async () => {
+    },
+    createFunctionRegistry: async () => {
+      calls.push("createFunctionRegistry");
+      return {};
+    },
+    updateFunctionRegistry: async () => {
+      calls.push("updateFunctionRegistry");
+      return {};
+    },
+    createWorkflowJobFunction: async (request) => {
+      calls.push(`createWorkflowJobFunction ${request.jobFunctionName}`);
+      return { jobFunction: { version: request.jobFunctionName === RUNNER ? 2n : 1n } };
+    },
+    createWorkflow: async () => {
       calls.push("createWorkflow");
       return { workflow: { id: "wf-new" } };
-    }),
-    startWorkflow: vi.fn(async () => {
+    },
+    startWorkflow: async () => {
       calls.push("startWorkflow");
       const failure = options.startFailure;
       if (failure && !failure.afterCreating) throw failure.error;
       startRun("exec-new");
       if (failure) throw failure.error;
       return { executionId: "exec-new" };
-    }),
-    resumeWorkflowExecution: vi.fn(async ({ executionId }: { executionId: string }) => {
+    },
+    resumeWorkflowExecution: async (request) => {
+      const executionId = request.executionId ?? "";
       calls.push(`resumeWorkflowExecution ${executionId}`);
       startRun(executionId);
       return { executionId };
-    }),
-    getWorkflowExecution: vi.fn(async ({ executionId }: { executionId: string }) => {
+    },
+    getWorkflowExecution: async (request) => {
+      const executionId = request.executionId ?? "";
       calls.push(`getWorkflowExecution ${executionId}`);
       const spec = executions.get(executionId);
       if (!spec) throw new ConnectError("not found", Code.NotFound);
@@ -170,9 +190,9 @@ function createStepsClient(options: StepsClientOptions = {}) {
       const status = statuses[Math.min(polls, statuses.length - 1)]!;
       polls++;
       return { execution: toExecution(spec, status) };
-    }),
-    getFunctionExecution: vi.fn(async ({ executionId }: { executionId: string }) => {
-      const job = functionExecutions.get(executionId);
+    },
+    getFunctionExecution: async (request) => {
+      const job = functionExecutions.get(request.executionId ?? "");
       return {
         execution: {
           logEntries: (job?.logs ?? []).map((message) => ({ message })),
@@ -180,15 +200,22 @@ function createStepsClient(options: StepsClientOptions = {}) {
           result: job?.result ?? "",
         },
       };
-    }),
-    deleteWorkflow: vi.fn(async () => calls.push("deleteWorkflow")),
-    deleteWorkflowJobFunction: vi.fn(async ({ jobFunctionName }: { jobFunctionName: string }) =>
-      calls.push(`deleteWorkflowJobFunction ${jobFunctionName}`),
-    ),
-    deleteFunctionRegistry: vi.fn(async () => calls.push("deleteFunctionRegistry")),
-  };
+    },
+    deleteWorkflow: async () => {
+      calls.push("deleteWorkflow");
+      return {};
+    },
+    deleteWorkflowJobFunction: async (request) => {
+      calls.push(`deleteWorkflowJobFunction ${request.jobFunctionName}`);
+      return {};
+    },
+    deleteFunctionRegistry: async () => {
+      calls.push("deleteFunctionRegistry");
+      return {};
+    },
+  });
 
-  return { client: raw as unknown as OperatorClient, raw, calls };
+  return { client, calls };
 }
 
 function run(
@@ -202,8 +229,7 @@ function run(
     namespace: "tailordb",
     migrationNumber: 3,
     invoker,
-    appName: "my-app",
-    appId: "app-1",
+    owner: { kind: "application", name: "my-app", id: "app-1" },
     maintenanceMode: true,
     pollIntervalMs: 0,
     order: ORDER,
@@ -239,7 +265,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
   test("starts an orchestrator and a step runner, and keeps them after success", async () => {
     const onExecutionStarted = vi.fn(async () => {});
-    const { client, raw, calls } = createStepsClient({
+    const { client, calls } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
     });
 
@@ -253,14 +279,14 @@ describe("executeMigrationStepsAsWorkflow", () => {
       stepsMayHaveCommitted: true,
     });
     expect(result.reusedEarlierRun).toBeUndefined();
-    expect(raw.createWorkflow).toHaveBeenCalledWith(
+    expect(client.createWorkflow).toHaveBeenCalledWith(
       expect.objectContaining({
         workflowName: NAME,
         mainJobFunctionName: NAME,
         jobFunctions: { [NAME]: 1n, [RUNNER]: 2n },
       }),
     );
-    expect(raw.createWorkflowJobFunction).toHaveBeenCalledWith(
+    expect(client.createWorkflowJobFunction).toHaveBeenCalledWith(
       expect.objectContaining({ jobFunctionName: RUNNER, scriptRef: NAME }),
     );
     expect(onExecutionStarted).toHaveBeenCalledWith("exec-new");
@@ -495,7 +521,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
   });
 
   test("reports progress on every poll that finds the run active", async () => {
-    const { client, raw } = createStepsClient({
+    const { client } = createStepsClient({
       run: {
         statuses: [
           WorkflowExecution_Status.RUNNING,
@@ -508,7 +534,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
         ],
       },
     });
-    raw.getWorkflowExecution.mockRejectedValueOnce(
+    client.getWorkflowExecution.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
     const onProgress = vi.fn();
@@ -559,13 +585,13 @@ describe("executeMigrationStepsAsWorkflow", () => {
   });
 
   test("reports a poll of the run that failed as unknown", async () => {
-    const { client, raw } = createStepsClient({
+    const { client } = createStepsClient({
       run: {
         statuses: [WorkflowExecution_Status.RUNNING, WorkflowExecution_Status.SUCCESS],
         jobs: [runnerJob(0, WorkflowJobExecution_Status.RUNNING, [MIGRATION_SCRIPT_STARTED_LOG])],
       },
     });
-    raw.getWorkflowExecution.mockRejectedValueOnce(
+    client.getWorkflowExecution.mockRejectedValueOnce(
       new ConnectError("unavailable", Code.Unavailable),
     );
     const { events, onRunEvent } = recordRunEvents();
@@ -576,10 +602,10 @@ describe("executeMigrationStepsAsWorkflow", () => {
   });
 
   test("treats a run that disappears while polling as possibly committed", async () => {
-    const { client, raw } = createStepsClient({
+    const { client } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
     });
-    raw.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined } as never);
+    client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
 
     const result = await run(client);
 
@@ -607,7 +633,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
   test("refuses to reclaim leftovers while one of their executions is still active", async () => {
     const onBeforeStart = vi.fn(async () => {});
-    const { client, raw } = createStepsClient({
+    const { client } = createStepsClient({
       existingWorkflow: { id: "wf-old" },
       listed: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
     });
@@ -619,20 +645,20 @@ describe("executeMigrationStepsAsWorkflow", () => {
         "Wait for it to finish, or check that no other deploy is running against this workspace, then deploy again.",
       context: { executionId: "exec-old" },
     });
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.startWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.startWorkflow).not.toHaveBeenCalled();
     expect(onBeforeStart).not.toHaveBeenCalled();
   });
 
   test("fails with the listing's own error when the leftovers' executions cannot be listed", async () => {
     const onBeforeStart = vi.fn(async () => {});
-    const { client, raw } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
+    const { client } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
     const lost = new ConnectError("lost", Code.Unavailable);
-    raw.listWorkflowExecutions.mockRejectedValueOnce(lost);
+    client.listWorkflowExecutions.mockRejectedValueOnce(lost);
 
     await expect(run(client, { onBeforeStart })).rejects.toBe(lost);
-    expect(raw.deleteWorkflow).not.toHaveBeenCalled();
-    expect(raw.startWorkflow).not.toHaveBeenCalled();
+    expect(client.deleteWorkflow).not.toHaveBeenCalled();
+    expect(client.startWorkflow).not.toHaveBeenCalled();
     expect(onBeforeStart).not.toHaveBeenCalled();
   });
 
@@ -663,7 +689,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
     };
 
     test("resumes the failed run with the updated script when the plan is unchanged", async () => {
-      const { client, raw, calls } = createStepsClient({
+      const { client, calls } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
         listed: [failedRun],
         run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -677,13 +703,13 @@ describe("executeMigrationStepsAsWorkflow", () => {
       expect(calls.indexOf("updateFunctionRegistry")).toBeLessThan(
         calls.indexOf("resumeWorkflowExecution exec-old"),
       );
-      expect(raw.createWorkflow).not.toHaveBeenCalled();
-      expect(raw.startWorkflow).not.toHaveBeenCalled();
-      expect(raw.deleteWorkflow).not.toHaveBeenCalled();
+      expect(client.createWorkflow).not.toHaveBeenCalled();
+      expect(client.startWorkflow).not.toHaveBeenCalled();
+      expect(client.deleteWorkflow).not.toHaveBeenCalled();
     });
 
     test("uploads the resumed script behind the log line that marks its start", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
         listed: [failedRun],
         run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -691,12 +717,10 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       await run(client, { inProgress: { executionId: "exec-old" } });
 
-      const [stream] = raw.updateFunctionRegistry.mock.calls[0] as unknown as [
-        AsyncIterable<{ payload: { case: string; value: unknown } }>,
-      ];
+      const [stream] = client.updateFunctionRegistry.mock.calls[0]!;
       const chunks: Uint8Array[] = [];
       for await (const message of stream) {
-        if (message.payload.case === "chunk") chunks.push(message.payload.value as Uint8Array);
+        if (message.payload?.case === "chunk") chunks.push(message.payload.value);
       }
       const content = Buffer.concat(chunks).toString("utf-8");
       const logged: string[] = [];
@@ -706,7 +730,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
     });
 
     test("finds the run by name when its execution id was never recorded", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
         listed: [failedRun],
         run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -714,14 +738,14 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       await run(client, { inProgress: {} });
 
-      expect(raw.resumeWorkflowExecution).toHaveBeenCalledWith({
+      expect(client.resumeWorkflowExecution).toHaveBeenCalledWith({
         workspaceId: "ws-1",
         executionId: "exec-old",
       });
     });
 
     test("runs every step again when the planned steps changed", async () => {
-      const { client, raw, calls } = createStepsClient({
+      const { client, calls } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
         listed: [failedRun],
         run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
@@ -730,20 +754,20 @@ describe("executeMigrationStepsAsWorkflow", () => {
       const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
       expect(result.success).toBe(true);
-      expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
+      expect(client.resumeWorkflowExecution).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
       expect(calls.indexOf("deleteWorkflow")).toBeLessThan(calls.indexOf("startWorkflow"));
     });
 
     test("runs every step again when the earlier run is gone", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
       });
 
       const result = await run(client, { inProgress: { executionId: "exec-gone" } });
 
       expect(result.success).toBe(true);
-      expect(raw.startWorkflow).toHaveBeenCalledOnce();
+      expect(client.startWorkflow).toHaveBeenCalledOnce();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
     });
 
@@ -769,7 +793,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
     });
 
     test("does not run the steps again when the earlier run already succeeded", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
         listed: [
           { id: "exec-old", status: WorkflowExecution_Status.SUCCESS, jobs: ALL_STEPS_SUCCEEDED },
@@ -783,12 +807,12 @@ describe("executeMigrationStepsAsWorkflow", () => {
         completedSteps: ORDER,
         reusedEarlierRun: true,
       });
-      expect(raw.startWorkflow).not.toHaveBeenCalled();
-      expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
+      expect(client.startWorkflow).not.toHaveBeenCalled();
+      expect(client.resumeWorkflowExecution).not.toHaveBeenCalled();
     });
 
     test("runs every step again when the steps changed after the earlier run succeeded", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
         listed: [
           { id: "exec-old", status: WorkflowExecution_Status.SUCCESS, jobs: ALL_STEPS_SUCCEEDED },
@@ -799,22 +823,22 @@ describe("executeMigrationStepsAsWorkflow", () => {
       const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
       expect(result).toMatchObject({ success: true, executionId: "exec-new" });
-      expect(raw.startWorkflow).toHaveBeenCalledOnce();
+      expect(client.startWorkflow).toHaveBeenCalledOnce();
       expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
     });
 
     test("waits for an earlier run that is still active instead of starting another", async () => {
-      const { client, raw } = createStepsClient({
+      const { client } = createStepsClient({
         existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(ORDER) },
         listed: [{ id: "exec-old", status: WorkflowExecution_Status.RUNNING }],
       });
-      raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+      client.getWorkflowExecution.mockImplementationOnce(async () => ({
         execution: { id: "exec-old", status: WorkflowExecution_Status.RUNNING, jobExecutions: [] },
       }));
-      raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+      client.getWorkflowExecution.mockImplementationOnce(async () => ({
         execution: { id: "exec-old", status: WorkflowExecution_Status.RUNNING, jobExecutions: [] },
       }));
-      raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+      client.getWorkflowExecution.mockImplementationOnce(async () => ({
         execution: {
           id: "exec-old",
           status: WorkflowExecution_Status.SUCCESS,
@@ -826,8 +850,8 @@ describe("executeMigrationStepsAsWorkflow", () => {
 
       expect(result.success).toBe(true);
       expect(result.reusedEarlierRun).toBeUndefined();
-      expect(raw.startWorkflow).not.toHaveBeenCalled();
-      expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
+      expect(client.startWorkflow).not.toHaveBeenCalled();
+      expect(client.resumeWorkflowExecution).not.toHaveBeenCalled();
     });
 
     test.each([
@@ -836,26 +860,26 @@ describe("executeMigrationStepsAsWorkflow", () => {
     ])(
       "runs every step again when the steps changed and an earlier active run %s",
       async (_label, finalStatus) => {
-        const { client, raw } = createStepsClient({
+        const { client } = createStepsClient({
           existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
           listed: [{ id: "exec-old", status: finalStatus }],
           run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
         });
-        raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+        client.getWorkflowExecution.mockImplementationOnce(async () => ({
           execution: {
             id: "exec-old",
             status: WorkflowExecution_Status.RUNNING,
             jobExecutions: [],
           },
         }));
-        raw.getWorkflowExecution.mockImplementationOnce(async () => ({
+        client.getWorkflowExecution.mockImplementationOnce(async () => ({
           execution: { id: "exec-old", status: finalStatus, jobExecutions: [] },
         }));
 
         const result = await run(client, { inProgress: { executionId: "exec-old" } });
 
         expect(result).toMatchObject({ success: true, executionId: "exec-new" });
-        expect(raw.startWorkflow).toHaveBeenCalledOnce();
+        expect(client.startWorkflow).toHaveBeenCalledOnce();
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("every step runs again"));
       },
     );
@@ -1004,11 +1028,11 @@ describe("executeMigrationStepsAsWorkflow", () => {
       });
 
       test("says when the results of some succeeded steps could not be read, so the list may be incomplete", async () => {
-        const { notify, raw, result } = runKeeping({
+        const { notify, client, result } = runKeeping({
           existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(["backfillUser"]) },
           listed: [succeededThenFailed(WorkflowExecution_Status.FAILED)],
         });
-        raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+        client.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
 
         await result();
 
@@ -1047,7 +1071,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
           status: WorkflowExecution_Status.CANCELED,
         },
       ])("starts a new run that skips the requested steps $reason", async ({ plan, status }) => {
-        const { raw, result } = runKeeping(
+        const { client, result } = runKeeping(
           {
             existingWorkflow: { id: "wf-old", plan: migrationPlanFingerprint(plan) },
             listed: [succeededThenFailed(status)],
@@ -1056,8 +1080,8 @@ describe("executeMigrationStepsAsWorkflow", () => {
         );
 
         await expect(result()).resolves.toMatchObject({ success: true, executionId: "exec-new" });
-        expect(raw.resumeWorkflowExecution).not.toHaveBeenCalled();
-        expect(raw.startWorkflow).toHaveBeenCalledOnce();
+        expect(client.resumeWorkflowExecution).not.toHaveBeenCalled();
+        expect(client.startWorkflow).toHaveBeenCalledOnce();
       });
 
       test("reports the skipped steps instead of claiming that every step runs again", async () => {
@@ -1146,11 +1170,11 @@ describe("assertSkippableSteps", () => {
   });
 
   test("does not call a step unsuccessful when the earlier run's step results could not be read", async () => {
-    const { client, raw } = createStepsClient({
+    const { client } = createStepsClient({
       existingWorkflow: { id: "wf-old" },
       listed: [succeededRun],
     });
-    raw.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
+    client.getFunctionExecution.mockRejectedValue(new ConnectError("lost", Code.Internal));
 
     const error = await assertSkippableSteps({
       client,
@@ -1218,10 +1242,12 @@ describe("removeMigrationWorkflowResources", () => {
   });
 
   test("names the job function it could not remove", async () => {
-    const { client, raw } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
-    raw.deleteWorkflowJobFunction.mockImplementation(async ({ jobFunctionName }) => {
-      if (jobFunctionName === RUNNER) throw new ConnectError("denied", Code.PermissionDenied);
-      return 0;
+    const { client } = createStepsClient({ existingWorkflow: { id: "wf-old" } });
+    client.deleteWorkflowJobFunction.mockImplementation(async (request) => {
+      if (request.jobFunctionName === RUNNER) {
+        throw new ConnectError("denied", Code.PermissionDenied);
+      }
+      return {};
     });
 
     await removeMigrationWorkflowResources(client, "ws-1", "tailordb", 3);

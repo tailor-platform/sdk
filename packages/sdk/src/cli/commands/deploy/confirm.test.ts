@@ -4,12 +4,16 @@ import {
   confirmMigrationCheckpointRepairs,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  confirmWorkspaceTakeover,
   type MissingDependentApp,
   type OwnerConflict,
+  type WorkspaceTakeover,
 } from "./confirm";
+import type { logger as loggerModule } from "#/cli/shared/logger";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     log: vi.fn(),
     info: vi.fn(),
@@ -233,6 +237,49 @@ describe("confirmUnmanagedResources", () => {
 
     expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
   });
+
+  test("says a workspace config manages a resource it marked, instead of another tool", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.log).mockClear();
+
+    await confirmUnmanagedResources(
+      [
+        {
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB namespace",
+          resourceName: "main",
+          managedBy: "workspace",
+        },
+      ],
+      "my-app",
+      "dry-run",
+    );
+
+    const lines = vi.mocked(logger.log).mock.calls.flat().join("\n");
+    expect(logger.warn).toHaveBeenCalledWith("Resources managed by a workspace config were found:");
+    expect(lines).toContain('    • TailorDB namespace "main"');
+    expect(lines).toContain('Continuing moves them to "my-app"');
+    expect(lines).not.toContain("older SDK versions");
+  });
+
+  test.for([
+    { label: "an application", appName: "my-app", owner: '"my-app"' },
+    { label: "a workspace config", appName: undefined, owner: "this workspace config" },
+  ])("names $label in the prompt", async ({ appName, owner }) => {
+    const { prompt } = await import("#/cli/shared/prompt");
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(true);
+
+    await confirmUnmanagedResources(
+      [{ resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1" }],
+      appName,
+      "prompt",
+    );
+
+    expect(prompt.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: `Allow tailor to manage these resources for ${owner}?` }),
+    );
+  });
 });
 
 describe("confirmMigrationCheckpointRepairs", () => {
@@ -368,5 +415,84 @@ describe("confirmMissingDependentApps", () => {
     await confirmMissingDependentApps(missing, "yes");
 
     expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+});
+
+describe("confirmWorkspaceTakeover", () => {
+  let prompt: typeof promptModule;
+  let logger: typeof loggerModule;
+
+  const takeovers: WorkspaceTakeover[] = [
+    {
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "shared-db",
+      action: "update",
+      currentOwner: "shop",
+    },
+    {
+      resourceType: "executor",
+      resourceLabel: "Executor",
+      resourceName: "old-sync",
+      action: "delete",
+      currentOwner: "backoffice",
+    },
+  ];
+
+  aroundEach(async (runTest) => {
+    ({ prompt } = await import("#/cli/shared/prompt"));
+    ({ logger } = await import("#/cli/shared/logger"));
+    await runTest();
+    vi.restoreAllMocks();
+  });
+
+  test("returns immediately when nothing is taken over", async () => {
+    await confirmWorkspaceTakeover([], "prompt");
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("lists the resources taken over and the ones deleted, then asks once", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    await confirmWorkspaceTakeover(takeovers, "prompt");
+
+    const lines = vi
+      .mocked(logger.log)
+      .mock.calls.map(([line]) => String(line))
+      .join("\n");
+    expect(lines).toContain('TailorDB namespace "shared-db" (application "shop")');
+    expect(lines).toContain('Executor "old-sync" (application "backoffice")');
+    expect(lines).not.toContain("permanently remove");
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not ask with dry-run", async () => {
+    await confirmWorkspaceTakeover(takeovers, "dry-run");
+    expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  test.for([
+    {
+      label: "deletes too",
+      takeovers,
+      message:
+        "Taking over these resources and deleting the ones listed as deleted (--yes flag specified)...",
+    },
+    {
+      label: "only takes over",
+      takeovers: takeovers.slice(0, 1),
+      message: "Moving these resources under this workspace config (--yes flag specified)...",
+    },
+  ])("does not ask with --yes and says that the deploy $label", async ({ takeovers, message }) => {
+    await confirmWorkspaceTakeover(takeovers, "yes");
+    expect(prompt.confirm).not.toHaveBeenCalled();
+    expect(logger.success).toHaveBeenCalledWith(message, { mode: "plain" });
+  });
+
+  test("cancels the deploy when the answer is no", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
+    await expect(confirmWorkspaceTakeover(takeovers, "prompt")).rejects.toMatchObject({
+      code: "DEPLOY_CANCELLED",
+    });
   });
 });

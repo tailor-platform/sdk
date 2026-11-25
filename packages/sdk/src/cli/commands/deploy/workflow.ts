@@ -28,6 +28,7 @@ import {
   addDependencyRecords,
   buildMetaRequest,
   type DependentAppsByResource,
+  type DeployOwner,
   eventSourceKey,
   type MetadataLabelWrite,
   resourceTrn,
@@ -56,14 +57,13 @@ export async function applyWorkflow(
   result: Awaited<ReturnType<typeof planWorkflow>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
 ) {
-  const { changeSet, appName, appId } = result;
+  const { changeSet, owner } = result;
   if (phase === "create-update") {
     // Register job functions used by any workflow, returns map of job name to version
     const jobFunctionVersions = await registerJobFunctions(
       client,
       changeSet,
-      appName,
-      appId,
+      owner,
       result.unchangedWorkflowJobNames,
       result.jobFunctionPublishEvents,
     );
@@ -184,8 +184,7 @@ function filterJobFunctionVersions(
  * Sets metadata on used JobFunctions.
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
- * @param appName - Application name
- * @param appId - Application ID used for job function metadata when available
+ * @param owner - Owner of the resources the deploy manages
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @param jobFunctionPublishEvents - Resolved `publishExecutionEvents` keyed by job function name
  * @returns Map of job function names to versions
@@ -193,8 +192,7 @@ function filterJobFunctionVersions(
 async function registerJobFunctions(
   client: OperatorClient,
   changeSet: ChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
   jobFunctionPublishEvents: ReadonlyMap<string, boolean> = new Map(),
 ): Promise<{ [key: string]: bigint }> {
@@ -248,8 +246,7 @@ async function registerJobFunctions(
           client,
           await buildMetaRequest({
             trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
-            appName,
-            appId,
+            owner,
           }),
         );
 
@@ -528,8 +525,7 @@ export interface PreviousWorkflowExisting {
  * Plan workflow changes and job functions based on current and desired state.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param appName - Application name
- * @param appId - Application ID used for workflow metadata when available
+ * @param owner - Owner of the resources the deploy manages
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
@@ -541,8 +537,7 @@ export interface PreviousWorkflowExisting {
 export async function planWorkflow(
   client: OperatorClient,
   workspaceId: string,
-  appName: string,
-  appId: string | undefined,
+  owner: DeployOwner,
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
@@ -556,7 +551,7 @@ export async function planWorkflow(
     never,
     UnchangedWorkflow
   >("Workflows");
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
   const unchangedWorkflowJobNames = new Set<string>();
   const retainedWorkflowJobNames = new Set<string>();
 
@@ -603,12 +598,9 @@ export async function planWorkflow(
   const desired: DesiredWorkflow[] = [];
   for (const workflow of Object.values(workflows)) {
     const metaRequest = addDependencyRecords(
-      await buildMetaRequest({
-        trn: resourceTrn(workspaceId, "workflow", workflow.name),
-        appName,
-        appId,
-      }),
+      await buildMetaRequest({ trn: resourceTrn(workspaceId, "workflow", workflow.name), owner }),
       {
+        owner,
         key: eventSourceKey.workflow(workflow.name),
         dependentApps,
         runAppIds,
@@ -618,6 +610,7 @@ export async function planWorkflow(
     // The jobs' value is driven by workflowJobExecution subscribers, independently
     // of the workflow's own, so its records live in their own namespace here.
     addDependencyRecords(metaRequest, {
+      owner,
       key: eventSourceKey.workflowJobs(workflow.name),
       dependentApps,
       runAppIds,
@@ -657,10 +650,7 @@ export async function planWorkflow(
     desired,
     existing: Object.entries(fetchedWorkflows),
     keyOf: (workflow) => workflow.name,
-    ...labeledResourceChecks(ownership, (workflow: DesiredWorkflow) => ({
-      resourceType: "workflow",
-      resourceName: workflow.name,
-    })),
+    ...labeledResourceChecks(ownership, "workflow"),
     isConfigUnchanged: ({ workflow, usedJobNames }, existing) =>
       // Job functions are only re-registered while applying a workflow create/update.
       !usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName)) &&
@@ -722,8 +712,7 @@ export async function planWorkflow(
   return {
     changeSet,
     ...ownership.result,
-    appName,
-    appId,
+    owner,
     unchangedWorkflowJobNames,
     jobFunctionDeletes,
     jobFunctionPublishEvents,
@@ -773,7 +762,10 @@ async function planWorkflowJobFunctionDeletes(
       });
       // Record the owner of what is skipped, so remove can say it left something
       // behind instead of reporting that it deleted everything.
-      return ownership.ownsRemaining(metadata?.labels)
+      return ownership.ownsRemaining(metadata?.labels, {
+        resourceType: "workflow_job_function",
+        resourceName: jobFunctionName,
+      })
         ? { workspaceId, jobFunctionName }
         : undefined;
     }),

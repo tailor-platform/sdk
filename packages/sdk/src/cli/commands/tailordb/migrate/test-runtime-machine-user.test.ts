@@ -1,9 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { initOperatorClient } from "#/cli/shared/client";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
 import { runMigrationTest } from "./test";
 import {
@@ -92,28 +92,26 @@ function fixture(directory: string, options: FixtureOptions = {}) {
   );
   const assertionPath = path.join(directory, "assert.ts");
   fs.writeFileSync(assertionPath, "export async function main() {}\n");
-  const client = {
-    getWorkspace: vi
-      .fn()
-      .mockResolvedValue({ workspace: { id: "source", region: "asia-northeast" } }),
-    getApplication: vi.fn().mockResolvedValue({ application: { name: "migration-test" } }),
-    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0000" } } }),
-    listTailorDBTypes: vi.fn().mockResolvedValue({
+  const client = mockOperatorClient({
+    getWorkspace: { workspace: { id: "source", region: "asia-northeast" } },
+    getApplication: { application: { name: "migration-test" } },
+    getMetadata: { metadata: { labels: { "sdk-migration": "m0000" } } },
+    listTailorDBTypes: {
       tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
-    }),
-    listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
-    createWorkspace: vi.fn().mockRejectedValue(new Error("Unexpected workspace creation")),
-    execScript: vi.fn().mockResolvedValue({ executionId: "execution" }),
-    getFunctionExecution: vi.fn().mockResolvedValue({
+    },
+    listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+    createWorkspace: () => Promise.reject(new Error("Unexpected workspace creation")),
+    execScript: { executionId: "execution" },
+    getFunctionExecution: {
       execution: {
         status: FunctionExecution_Status.SUCCESS,
         result: '{"success":true}',
         logEntries: [],
       },
-    }),
-  };
-  vi.mocked(initOperatorClient).mockResolvedValue(client as unknown as OperatorClient);
+    },
+  });
+  vi.mocked(initOperatorClient).mockResolvedValue(client);
   return {
     client,
     configPath,

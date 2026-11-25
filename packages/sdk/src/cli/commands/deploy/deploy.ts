@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { type Application } from "#/cli/services/application";
+import { type ConfigServices } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
@@ -9,13 +9,16 @@ import {
   staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
+import { type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
+import { reclaimFinishedWorkflowRuns } from "#/cli/shared/workflow-run";
 import { withSpan } from "#/cli/telemetry/index";
+import { listEnvOverrides } from "#/parser/app-config/config-export";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { applicationLabelLimitError, planApplication } from "./application";
@@ -37,20 +40,30 @@ import {
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
+  confirmWorkspaceTakeover,
   type ConfirmMode,
+  type ImportantResourceDeletion,
   type MissingDependentApp,
+  type TakeoverConfirmation,
+  type WorkspaceTakeover,
 } from "./confirm";
 import { assertNoSingleRunTransferHandoff } from "./custom-domain-transfer-guard";
+import { assertResourcesFromOwnConfig } from "./define-app-guard";
 import { fetchMissingDependentApps } from "./dependency-records";
 import {
+  deployedHookLabel,
   deployedHookLoadFailure,
-  loadDeployedApplications,
+  deployedHookRef,
+  loadDeployedTargets,
   runDeployedHooks,
 } from "./deployed-hooks";
 import {
   buildDeploymentTargets,
   loadDeployConfigs,
+  loadedSettings,
   parseDeployConfigPaths,
+  sourceApplicationName,
+  sourcePath,
   type BuiltDeploymentTarget,
 } from "./deployment-target";
 import {
@@ -74,12 +87,21 @@ import {
   planFunctionRegistry,
 } from "./function-registry";
 import { planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import {
+  applicationIdOf,
+  buildMetaRequest,
+  type DeployOwner,
+  hasMatchingSdkVersion,
+  isOwnedBy,
+  resourceTrn,
+  sdkNameLabelKey,
+} from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
   assertUniqueGlobalResourceNames,
   collectImportantResourceDeletions,
   collectOwnerConflicts,
+  collectTakeovers,
   collectUnmanagedResources,
   dropCrossDeploymentManagedDeletes,
   scheduleRenamedAppDeletes,
@@ -104,6 +126,7 @@ import {
 import { planWorkflow } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
+import type { DeployApplication } from "./deploy-application";
 import type {
   PlanContext,
   TailorDBMigrationTestBaseline,
@@ -178,43 +201,48 @@ function collectExpectedLocalStaticWebsiteNames(
 // Same set as collectExpectedLocalStaticWebsiteNames, read from the loaded
 // configs so it is available before any of them is bundled.
 export function collectExpectedLocalStaticWebsiteNamesFromConfigs(
-  configs: ReadonlyArray<{ config: { staticWebsites?: ReadonlyArray<{ name: string }> } }>,
+  configs: ReadonlyArray<LoadedConfigFile>,
 ): ReadonlySet<string> {
   const websiteNames = new Set<string>();
-  for (const { config } of configs) {
-    for (const website of config.staticWebsites ?? []) {
+  for (const entry of configs) {
+    for (const website of loadedSettings(entry).staticWebsites ?? []) {
       websiteNames.add(website.name);
     }
   }
   return websiteNames;
 }
 
+type ForceApplyConfig = {
+  application: Readonly<ConfigServices>;
+  applications: ReadonlyArray<Pick<DeployApplication, "name" | "subgraphs">>;
+};
+
 /**
- * Detect whether any resource owned by this application was last applied by a
+ * Detect whether any resource owned by this config was last applied by a
  * different SDK version, in which case every resource is re-applied.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @param application - Application being deployed
- * @param functionEntries - Function registry entries of the application
+ * @param owner - Owner of the resources the deploy manages
+ * @param config - Services and applications the config deploys
+ * @param functionEntries - Function registry entries of the config
  * @returns True when an owned resource carries a different sdk-version label
  */
 export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
-  application: Readonly<Application>,
+  owner: DeployOwner,
+  config: ForceApplyConfig,
   functionEntries: ReadonlyArray<{ name: string }>,
 ) {
-  const desiredLabels = (
-    await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "application", application.name),
-      appName: application.name,
-      appId: application.id,
-    })
-  ).labels;
+  const { application, applications } = config;
+  const managedByOwner = (labels: Record<string, string>) =>
+    owner.kind === "workspace" ? isOwnedBy(labels, owner) : labels[sdkNameLabelKey] === owner.name;
   const candidateTrns = new Set<string>();
 
-  if (application.subgraphs.length > 0) {
-    candidateTrns.add(resourceTrn(workspaceId, "application", application.name));
+  for (const app of applications) {
+    if (app.subgraphs.length > 0) {
+      candidateTrns.add(resourceTrn(workspaceId, "application", app.name));
+    }
   }
   application.staticWebsiteServices.forEach((website) => {
     candidateTrns.add(resourceTrn(workspaceId, "staticwebsite", website.name));
@@ -228,9 +256,9 @@ export async function shouldForceApplyAll(
   application.idpServices.forEach((idp) => {
     candidateTrns.add(resourceTrn(workspaceId, "idp", idp.name));
   });
-  if (application.authService) {
-    candidateTrns.add(resourceTrn(workspaceId, "auth", application.authService.config.name));
-  }
+  application.authServices.forEach((authService) => {
+    candidateTrns.add(resourceTrn(workspaceId, "auth", authService.config.name));
+  });
   Object.values(application.executorService?.executors ?? {}).forEach((executor) => {
     candidateTrns.add(resourceTrn(workspaceId, "executor", executor.name));
   });
@@ -246,6 +274,11 @@ export async function shouldForceApplyAll(
   functionEntries.forEach((entry) => {
     candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
+  const [anyTrn] = candidateTrns;
+  if (anyTrn === undefined) {
+    return false;
+  }
+  const desiredLabels = (await buildMetaRequest({ trn: anyTrn, owner })).labels;
 
   const results = await Promise.allSettled(
     [...candidateTrns].map((trn) =>
@@ -259,7 +292,8 @@ export async function shouldForceApplyAll(
   const hasMismatch = results.some(
     (result) =>
       result.status === "fulfilled" &&
-      result.value?.labels[sdkNameLabelKey] === application.name &&
+      result.value != null &&
+      managedByOwner(result.value.labels) &&
       !hasMatchingSdkVersion(result.value.labels, desiredLabels),
   );
   if (hasMismatch) {
@@ -330,7 +364,7 @@ type PlanDeploymentTargetsParams = {
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
   /** Resource kinds to reuse from `previousDeployments` instead of re-planning. */
   skip?: ReadonlySet<ReusablePlanKind>;
-  /** Prior plan results, matched to targets by application name, source for `skip` reuse. */
+  /** Prior plan results, matched to targets by config path, source for `skip` reuse. */
   previousDeployments?: ReadonlyArray<PlannedDeployment>;
 };
 
@@ -397,7 +431,7 @@ function workspaceRecoveryArgs(
 function collectPlannedExternalTailorDBServices(
   target: BuiltDeploymentTarget,
   targets: ReadonlyArray<BuiltDeploymentTarget>,
-): Application["tailorDBServices"] {
+): ConfigServices["tailorDBServices"] {
   const externalNamespaces = new Set(target.application.externalTailorDBNamespaces);
   if (externalNamespaces.size === 0) {
     return [];
@@ -414,11 +448,7 @@ export function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, string | undefined> {
   const idpConfigNames = new Map<string, string | undefined>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const idpConfigName = authService.config.idProvider?.name;
     if (idpConfigNames.has(name) && idpConfigNames.get(name) !== idpConfigName) {
@@ -439,11 +469,7 @@ export function collectPlannedMachineUsers(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, ReadonlySet<string>> {
   const machineUsers = new Map<string, Set<string>>();
-  for (const target of targets) {
-    const authService = target.application.authService;
-    if (!authService) {
-      continue;
-    }
+  for (const authService of targets.flatMap((target) => target.application.authServices)) {
     const { name } = authService.config;
     const names = machineUsers.get(name) ?? new Set<string>();
     for (const machineUserName of Object.keys(authService.config.machineUsers ?? {})) {
@@ -463,7 +489,7 @@ function collectDeployRunPlanInputs(
   return {
     eventSubscriptions,
     runAppIds: new Set(
-      targets.map((target) => target.application.id).filter((id) => id !== undefined),
+      targets.map((target) => applicationIdOf(target.owner)).filter((id) => id !== undefined),
     ),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
@@ -489,8 +515,15 @@ async function planDeploymentTarget(
     skip,
     previous,
   } = params;
-  const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
-    target;
+  const {
+    config,
+    application,
+    applications,
+    owner,
+    workflowBuildResult,
+    httpAdapterBuildResult,
+    bundledScripts,
+  } = target;
   const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
   const migrationTestServices = application.tailorDBServices.map((service) => {
@@ -520,20 +553,22 @@ async function planDeploymentTarget(
   const forceApplyAll = previous
     ? previous.forceApplyAll
     : await withSpan("plan.detectSdkVersionChange", () =>
-        shouldForceApplyAll(client, workspaceId, application, functionEntries),
+        shouldForceApplyAll(client, workspaceId, owner, target, functionEntries),
       );
 
   return withSpan("plan", async () => {
-    const applications = targets.map((target) => target.application);
-    const tailorDBTypeNamespaces = collectVisibleTailorDBTypeNamespaces(application, applications);
-    const resolverNamespaces = collectVisibleResolverNamespaces(application, applications);
-    const idpNames = collectVisibleIdpNames(application, applications);
+    const tailorDBTypeNamespaces = collectVisibleTailorDBTypeNamespaces(target, targets);
+    const resolverNamespaces = collectVisibleResolverNamespaces(target, targets);
+    const idpNames = collectVisibleIdpNames(target, targets);
     const ctx: PlanContext = {
       client,
       workspaceId,
       application,
+      applications,
+      owner,
       forRemoval: false,
       config,
+      envOverrides: target.envOverrides,
       noSchemaCheck,
       migrationSkipSteps,
       migrationRecoveryArgs,
@@ -554,10 +589,10 @@ async function planDeploymentTarget(
       planFunctionRegistry(
         client,
         workspaceId,
-        application.name,
-        application.id,
+        owner,
         functionEntries,
         previous?.functionRegistry.existingMap,
+        target.applications,
       ),
     );
     const unchangedWorkflowJobs = collectUnchangedWorkflowJobs(functionRegistry.changeSet);
@@ -609,8 +644,7 @@ async function planDeploymentTarget(
         planWorkflow(
           client,
           workspaceId,
-          application.name,
-          application.id,
+          owner,
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
@@ -632,8 +666,7 @@ async function planDeploymentTarget(
             planWorkflowJobFunctionExecutionPolicy(
               client,
               workspaceId,
-              application.name,
-              application.id,
+              owner,
               config.workflow?.executionPolicies ?? {},
             ),
           ),
@@ -643,7 +676,11 @@ async function planDeploymentTarget(
     ]);
 
     return {
+      source: target.source,
       application,
+      envOverrides: target.envOverrides,
+      applications,
+      owner,
       forceApplyAll,
       functionRegistry,
       tailorDB,
@@ -665,8 +702,8 @@ export async function planDeploymentTargets(
   params: PlanDeploymentTargetsParams,
 ): Promise<PlannedDeployment[]> {
   const { targets, planTarget = planDeploymentTarget, previousDeployments, ...planParams } = params;
-  const previousByAppName = new Map(
-    previousDeployments?.map((deployment) => [deployment.application.name, deployment]),
+  const previousByConfigPath = new Map(
+    previousDeployments?.map((deployment) => [sourcePath(deployment.source), deployment]),
   );
   return Promise.all(
     targets.map((target) =>
@@ -674,14 +711,18 @@ export async function planDeploymentTargets(
         ...planParams,
         target,
         targets,
-        previous: previousByAppName.get(target.application.name),
+        previous: previousByConfigPath.get(sourcePath(target.source)),
       }),
     ),
   );
 }
 
+function deletionKey(resource: Pick<ImportantResourceDeletion, "resourceType" | "resourceName">) {
+  return JSON.stringify([resource.resourceType, resource.resourceName]);
+}
+
 function confirmationKey(deployment: PlannedDeployment, item: object): string {
-  return JSON.stringify([deployment.application.name, item]);
+  return JSON.stringify([sourcePath(deployment.source), item]);
 }
 
 function collectConfirmations(
@@ -694,7 +735,8 @@ function collectConfirmations(
     checkpointRepairs: deployment.tailorDB.context.checkpointRepairs.filter(isNew),
     conflicts: collectOwnerConflicts(results).filter(isNew),
     unmanaged: collectUnmanagedResources(results).filter(isNew),
-    importantDeletions: collectImportantResourceDeletions(results).filter(isNew),
+    takeovers: collectTakeovers(results).filter(isNew),
+    importantDeletions: collectImportantResourceDeletions(results, deployment.owner).filter(isNew),
   };
 }
 
@@ -724,19 +766,49 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     mode,
   );
   await confirmMissingDependentApps(missingDependentApps, mode);
-  for (const { deployment, conflicts, unmanaged } of pending) {
-    await confirmOwnerConflict(
-      conflicts,
-      deployment.application.name,
-      mode,
-      deployment.application.id,
-    );
-    await confirmUnmanagedResources(unmanaged, deployment.application.name, mode);
+  const remainingDeletions: ImportantResourceDeletion[] = [];
+  for (const { deployment, conflicts, unmanaged, takeovers, importantDeletions } of pending) {
+    const split = splitTakeoverDeletions(takeovers, importantDeletions);
+    remainingDeletions.push(...split.remaining);
+    if (deployment.owner.kind === "workspace") {
+      await confirmWorkspaceTakeover(split.takeovers, mode);
+    } else {
+      await confirmOwnerConflict(conflicts, deployment.owner.name, mode, deployment.owner.id);
+    }
+    await confirmUnmanagedResources(unmanaged, sourceApplicationName(deployment.source), mode);
   }
-  await confirmImportantResourceDeletion(
-    pending.flatMap((confirmations) => confirmations.importantDeletions),
-    mode,
+  await confirmImportantResourceDeletion(remainingDeletions, mode);
+}
+
+type SplitTakeoverDeletions = {
+  takeovers: TakeoverConfirmation[];
+  remaining: ImportantResourceDeletion[];
+};
+
+function splitTakeoverDeletions(
+  takeovers: ReadonlyArray<WorkspaceTakeover>,
+  importantDeletions: ReadonlyArray<ImportantResourceDeletion>,
+): SplitTakeoverDeletions {
+  const deletedByTakeover = new Set(
+    takeovers.filter(({ action }) => action === "delete").map(deletionKey),
   );
+  const covered = (deletion: ImportantResourceDeletion) =>
+    deletedByTakeover.has(deletionKey(deletion)) ||
+    (deletion.parent !== undefined && deletedByTakeover.has(deletionKey(deletion.parent)));
+  return {
+    takeovers: takeovers.map((takeover) => {
+      if (takeover.action !== "delete") return takeover;
+      const key = deletionKey(takeover);
+      return {
+        ...takeover,
+        losesData: importantDeletions.some((deletion) => deletionKey(deletion) === key),
+        nestedDeletions: importantDeletions.filter(
+          (deletion) => deletion.parent && deletionKey(deletion.parent) === key,
+        ),
+      };
+    }),
+    remaining: importantDeletions.filter((deletion) => !covered(deletion)),
+  };
 }
 
 /**
@@ -752,7 +824,7 @@ async function reviewDeploymentPlans(params: ReviewDeploymentPlansParams): Promi
   } else {
     await validatePlans(
       deployments.map((deployment) => ({
-        application: deployment.application.name,
+        application: sourceApplicationName(deployment.source),
         results: deploymentPlanResults(deployment),
       })),
     );
@@ -784,10 +856,15 @@ export function needsEnvRebuild(
   expectedLocalStaticWebsiteNames: ReadonlySet<string>,
 ): boolean {
   return deployments.some((deployment) =>
-    Object.values(deployment.application.env).some(
-      (value) =>
-        hasStaticWebsiteUrlPlaceholder(value) &&
-        expectedLocalStaticWebsiteNames.has(staticWebsiteNameFromPlaceholder(value)),
+    [
+      deployment.application.env,
+      ...listEnvOverrides(deployment.envOverrides).map(({ env }) => env),
+    ].some((env) =>
+      Object.values(env).some(
+        (value) =>
+          hasStaticWebsiteUrlPlaceholder(value) &&
+          expectedLocalStaticWebsiteNames.has(staticWebsiteNameFromPlaceholder(value)),
+      ),
     ),
   );
 }
@@ -825,30 +902,25 @@ export function assertEnvResolvedAfterRebuild(
  * @returns The application as the migration test deploy manages it
  */
 export function adjustApplicationForMigrationTest(
-  application: Application,
+  application: ConfigServices,
   internalContext: DeployInternalContext | undefined,
-): Application {
+): ConfigServices {
   if (!internalContext?.migrationTestSnapshots) {
     return application;
   }
   const forBaseline = internalContext.migrationTestBaselines !== undefined;
-  const authService =
-    forBaseline && application.authService
-      ? { ...application.authService, userProfile: undefined }
-      : application.authService;
-  const adjusted: Application = {
+  const authServices = forBaseline
+    ? application.authServices.map((authService) => ({ ...authService, userProfile: undefined }))
+    : application.authServices;
+  return {
     ...application,
     executorService: forBaseline ? undefined : application.executorService,
-    authService,
+    authServices,
     staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
       ...website,
       customDomains: undefined,
     })),
-    get applications() {
-      return [adjusted];
-    },
   };
-  return adjusted;
 }
 
 /**
@@ -881,11 +953,15 @@ async function deployInternal(
       : await withSpan("config.preflight", () =>
           loadDeployConfigs({ configPaths, dryRun, buildOnly }),
         );
-    const resolvedConfigPaths = preflightConfigs.map(({ config }) => config.path);
-    const workspaceContextTargets = preflightConfigs.map(({ config }) => ({
-      configPath: config.path,
-      applicationId: config.id ?? `name:${config.name}`,
-    }));
+    const resolvedConfigPaths = preflightConfigs.map((entry) => loadedSettings(entry).path);
+    const workspaceContextTargets = preflightConfigs.map((entry) =>
+      entry.kind === "config"
+        ? {
+            configPath: entry.config.path,
+            applicationId: entry.config.id ?? `name:${entry.config.name}`,
+          }
+        : { configPath: entry.workspace.path },
+    );
     const workspace = buildOnly
       ? undefined
       : await resolveDeployWorkspace({
@@ -953,7 +1029,10 @@ async function deployInternal(
     if (!workspace) throw internalError("Workspace was not resolved");
     const { client, workspaceId } = workspace;
 
-    rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
+    rootSpan.setAttribute(
+      "app.name",
+      targets.flatMap((target) => target.applications.map(({ name }) => name)).join(","),
+    );
     rootSpan.setAttribute("workspace.id", workspaceId);
 
     // Reused on a rebuild's replan (see below) instead of re-scanning
@@ -981,7 +1060,7 @@ async function deployInternal(
               createMetadataLookupClient({
                 client,
                 workspaceId,
-                applications: planTargets.map(({ application }) => application),
+                owners: planTargets.map(({ owner }) => owner),
               }),
             );
       firstMetadataClient = metadataClient;
@@ -1002,6 +1081,13 @@ async function deployInternal(
       });
       dropCrossDeploymentManagedDeletes(deployments);
       scheduleRenamedAppDeletes(deployments);
+      for (const deployment of deployments) {
+        assertResourcesFromOwnConfig(deployment.source, {
+          applications: deployment.applications,
+          takeovers: collectTakeovers(deploymentPlanResults(deployment)),
+          applicationDeletes: deployment.app.deletes,
+        });
+      }
       await assertResourcesNotInUse({ deployments, command: "deploy", client, workspaceId });
       assertNoSingleRunTransferHandoff(deployments);
       return { planTargets, metadataClient, runInputs, deployments };
@@ -1020,14 +1106,16 @@ async function deployInternal(
     const missingDependentApps = (
       await Promise.all(
         planTargets.map((target) =>
-          fetchMissingDependentApps({
-            client: metadataClient,
-            workspaceId,
-            application: target.application,
-            runAppIds: runInputs.runAppIds ?? new Set<string>(),
-            subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
-            jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
-          }),
+          target.source.kind === "config"
+            ? fetchMissingDependentApps({
+                client: metadataClient,
+                workspaceId,
+                application: { ...target.source.application, ...target.application },
+                runAppIds: runInputs.runAppIds ?? new Set<string>(),
+                subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
+                jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
+              })
+            : Promise.resolve([]),
         ),
       )
     ).flat();
@@ -1049,7 +1137,7 @@ async function deployInternal(
       : targets.flatMap((target) =>
           target.plugins
             .filter((plugin) => plugin.onDeployed)
-            .map((plugin) => ({ application: target.application.name, pluginId: plugin.id })),
+            .map((plugin) => deployedHookRef(target, plugin)),
         );
     const reviewOptions = { yes: options?.yes ?? false, noValidate: options?.noValidate };
     let planSummary = await reviewDeploymentPlans({
@@ -1062,7 +1150,9 @@ async function deployInternal(
 
     if (dryRun) {
       for (const { application, pluginId } of pendingDeployedHooks) {
-        logger.info(`Hook to run after apply: "${pluginId}" (app "${application}")`);
+        logger.info(
+          `Hook to run after apply: "${pluginId}"${application === undefined ? "" : ` (app "${application}")`}`,
+        );
       }
       logger.info("Dry run enabled. No changes applied.");
       return undefined;
@@ -1078,7 +1168,7 @@ async function deployInternal(
     // can never reference a static website's URL, so applying them first is
     // safe -- and it means a site this same deploy creates already exists by
     // the time env is read again below.
-    await applyPrerequisiteResources(client, deployments);
+    const prerequisites = await applyPrerequisiteResources(client, deployments);
 
     let applied: RemainingApplyResult;
     if (needsUrlResolution) {
@@ -1109,29 +1199,25 @@ async function deployInternal(
       applied = await applyRemainingResources(client, deployments);
     }
     const { maintenance: tailordbMaintenance, labelRejections } = applied;
+    const warnings = [...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels].map(
+      (dropped) => ({ type: "onAppLabelsDropped" as const, ...dropped }),
+    );
 
-    const applications =
+    const deployed =
       logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
-        ? await loadDeployedApplications({ client, workspaceId, targets }).catch(
-            (error: unknown) => {
-              if (pendingDeployedHooks.length)
-                throw deployedHookLoadFailure(
-                  error,
-                  pendingDeployedHooks.map(
-                    ({ application, pluginId }) => `${pluginId} (app: ${application})`,
-                  ),
-                );
-              throw CLIError({
-                code: "DEPLOY_RESULT_LOAD_FAILED",
-                message:
-                  "Platform resources were applied successfully, but loading the deployed application information failed.",
-                details: error instanceof Error ? error.message : String(error),
-                suggestion:
-                  "Fix the error and run tailor deploy again. Unchanged resources are not re-applied.",
-                cause: error,
-              });
-            },
-          )
+        ? await loadDeployedTargets({ client, workspaceId, targets }).catch((error: unknown) => {
+            if (pendingDeployedHooks.length)
+              throw deployedHookLoadFailure(error, pendingDeployedHooks.map(deployedHookLabel));
+            throw CLIError({
+              code: "DEPLOY_RESULT_LOAD_FAILED",
+              message:
+                "Platform resources were applied successfully, but loading the deployed application information failed.",
+              details: error instanceof Error ? error.message : String(error),
+              suggestion:
+                "Fix the error and run tailor deploy again. Unchanged resources are not re-applied.",
+              cause: error,
+            });
+          })
         : undefined;
     const deployedHooks = internalContext?.skipDeployedHooks
       ? []
@@ -1139,10 +1225,17 @@ async function deployInternal(
           client,
           workspaceId,
           targets,
-          applications,
+          deployed,
           profile: options?.profile,
         });
     if (labelRejections.length > 0) throw applicationLabelLimitError(labelRejections);
+
+    const reclaimedRuns = (
+      await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() })
+    )?.removed.length;
+    if (reclaimedRuns) {
+      logger.info(`Removed the resources of ${reclaimedRuns} finished \`workflow run\` run(s).`);
+    }
 
     if (!internalContext?.suppressResultOutput) {
       if (logger.jsonMode) {
@@ -1150,9 +1243,10 @@ async function deployInternal(
           summary: planSummary,
           status: "applied",
           workspaceId,
-          applications,
+          applications: deployed?.flatMap((entry) => entry.applications),
           ...(tailordbMaintenance.length ? { tailordbMaintenance } : {}),
           ...(deployedHooks.length ? { deployedHooks } : {}),
+          ...(warnings.length ? { warnings } : {}),
         });
       } else {
         logger.success("Successfully applied changes.");

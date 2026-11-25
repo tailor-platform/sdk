@@ -5,7 +5,15 @@ import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { idpClientVaultName } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  labelRefreshOf,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeLabelRefreshes,
+  writeMetadataLabels,
+} from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import {
   hashValue,
@@ -16,7 +24,7 @@ import {
   withSecretsStateLock,
 } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices } from "#/cli/services/application";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
   CreateSecretManagerSecretRequestSchema,
@@ -27,11 +35,13 @@ import type {
 type CreateVault = {
   name: string;
   workspaceId: string;
+  metaRequest: MetadataLabelWrite;
 };
 
 type ExistingVault = {
   name: string;
   workspaceId: string;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteVault = {
@@ -131,7 +141,7 @@ export function secretUpdateRequest(
   };
 }
 
-function collectIdPClientVaultNames(idpServices: Application["idpServices"]) {
+function collectIdPClientVaultNames(idpServices: ConfigServices["idpServices"]) {
   return new Set(
     idpServices.flatMap((idp) => idp.clients.map((name) => idpClientVaultName(idp.name, name))),
   );
@@ -166,7 +176,7 @@ function validateDeclaredVaultNames(
  * @returns Planned changes for vaults and secrets
  */
 export async function planSecretManager(context: PlanContext) {
-  const { client, workspaceId, application, forRemoval, forceApplyAll = false } = context;
+  const { client, workspaceId, application, owner, forRemoval, forceApplyAll = false } = context;
   const secretVaults = forRemoval ? [] : application.secrets;
   const idpClientVaultNames = collectIdPClientVaultNames(application.idpServices);
   validateDeclaredVaultNames(secretVaults, idpClientVaultNames);
@@ -177,7 +187,7 @@ export async function planSecretManager(context: PlanContext) {
   const secretChangeSet = createChangeSet<CreateSecret, UpdateSecret, DeleteSecret>(
     "Secret Manager secrets",
   );
-  const ownership = createOwnershipTracker(application.name, application.id);
+  const ownership = createOwnershipTracker(owner);
 
   // Fetch all existing vaults with metadata to track managed resources
   const existingVaults = await fetchExistingResourcesWithLabels({
@@ -202,23 +212,26 @@ export async function planSecretManager(context: PlanContext) {
     secretVaults.map(async (vault) => {
       const vaultName = vault.vaultName;
       const existing = existingVaults[vaultName];
+      const metaRequest = await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "vault", vaultName),
+        owner,
+      });
 
       if (existing) {
-        const metaRequest = await buildMetaRequest({
-          trn: resourceTrn(workspaceId, "vault", vaultName),
-          appName: application.name,
-          appId: application.id,
-        });
         const owned = ownership.ownsDesired(existing.allLabels, {
           resourceType: "secret.vault",
           resourceName: vaultName,
         });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
-          vaultChangeSet.unchanged.push({ name: vaultName });
+          vaultChangeSet.unchanged.push({
+            name: vaultName,
+            ...labelRefreshOf(existing.allLabels, metaRequest),
+          });
         } else {
           vaultChangeSet.updates.push({
             name: vaultName,
             workspaceId,
+            metaRequest,
             ...(owned && { forcedBySdkVersion: true }),
           });
         }
@@ -227,6 +240,7 @@ export async function planSecretManager(context: PlanContext) {
         vaultChangeSet.creates.push({
           name: vaultName,
           workspaceId,
+          metaRequest,
         });
       }
 
@@ -308,7 +322,9 @@ export async function planSecretManager(context: PlanContext) {
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
-    if (ownership.ownsRemaining(entry.allLabels)) {
+    if (
+      ownership.ownsRemaining(entry.allLabels, { resourceType: "secret.vault", resourceName: name })
+    ) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
         const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
@@ -349,14 +365,14 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application used for ownership metadata and hash state persistence
+ * @param application - Services whose secret hashes are persisted
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planSecretManager>>,
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
-  application?: Readonly<Application>,
+  application?: Readonly<ConfigServices>,
 ) {
   const { vaultChangeSet, secretChangeSet, stateScope } = result;
 
@@ -365,30 +381,15 @@ export async function applySecretManager(
     await Promise.all(
       vaultChangeSet.creates.map(async (create) => {
         await client.createSecretManagerVault(vaultCreateRequest(create));
-        if (application) {
-          const metaRequest = await buildMetaRequest({
-            trn: resourceTrn(create.workspaceId, "vault", create.name),
-            appName: application.name,
-            appId: application.id,
-          });
-          await writeMetadataLabels(client, metaRequest);
-        }
+        await writeMetadataLabels(client, create.metaRequest);
       }),
     );
 
     // Update metadata for existing vaults
-    if (application) {
-      await Promise.all(
-        vaultChangeSet.updates.map(async (update) => {
-          const metaRequest = await buildMetaRequest({
-            trn: resourceTrn(update.workspaceId, "vault", update.name),
-            appName: application.name,
-            appId: application.id,
-          });
-          await writeMetadataLabels(client, metaRequest);
-        }),
-      );
-    }
+    await Promise.all([
+      ...vaultChangeSet.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
+      ...writeLabelRefreshes(client, vaultChangeSet.unchanged),
+    ]);
 
     const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
     if (secretHashUpdates.length > 0) {

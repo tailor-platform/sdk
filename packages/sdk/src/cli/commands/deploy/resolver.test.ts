@@ -1,7 +1,9 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { describe, test, expect, vi } from "vitest";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
-import { sdkNameLabelKey } from "./label";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
@@ -10,6 +12,12 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { Resolver } from "#/types/resolver.generated";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { MachineUserSummarySchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type {
+  PipelineResolverSchema,
+  PipelineServiceSchema,
+} from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
@@ -67,72 +75,78 @@ function createMockApplication(
 ): Application {
   return {
     name: appName,
+    config: {},
+    subgraphs: [],
     env: {},
     resolverServices,
     executorService: createMockExecutorService(),
+    authServices: [],
     ...extra,
   } as unknown as Application;
 }
 
 function createMockClient(
   existingServices: Array<{ name: string; label?: string; sdkVersion?: string }>,
-  existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
-  resolverDetails: Record<string, Record<string, unknown>> = {},
+  existingResolvers: Record<string, Array<MessageInitShape<typeof PipelineResolverSchema>>> = {},
+  resolverDetails: Record<string, MessageInitShape<typeof PipelineResolverSchema>> = {},
   workspaceMachineUsers: string[] = [],
 ): OperatorClient {
-  return {
-    listAuthMachineUsers: vi.fn().mockResolvedValue({
-      machineUsers: workspaceMachineUsers.map((name) => ({ name })),
+  return mockOperatorClient({
+    listAuthMachineUsers: {
+      machineUsers: workspaceMachineUsers.map(
+        (name): MessageInitShape<typeof MachineUserSummarySchema> => ({ name }),
+      ),
       nextPageToken: "",
-    }),
-    listPipelineServices: vi.fn().mockResolvedValue({
-      pipelineServices: existingServices.map((s) => ({
-        namespace: { name: s.name },
-      })),
-      nextPageToken: "",
-    }),
-    listPipelineResolvers: vi
-      .fn()
-      .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-        pipelineResolvers: existingResolvers[namespaceName] ?? [],
-        nextPageToken: "",
-      })),
-    getPipelineResolver: vi
-      .fn()
-      .mockImplementation(
-        ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
-          pipelineResolver:
-            resolverDetails[`${namespaceName}:${resolverName}`] ??
-            (existingResolvers[namespaceName] ?? []).find(
-              (resolver) => resolver.name === resolverName,
-            ),
+    },
+    listPipelineServices: {
+      pipelineServices: existingServices.map(
+        (s): MessageInitShape<typeof PipelineServiceSchema> => ({
+          namespace: { name: s.name },
         }),
       ),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
-      const service = existingServices.find((s) => s.name === name);
-      return {
-        metadata: {
-          labels: service?.label
-            ? {
-                [sdkNameLabelKey]: service.label,
-                "sdk-version": service.sdkVersion ?? "v1-0-0",
-              }
-            : {},
-        },
-      };
+      nextPageToken: "",
+    },
+    listPipelineResolvers: (request) => ({
+      pipelineResolvers: existingResolvers[request.namespaceName ?? ""] ?? [],
+      nextPageToken: "",
     }),
-  } as unknown as OperatorClient;
+    getPipelineResolver: (request) => {
+      const namespaceName = request.namespaceName ?? "";
+      return {
+        pipelineResolver:
+          resolverDetails[`${namespaceName}:${request.resolverName}`] ??
+          (existingResolvers[namespaceName] ?? []).find(
+            (resolver) => resolver.name === request.resolverName,
+          ),
+      };
+    },
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
+      const service = existingServices.find((s) => s.name === name);
+      const labels: Record<string, string> = service?.label
+        ? {
+            [sdkNameLabelKey]: service.label,
+            "sdk-version": service.sdkVersion ?? "v1-0-0",
+          }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
 }
 
-function buildCtx(overrides: Partial<PlanContext>): PlanContext {
+function buildCtx(
+  overrides: Omit<Partial<PlanContext>, "application"> & { application?: Application },
+): PlanContext {
+  const application = overrides.application ?? createMockApplication([]);
   return {
     client: createMockClient([]),
     workspaceId,
-    application: createMockApplication([]),
+    owner: applicationOwner(createMockApplication([])),
     forRemoval: false,
     config: mockConfig,
     ...overrides,
+    application,
+    applications: [deployApplicationOf(application)],
   };
 }
 
@@ -189,6 +203,8 @@ describe("planPipeline (resolver service level)", () => {
         client,
         workspaceId,
         application: createMockApplication([createResolverServiceWith(publishEvents)]),
+        applications: [],
+        owner: applicationOwner(createMockApplication([createResolverServiceWith(publishEvents)])),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: subscribed ? new Set(["myResolver"]) : new Set<string>(),
@@ -241,6 +257,8 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        applications: [],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: new Set<string>(),
@@ -268,6 +286,8 @@ describe("planPipeline (resolver service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        applications: [],
+        owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
         executorUsedResolvers: new Set<string>(),
@@ -290,6 +310,8 @@ describe("planPipeline (resolver service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([createResolverServiceWith(false)]),
+          applications: [],
+          owner: applicationOwner(createMockApplication([createResolverServiceWith(false)])),
           forRemoval: false,
           config: mockConfig,
           executorUsedResolvers: new Set(["myResolver"]),
@@ -341,15 +363,43 @@ describe("planPipeline (resolver service level)", () => {
           ?.operationHook?.expr;
       expect(hookExpr).toContain('"SITE_URL":"my-site:url"');
     });
+
+    test("embeds the root env with the override of the resolver's namespace", async () => {
+      const application = createMockApplication([createPipelineWithResolver()], {
+        env: { region: "jp", tier: "root" },
+      });
+
+      const result = await planPipeline(
+        buildCtx({
+          application,
+          envOverrides: {
+            resolver: { "my-resolver": { tier: "resolver" }, other: { tier: "other" } },
+            executor: { tier: "jobs" },
+            auth: {},
+          },
+        }),
+      );
+
+      const hookExpr =
+        result.changeSet.resolver.creates[0]!.request.pipelineResolver?.pipelines?.[0]
+          ?.operationHook?.expr;
+      expect(hookExpr).toContain('"region":"jp"');
+      expect(hookExpr).toContain('"tier":"resolver"');
+      expect(hookExpr).not.toMatch(/"tier":"(root|other|jobs)"/);
+    });
   });
 
-  describe("string invoker", () => {
-    function createPipelineWithInvoker(invoker: string): ResolverService {
+  describe("invoker", () => {
+    const resolverFile = "/test/resolvers/test-resolver.ts";
+
+    function createPipelineWithInvoker(
+      invoker: string | { namespace: string; machineUserName: string },
+    ): ResolverService {
       return {
         namespace: "my-resolver",
         config: {},
         resolvers: {
-          "test-resolver": {
+          [resolverFile]: {
             name: "test-resolver",
             operation: "query",
             output: { type: "string", metadata: {} },
@@ -380,16 +430,34 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("rejects a machine user that exists nowhere in the external auth namespace", async () => {
+      const error = (await planPipeline(
+        buildCtx({
+          client: createMockClient([], {}, {}, ["portal"]),
+          application: createExternalAuthApplication("portl"),
+        }),
+      ).catch((error: unknown) => error)) as Error;
+
+      expect(error).toMatchObject({
+        code: "INVOKER_MACHINE_USER_NOT_FOUND",
+        message: expect.stringContaining('Resolver "test-resolver"'),
+        context: { resolver: "test-resolver", file: resolverFile },
+      });
+      expect(getErrorDiagnostics(error).location).toEqual({ file: resolverFile });
+    });
+
+    test("rejects an object invoker whose Auth namespace lacks the machine user", async () => {
       await expect(
         planPipeline(
           buildCtx({
             client: createMockClient([], {}, {}, ["portal"]),
-            application: createExternalAuthApplication("portl"),
+            application: createMockApplication([
+              createPipelineWithInvoker({ namespace: "other-auth", machineUserName: "portl" }),
+            ]),
           }),
         ),
       ).rejects.toMatchObject({
         code: "INVOKER_MACHINE_USER_NOT_FOUND",
-        message: expect.stringContaining('Resolver "test-resolver"'),
+        context: { invoker: "portl", authNamespace: "other-auth", machineUsers: ["portal"] },
       });
     });
 
@@ -462,6 +530,54 @@ describe("planPipeline (resolver service level)", () => {
       expect(result.changeSet.service.unchanged).toHaveLength(0);
     });
 
+    test("service whose other SDK labels differ is unchanged with a label refresh", async () => {
+      const client = createMockClient([{ name: "resolver-a", label: appName }]);
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+      const desiredLabels = { "sdk-name": appName, "sdk-version": "v1-0-0", "sdk-app-id": "app-1" };
+      vi.mocked(buildMetaRequest).mockImplementationOnce(async ({ trn }) => ({
+        trn,
+        labels: desiredLabels,
+      }));
+
+      const result = await planPipeline(buildCtx({ client, application }));
+
+      expect(result.changeSet.service.updates).toHaveLength(0);
+      expect(result.changeSet.service.unchanged).toEqual([
+        { name: "resolver-a", labelRefresh: expect.objectContaining({ labels: desiredLabels }) },
+      ]);
+    });
+
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const application = createMockApplication([createMockResolverService("resolver-a")]);
+
+      await planPipeline({
+        ...buildCtx({ client: createMockClient([]), application }),
+        owner: { kind: "workspace" },
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "pipeline", Name: "resolver-a" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:pipeline:resolver-a$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
+    });
+
     test("service update taking over ownership is not forced by the SDK version", async () => {
       const client = createMockClient([{ name: "resolver-a", label: "other-app" }]);
       const application = createMockApplication([createMockResolverService("resolver-a")]);
@@ -508,9 +624,12 @@ describe("planPipeline (resolver service level)", () => {
     // so tests can feed it back in as the "existing remote state".
     async function getDesiredResolver(pipeline: ResolverService) {
       const createResult = await planPipeline(
-        buildCtx({ client: createMockClient([]), application: createMockApplication([pipeline]) }),
+        buildCtx({
+          client: createMockClient([], {}, {}, ["batch-user"]),
+          application: createMockApplication([pipeline]),
+        }),
       );
-      return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver!;
     }
 
     test("resolver is unchanged when remote definition matches desired definition", async () => {
@@ -522,7 +641,7 @@ describe("planPipeline (resolver service level)", () => {
       const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -551,7 +670,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [remoteResolver as Record<string, unknown>],
+        "my-resolver": [remoteResolver],
       });
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -573,7 +692,7 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient(
         [{ name: "my-resolver", label: appName }],
         { "my-resolver": [{ name: "test-resolver" }] },
-        { "my-resolver:test-resolver": desiredResolver as Record<string, unknown> },
+        { "my-resolver:test-resolver": desiredResolver },
       );
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
@@ -594,7 +713,7 @@ describe("planPipeline (resolver service level)", () => {
       const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const result = await planPipeline(
         buildCtx({
@@ -623,7 +742,7 @@ describe("planPipeline (resolver service level)", () => {
       });
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [remoteResolver as Record<string, unknown>],
+        "my-resolver": [remoteResolver],
       });
       const result = await planPipeline(
         buildCtx({
@@ -647,11 +766,14 @@ describe("planPipeline (resolver service level)", () => {
       });
       const desiredResolver = structuredClone(await getDesiredResolver(pipeline));
       expect(desiredResolver).toBeDefined();
-      delete desiredResolver!.pipelines?.[0]?.invoker;
+      delete desiredResolver.pipelines?.[0]?.invoker;
 
-      const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
-      });
+      const client = createMockClient(
+        [{ name: "my-resolver", label: appName }],
+        { "my-resolver": [desiredResolver] },
+        {},
+        ["batch-user"],
+      );
       const result = await planPipeline(
         buildCtx({ client, application: createMockApplication([pipeline]) }),
       );
@@ -688,10 +810,10 @@ describe("planPipeline (resolver service level)", () => {
       // plan again as if that shape were already deployed (so it comes back unchanged).
       const emptyClient = createMockClient([]);
       const createResult = await planPipeline(buildCtx({ client: emptyClient, application }));
-      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver!;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
-        "my-resolver": [desiredResolver as Record<string, unknown>],
+        "my-resolver": [desiredResolver],
       });
       const first = await planPipeline(buildCtx({ client, application }));
       expect(client.listPipelineServices).toHaveBeenCalledTimes(1);
@@ -715,7 +837,7 @@ describe("planPipeline (resolver service level)", () => {
     test("skips re-listing resolvers for a deleted service's namespace when a prior fetch is provided", async () => {
       const application = createMockApplication([createMockResolverService("new-resolver")]);
       const client = createMockClient([{ name: "old-resolver", label: appName }], {
-        "old-resolver": [{ name: "stale-resolver", operation: "query" }],
+        "old-resolver": [{ name: "stale-resolver", operationType: "query" }],
       });
 
       const first = await planPipeline(buildCtx({ client, application }));
@@ -747,7 +869,7 @@ describe("processResolver invoker mapping", () => {
       namespace: "test-ns",
       config: {},
       resolvers: {
-        myResolver: {
+        "/test/resolvers/myResolver.ts": {
           name: "myResolver",
           operation: "query",
           body: () => "hello",
@@ -764,7 +886,7 @@ describe("processResolver invoker mapping", () => {
     extraApplicationFields: Record<string, unknown> = {},
     plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>>,
   ) {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const client = createMockClient([{ name: "test-ns", label: appName }], {}, {}, ["batch-user"]);
     const application = createMockApplication([resolverService], extraApplicationFields);
     return planPipeline(buildCtx({ client, application, plannedMachineUsers }));
   }
@@ -792,7 +914,7 @@ describe("processResolver invoker mapping", () => {
 
     const result = await planWithResolverService(
       resolverService,
-      { authService: { config: { name: "my-auth" } } },
+      { authServices: [{ config: { name: "my-auth" } }] },
       new Map([["my-auth", new Set(["batch-user"])]]),
     );
 
@@ -806,12 +928,26 @@ describe("processResolver invoker mapping", () => {
     });
   });
 
-  test("string invoker without auth service configured throws", async () => {
+  test("string invoker without auth service configured points at the resolver", async () => {
     const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    await expect(planWithResolverService(resolverService)).rejects.toThrow(
-      /no Auth service is configured/,
-    );
+    const error = (await planWithResolverService(resolverService).catch(
+      (error: unknown) => error,
+    )) as Error;
+
+    expect(error).toMatchObject({
+      code: "INVOKER_AUTH_REQUIRED",
+      message: expect.stringMatching(/no Auth service is configured/),
+      suggestion: expect.stringContaining(
+        'invoker: { namespace: "<auth>", machineUserName: "batch-user" }',
+      ),
+      context: {
+        invoker: "batch-user",
+        resolver: "myResolver",
+        file: "/test/resolvers/myResolver.ts",
+      },
+    });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/test/resolvers/myResolver.ts" });
   });
 
   test("invoker is undefined when invoker is not set", async () => {
@@ -891,14 +1027,14 @@ describe("formatResolverChangeEntries", () => {
 
 describe("applyPipeline phase separation", () => {
   function createMockClientWithSpies() {
-    return {
-      deletePipelineResolver: vi.fn().mockResolvedValue({}),
-      deletePipelineService: vi.fn().mockResolvedValue({}),
-      createPipelineService: vi.fn().mockResolvedValue({}),
-      createPipelineResolver: vi.fn().mockResolvedValue({}),
-      updatePipelineResolver: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    return mockOperatorClient({
+      deletePipelineResolver: {},
+      deletePipelineService: {},
+      createPipelineService: {},
+      createPipelineResolver: {},
+      updatePipelineResolver: {},
+      setMetadata: {},
+    });
   }
 
   function createMockPlanResult() {

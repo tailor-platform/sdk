@@ -14,6 +14,7 @@ paths:
   - "packages/sdk/src/cli/commands/deploy/managed-resources.ts"
   - "packages/sdk/src/cli/commands/deploy/managed-resources.test.ts"
   - "packages/sdk/src/cli/commands/deploy/resources-in-use.ts"
+  - "packages/sdk/src/cli/commands/deploy/label-refresh.test.ts"
 ---
 
 # Adding a Deploy-Managed Resource Type
@@ -54,6 +55,11 @@ consumer below; the guard named with it fails while one is missing.
   whose workspace ID is not a UUID into each list with checks and expects a violation.
 - `resources-in-use.ts`'s `CHECKED_RESOURCES` — add a type that other resources reference, so
   deleting it while referenced fails.
+- `label-refresh.test.ts`'s `CASES` — when the type's planner reads its SDK labels, attach a
+  refresh to its unchanged items (`labeledResourceChecks` or `labelRefreshOf`) and write it in its
+  create-update apply with `writeLabelRefreshes`; add its case, or the reason it has none (guard:
+  `satisfies Record`). The cases check only the apply, so also plan an owned unchanged resource
+  with stale SDK labels in the planner's tests and expect its `labelRefresh`.
 
 ## Per plan kind
 
@@ -66,6 +72,7 @@ consumer below; the guard named with it fails while one is missing.
   rebuild reuses it instead of re-planning.
 - `deploy.ts`'s `shouldForceApplyAll` — add a candidate TRN for each top-level service of the
   kind, so a change of SDK version re-applies its resources.
-- The plan result carries `conflicts`, `unmanaged`, and `resourceOwners`;
-  `collectOwnerConflicts`, `collectUnmanagedResources`, and `collectResourceOwners`
-  (`managed-resources.ts`) read every plan through `Object.values`.
+- The plan result carries `conflicts`, `unmanaged`, `takeovers`, and `resourceOwners`;
+  `collectOwnerConflicts`, `collectUnmanagedResources`, `collectTakeovers`, and
+  `collectResourceOwners` (`managed-resources.ts`) read every plan through `Object.values`. A
+  plan that merges the results of several trackers carries each of these fields over.

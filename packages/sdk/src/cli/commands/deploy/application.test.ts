@@ -1,9 +1,12 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Subgraph_ServiceType } from "@tailor-platform/tailor-proto/application_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { logger, symbols } from "#/cli/shared/logger";
-import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import {
+  mockOperatorClient,
+  type OperatorClientMocks,
+  withOperatorClientMocks,
+} from "#/cli/shared/test-helpers/operator-client";
 import {
   applicationLabelLimitError,
   applyApplication,
@@ -11,14 +14,21 @@ import {
   planApplication,
   recomposeApplication,
 } from "./application";
-import { withMetadataWriteBatch } from "./label";
+import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner, buildMetaRequest, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
 } from "./test-helpers/label-count-rejection";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployOwner } from "./label";
 import type { PlanContext } from "./types";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type {
+  ApplicationSchema,
+  SubgraphSchema,
+} from "@tailor-platform/tailor-proto/application_resource_pb";
 
 vi.mock("./label", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
@@ -26,19 +36,20 @@ vi.mock("./label", async (importOriginal) => {
     ...original,
     buildMetaRequest: vi
       .fn()
-      .mockImplementation(
-        async ({ trn, appName, appId }: { trn: string; appName: string; appId?: string }) => ({
+      .mockImplementation(async ({ trn, owner }: { trn: string; owner: DeployOwner }) => {
+        const { name, id } = owner.kind === "application" ? owner : { name: "", id: undefined };
+        return {
           trn,
           labels: {
-            "sdk-name": appName,
+            "sdk-name": name,
             "sdk-version": "v1-0-0",
-            ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
+            ...(id ? { "sdk-app-id": `app-${id}` } : {}),
           },
-          // Mirrors the real buildMetaRequest: a config with no id asks for the
+          // Like the real buildMetaRequest, a config with no id asks for the
           // stale sdk-app-id to be dropped.
-          remove: appId ? undefined : ["sdk-app-id"],
-        }),
-      ),
+          remove: id ? undefined : ["sdk-app-id"],
+        };
+      }),
   };
 });
 
@@ -51,7 +62,7 @@ const appName = "test-app";
 const matchingSubgraphs = [
   { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
   { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
-];
+] satisfies Array<MessageInitShape<typeof SubgraphSchema>>;
 
 function createMockApplication(
   overrides: {
@@ -77,60 +88,64 @@ function createMockApplication(
       metadata: overrides.metadata,
     },
     staticWebsiteServices: overrides.staticWebsiteServices ?? [],
-    authService: {
-      config: {
-        name: "auth-a",
-        idProvider: {
-          name: "idp-a",
+    authServices: [
+      {
+        config: {
+          name: "auth-a",
+          idProvider: {
+            name: "idp-a",
+          },
         },
       },
-    },
+    ],
   } as unknown as Application;
 }
 
-function createMockClient(
-  applications: Array<{
-    name: string;
-    authNamespace?: string;
-    authIdpConfigName?: string;
-    cors?: string[];
-    allowedIpAddresses?: string[];
-    disableIntrospection?: boolean;
-    disabled?: boolean;
-    subgraphs?: Array<{ serviceType: number; serviceNamespace: string }>;
-    sdkVersion?: string;
-    label?: string;
-    sdkAppId?: string;
-    extraLabels?: Record<string, string>;
-  }>,
+type RemoteApplication = MessageInitShape<typeof ApplicationSchema> & {
+  name: string;
+  sdkVersion?: string;
+  label?: string;
+  sdkAppId?: string;
+  extraLabels?: Record<string, string>;
+};
+
+function createMockClient<K extends keyof OperatorClient = never>(
+  applications: RemoteApplication[],
+  overrides?: OperatorClientMocks<K>,
 ): OperatorClient {
-  return {
-    listApplications: vi.fn().mockResolvedValue({
-      applications,
+  const client = mockOperatorClient({
+    listApplications: {
+      applications: applications.map(
+        ({
+          sdkVersion: _sdkVersion,
+          label: _label,
+          sdkAppId: _sdkAppId,
+          extraLabels: _extraLabels,
+          ...application
+        }): MessageInitShape<typeof ApplicationSchema> => application,
+      ),
       nextPageToken: "",
-    }),
-    listAuthIDPConfigs: vi.fn().mockResolvedValue({
+    },
+    listAuthIDPConfigs: {
       idpConfigs: [],
       nextPageToken: "",
-    }),
-    getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-      const name = trn.split(":").pop();
+    },
+    getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+    getMetadata: (request) => {
+      const name = request.trn?.split(":").pop();
       const application = applications.find((app) => app.name === name);
-      return {
-        metadata: {
-          labels: application
-            ? {
-                "sdk-name": application.label ?? appName,
-                "sdk-version": application.sdkVersion ?? "v1-0-0",
-                ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
-                ...application.extraLabels,
-              }
-            : {},
-        },
-      };
-    }),
-  } as unknown as OperatorClient;
+      const labels: Record<string, string> = application
+        ? {
+            "sdk-name": application.label ?? appName,
+            "sdk-version": application.sdkVersion ?? "v1-0-0",
+            ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
+            ...application.extraLabels,
+          }
+        : {};
+      return { metadata: { labels } };
+    },
+  });
+  return withOperatorClientMocks(client, overrides);
 }
 
 function createContext(client: OperatorClient, application = createMockApplication()): PlanContext {
@@ -138,8 +153,10 @@ function createContext(client: OperatorClient, application = createMockApplicati
     client,
     workspaceId,
     application,
+    applications: [deployApplicationOf(application)],
+    owner: applicationOwner(application),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -208,7 +225,7 @@ describe("planApplication", () => {
       disableIntrospection: true,
       disabled: false,
       subgraphs: matchingSubgraphs,
-    };
+    } satisfies RemoteApplication;
 
     test("carries config metadata next to the application's SDK labels", async () => {
       const client = createMockClient([]);
@@ -374,7 +391,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },
@@ -396,7 +413,7 @@ describe("planApplication", () => {
     const baseApplication = createMockApplication();
     const application = {
       ...baseApplication,
-      authService: undefined,
+      authServices: [],
       config: {
         ...baseApplication.config,
         auth: { name: "peer-auth", external: true },
@@ -486,6 +503,89 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(0);
   });
 
+  test("labels each application of a workspace config with its own name", async () => {
+    await planApplication({
+      ...createContext(createMockClient([])),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:application:shop$/),
+        onApps: ["shop"],
+      }),
+    );
+  });
+
+  test("plans every application of the config with its own subgraphs, Auth, and settings", async () => {
+    const managed = { extraLabels: { "sdk-managed": "workspace" } };
+    const client = createMockClient([
+      { name: "shop", subgraphs: matchingSubgraphs, ...managed },
+      { name: "landing", subgraphs: matchingSubgraphs, ...managed },
+      { name: "unrelated", subgraphs: matchingSubgraphs, ...managed },
+    ]);
+
+    const result = await planApplication({
+      ...createContext(client),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: "auth-a",
+          settings: { cors: ["https://shop.example.com"] },
+        },
+        {
+          name: "backoffice",
+          subgraphs: [{ Type: "pipeline", Name: "pipeline-a" }],
+          authNamespace: undefined,
+          settings: { disableIntrospection: true },
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(result.updates.map(({ name, request }) => ({ name, request }))).toEqual([
+      {
+        name: "shop",
+        request: expect.objectContaining({
+          applicationName: "shop",
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://shop.example.com"],
+          subgraphs: [
+            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
+          ],
+          disableIntrospection: undefined,
+        }),
+      },
+    ]);
+    expect(result.creates.map(({ name, request }) => ({ name, request }))).toEqual([
+      {
+        name: "backoffice",
+        request: expect.objectContaining({
+          applicationName: "backoffice",
+          authNamespace: undefined,
+          authIdpConfigName: undefined,
+          cors: undefined,
+          subgraphs: [
+            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
+          ],
+          disableIntrospection: true,
+        }),
+      },
+    ]);
+    expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
+  });
+
   test("reports a conflict for a same-name application this config does not own", async () => {
     // Without a conflict the take-over is never confirmed, and the id label is
     // rewritten (or dropped) on an application that belongs to someone else.
@@ -537,6 +637,29 @@ describe("planApplication", () => {
       expect(result.deletes[0]!.name).toBe(oldName);
     });
 
+    test("deletes the applications that a workspace config marks or an application config deployed, once apps no longer lists them", async () => {
+      const client = createMockClient([
+        {
+          name: "backoffice",
+          subgraphs: matchingSubgraphs,
+          extraLabels: { "sdk-managed": "workspace" },
+        },
+        { name: "legacy", label: "legacy", sdkAppId: "old-id", subgraphs: matchingSubgraphs },
+        { name: "neighbor", label: "neighbor", subgraphs: matchingSubgraphs },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await planApplication({
+        ...createContext(client, application),
+        owner: { kind: "workspace" },
+      });
+
+      expect(result.deletes.map(({ name }) => name)).toEqual(["backoffice", "legacy"]);
+      expect(result.takeovers).toEqual([
+        expect.objectContaining({ resourceName: "legacy", action: "delete" }),
+      ]);
+    });
+
     test("ignores apps with the same id when name still matches", async () => {
       const appId = "stable-id";
       const client = createMockClient([
@@ -559,6 +682,34 @@ describe("planApplication", () => {
       expect(result.unchanged).toHaveLength(1);
       expect(result.creates).toHaveLength(0);
       expect(result.deletes).toHaveLength(0);
+    });
+
+    test("refreshes the labels of an unchanged app that lacks its sdk-app-id", async () => {
+      const client = createMockClient([
+        {
+          name: appName,
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://a.example.com", "https://b.example.com"],
+          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+          disableIntrospection: true,
+          disabled: false,
+          subgraphs: matchingSubgraphs,
+        },
+      ]);
+      const application = createMockApplication({ name: appName, id: "stable-id" });
+
+      const result = await planApplication(createContext(client, application));
+
+      expect(result.updates).toHaveLength(0);
+      expect(result.unchanged).toEqual([
+        expect.objectContaining({
+          name: appName,
+          labelRefresh: expect.objectContaining({
+            labels: expect.objectContaining({ "sdk-app-id": "app-stable-id" }),
+          }),
+        }),
+      ]);
     });
 
     test("does not delete unrelated apps when only sdk-name matches a different app", async () => {
@@ -633,10 +784,9 @@ describe("planApplication", () => {
     });
 
     test("does not delete a same-name app that carries no SDK labels", async () => {
-      const client = {
-        ...createMockClient([{ name: appName }]),
-        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
-      } as unknown as OperatorClient;
+      const client = createMockClient([{ name: appName }], {
+        getMetadata: { metadata: { labels: {} } },
+      });
       const application = createMockApplication({ name: appName });
 
       const result = await plan(client, application);
@@ -675,10 +825,9 @@ describe("planApplication", () => {
   describe("CORS resolution on first deployment (issue #1030)", () => {
     test("does not warn when CORS references a locally-defined static website that is not yet on the platform", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const client = {
-        ...createMockClient([]),
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient([], {
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
       const application = createMockApplication({
         cors: ["my-frontend:url"],
         staticWebsiteServices: [{ name: "my-frontend" }],
@@ -692,10 +841,9 @@ describe("planApplication", () => {
 
     test("still warns when CORS references a static website that is not defined locally", async () => {
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const client = {
-        ...createMockClient([]),
-        getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-      } as unknown as OperatorClient;
+      const client = createMockClient([], {
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      });
       const application = createMockApplication({
         cors: ["typo-name:url"],
         staticWebsiteServices: [{ name: "my-frontend" }],
@@ -746,27 +894,31 @@ describe("planApplication", () => {
     });
 
     test("treats a legitimately-undefined previous.existingLabels as already fetched, not a cache miss", async () => {
-      const client = createMockClient([
+      const client = createMockClient(
+        [
+          {
+            name: appName,
+            authNamespace: "auth-a",
+            authIdpConfigName: "idp-a",
+            cors: ["https://a.example.com", "https://b.example.com"],
+            allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+            disableIntrospection: true,
+            disabled: false,
+            subgraphs: matchingSubgraphs,
+          },
+        ],
         {
-          name: appName,
-          authNamespace: "auth-a",
-          authIdpConfigName: "idp-a",
-          cors: ["https://a.example.com", "https://b.example.com"],
-          allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
-          disableIntrospection: true,
-          disabled: false,
-          subgraphs: matchingSubgraphs,
+          // No metadata found for this app's own trn, e.g. a brand new resource.
+          getMetadata: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
         },
-      ]);
-      // No metadata found for this app's own trn, e.g. a brand new resource.
-      client.getMetadata = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+      );
       const application = createMockApplication({
         cors: ["https://a.example.com", "https://b.example.com"],
       });
 
       const first = await planApplication(createContext(client, application));
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
-      expect(first.existingLabels).toBeUndefined();
+      expect(first.existingLabels).toEqual(new Map([[appName, undefined]]));
 
       const second = await planApplication(createContext(client, application), undefined, {
         existingApplications: first.existingApplications,
@@ -776,7 +928,7 @@ describe("planApplication", () => {
       // `previous` was given, so the cached `undefined` is honored as-is
       // instead of being treated as "no previous fetch happened".
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
-      expect(second.existingLabels).toBeUndefined();
+      expect(second.existingLabels).toEqual(new Map([[appName, undefined]]));
     });
   });
 });
@@ -824,8 +976,7 @@ describe("diffHttpAdapterDisplay", () => {
 
 describe("recomposeApplication", () => {
   test("updates every application the deploy created, updated, or left unchanged", async () => {
-    const updateApplication = vi.fn().mockResolvedValue({});
-    const client = { updateApplication } as unknown as OperatorClient;
+    const client = mockOperatorClient({ updateApplication: {} });
     const entry = (applicationName: string) => ({
       name: applicationName,
       request: { workspaceId: "ws", applicationName },
@@ -839,11 +990,9 @@ describe("recomposeApplication", () => {
       deletes: [entry("deleted")],
     } as never);
 
-    expect(updateApplication.mock.calls.map(([request]) => request.applicationName)).toEqual([
-      "created",
-      "updated",
-      "unchanged",
-    ]);
+    expect(client.updateApplication.mock.calls.map(([request]) => request.applicationName)).toEqual(
+      ["created", "updated", "unchanged"],
+    );
   });
 });
 

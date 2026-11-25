@@ -1,4 +1,3 @@
-// oxlint-disable local/typed-operator-client-mock -- Untyped mocks; migrate them to mockOperatorClient() when editing them.
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { pathToFileURL } from "node:url";
@@ -8,15 +7,23 @@ import {
   collectFunctionEntries,
   planFunctionRegistry,
 } from "#/cli/commands/deploy/function-registry";
+import { applicationOwner } from "#/cli/commands/deploy/label";
 import { planPipeline } from "#/cli/commands/deploy/resolver";
 import { createGenerationManager } from "#/cli/commands/generate/service";
 import { logger } from "#/cli/shared/logger";
+import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
 import { defineConfig } from "#/configure/config/index";
+import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { t } from "#/configure/types/type";
 import { PluginManager } from "#/plugin/manager";
-import { defineApplication, loadApplication } from "./application";
-import type { OperatorClient } from "#/cli/shared/client";
+import {
+  defineApplication,
+  definePluginResolverServices,
+  defineWorkspaceServices,
+  loadApplication,
+} from "./application";
 
 describe("plugin-generated resolvers", () => {
   let baseDir: string;
@@ -89,16 +96,18 @@ describe("plugin-generated resolvers", () => {
         message: "Hello, Tailor!",
       });
 
-      const client = {
-        listPipelineServices: vi.fn().mockResolvedValue({ pipelineServices: [] }),
-        listPipelineResolvers: vi.fn().mockResolvedValue({ pipelineResolvers: [] }),
-        listFunctionRegistries: vi.fn().mockResolvedValue({ functions: [] }),
-      } as unknown as OperatorClient;
+      const client = mockOperatorClient({
+        listPipelineServices: { pipelineServices: [] },
+        listPipelineResolvers: { pipelineResolvers: [] },
+        listFunctionRegistries: { functions: [] },
+      });
       const pipelinePlan = await planPipeline({
         client,
         workspaceId: "ws",
         application,
         config,
+        applications: [],
+        owner: applicationOwner(application),
         forRemoval: false,
       });
       expect(pipelinePlan.changeSet.service.creates).toMatchObject([{ name: "main" }]);
@@ -109,8 +118,7 @@ describe("plugin-generated resolvers", () => {
       const functionPlan = await planFunctionRegistry(
         client,
         "ws",
-        application.name,
-        undefined,
+        { kind: "application", name: application.name, id: undefined },
         entries,
       );
       expect(functionPlan.changeSet.creates).toMatchObject([{ name: "resolver--main--greet" }]);
@@ -160,7 +168,11 @@ describe("plugin-generated resolvers", () => {
       path: path.join(baseDir, "tailor.config.ts"),
     };
     const application = defineApplication({ config, pluginManager });
-    const generation = createGenerationManager({ application, config, pluginManager });
+    const generation = createGenerationManager({
+      configServices: application,
+      config,
+      pluginManager,
+    });
     await generation.generate();
     expect(Object.keys(generation.services.resolver.main!).toSorted()).toEqual([
       "getOrder",
@@ -185,7 +197,11 @@ describe("plugin-generated resolvers", () => {
     };
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const application = defineApplication({ config, pluginManager });
-    const generation = createGenerationManager({ application, config, pluginManager });
+    const generation = createGenerationManager({
+      configServices: application,
+      config,
+      pluginManager,
+    });
     await generation.generate();
     const warnings = warn.mock.calls.map(([message]) => String(message));
     warn.mockRestore();
@@ -240,6 +256,130 @@ describe("plugin-generated resolvers", () => {
       );
     }
     expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
+  async function generateWorkspaceResolverFiles(
+    configPath: string,
+    resolverName: string,
+  ): Promise<string[]> {
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onTailorDBNamespaceLoaded: () => ({
+          resolvers: [
+            { name: resolverName, operation: "query", outputFields: {}, body: "return {};" },
+          ],
+        }),
+      },
+    ]);
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: { main: { files: [] } },
+        resolver: { main: { files: [] } },
+        apps: {},
+      }),
+      configPath,
+    );
+    const { tailorDBServices, resolverServices } = defineWorkspaceServices({
+      workspace,
+      pluginManager,
+    });
+    for (const tailordb of tailorDBServices) {
+      await tailordb.loadTypes();
+      await tailordb.processNamespacePlugins();
+    }
+    expect(definePluginResolverServices(workspace, pluginManager)).toEqual([]);
+    const [resolverService] = resolverServices;
+    await resolverService!.loadResolvers();
+    return Object.keys(resolverService!.resolvers);
+  }
+
+  async function processWorkspacePlugins(config: unknown) {
+    const pluginManager = new PluginManager([
+      {
+        id: "greeting",
+        description: "Query",
+        onTailorDBNamespaceLoaded: () => ({
+          resolvers: [{ name: "greet", operation: "query", outputFields: {}, body: "return {};" }],
+        }),
+      },
+    ]);
+    const workspace = loadedWorkspace(config, path.join(baseDir, "tailor.config.ts"));
+    for (const tailordb of defineWorkspaceServices({ workspace, pluginManager }).tailorDBServices) {
+      await tailordb.loadTypes();
+      await tailordb.processNamespacePlugins();
+    }
+    return { workspace, pluginManager };
+  }
+
+  test("rejects resolvers a plugin generates into namespaces a workspace config does not declare", async () => {
+    const { workspace, pluginManager } = await processWorkspacePlugins(
+      defineWorkspace({
+        db: { main: { files: [] }, sales: { files: [] }, ledger: { files: [] } },
+        resolver: { ledger: { files: [] } },
+        apps: {},
+      }),
+    );
+
+    expect(() => definePluginResolverServices(workspace, pluginManager)).toThrow(
+      expect.objectContaining({
+        code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+        message:
+          'Plugins generate resolvers into resolver namespaces this config does not declare: "main" (plugin "greeting"), "sales" (plugin "greeting").',
+        suggestion:
+          'Declare each namespace under "resolver", e.g. resolver: { "main": { files: [] } }, and list it in the "resolver" of the apps that expose it.',
+        context: {
+          resourceType: "pipeline.service",
+          namespaces: [
+            { namespace: "main", pluginIds: ["greeting"] },
+            { namespace: "sales", pluginIds: ["greeting"] },
+          ],
+        },
+      }),
+    );
+  });
+
+  test("suggests only declaring the namespace for a defineApp() config", async () => {
+    const { workspace, pluginManager } = await processWorkspacePlugins(
+      defineApp({ name: "shop", db: { main: { files: [] } } }),
+    );
+
+    expect(() => definePluginResolverServices(workspace, pluginManager)).toThrow(
+      expect.objectContaining({
+        code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+        suggestion:
+          'Declare each namespace under "resolver", e.g. resolver: { "main": { files: [] } }.',
+      }),
+    );
+  });
+
+  test("generates a workspace's resolver files at the same project-relative path in every checkout", async () => {
+    const generatedFiles: string[][] = [];
+    for (const checkout of ["checkout-1", "checkout-2"]) {
+      const projectDir = path.join(baseDir, checkout);
+      vi.stubEnv("TAILOR_BUILD_OUTPUT_DIR", path.join(projectDir, ".tailor"));
+      const files = await generateWorkspaceResolverFiles(
+        path.join(projectDir, "tailor.config.ts"),
+        "greet",
+      );
+      generatedFiles.push(files.map((file) => path.relative(projectDir, file)));
+    }
+    expect(generatedFiles[0]).toHaveLength(1);
+    expect(generatedFiles[1]).toEqual(generatedFiles[0]);
+  });
+
+  test("keeps another workspace config's generated resolvers in the same namespace", async () => {
+    const files = await generateWorkspaceResolverFiles(
+      path.join(baseDir, "apps", "shop", "tailor.config.ts"),
+      "greet_shop",
+    );
+    expect(files).toHaveLength(1);
+    await generateWorkspaceResolverFiles(
+      path.join(baseDir, "apps", "backoffice", "tailor.config.ts"),
+      "greet_backoffice",
+    );
+    expect(files.filter((file) => !fs.existsSync(file))).toEqual([]);
   });
 
   test("warns about unmatched resolver patterns when plugins generate resolvers", async () => {
@@ -655,7 +795,7 @@ describe("plugin-generated resolvers", () => {
     });
     const application = defineApplication({ config, pluginManager });
     await expect(
-      createGenerationManager({ application, config, pluginManager }).generate(),
+      createGenerationManager({ configServices: application, config, pluginManager }).generate(),
     ).rejects.toMatchObject({ code: "PLUGIN_RESOLVER_NAMESPACE_EXTERNAL" });
   });
 });

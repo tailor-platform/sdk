@@ -1,6 +1,7 @@
 import { parse } from "graphql";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import {
+  AuthAccessTokenTriggerSchema,
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
@@ -306,6 +307,21 @@ describe("workflow execution trigger schemas", () => {
       schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "  " })
         .success,
     ).toBe(false);
+  });
+});
+
+describe("AuthAccessTokenTriggerSchema", () => {
+  const trigger = { kind: "authAccessToken", events: ["auth.access_token.issued"] };
+
+  test("accepts an Auth namespace name in auth", () => {
+    expect(
+      expectParseSuccess(AuthAccessTokenTriggerSchema.safeParse({ ...trigger, auth: "my-auth" })),
+    ).toMatchObject({ auth: "my-auth" });
+  });
+
+  test.each(["", "My_Auth"])("rejects auth %j", (auth) => {
+    const error = expectParseFailure(AuthAccessTokenTriggerSchema.safeParse({ ...trigger, auth }));
+    expect(error.issues).toEqual([expect.objectContaining({ path: ["auth"] })]);
   });
 });
 

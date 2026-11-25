@@ -543,7 +543,8 @@
     {
       "files": ["**/*.test.ts", "**/test-helpers/**/*.ts"],
       "rules": {
-        "local/typed-operator-client-mock": "error"
+        "local/typed-operator-client-mock": "error",
+        "local/logger-mock-import-original": "error"
       }
     },
     {

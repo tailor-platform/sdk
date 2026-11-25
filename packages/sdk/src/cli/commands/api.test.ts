@@ -1,6 +1,6 @@
 import { runCommand } from "@politty/zod";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { apiCall, apiCommand } from "./api";
@@ -12,7 +12,7 @@ vi.mock("#/cli/shared/context", () => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/readonly-guard", () => ({
@@ -31,11 +31,11 @@ function getRequestBody(): Record<string, unknown> {
 }
 
 function mockConfigWith(config: Record<string, unknown>): void {
-  vi.mocked(loadConfig).mockResolvedValue({
+  vi.mocked(loadConfigFile).mockResolvedValue({
+    kind: "config",
     config: { name: "my-app", path: "/fake", ...config },
-    generators: [],
     plugins: [],
-  } as never);
+  });
 }
 
 describe("api command body auto-injection", () => {
@@ -204,7 +204,7 @@ describe("api command body auto-injection", () => {
 
     test("should skip namespaceName injection when config loading fails", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockRejectedValue(new Error("config not found"));
+      vi.mocked(loadConfigFile).mockRejectedValue(new Error("config not found"));
 
       await runCommand(apiCommand, ["GetAuthService"]);
 

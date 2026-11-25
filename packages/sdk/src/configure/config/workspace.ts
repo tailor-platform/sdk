@@ -4,6 +4,8 @@ import type { AppDefinition, EnvEntry, WorkspaceConfig } from "#/configure/confi
 
 /**
  * Define the services a Tailor Platform workspace owns and the applications that expose them.
+ *
+ * **Beta:** This API may change in future releases.
  * @template Env
  * @template Db
  * @template Resolver
@@ -27,6 +29,8 @@ export function defineWorkspace<
 
 /**
  * Define a Tailor Platform workspace that holds a single application.
+ *
+ * **Beta:** This API may change in future releases.
  * @template Config
  * @param config - Application configuration
  * @returns A copy of the configuration marked as a single-application workspace configuration

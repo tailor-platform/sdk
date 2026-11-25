@@ -3,8 +3,14 @@ import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from 
 import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
-import type { ImportantResourceDeletion, OwnerConflict, UnmanagedResource } from "./confirm";
+import type {
+  ImportantResourceDeletion,
+  OwnerConflict,
+  UnmanagedResource,
+  WorkspaceTakeover,
+} from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
+import type { DeployOwner, UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
 
 /**
@@ -68,6 +74,10 @@ export function collectUnmanagedResources(results: PlanResults): UnmanagedResour
   return ownershipTrackedPlans(results).flatMap((plan) => plan.unmanaged);
 }
 
+export function collectTakeovers(results: PlanResults): WorkspaceTakeover[] {
+  return ownershipTrackedPlans(results).flatMap((plan) => plan.takeovers);
+}
+
 function collectResourceOwners(results: PlanResults): Set<string> {
   return new Set(ownershipTrackedPlans(results).flatMap((plan) => [...plan.resourceOwners]));
 }
@@ -80,11 +90,11 @@ type ManagedResourceChangeSet<Item = ManagedResourceItem> = {
   updates: Item[];
   deletes: Item[];
   replaces: Item[];
-  unchanged: Item[];
+  unchanged: Array<Item & UnchangedAnnotation>;
   lines: () => string[];
 };
 
-/** Items that carry their requests; `unchanged` ones carry only a name. */
+/** Items that carry their requests; `unchanged` ones need not carry one. */
 type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
   | C["creates"][number]
   | C["updates"][number]
@@ -265,6 +275,22 @@ export const MANAGED_RESOURCES = {
   }),
 } satisfies Record<ManagedResourceType, ManagedResource>;
 
+/**
+ * Count the unchanged resources whose labels are rewritten.
+ * @param results - Plan results for a single deployment
+ * @returns Number of unchanged items carrying a label refresh
+ */
+export function countLabelRefreshes(results: PlanResults): number {
+  return (Object.keys(MANAGED_RESOURCES) as ManagedResourceType[]).reduce(
+    (count, resourceType) =>
+      count +
+      MANAGED_RESOURCES[resourceType]
+        .changeSetOf(results)
+        .unchanged.filter((item) => item.labelRefresh !== undefined).length,
+    0,
+  );
+}
+
 /** The change set `MANAGED_RESOURCES` maps resource type `T` to, with its items' own types. */
 export type ManagedChangeSetOf<T extends ManagedResourceType> = ReturnType<
   (typeof MANAGED_RESOURCES)[T]["changeSetOf"]
@@ -278,24 +304,37 @@ function deletesNeedingConfirmation(
   results: PlanResults,
   resourceType: ManagedResourceType,
 ): ImportantResourceDeletion[] {
-  const resource = MANAGED_RESOURCES[resourceType];
-  return resource.changeSetOf(results).deletes.map((item) => ({
-    resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
-    resourceName: managedResourceName(resource, item),
-  }));
+  const resource: ManagedResource = MANAGED_RESOURCES[resourceType];
+  return resource.changeSetOf(results).deletes.map((item) => {
+    const parentName = resource.namespace?.of(item);
+    return {
+      resourceType,
+      resourceLabel: MANAGED_RESOURCE_LABELS[resourceType],
+      resourceName: managedResourceName(resource, item),
+      ...(resource.namespace &&
+        parentName !== undefined && {
+          parent: { resourceType: resource.namespace.owner, resourceName: parentName },
+        }),
+    };
+  });
 }
 
 export function collectImportantResourceDeletions(
   results: PlanResults,
+  owner: DeployOwner,
 ): ImportantResourceDeletion[] {
   const { app } = results;
-  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
+  // A defineConfig() config that keeps its application deletes the others only when renamed.
+  const keepsApplication =
+    owner.kind === "application" &&
+    app.creates.length + app.updates.length + app.unchanged.length > 0;
   return [
     ...deletesNeedingConfirmation(results, "tailordb.type"),
     ...deletesNeedingConfirmation(results, "staticwebsite"),
     ...deletesNeedingConfirmation(results, "aigateway"),
     ...deletesNeedingConfirmation(results, "auth.oauth2_client"),
     ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
+      resourceType: "auth.oauth2_client" as const,
       resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
       resourceName: replace.name,
     })),
@@ -370,7 +409,10 @@ function retainDeletesNotClaimed(
 const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   Pick<ResourceNameCheck, "namesOf"> & { resourceType: ManagedResourceType }
 > = [
-  { resourceType: "application", namesOf: (target) => [target.application.name] },
+  {
+    resourceType: "application",
+    namesOf: (target) => target.applications.map((application) => application.name),
+  },
   {
     resourceType: "executor",
     namesOf: (target) =>
@@ -396,7 +438,10 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   },
   {
     resourceType: "auth.connection",
-    namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
+    namesOf: (target) =>
+      target.application.authServices.flatMap((authService) =>
+        Object.keys(authService.connections),
+      ),
   },
   {
     resourceType: "staticwebsite",
@@ -408,10 +453,8 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   },
   {
     resourceType: "auth.service",
-    namesOf: (target) => {
-      const name = target.application.authService?.config.name;
-      return name === undefined ? [] : [name];
-    },
+    namesOf: (target) =>
+      target.application.authServices.map((authService) => authService.config.name),
   },
   {
     resourceType: "idp.service",
@@ -504,7 +547,9 @@ function collectDeploymentResourceOwners(
  * @param deployments - Planned deployments of this run
  */
 export function scheduleRenamedAppDeletes(deployments: ReadonlyArray<PlannedDeployment>): void {
-  const protectedAppNames = new Set(deployments.map((deployment) => deployment.application.name));
+  const protectedAppNames = new Set(
+    deployments.flatMap((deployment) => deployment.applications.map(({ name }) => name)),
+  );
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduled = new Set(
     deployments.flatMap((deployment) => deployment.app.deletes.map((del) => del.name)),

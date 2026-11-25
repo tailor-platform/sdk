@@ -21,17 +21,29 @@ import {
 } from "#/cli/services/resolver/service";
 import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
-import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
+import {
+  bundleWorkflowJobs,
+  type BundleWorkflowJobsOptions,
+  type BundleWorkflowJobsResult,
+} from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
-import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
-import { resolveStaticWebsiteUrlsInEnv, type OperatorClient } from "#/cli/shared/client";
-import { type LoadedConfig } from "#/cli/shared/config-loader";
+import {
+  type ApplicationEnv,
+  resolveStaticWebsiteUrlsInEnv,
+  type OperatorClient,
+} from "#/cli/shared/client";
+import {
+  isLoadedWorkspaceConfig,
+  tailorDBTypeNameScopeOf,
+  type LoadedConfig,
+  type LoadedWorkspaceConfig,
+} from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
-import { idpConfigList, isIdpConfigList, type IdpConfigInput } from "#/cli/shared/idp-config";
+import { idpConfigList, isIdpConfigList } from "#/cli/shared/idp-config";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
@@ -52,9 +64,15 @@ import {
   type LogLevel,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
+  type WorkspaceSettings,
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import {
+  type EnvOverrideService,
+  mapEnvOverridesAsync,
+  singleServiceKey,
+} from "#/parser/app-config/config-export";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -67,6 +85,7 @@ import { readSecretEntry } from "#/utils/secret-entry";
 import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { FunctionBundleSettings } from "#/cli/services/function-bundle";
 import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
 import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -86,16 +105,23 @@ type SecretVault = {
   }>;
 };
 
-export type Application = {
-  readonly name: string;
-  readonly id: string | undefined;
-  readonly config: AppConfig;
-  readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
+/** Settings of a `defineConfig()` or workspace config that its services share. */
+export type ServiceSettings = Pick<
+  LoadedConfig,
+  "path" | keyof WorkspaceSettings | "db" | "resolver" | "workflow"
+>;
+
+/** `env` values each service uses in place of the root values with the same keys. */
+export type EnvOverrides = LoadedWorkspaceConfig["envOverrides"];
+
+/** The services a config defines, with the `env` they share. */
+export type ConfigServices = {
   readonly tailorDBServices: ReadonlyArray<TailorDBService>;
   readonly externalTailorDBNamespaces: ReadonlyArray<string>;
   readonly resolverServices: ReadonlyArray<ResolverService>;
   readonly idpServices: ReadonlyArray<IdP>;
-  readonly authService: Readonly<AuthService> | undefined;
+  /** Auth services the config defines, in config order. A `defineConfig()` config has at most one. */
+  readonly authServices: ReadonlyArray<Readonly<AuthService>>;
   readonly executorService: Readonly<ExecutorService> | undefined;
   readonly workflowService: Readonly<WorkflowService> | undefined;
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
@@ -104,11 +130,23 @@ export type Application = {
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
-  readonly applications: ReadonlyArray<Application>;
+};
+
+/** The services a workspace config defines, with the settings they share and their `env` overrides. */
+export type WorkspaceServices = ConfigServices & {
+  readonly settings: ServiceSettings;
+  readonly envOverrides: EnvOverrides;
+};
+
+export type Application = ConfigServices & {
+  readonly name: string;
+  readonly id: string | undefined;
+  readonly config: AppConfig;
+  readonly subgraphs: ReadonlyArray<{ Type: string; Name: string }>;
 };
 
 /**
- * Intermediate state from a `loadApplication` call that carries no `env`
+ * Intermediate state from loading a config's services that carries no `env`
  * dependency, kept so a later call passing `previous` can rebundle only
  * workflow jobs and auth hooks without redoing this work.
  */
@@ -234,10 +272,14 @@ type DefineResolverResult = {
 };
 
 function pluginResolverSource(
-  config: LoadedConfig,
+  outputKey: string,
   pluginManager: PluginManager | undefined,
 ): PluginResolverSource | undefined {
-  return pluginManager && { pluginManager, appName: config.name };
+  return pluginManager && { pluginManager, outputKey };
+}
+
+function pluginResolverOutputKey(config: LoadedConfig | LoadedWorkspaceConfig): string {
+  return isLoadedWorkspaceConfig(config) ? path.relative(getDistDir(), config.path) : config.name;
 }
 
 function defineResolver(
@@ -272,17 +314,19 @@ function defineResolver(
 
 /**
  * Define resolver services for namespaces that plugins generate resolvers into without a `resolver` entry.
+ * A workspace config must declare those namespaces, so for one this reports every undeclared namespace instead.
  * Call after table and namespace plugins have run.
- * @param config - Loaded configuration
+ * @param config - Loaded `defineConfig()` or workspace config the plugins belong to
  * @param pluginManager - Plugin manager holding the generated resolvers
  * @returns Resolver services for those namespaces
  */
 export function definePluginResolverServices(
-  config: LoadedConfig,
+  config: LoadedConfig | LoadedWorkspaceConfig,
   pluginManager: PluginManager | undefined,
 ): ResolverService[] {
   const baseDir = path.dirname(config.path);
   const resolverServices: ResolverService[] = [];
+  const undeclared = new Map<string, string[]>();
   for (const { namespace, pluginId } of pluginManager?.getPluginGeneratedResolvers() ?? []) {
     const serviceConfig = config.resolver?.[namespace];
     if (serviceConfig && "external" in serviceConfig) {
@@ -295,17 +339,52 @@ export function definePluginResolverServices(
     if (serviceConfig || resolverServices.some((service) => service.namespace === namespace)) {
       continue;
     }
+    if (isLoadedWorkspaceConfig(config)) {
+      const pluginIds = undeclared.get(namespace) ?? [];
+      if (!pluginIds.includes(pluginId)) pluginIds.push(pluginId);
+      undeclared.set(namespace, pluginIds);
+      continue;
+    }
     resolverServices.push(
       createResolverService({
         namespace,
         config: { files: [] },
         configPath: config.path,
         baseDir,
-        plugins: pluginResolverSource(config, pluginManager),
+        plugins: pluginResolverSource(pluginResolverOutputKey(config), pluginManager),
       }),
     );
   }
+  if (isLoadedWorkspaceConfig(config) && undeclared.size > 0) {
+    throw undeclaredPluginResolverNamespacesError(config, undeclared);
+  }
   return resolverServices;
+}
+
+function undeclaredPluginResolverNamespacesError(
+  workspace: LoadedWorkspaceConfig,
+  pluginIdsByNamespace: ReadonlyMap<string, readonly string[]>,
+) {
+  const namespaces = [...pluginIdsByNamespace].map(([namespace, pluginIds]) => ({
+    namespace,
+    pluginIds,
+  }));
+  const quoted = (names: readonly string[]) => names.map((name) => `"${name}"`).join(", ");
+  const example = `resolver: { ${JSON.stringify(namespaces[0]?.namespace)}: { files: [] } }`;
+  return CLIError({
+    code: "PLUGIN_RESOLVER_NAMESPACE_UNDECLARED",
+    message: `Plugins generate resolvers into resolver namespaces this config does not declare: ${namespaces
+      .map(
+        ({ namespace, pluginIds }) =>
+          `"${namespace}" (${pluginIds.length === 1 ? "plugin" : "plugins"} ${quoted(pluginIds)})`,
+      )
+      .join(", ")}.`,
+    suggestion:
+      workspace.definedBy === "defineApp"
+        ? `Declare each namespace under "resolver", e.g. ${example}.`
+        : `Declare each namespace under "resolver", e.g. ${example}, and list it in the "resolver" of the apps that expose it.`,
+    context: { resourceType: "pipeline.service", namespaces },
+  });
 }
 
 type DefineIdpResult = {
@@ -320,72 +399,82 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
   return config;
 }
 
-function defineIdp(config: IdpConfigInput | undefined, configPath: string): DefineIdpResult {
+/** A service configured in a config, with its key under the service's config property, when it has one. */
+interface ServiceEntry<Config, Key extends string | number = string | number> {
+  config: Config;
+  key?: Key;
+}
+
+function defineIdp(
+  entries: ReadonlyArray<ServiceEntry<IdPConfig>>,
+  configPath: string,
+): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  const idps = idpConfigList(config);
   assertUniqueDefinitionNames({
     kind: "idp",
-    definitions: idps
-      .map(({ name }, index) => ({
-        name,
+    definitions: entries
+      .map(({ config, key }) => ({
+        name: config.name,
         file: configPath,
         exportName: "default",
-        path: ["idp", index],
+        path: key === undefined ? ["idp"] : ["idp", key],
       }))
       .filter((definition) => typeof definition.name === "string"),
   });
-  idps.forEach((idpConfig, index) => {
-    const name = idpConfig.name;
-    if (!("external" in idpConfig)) {
-      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(idpConfig), {
+  for (const { config, key } of entries) {
+    const name = config.name;
+    if (!("external" in config)) {
+      const idp = parseServiceConfig(IdPSchema, stripIdpProviderHelper(config), {
         file: configPath,
         configKey: "idp",
-        key: isIdpConfigList(config) ? index : undefined,
+        key,
         name,
       });
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
-  });
+  }
 
   return { idpServices, subgraphs };
 }
 
 type DefineAuthResult = {
-  authService: AuthService | undefined;
+  authServices: AuthService[];
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
 function defineAuth(
-  config: AuthConfig | undefined,
+  entries: ReadonlyArray<ServiceEntry<AuthConfig>>,
   configPath: string,
   tailorDBServices: ReadonlyArray<TailorDBService>,
   externalTailorDBNamespaces: ReadonlyArray<string>,
 ): DefineAuthResult {
+  const authServices: AuthService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
-  if (!config) {
-    return { authService: undefined, subgraphs };
+  for (const { config, key } of entries) {
+    if (!("external" in config)) {
+      authServices.push(
+        createAuthService(
+          parseServiceConfig(AuthConfigSchema, config, {
+            file: configPath,
+            configKey: "auth",
+            key,
+            name: config.name,
+          }),
+          tailorDBServices,
+          externalTailorDBNamespaces,
+          configPath,
+          key === undefined ? ["auth"] : ["auth", key],
+        ),
+      );
+    }
+    subgraphs.push({ Type: "auth", Name: config.name });
   }
 
-  let authService: AuthService | undefined;
-  if (!("external" in config)) {
-    authService = createAuthService(
-      parseServiceConfig(AuthConfigSchema, config, {
-        file: configPath,
-        configKey: "auth",
-        name: config.name,
-      }),
-      tailorDBServices,
-      externalTailorDBNamespaces,
-      configPath,
-    );
-  }
-  subgraphs.push({ Type: "auth", Name: config.name });
-
-  return { authService, subgraphs };
+  return { authServices, subgraphs };
 }
 
 function defineExecutor(
@@ -459,7 +548,7 @@ function defineStaticWebsites(
 function defineAIGateways(
   gateways: readonly AIGatewayInput[] | undefined,
   configPath: string,
-  applicationAuthNamespace: string | undefined,
+  authNamespaces: readonly string[],
 ): AIGateway[] {
   const aiGatewayServices: AIGateway[] = [];
   assertUniqueDefinitionNames({
@@ -482,22 +571,28 @@ function defineAIGateways(
       name: config.name,
     });
     if (gateway.authNamespace === undefined) {
-      if (!applicationAuthNamespace) {
+      const [authNamespace, ...others] = authNamespaces;
+      if (authNamespace === undefined || others.length > 0) {
+        const issue =
+          authNamespace === undefined
+            ? {
+                message: "No Auth service is configured to default to",
+                suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+              }
+            : {
+                message: `Several Auth services are configured (${authNamespaces.join(", ")}), so there is none to default to`,
+                suggestion: 'Set "authNamespace" to one of the Auth services.',
+              };
         throw configIssuesError({
           file: configPath,
           exportName: "default",
           subject: "Tailor config",
           service: { configKey: "aiGateways", name: gateway.name },
-          issues: [
-            {
-              path: ["aiGateways", index, "authNamespace"],
-              message: "No Auth service is configured to default to",
-            },
-          ],
-          suggestion: 'Define an Auth service, or set "authNamespace" explicitly.',
+          issues: [{ path: ["aiGateways", index, "authNamespace"], message: issue.message }],
+          suggestion: issue.suggestion,
         });
       }
-      gateway.authNamespace = applicationAuthNamespace;
+      gateway.authNamespace = authNamespace;
     }
     aiGatewayServices.push(gateway);
   });
@@ -567,40 +662,76 @@ type DefineServicesResult = {
   ignoreNullishValues: boolean;
 };
 
+/** The service declarations of a `defineConfig()` or workspace config, in one shape. */
+interface ServiceSource {
+  settings: ServiceSettings;
+  pluginResolverOutputKey: string;
+  idps: ReadonlyArray<ServiceEntry<IdPConfig>>;
+  auths: ReadonlyArray<ServiceEntry<AuthConfig, string>>;
+}
+
+function configServiceSource(config: LoadedConfig): ServiceSource {
+  return {
+    settings: config,
+    pluginResolverOutputKey: pluginResolverOutputKey(config),
+    idps: idpConfigList(config.idp).map((idp, index) => ({
+      config: idp,
+      key: isIdpConfigList(config.idp) ? index : undefined,
+    })),
+    auths: config.auth ? [{ config: config.auth }] : [],
+  };
+}
+
+function workspaceServiceSource(workspace: LoadedWorkspaceConfig): ServiceSource {
+  return {
+    settings: workspace,
+    pluginResolverOutputKey: pluginResolverOutputKey(workspace),
+    idps: Object.entries(workspace.idp).map(([name, idp]) => ({
+      config: idp,
+      key: singleServiceKey(workspace.definedBy, name),
+    })),
+    auths: Object.entries(workspace.auth).map(([name, auth]) => ({
+      config: auth,
+      key: singleServiceKey(workspace.definedBy, name),
+    })),
+  };
+}
+
 function defineServices(
-  config: LoadedConfig,
+  source: ServiceSource,
   baseDir: string,
   pluginManager?: PluginManager,
   precompileTailorDBScripts?: boolean,
 ): DefineServicesResult {
+  const { settings } = source;
   const tailordbResult = defineTailorDB(
-    config.db,
-    config.path,
+    settings.db,
+    settings.path,
     baseDir,
-    effectiveDateDefault(config),
+    effectiveDateDefault(settings),
     pluginManager,
     precompileTailorDBScripts,
   );
   const resolverResult = defineResolver(
-    config.resolver,
-    config.path,
+    settings.resolver,
+    settings.path,
     baseDir,
-    pluginResolverSource(config, pluginManager),
+    pluginResolverSource(source.pluginResolverOutputKey, pluginManager),
   );
-  const idpResult = defineIdp(config.idp, config.path);
+  const idpResult = defineIdp(source.idps, settings.path);
   const authResult = defineAuth(
-    config.auth,
-    config.path,
+    source.auths,
+    settings.path,
     tailordbResult.tailorDBServices,
     tailordbResult.externalTailorDBNamespaces,
   );
-  const staticWebsiteServices = defineStaticWebsites(config.staticWebsites, config.path);
+  const staticWebsiteServices = defineStaticWebsites(settings.staticWebsites, settings.path);
   const aiGatewayServices = defineAIGateways(
-    config.aiGateways,
-    config.path,
-    getApplicationAuthNamespace({ authService: authResult.authService, config }),
+    settings.aiGateways,
+    settings.path,
+    source.auths.map(({ config }) => config.name),
   );
-  const { secrets, ignoreNullishValues } = parseSecretManager(config.secrets, config.path);
+  const { secrets, ignoreNullishValues } = parseSecretManager(settings.secrets, settings.path);
   return {
     tailordbResult,
     resolverResult,
@@ -613,22 +744,38 @@ function defineServices(
   };
 }
 
-function buildApplication(params: {
-  config: AppConfig;
-  tailordbResult: DefineTailorDBResult;
-  resolverResult: DefineResolverResult;
-  idpResult: DefineIdpResult;
-  authResult: DefineAuthResult;
+interface BuildConfigServicesParams extends DefineServicesResult {
   executorService: ExecutorService | undefined;
   workflowService: WorkflowService | undefined;
   httpAdapterService: HttpAdapterService | undefined;
-  staticWebsiteServices: StaticWebsite[];
-  aiGatewayServices: AIGateway[];
-  secrets: SecretVault[];
-  ignoreNullishValues: boolean;
   env: Record<string, string | number | boolean>;
-}): Application {
-  const application: Application = {
+}
+
+function buildConfigServices(params: BuildConfigServicesParams): ConfigServices {
+  return {
+    tailorDBServices: params.tailordbResult.tailorDBServices,
+    externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
+    resolverServices: params.resolverResult.resolverServices,
+    idpServices: params.idpResult.idpServices,
+    authServices: params.authResult.authServices,
+    executorService: params.executorService,
+    workflowService: params.workflowService,
+    httpAdapterService: params.httpAdapterService,
+    staticWebsiteServices: params.staticWebsiteServices,
+    aiGatewayServices: params.aiGatewayServices,
+    secrets: params.secrets,
+    ignoreNullishValues: params.ignoreNullishValues,
+    env: params.env,
+  };
+}
+
+interface BuildApplicationParams extends BuildConfigServicesParams {
+  config: LoadedConfig;
+}
+
+function buildApplication(params: BuildApplicationParams): Application {
+  return {
+    ...buildConfigServices(params),
     name: params.config.name,
     id: params.config.id,
     config: params.config,
@@ -638,24 +785,7 @@ function buildApplication(params: {
       ...params.idpResult.subgraphs,
       ...params.authResult.subgraphs,
     ],
-    tailorDBServices: params.tailordbResult.tailorDBServices,
-    externalTailorDBNamespaces: params.tailordbResult.externalTailorDBNamespaces,
-    resolverServices: params.resolverResult.resolverServices,
-    idpServices: params.idpResult.idpServices,
-    authService: params.authResult.authService,
-    executorService: params.executorService,
-    workflowService: params.workflowService,
-    httpAdapterService: params.httpAdapterService,
-    staticWebsiteServices: params.staticWebsiteServices,
-    aiGatewayServices: params.aiGatewayServices,
-    secrets: params.secrets,
-    ignoreNullishValues: params.ignoreNullishValues,
-    env: params.env,
-    get applications() {
-      return [application];
-    },
   };
-  return application;
 }
 
 /**
@@ -714,7 +844,12 @@ export interface LoadApplicationParams extends DefineApplicationParams {
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager, precompileTailorDBScripts } = params;
   const baseDir = path.dirname(config.path);
-  const services = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
+  const services = defineServices(
+    configServiceSource(config),
+    baseDir,
+    pluginManager,
+    precompileTailorDBScripts,
+  );
   // Plugin executors are not known at define-time; generate/apply flows handle them after table loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
   const workflowService = defineWorkflow(config.workflow, baseDir);
@@ -728,6 +863,45 @@ export function defineApplication(params: DefineApplicationParams): Application 
     httpAdapterService,
     env: config.env ?? {},
   });
+}
+
+/**
+ * Parameters for defining the services of a workspace
+ */
+export interface DefineWorkspaceServicesParams extends Pick<
+  DefineApplicationParams,
+  "pluginManager" | "precompileTailorDBScripts"
+> {
+  /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
+  workspace: LoadedWorkspaceConfig;
+}
+
+/**
+ * Define every service a workspace declares, whether or not an application exposes it.
+ * Like {@link defineApplication}, this loads no tables and bundles no files.
+ * @param params - Parameters for defining the services
+ * @returns The workspace's services
+ */
+export function defineWorkspaceServices(params: DefineWorkspaceServicesParams): WorkspaceServices {
+  const { workspace, pluginManager, precompileTailorDBScripts } = params;
+  const baseDir = path.dirname(workspace.path);
+  const services = defineServices(
+    workspaceServiceSource(workspace),
+    baseDir,
+    pluginManager,
+    precompileTailorDBScripts,
+  );
+  return {
+    ...buildConfigServices({
+      ...services,
+      executorService: defineExecutor(workspace.executor, baseDir, false),
+      workflowService: defineWorkflow(workspace.workflow, baseDir),
+      httpAdapterService: defineHttpAdapterService(workspace.httpAdapter, baseDir),
+      env: workspace.env,
+    }),
+    settings: workspace,
+    envOverrides: workspace.envOverrides,
+  };
 }
 
 /**
@@ -777,39 +951,214 @@ function assertWaitPointKeys(): void {
   });
 }
 
+/** What loading reads from a `defineConfig()` or workspace config besides its service declarations. */
+interface LoadSource extends ServiceSource {
+  config: LoadedConfig | LoadedWorkspaceConfig;
+  executor: ExecutorServiceInput | undefined;
+  env: ApplicationEnv;
+  envOverrides: EnvOverrides;
+}
+
+/** The `env` overrides of a `defineConfig()` config, which has none. */
+export const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
+
+function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource {
+  if (isLoadedWorkspaceConfig(config)) {
+    return {
+      ...workspaceServiceSource(config),
+      config,
+      executor: config.executor,
+      env: config.env,
+      envOverrides: config.envOverrides,
+    };
+  }
+  return {
+    ...configServiceSource(config),
+    config,
+    executor: config.executor,
+    env: config.env ?? {},
+    envOverrides: NO_ENV_OVERRIDES,
+  };
+}
+
+interface ResolveEnvParams {
+  source: LoadSource;
+  client: OperatorClient | undefined;
+  workspaceId: string | undefined;
+  expectedLocalNames: ReadonlySet<string>;
+}
+
+interface ResolvedEnv {
+  env: ApplicationEnv;
+  envOverrides: EnvOverrides;
+}
+
+function serviceEnv(resolved: ResolvedEnv, service: EnvOverrideService): ApplicationEnv {
+  const { env, envOverrides } = resolved;
+  const override =
+    service.kind === "resolver" || service.kind === "auth"
+      ? envOverrides[service.kind][service.name]
+      : envOverrides[service.kind];
+  return override ? { ...env, ...override } : env;
+}
+
+async function resolveEnv(params: ResolveEnvParams): Promise<ResolvedEnv> {
+  const { source, client, workspaceId, expectedLocalNames } = params;
+  if (!client || !workspaceId) {
+    return { env: source.env, envOverrides: source.envOverrides };
+  }
+  const siteLookupCache = new Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>();
+  const resolve = (env: ApplicationEnv, service?: string) =>
+    resolveStaticWebsiteUrlsInEnv(client, workspaceId, env, {
+      expectedLocalNames,
+      siteLookupCache,
+      service,
+    });
+  const [env, envOverrides] = await Promise.all([
+    resolve(source.env),
+    mapEnvOverridesAsync(source.envOverrides, (env, service) =>
+      resolve(env, envOverrideServiceLabel(service)),
+    ),
+  ]);
+  return { env, envOverrides };
+}
+
+function envOverrideServiceLabel(service: EnvOverrideService): string {
+  switch (service.kind) {
+    case "resolver":
+      return `resolver namespace "${service.name}"`;
+    case "auth":
+      return `Auth service "${service.name}"`;
+    case "executor":
+    case "workflow":
+      return service.kind;
+  }
+}
+
 /**
- * Load and fully initialize a Tailor application.
+ * How a config's workflow `.start()` calls resolve a string invoker: the config's only Auth
+ * service, or, with several, the Auth services that define each machine user.
+ * @param config - Loaded config of either kind
+ * @returns The start context's Auth namespace and machine user lookup
+ */
+export function startContextAuth(
+  config: LoadedConfig | LoadedWorkspaceConfig,
+): Pick<StartContext, "authNamespace" | "machineUserAuthNamespaces"> {
+  const source = loadSourceOf(config);
+  return {
+    authNamespace: startContextAuthNamespace(source),
+    ...startContextMachineUsers(source),
+  };
+}
+
+function startContextAuthNamespace(source: LoadSource): string | undefined {
+  const [auth, ...others] = source.auths;
+  return auth && others.length === 0 ? auth.config.name : undefined;
+}
+
+function startContextMachineUsers(
+  source: LoadSource,
+): Pick<StartContext, "machineUserAuthNamespaces"> {
+  if (source.auths.length < 2) return {};
+  const machineUserAuthNamespaces = new Map<string, string[]>();
+  for (const { config } of source.auths) {
+    const machineUsers = "machineUsers" in config ? config.machineUsers : undefined;
+    for (const machineUser of Object.keys(machineUsers ?? {})) {
+      machineUserAuthNamespaces.set(machineUser, [
+        ...(machineUserAuthNamespaces.get(machineUser) ?? []),
+        config.name,
+      ]);
+    }
+  }
+  return { machineUserAuthNamespaces };
+}
+
+interface EnvDependentBundleSettings extends FunctionBundleSettings {
+  startContext: StartContext;
+  baseDir: string;
+  allowedRuntimeGlobals: BundleWorkflowJobsOptions["allowedRuntimeGlobals"];
+}
+
+interface BundleEnvDependentScriptsParams {
+  source: LoadSource;
+  services: Pick<ConfigServices, "workflowService" | "authServices">;
+  resolved: ResolvedEnv;
+  bundleSettings: EnvDependentBundleSettings;
+  previousUsedJobs?: BundleWorkflowJobsResult;
+}
+
+interface EnvDependentBundles {
+  workflowBuildResult: BundleWorkflowJobsResult | undefined;
+  authHooks: Map<string, string>;
+}
+
+/**
+ * Bundle the functions that embed `env`: the workflow jobs and each Auth service's before-login hook.
+ * @param params - The config's load source, its services, its resolved env, and bundle settings
+ * @returns The workflow build result and the hook bundles
+ */
+async function bundleEnvDependentScripts(
+  params: BundleEnvDependentScriptsParams,
+): Promise<EnvDependentBundles> {
+  const { source, services, resolved, bundleSettings, previousUsedJobs } = params;
+  const { allowedRuntimeGlobals: _allowedRuntimeGlobals, ...hookSettings } = bundleSettings;
+  const { workflowService } = services;
+
+  const workflowBuildResult =
+    workflowService && workflowService.jobs.length > 0
+      ? await bundleWorkflowJobs({
+          ...bundleSettings,
+          allJobs: workflowService.jobs,
+          mainJobNames: workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name),
+          env: serviceEnv(resolved, { kind: "workflow" }),
+          previousUsedJobs,
+        })
+      : undefined;
+
+  const authHooks = new Map<string, string>();
+  for (const authService of services.authServices) {
+    if (!authService.config.hooks?.beforeLogin) continue;
+    const authName = authService.config.name;
+    const hooks = await bundleAuthHooks({
+      ...hookSettings,
+      configPath: source.settings.path,
+      authName,
+      authKey: source.auths.find((auth) => auth.config.name === authName)?.key,
+      env: serviceEnv(resolved, { kind: "auth", name: authName }),
+    });
+    for (const [name, code] of hooks) authHooks.set(name, code);
+  }
+  return { workflowBuildResult, authHooks };
+}
+
+interface LoadServicesParams extends Omit<LoadApplicationParams, "config" | "previous"> {
+  source: LoadSource;
+}
+
+interface LoadedServices extends Omit<LoadApplicationResult, "application"> {
+  defined: BuildConfigServicesParams;
+  envOverrides: EnvOverrides;
+}
+
+/**
+ * Load the services of a config and bundle their functions.
  * This performs all I/O-heavy operations: loading tables, processing plugins,
  * generating plugin files, bundling, and loading definitions for validation.
- * @param params - Parameters for defining and loading the application
- * @returns Fully initialized application with workflow results
+ * @param params - The config's load source and the loading options
+ * @returns The loaded services and their bundles
  */
-export async function loadApplication(
-  params: LoadApplicationParams,
-): Promise<LoadApplicationResult> {
+async function loadServices(params: LoadServicesParams): Promise<LoadedServices> {
   const {
-    config,
+    source,
     pluginManager,
     bundleCache,
     client,
     workspaceId,
     expectedLocalStaticWebsiteNames,
-    previous,
     precompileTailorDBScripts,
   } = params;
-  const baseDir = path.dirname(config.path);
-
-  if (previous) {
-    return reloadEnvDependentBundles({
-      config,
-      baseDir,
-      client,
-      workspaceId,
-      expectedLocalStaticWebsiteNames,
-      bundleCache,
-      previous,
-    });
-  }
+  const { config, settings } = source;
+  const baseDir = path.dirname(settings.path);
 
   // 1. Define services (synchronous)
   const {
@@ -821,20 +1170,20 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, baseDir, pluginManager, precompileTailorDBScripts);
+  } = defineServices(source, baseDir, pluginManager, precompileTailorDBScripts);
 
-  // 2. Resolve `name:url` static website placeholders in `env` once, before any
-  // bundling or expression generation embeds it into resolver, executor,
-  // workflow, or auth hook code. Skipped without a client (e.g. `--build-only`,
-  // which never reaches the platform), leaving `env` as declared.
-  const env =
-    client && workspaceId
-      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
-          expectedLocalNames:
-            expectedLocalStaticWebsiteNames ??
-            new Set(staticWebsiteServices.map((website) => website.name)),
-        })
-      : (config.env ?? {});
+  // 2. Resolve `name:url` static website placeholders in `env` and its overrides
+  // once, before any bundling or expression generation embeds them into
+  // resolver, executor, workflow, or auth hook code. Skipped without a client
+  // (e.g. `--build-only`, which never reaches the platform), leaving them as declared.
+  const resolved = await resolveEnv({
+    source,
+    client,
+    workspaceId,
+    expectedLocalNames:
+      expectedLocalStaticWebsiteNames ??
+      new Set(staticWebsiteServices.map((website) => website.name)),
+  });
 
   // 3. Load TailorDB tables, process namespace plugins, and define plugin resolver namespaces
   for (const tailordb of tailordbResult.tailorDBServices) {
@@ -843,6 +1192,7 @@ export async function loadApplication(
   }
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
+    scope: tailorDBTypeNameScopeOf(config),
   });
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
@@ -857,20 +1207,20 @@ export async function loadApplication(
   const pluginExecutorFiles = generatePluginFilesIfNeeded(
     pluginManager,
     tailordbResult.tailorDBServices,
-    config.path,
+    settings.path,
   );
 
   // 5. Determine final executorService (const, no reassignment)
-  const executorService = defineExecutor(config.executor, baseDir, pluginExecutorFiles.length > 0);
+  const executorService = defineExecutor(source.executor, baseDir, pluginExecutorFiles.length > 0);
 
   // 6. Load and collect workflows
-  const workflowService = defineWorkflow(config.workflow, baseDir);
+  const workflowService = defineWorkflow(settings.workflow, baseDir);
   if (workflowService) {
     await workflowService.loadWorkflows();
   }
 
   // 7. Load and collect HTTP adapters
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
+  const httpAdapterService = defineHttpAdapterService(settings.httpAdapter, baseDir);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
@@ -881,21 +1231,24 @@ export async function loadApplication(
   const sdkBuilderAnnotationCache: SdkBuilderAnnotationCache = new Map();
 
   // 8. Build start context for workflow/job start transformation
-  const startContext = await buildStartContext(
-    config.workflow,
-    getApplicationAuthNamespace({ authService: authResult.authService, config }),
-    baseDir,
-    workflowService?.workflowSources,
-    tsconfigCache,
-  );
+  const startContext: StartContext = {
+    ...(await buildStartContext(
+      settings.workflow,
+      startContextAuthNamespace(source),
+      baseDir,
+      workflowService?.workflowSources,
+      tsconfigCache,
+    )),
+    ...startContextMachineUsers(source),
+  };
 
   // 9. Resolve bundle settings
-  const buildOptions = buildOptionsOf(config);
+  const buildOptions = buildOptionsOf(settings);
   const inlineSourcemap = resolveInlineSourcemap(buildOptions.inlineSourcemap);
   const inlineSourcemapDependencySources = buildOptions.inlineSourcemapDependencySources ?? false;
   const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
-  const dateDefault = effectiveDateDefault(config);
+  const dateDefault = effectiveDateDefault(settings);
   const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
 
   // Collect in-memory bundled scripts
@@ -953,30 +1306,31 @@ export async function loadApplication(
     });
   }
 
-  // 12. Bundle workflows
-  let workflowBuildResult: BundleWorkflowJobsResult | undefined;
-  if (workflowService && workflowService.jobs.length > 0) {
-    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs({
-      allJobs: workflowService.jobs,
-      mainJobNames,
-      env,
+  // 12. Bundle workflow jobs and auth hooks, the functions that embed env
+  const { workflowBuildResult, authHooks } = await bundleEnvDependentScripts({
+    source,
+    services: { workflowService, authServices: authResult.authServices },
+    resolved,
+    bundleSettings: {
       startContext,
-      baseDir,
       cache: bundleCache,
       inlineSourcemap,
       inlineSourcemapDependencySources,
       inlineSourcemapProjectSources,
       bundleLogLevel,
       bundleTreeshake: buildOptions.treeshake,
+      baseDir,
       tsconfigCache,
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
       kyselyTemporal,
-    });
+    },
+  });
+  if (workflowBuildResult) {
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
+  bundledScripts.authHooks = authHooks;
 
   // 13. Bundle HTTP adapters
   let httpAdapterBuildResult: HttpAdapterBundleResult | undefined;
@@ -996,30 +1350,7 @@ export async function loadApplication(
     );
   }
 
-  // 14. Bundle auth hooks
-  if (authResult.authService?.config.hooks?.beforeLogin) {
-    const authName = authResult.authService.config.name;
-    bundledScripts.authHooks = await bundleAuthHooks({
-      configPath: config.path,
-      authName,
-      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
-      env,
-      startContext,
-      cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
-      bundleTreeshake: buildOptions.treeshake,
-      baseDir,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      dateDefault,
-      kyselyTemporal,
-    });
-  }
-
-  // 15. Load resolver and executor definitions (for validation/logging)
+  // 14. Load resolver and executor definitions (for validation/logging)
   for (const pipeline of resolverResult.resolverServices) {
     await pipeline.loadResolvers();
   }
@@ -1029,7 +1360,7 @@ export async function loadApplication(
       await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
     }
   }
-  // 16. Check the wait point keys every loaded module declared
+  // 15. Check the wait point keys every loaded module declared
   assertWaitPointKeys();
 
   if (workflowService) {
@@ -1040,25 +1371,22 @@ export async function loadApplication(
   }
   logger.newline();
 
-  // 17. Build immutable Application
-  const application = buildApplication({
-    config,
-    tailordbResult,
-    resolverResult,
-    idpResult,
-    authResult,
-    executorService,
-    workflowService,
-    httpAdapterService,
-    staticWebsiteServices,
-    aiGatewayServices,
-    secrets,
-    ignoreNullishValues,
-    env,
-  });
-
   return {
-    application,
+    defined: {
+      tailordbResult,
+      resolverResult,
+      idpResult,
+      authResult,
+      executorService,
+      workflowService,
+      httpAdapterService,
+      staticWebsiteServices,
+      aiGatewayServices,
+      secrets,
+      ignoreNullishValues,
+      env: resolved.env,
+    },
+    envOverrides: resolved.envOverrides,
     workflowBuildResult,
     httpAdapterBuildResult,
     bundledScripts,
@@ -1075,116 +1403,157 @@ export async function loadApplication(
   };
 }
 
+/** A load of a config's services that a reload reuses. */
+interface PreviousLoad extends Omit<LoadApplicationResult, "application"> {
+  services: ConfigServices;
+}
+
+interface ReloadEnvDependentBundlesParams extends Pick<
+  LoadApplicationParams,
+  "client" | "workspaceId" | "expectedLocalStaticWebsiteNames" | "bundleCache"
+> {
+  source: LoadSource;
+  previous: PreviousLoad;
+}
+
+interface ReloadedBundles
+  extends Pick<LoadApplicationResult, "workflowBuildResult" | "bundledScripts">, ResolvedEnv {}
+
 /**
  * Re-resolve `env`'s static website placeholders and rebundle only the
  * workflow-job and auth-hook code that embeds it, reusing everything else
  * from `previous` -- config parsing, TailorDB loading, plugin execution, and
  * the resolver/executor/HTTP-adapter bundles, none of which depend on `env`.
- * @param params - Config, client, and the prior `loadApplication` result to reuse
- * @returns A `LoadApplicationResult` with `env` and its two dependent bundle kinds refreshed
+ * @param params - The config's load source, client, and the prior load to reuse
+ * @returns `env` and its overrides, and the two dependent bundle kinds, refreshed
  */
-async function reloadEnvDependentBundles(params: {
-  config: LoadedConfig;
-  baseDir: string;
-  client: OperatorClient | undefined;
-  workspaceId: string | undefined;
-  expectedLocalStaticWebsiteNames: ReadonlySet<string> | undefined;
-  bundleCache: BundleCache | undefined;
-  previous: LoadApplicationResult;
-}): Promise<LoadApplicationResult> {
-  const {
-    config,
-    baseDir,
+async function reloadEnvDependentBundles(
+  params: ReloadEnvDependentBundlesParams,
+): Promise<ReloadedBundles> {
+  const { source, client, workspaceId, expectedLocalStaticWebsiteNames, bundleCache, previous } =
+    params;
+  const { services, reusableBuildState } = previous;
+  const { settings } = source;
+  const buildOptions = buildOptionsOf(settings);
+
+  const resolved = await resolveEnv({
+    source,
     client,
     workspaceId,
-    expectedLocalStaticWebsiteNames,
-    bundleCache,
-    previous,
-  } = params;
-  const { application: previousApplication, reusableBuildState } = previous;
-  const {
-    startContext,
-    tsconfigCache,
-    sdkBuilderAnnotationCache,
-    inlineSourcemap,
-    inlineSourcemapDependencySources,
-    inlineSourcemapProjectSources,
-    bundleLogLevel,
-    kyselyTemporal,
-  } = reusableBuildState;
+    expectedLocalNames:
+      expectedLocalStaticWebsiteNames ??
+      new Set(services.staticWebsiteServices.map((website) => website.name)),
+  });
 
-  const env =
-    client && workspaceId
-      ? await resolveStaticWebsiteUrlsInEnv(client, workspaceId, config.env ?? {}, {
-          expectedLocalNames:
-            expectedLocalStaticWebsiteNames ??
-            new Set(previousApplication.staticWebsiteServices.map((website) => website.name)),
-        })
-      : (config.env ?? {});
-
-  const bundledScripts: BundledScripts = { ...previous.bundledScripts };
-
-  const workflowService = previousApplication.workflowService;
-  let workflowBuildResult = previous.workflowBuildResult;
-  if (workflowService && workflowService.jobs.length > 0) {
-    const mainJobNames = workflowService.workflowSources.map((ws) => ws.workflow.mainJob.name);
-    workflowBuildResult = await bundleWorkflowJobs({
-      allJobs: workflowService.jobs,
-      mainJobNames,
-      env,
-      startContext,
-      baseDir,
+  const { workflowBuildResult, authHooks } = await bundleEnvDependentScripts({
+    source,
+    services,
+    resolved,
+    bundleSettings: {
+      ...reusableBuildState,
       cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
-      bundleTreeshake: buildOptionsOf(config).treeshake,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      previousUsedJobs: previous.workflowBuildResult,
-      allowedRuntimeGlobals: buildOptionsOf(config).allowedRuntimeGlobals,
-      dateDefault: effectiveDateDefault(config),
-      kyselyTemporal,
-    });
-    bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
-  }
-
-  if (previousApplication.authService?.config.hooks?.beforeLogin) {
-    const authName = previousApplication.authService.config.name;
-    bundledScripts.authHooks = await bundleAuthHooks({
-      configPath: config.path,
-      authName,
-      handlerAccessPath: `auth.hooks.beforeLogin.handler`,
-      env,
-      startContext,
-      cache: bundleCache,
-      inlineSourcemap,
-      inlineSourcemapDependencySources,
-      inlineSourcemapProjectSources,
-      bundleLogLevel,
-      bundleTreeshake: buildOptionsOf(config).treeshake,
-      baseDir,
-      tsconfigCache,
-      sdkBuilderAnnotationCache,
-      dateDefault: effectiveDateDefault(config),
-      kyselyTemporal,
-    });
-  }
-
-  const application: Application = {
-    ...previousApplication,
-    env,
-    get applications() {
-      return [application];
+      bundleTreeshake: buildOptions.treeshake,
+      baseDir: path.dirname(settings.path),
+      allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
+      dateDefault: effectiveDateDefault(settings),
     },
+    previousUsedJobs: previous.workflowBuildResult,
+  });
+  const bundledScripts: BundledScripts = {
+    ...previous.bundledScripts,
+    ...(workflowBuildResult ? { workflowJobs: workflowBuildResult.bundledCode } : {}),
+    authHooks,
   };
 
   return {
-    application,
-    workflowBuildResult,
-    httpAdapterBuildResult: previous.httpAdapterBuildResult,
+    ...resolved,
+    workflowBuildResult: workflowBuildResult ?? previous.workflowBuildResult,
     bundledScripts,
-    reusableBuildState,
+  };
+}
+
+/**
+ * Load and fully initialize a Tailor application.
+ * This performs all I/O-heavy operations: loading tables, processing plugins,
+ * generating plugin files, bundling, and loading definitions for validation.
+ * @param params - Parameters for defining and loading the application
+ * @returns Fully initialized application with workflow results
+ */
+export async function loadApplication(
+  params: LoadApplicationParams,
+): Promise<LoadApplicationResult> {
+  const { config, previous } = params;
+  const source = loadSourceOf(config);
+
+  if (previous) {
+    const reloaded = await reloadEnvDependentBundles({
+      ...params,
+      source,
+      previous: { ...previous, services: previous.application },
+    });
+    const application: Application = { ...previous.application, env: reloaded.env };
+    return {
+      application,
+      workflowBuildResult: reloaded.workflowBuildResult,
+      httpAdapterBuildResult: previous.httpAdapterBuildResult,
+      bundledScripts: reloaded.bundledScripts,
+      reusableBuildState: previous.reusableBuildState,
+    };
+  }
+
+  const {
+    defined,
+    envOverrides: _envOverrides,
+    ...loaded
+  } = await loadServices({
+    ...params,
+    source,
+  });
+  return { application: buildApplication({ config, ...defined }), ...loaded };
+}
+
+/**
+ * Parameters for loading and bundling the services of a workspace config
+ */
+export interface LoadWorkspaceParams extends Omit<LoadApplicationParams, "config" | "previous"> {
+  /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
+  workspace: LoadedWorkspaceConfig;
+  /** A prior `loadWorkspace` result for this same config, reused as `loadApplication` reuses its `previous`. */
+  previous?: LoadWorkspaceResult;
+}
+
+/**
+ * Result of loading the services of a workspace config
+ */
+export interface LoadWorkspaceResult extends Omit<LoadApplicationResult, "application"> {
+  /** The workspace's services, with the static website URLs in `env` and its overrides resolved when a client is given */
+  services: WorkspaceServices;
+}
+
+/**
+ * Load the services of a `defineWorkspace()` or `defineApp()` config and bundle their functions,
+ * as {@link loadApplication} does for a `defineConfig()` config.
+ * @param params - Parameters for loading the workspace
+ * @returns The loaded services and their bundles
+ */
+export async function loadWorkspace(params: LoadWorkspaceParams): Promise<LoadWorkspaceResult> {
+  const { workspace, previous } = params;
+  const source = loadSourceOf(workspace);
+
+  if (previous) {
+    const reloaded = await reloadEnvDependentBundles({ ...params, source, previous });
+    return {
+      services: { ...previous.services, env: reloaded.env, envOverrides: reloaded.envOverrides },
+      workflowBuildResult: reloaded.workflowBuildResult,
+      httpAdapterBuildResult: previous.httpAdapterBuildResult,
+      bundledScripts: reloaded.bundledScripts,
+      reusableBuildState: previous.reusableBuildState,
+    };
+  }
+
+  const { defined, envOverrides, ...loaded } = await loadServices({ ...params, source });
+  return {
+    services: { ...buildConfigServices(defined), settings: workspace, envOverrides },
+    ...loaded,
   };
 }

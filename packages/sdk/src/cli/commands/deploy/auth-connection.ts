@@ -10,9 +10,12 @@ import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import {
   buildMetaRequest,
+  type DeployOwner,
+  labelRefreshOf,
   type MetadataLabelWrite,
   resourceTrn,
   type WithLabel,
+  writeLabelRefreshes,
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker } from "./owned-resource";
@@ -113,19 +116,21 @@ function buildUpdateMask(
  * Plan auth connection changes based on current and desired state.
  * @param client - Operator client instance
  * @param stateScope - Workspace, application, and config the connections belong to
+ * @param owner - Owner of the resources the deploy manages
  * @param auths - Auth services with connection configs
  * @returns Planned changes for auth connections
  */
 export async function planAuthConnections(
   client: OperatorClient,
   stateScope: SecretsStateScope,
+  owner: DeployOwner,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
-  const { workspaceId, applicationName: appName, applicationId: appId } = stateScope;
+  const { workspaceId } = stateScope;
   const changeSet = createChangeSet<CreateConnection, UpdateConnection, DeleteConnection>(
     "Auth connections",
   );
-  const ownership = createOwnershipTracker(appName, appId);
+  const ownership = createOwnershipTracker(owner);
 
   const desiredConnections: Record<string, AuthConnectionConfig> = {};
   for (const auth of auths) {
@@ -160,8 +165,7 @@ export async function planAuthConnections(
     const existing = existingConnections[name];
     const metaRequest = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "auth_connection", name),
-      appName,
-      appId,
+      owner,
     });
 
     if (existing) {
@@ -190,7 +194,10 @@ export async function planAuthConnections(
         // the same question again.
         changeSet.updates.push({ name, metaRequest });
       } else {
-        changeSet.unchanged.push({ name });
+        changeSet.unchanged.push({
+          name,
+          ...labelRefreshOf(existing.allLabels, metaRequest),
+        });
       }
       delete existingConnections[name];
     } else {
@@ -207,7 +214,12 @@ export async function planAuthConnections(
     // Only delete connections we own. Connections without our label are
     // treated as unowned and left untouched, even if the local secrets-state
     // happens to track them.
-    if (ownership.ownsRemaining(entry.allLabels)) {
+    if (
+      ownership.ownsRemaining(entry.allLabels, {
+        resourceType: "auth.connection",
+        resourceName: name,
+      })
+    ) {
       changeSet.deletes.push({
         name,
         request: { workspaceId, connectionName: name },
@@ -289,13 +301,14 @@ export async function applyAuthConnections(
       });
     }
 
-    // Metadata-only updates: backfill the SDK ownership label on connections
-    // whose configuration is otherwise unchanged.
-    await Promise.all(
-      labelUpdates.map(async (update) => {
+    // Metadata-only writes: backfill the SDK ownership label on connections
+    // whose configuration is otherwise unchanged, and refresh owned ones' labels.
+    await Promise.all([
+      ...labelUpdates.map(async (update) => {
         await writeMetadataLabels(client, update.metaRequest);
       }),
-    );
+      ...writeLabelRefreshes(client, changeSet.unchanged),
+    ]);
   } else if (changeSet.deletes.length > 0) {
     await withSecretsStateLock(stateScope, async () => {
       await Promise.all(

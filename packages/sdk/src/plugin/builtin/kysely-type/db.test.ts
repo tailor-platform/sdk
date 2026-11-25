@@ -28,3 +28,12 @@ describe("getDB", () => {
     expect(await getDBWith(undefined)).toHaveBeenCalledWith({ namespace: "main" });
   });
 });
+
+describe("createScopedGetDB", () => {
+  test("returns getDB itself, which the type argument only narrows", async () => {
+    vi.resetModules();
+    const { createScopedGetDB, getDB } = await import("./db");
+
+    expect(createScopedGetDB()).toBe(getDB);
+  });
+});

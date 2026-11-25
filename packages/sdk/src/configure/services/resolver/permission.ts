@@ -38,9 +38,8 @@ type InputEqualityCondition<User extends object, Input> = [ComparableInputKeys<I
   never,
 ]
   ? never
-  :
-      | readonly [ResolverInputOperand<Input>, "=", UserStringOperand<User>]
-      | readonly [UserStringOperand<User>, "=", ResolverInputOperand<Input>];
+  : | readonly [ResolverInputOperand<Input>, "=", UserStringOperand<User>]
+    | readonly [UserStringOperand<User>, "=", ResolverInputOperand<Input>];
 
 /**
  * A single condition for {@link ResolverPermission}.

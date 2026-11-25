@@ -1,13 +1,23 @@
 import * as path from "pathe";
 import { assertDefined } from "#/utils/assert";
-import { processIdpUser, generateIdpUserSchemaFile } from "./idp-user-processor";
+import { PluginValidationError } from "#/utils/plugin-validation-error";
+import {
+  processIdpUser,
+  generateIdpUserSchemaFile,
+  type IdpUserMetadata,
+} from "./idp-user-processor";
 import {
   processLinesDb,
   generateLinesDbSchemaFile,
   generateLinesDbSchemaFileWithPluginAPI,
   type PluginSchemaParams,
 } from "./lines-db-processor";
-import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
+import type {
+  GeneratorAuthInput,
+  GeneratorResult,
+  Plugin,
+  TailorDBReadyContext,
+} from "#/plugin/types";
 
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
@@ -33,7 +43,8 @@ type DisableIdpUserSyncDirections = {
 
 export type SeedPluginOptions = {
   distPath: string;
-  machineUserName?: string;
+  /** Machine user the seed runs as, by name or with its Auth service as `{ namespace, machineUserName }`. */
+  machineUserName?: string | { namespace: string; machineUserName: string };
   /**
    * Disable individual `_User <-> userProfile` foreign keys emitted into
    * the generated seed schema. Both directions are emitted by default.
@@ -68,6 +79,30 @@ function resolveIdpUserSyncFKs(option: SeedPluginOptions["disableIdpUserSync"]):
   };
 }
 /**
+ * Find the one Auth service whose built-in IdP users the seed holds.
+ * @param auths - Auth services by name
+ * @returns The IdP user metadata of that Auth service, or null when none has a built-in IdP with a userProfile
+ */
+export function soleIdpUser(
+  auths: Readonly<Record<string, GeneratorAuthInput>>,
+): IdpUserMetadata | null {
+  const idpUsers = Object.entries(auths).flatMap(([name, auth]) => {
+    const idpUser = processIdpUser(auth);
+    return idpUser ? [{ name, idpUser }] : [];
+  });
+  if (idpUsers.length > 1) {
+    const names = idpUsers.map(({ name }) => name);
+    throw new PluginValidationError({
+      code: "SEED_IDP_USER_AUTH_AMBIGUOUS",
+      message: `seedPlugin seeds the users of one built-in IdP, but these Auth services each use one: ${names.join(", ")}.`,
+      suggestion: "Keep one Auth service with a built-in IdP and a userProfile in the config.",
+      context: { pluginId: SeedGeneratorID, auths: names },
+    });
+  }
+  return idpUsers[0]?.idpUser ?? null;
+}
+
+/**
  * Plugin that generates seed data and schema files consumed by the
  * `tailor seed` commands (@tailor-platform/sdk-plugin-seed).
  * @param options - Plugin options
@@ -88,7 +123,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const outputDir = path.resolve(path.dirname(ctx.configPath), ctx.pluginConfig.distPath);
 
       // Process IdP user early so we can add reverse FK to the user profile type
-      const idpUser = ctx.auth ? (processIdpUser(ctx.auth) ?? null) : null;
+      const idpUser = soleIdpUser(ctx.auths);
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
       for (const ns of ctx.tailordb) {
