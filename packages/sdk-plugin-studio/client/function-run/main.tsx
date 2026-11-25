@@ -15,6 +15,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
+import { createSaver } from "../../src/function-run/saver";
 import { parseEventFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { parseTailorErrors, type TailorErrorItem } from "../../src/function-run/tailor-errors";
 import { scopeTheme } from "../../src/function-run/theme";
@@ -289,12 +290,15 @@ function PathWithCopy({
 
 const PAGE_ID = crypto.randomUUID();
 
-function put(change: { code: string } | { arg: string }): void {
-  void fetch("file", {
+async function putFile(field: "code" | "arg", text: string): Promise<void> {
+  const response = await fetch("file", {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...change, origin: PAGE_ID }),
+    body: JSON.stringify({ [field]: text, origin: PAGE_ID }),
   });
+  if (!response.ok) {
+    throw new Error((await response.text()).trim() || `Request failed (${response.status})`);
+  }
 }
 
 function App() {
@@ -308,8 +312,8 @@ function App() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [argErrors, setArgErrors] = useState<TailorErrorItem[]>([]);
   const leftPane = useRef<HTMLDivElement | null>(null);
-  const serverCode = useRef("");
-  const serverArg = useRef("");
+  const [saveError, setSaveError] = useState<string | undefined>();
+  const saver = useMemo(() => createSaver({ write: putFile, onError: setSaveError }), []);
   const localId = useRef(0);
   const dark = useDarkTheme();
 
@@ -320,8 +324,8 @@ function App() {
     const handle = (event: string, data: unknown) => {
       if (event === "state") {
         const state = data as ServerState;
-        serverCode.current = state.code;
-        serverArg.current = state.arg;
+        saver.setServer("code", state.code);
+        saver.setServer("arg", state.arg);
         setCode(state.code);
         setArg(state.arg);
         setPaths({
@@ -350,11 +354,11 @@ function App() {
         const change = data as { code?: string; arg?: string; origin?: string };
         if (change.origin === PAGE_ID) return;
         if (change.code !== undefined) {
-          serverCode.current = change.code;
+          saver.setServer("code", change.code);
           setCode(change.code);
         }
         if (change.arg !== undefined) {
-          serverArg.current = change.arg;
+          saver.setServer("arg", change.arg);
           setArg(change.arg);
           setArgErrors([]);
         }
@@ -386,24 +390,20 @@ function App() {
   );
 
   useEffect(() => {
-    if (!loaded || code === serverCode.current) return;
-    const timer = setTimeout(() => {
-      serverCode.current = code;
-      put({ code });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [code, loaded]);
+    if (loaded) saver.edit("code", code);
+  }, [code, loaded, saver]);
 
   useEffect(() => {
-    if (!loaded || !argValid || arg === serverArg.current) return;
-    const timer = setTimeout(() => {
-      serverArg.current = arg;
-      put({ arg });
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [arg, argValid, loaded]);
+    if (loaded) saver.edit("arg", arg, argValid);
+  }, [arg, argValid, loaded, saver]);
 
   async function start() {
+    const notSaved = await saver.flush();
+    if (notSaved !== undefined) {
+      const text = `Not started: the latest edit was not saved (${notSaved}).`;
+      setEntries((current) => [{ type: "failure", text, id: --localId.current }, ...current]);
+      return;
+    }
     const response = await fetch("start", { method: "POST" });
     if (!response.ok) {
       const text = (await response.text()).trim() || "Request failed";
@@ -436,6 +436,11 @@ function App() {
           {watching ? "Watching" : status === "stopped" ? "Stopped" : "Idle"}
         </Badge>
       </div>
+      {saveError === undefined ? null : (
+        <div className="fr-invalid fr-save-error" role="alert">
+          Not saved: {saveError}. It is tried again on the next edit and when you press Run.
+        </div>
+      )}
       <div className="fr-main">
         <div className="fr-pane" ref={leftPane}>
           <div className="fr-label">

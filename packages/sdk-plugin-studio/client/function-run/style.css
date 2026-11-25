@@ -93,6 +93,10 @@ html {
   font-size: 0.8125rem;
 }
 
+.fr-save-error {
+  padding: 0 0.75rem;
+}
+
 .fr-splitter {
   background: var(--border, currentColor);
   border-radius: 2px;
