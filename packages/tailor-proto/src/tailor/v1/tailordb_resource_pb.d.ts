@@ -5,7 +5,7 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Namespace, Script } from "./resource_pb";
-import type { Duration, Timestamp, Value } from "@bufbuild/protobuf/wkt";
+import type { Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/tailordb_resource.proto.
@@ -368,6 +368,22 @@ export declare type TailorDBType_FieldConfig = Message<"tailor.v1.TailorDBType.F
    * @generated from field: bool optional_on_create = 19;
    */
   optionalOnCreate: boolean;
+
+  /**
+   * In a request, the name this field had before: declares a rename. In a
+   * response, set only while the field keeps that name as a deprecated name,
+   * together with keep_old_name. Top-level fields only.
+   *
+   * @generated from field: optional string renamed_from = 20;
+   */
+  renamedFrom?: string;
+
+  /**
+   * Keeps the renamed_from name usable as a deprecated name.
+   *
+   * @generated from field: bool keep_old_name = 21;
+   */
+  keepOldName: boolean;
 };
 
 /**
@@ -792,6 +808,31 @@ export declare type TailorDBType_Permission_Operand = Message<"tailor.v1.TailorD
      */
     value: Value;
     case: "value";
+  } | {
+    /**
+     * Cross-relation path operands. segments is a
+     * list of relationship names ending in a field name, evaluated as an EXISTS
+     * semijoin against the derived __authz index. Anchored like the scalar field
+     * operands (record for read/delete, old_record/new_record for update).
+     * Gated by a feature flag; validate rejects these
+     * while the flag is off, so there are no physical side-effects.
+     *
+     * @generated from field: tailor.v1.TailorDBType.Permission.PathOperand record_path = 6;
+     */
+    value: TailorDBType_Permission_PathOperand;
+    case: "recordPath";
+  } | {
+    /**
+     * @generated from field: tailor.v1.TailorDBType.Permission.PathOperand old_record_path = 7;
+     */
+    value: TailorDBType_Permission_PathOperand;
+    case: "oldRecordPath";
+  } | {
+    /**
+     * @generated from field: tailor.v1.TailorDBType.Permission.PathOperand new_record_path = 8;
+     */
+    value: TailorDBType_Permission_PathOperand;
+    case: "newRecordPath";
   } | { case: undefined; value?: undefined };
 };
 
@@ -800,6 +841,26 @@ export declare type TailorDBType_Permission_Operand = Message<"tailor.v1.TailorD
  * Use `create(TailorDBType_Permission_OperandSchema)` to create a new message.
  */
 export declare const TailorDBType_Permission_OperandSchema: GenMessage<TailorDBType_Permission_Operand>;
+
+/**
+ * @generated from message tailor.v1.TailorDBType.Permission.PathOperand
+ */
+export declare type TailorDBType_Permission_PathOperand = Message<"tailor.v1.TailorDBType.Permission.PathOperand"> & {
+  /**
+   * At least one relationship hop plus the terminal field name, and at most the hop
+   * limit the compiler enforces, so a walk that cannot be built is rejected before it is
+   * declared. Segments carry the same charset the fields and relationships they name do.
+   *
+   * @generated from field: repeated string segments = 1;
+   */
+  segments: string[];
+};
+
+/**
+ * Describes the message tailor.v1.TailorDBType.Permission.PathOperand.
+ * Use `create(TailorDBType_Permission_PathOperandSchema)` to create a new message.
+ */
+export declare const TailorDBType_Permission_PathOperandSchema: GenMessage<TailorDBType_Permission_PathOperand>;
 
 /**
  * @generated from enum tailor.v1.TailorDBType.Permission.Operator
@@ -1413,12 +1474,8 @@ export declare type TailorDBReplicationTableStatus = Message<"tailor.v1.TailorDB
   backfillCompletedAt?: Timestamp;
 
   /**
-   * @generated from field: google.protobuf.Duration lag = 5;
-   */
-  lag?: Duration;
-
-  /**
-   * Last error, when state is ERROR.
+   * Why the table isn't STREAMING: the last error when ERROR, or what a
+   * PENDING or BACKFILLING table waits for.
    *
    * @generated from field: string message = 6;
    */

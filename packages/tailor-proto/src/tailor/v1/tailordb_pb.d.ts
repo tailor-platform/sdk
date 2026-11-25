@@ -1268,3 +1268,49 @@ export declare type GetTailorDBReplicationStatusResponse = Message<"tailor.v1.Ge
  */
 export declare const GetTailorDBReplicationStatusResponseSchema: GenMessage<GetTailorDBReplicationStatusResponse>;
 
+/**
+ * @generated from message tailor.v1.RepairTailorDBReplicationRequest
+ */
+export declare type RepairTailorDBReplicationRequest = Message<"tailor.v1.RepairTailorDBReplicationRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * Types whose tables to repair; empty repairs the tables in ERROR.
+   *
+   * @generated from field: repeated string type_names = 3;
+   */
+  typeNames: string[];
+};
+
+/**
+ * Describes the message tailor.v1.RepairTailorDBReplicationRequest.
+ * Use `create(RepairTailorDBReplicationRequestSchema)` to create a new message.
+ */
+export declare const RepairTailorDBReplicationRequestSchema: GenMessage<RepairTailorDBReplicationRequest>;
+
+/**
+ * @generated from message tailor.v1.RepairTailorDBReplicationResponse
+ */
+export declare type RepairTailorDBReplicationResponse = Message<"tailor.v1.RepairTailorDBReplicationResponse"> & {
+  /**
+   * Types whose tables went to PENDING for a repair.
+   *
+   * @generated from field: repeated string type_names = 1;
+   */
+  typeNames: string[];
+};
+
+/**
+ * Describes the message tailor.v1.RepairTailorDBReplicationResponse.
+ * Use `create(RepairTailorDBReplicationResponseSchema)` to create a new message.
+ */
+export declare const RepairTailorDBReplicationResponseSchema: GenMessage<RepairTailorDBReplicationResponse>;
+
