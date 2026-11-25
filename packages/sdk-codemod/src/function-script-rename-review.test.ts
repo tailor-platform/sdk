@@ -42,6 +42,16 @@ describe("function script rename", () => {
       "npx @tailor-platform/sdk function -e .env script a.ts\n",
     ],
     [
+      "a command folded across lines in YAML",
+      "ci.yml",
+      "run: >\n  tailor function\n  script a.ts\n",
+    ],
+    [
+      "a command with a global option folded across lines in YAML",
+      "ci.yml",
+      "run: >\n  tailor --json function\n  script a.ts\n",
+    ],
+    [
       "an argv array with a spaced option value",
       "run.ts",
       "spawn('tailor', ['function', '--envFile', '.env local', 'script', 'a.ts']);\n",
