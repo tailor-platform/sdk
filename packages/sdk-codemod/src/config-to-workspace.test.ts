@@ -1451,6 +1451,57 @@ describe("v3/config-to-workspace", () => {
   );
 
   test.each([
+    [
+      "both configs get it",
+      "{ admin: {} }",
+      '{ directory: "./m", machineUser: process.env.MIGRATION_USER! }',
+      [uncheckedMigrationUser, uncheckedMigrationUser],
+    ],
+    ["only the second config gets it", "{}", '{ directory: "./m" }', [null, firstUnknown]],
+  ])(
+    "reports a migration finding of configs written alike at each config's line when %s",
+    async (_, bUsers, migration, messages) => {
+      const config = (name: string, users: string) =>
+        lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          `const auth = defineAuth("${name}-auth", { machineUsers: ${users} });`,
+          "export default defineConfig({",
+          `  name: "${name}",`,
+          '  env: { APP_ENV: "development", LOG_LEVEL: "debug", REGION: "asia-northeast1" },',
+          "  auth,",
+          "  db: {",
+          `    ${name}: {`,
+          '      files: ["./db/*.ts"],',
+          `      migration: ${migration},`,
+          "    },",
+          "  },",
+          "});",
+        );
+      const project = createProject({
+        "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+        "a/tailor.config.ts": config("a", "{ admin: {} }"),
+        "b/tailor.config.ts": config("b", bUsers),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      const migrationLines = project
+        .read("tailor.config.ts")!
+        .split("\n")
+        .flatMap((text, index) => (text.includes("migration:") ? [index + 1] : []));
+      expect(
+        findingsOf(result)
+          .filter(({ file }) => file === "tailor.config.ts")
+          .map(({ line, message }) => ({ line, message })),
+      ).toEqual(
+        messages.flatMap((message, member) =>
+          message === null ? [] : [{ line: migrationLines[member], message }],
+        ),
+      );
+    },
+  );
+
+  test.each([
     ["only one Auth service defines it", '"seeder"', "{ machineUsers: { admin: {} } }", []],
     [
       "no machine user name is defined by several Auth services",

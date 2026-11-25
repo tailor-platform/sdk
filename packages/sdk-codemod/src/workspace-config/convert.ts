@@ -12,7 +12,9 @@ import {
   collectSections,
   machineUserAmbiguity,
   renderWorkspaceObject,
+  shiftPlacements,
   type GroupFacts,
+  type Placement,
 } from "./sections";
 import type { ProjectChanges, ProjectFiles } from "../types";
 
@@ -55,18 +57,36 @@ function groupFacts(members: readonly ConfigModule[]): GroupFacts {
  * @param report - The report, on a member of the merge
  * @param outputPath - Project-relative path of the workspace config
  * @param output - The workspace config's content
+ * @param placements - Where the members' pieces landed in `output`
  * @returns The report on the workspace config
  */
-function movedReport(report: Report, outputPath: string, output: string): Report {
+function movedReport(
+  report: Report,
+  outputPath: string,
+  output: string,
+  placements: readonly Placement[],
+): Report {
   if (!("node" in report)) return report;
   const { node } = report;
+  const { start, end } = node.range();
+  const placement = placements.find(
+    (candidate) =>
+      candidate.file === report.file &&
+      candidate.node.range().start.index <= start.index &&
+      end.index <= candidate.node.range().end.index,
+  );
+  const from = placement?.start ?? 0;
   const at = movedIndex(
     node.getRoot().root().text(),
-    node.range().start.index,
+    start.index,
     node.text().split("\n", 1)[0]!.length,
-    output,
+    output.slice(from, placement?.end),
   );
-  return { ...toFinding(report), file: outputPath, line: at === -1 ? 1 : lineOfIndex(output, at) };
+  return {
+    ...toFinding(report),
+    file: outputPath,
+    line: lineOfIndex(output, from + Math.max(at, 0)),
+  };
 }
 
 class Conversion {
@@ -123,7 +143,7 @@ class Conversion {
       this.changes.warnings.push(...sections.warnings);
       this.changes.writes[member.path] = toDefineWorkspaceInPlace(
         member,
-        renderWorkspaceObject(sections),
+        renderWorkspaceObject(sections).text,
       );
     } else {
       this.changes.writes[member.path] = toDefineApp(member);
@@ -214,13 +234,13 @@ class Conversion {
     const statements = composed.statements
       .filter((block) => block.length > 0)
       .map((block) => block.join("\n"));
-    const text = [
-      imports.join("\n"),
-      ...statements,
-      `export default defineWorkspace(${renderWorkspaceObject(sections)});`,
-      ...(pluginsText === null ? [] : [pluginsText]),
-    ].join("\n\n");
+    const head = `${[imports.join("\n"), ...statements, ""].join("\n\n")}export default defineWorkspace(`;
+    const object = renderWorkspaceObject(sections);
+    const text = [`${head}${object.text});`, ...(pluginsText === null ? [] : [pluginsText])].join(
+      "\n\n",
+    );
     const output = `${text}\n`;
+    const placements = shiftPlacements(object.placements, head.length);
     this.changes.writes[outputPath] = output;
     for (const member of members) this.converted.add(member.path);
     Object.assign(this.changes.writes, rewrites.writes, references.writes);
@@ -236,7 +256,9 @@ class Conversion {
         ambiguity === "shared"
           ? `seedPlugin seeds as machine user "${name}", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.`
           : "The conversion cannot tell whether several Auth services of the merged workspace define the machine user seedPlugin seeds as; write it as { namespace, machineUserName } with the Auth service it belongs to.";
-      this.changes.findings.push(movedReport({ file, node, message }, outputPath, output));
+      this.changes.findings.push(
+        movedReport({ file, node, message }, outputPath, output, placements),
+      );
     }
     for (const name of new Set(pluginNames)) {
       const count = pluginNames.filter((candidate) => candidate === name).length;
@@ -253,7 +275,7 @@ class Conversion {
 
     this.changes.findings.push(
       ...[...composed.findings, ...sections.findings].map((report) =>
-        movedReport(report, outputPath, output),
+        movedReport(report, outputPath, output, placements),
       ),
       ...rewrites.findings,
       ...references.findings,

@@ -55,6 +55,8 @@ type Piece = {
   text: string;
   indent: string;
   node?: SgNode;
+  /** Project-relative path of the config `node` is in. */
+  file?: string;
   /** For a files patterns entry: its key and pattern texts, to merge with another config's. */
   patterns?: { key: string; elements: string[] };
 };
@@ -112,7 +114,12 @@ export function machineUserAmbiguity(
 }
 
 function pieceOf(member: ConfigModule, node: SgNode, edits: readonly TextEdit[] = []): Piece {
-  return { text: editedText(node, edits), indent: lineIndent(member.module.source, node), node };
+  return {
+    text: editedText(node, edits),
+    indent: lineIndent(member.module.source, node),
+    node,
+    file: member.path,
+  };
 }
 
 function objectValue(node: SgNode | null | undefined): SgNode | null {
@@ -698,13 +705,33 @@ export function collectSections(
   return new SectionsBuilder(cache, members, outputPath, facts).build();
 }
 
+/** Rendered text, with where each piece from a config that it wrote on lines of its own landed. */
+type Rendered = { text: string; placements: Placement[] };
+
+/** The range of a rendered text that a config's node was rendered to. */
+export type Placement = { file: string; node: SgNode; start: number; end: number };
+
+/**
+ * Placements in a text that another text holds at an offset, as placements in that other text.
+ * @param placements - The placements
+ * @param offset - Index of the text in the other text
+ * @returns The placements in the other text
+ */
+export function shiftPlacements(placements: readonly Placement[], offset: number): Placement[] {
+  return placements.map((placement) => ({
+    ...placement,
+    start: placement.start + offset,
+    end: placement.end + offset,
+  }));
+}
+
 function inlineOrBlock(
   pieces: readonly Piece[],
   indent: string,
   open: "{" | "[",
   prefixLength: number,
   allowInline: boolean,
-): string {
+): Rendered {
   const close = open === "{" ? "}" : "]";
   const pad = open === "{" ? " " : "";
   const inline = `${open}${pad}${pieces.map((piece) => piece.text).join(", ")}${pad}${close}`;
@@ -713,47 +740,71 @@ function inlineOrBlock(
     !inline.includes("\n") &&
     indent.length + prefixLength + inline.length + 1 <= MAX_INLINE
   ) {
-    return inline;
+    return { text: inline, placements: [] };
   }
   const inner = `${indent}  `;
-  const body = pieces.map(
-    (piece) => `${inner}${reindent(piece.text, piece.indent, inner, piece.node)},`,
-  );
-  return [open, ...body, `${indent}${close}`].join("\n");
+  let text = open;
+  const placements: Placement[] = [];
+  for (const piece of pieces) {
+    const rendered = reindent(piece.text, piece.indent, inner, piece.node);
+    text += `\n${inner}`;
+    if (piece.file && piece.node) {
+      placements.push({
+        file: piece.file,
+        node: piece.node,
+        start: text.length,
+        end: text.length + rendered.length,
+      });
+    }
+    text += `${rendered},`;
+  }
+  return { text: `${text}\n${indent}${close}`, placements };
 }
 
 /**
  * Render the workspace config object.
  * @param sections - The sections
- * @returns The object literal, starting with `{`, written for the top level
+ * @returns The object literal, starting with `{`, written for the top level, and where the configs'
+ * pieces it wrote on lines of their own landed in it
  */
-export function renderWorkspaceObject(sections: WorkspaceSections): string {
-  const lines: string[] = ["{"];
+export function renderWorkspaceObject(sections: WorkspaceSections): Rendered {
+  let text = "{";
+  const placements: Placement[] = [];
+  const addLine = (head: string, value: Rendered) => {
+    text += `\n${head}`;
+    placements.push(...shiftPlacements(value.placements, text.length));
+    text += `${value.text},`;
+  };
   for (const key of SECTION_ORDER) {
     const section = sections.values.get(key);
     if (!section) continue;
     const prefix = `${key}: `.length + 2;
-    const value =
+    addLine(
+      `  ${key}: `,
       section.whole && section.contributors === 1
-        ? reindent(section.whole.text, section.whole.indent, "  ", section.whole.node)
-        : inlineOrBlock(section.items, "  ", section.open, prefix, INLINE_SECTIONS.has(key));
-    lines.push(`  ${key}: ${value},`);
+        ? {
+            text: reindent(section.whole.text, section.whole.indent, "  ", section.whole.node),
+            placements: [],
+          }
+        : inlineOrBlock(section.items, "  ", section.open, prefix, INLINE_SECTIONS.has(key)),
+    );
   }
-  lines.push("  apps: {");
+  text += "\n  apps: {";
   for (const app of sections.apps) {
     const pieces: Piece[] = [...app.settings];
     for (const service of ["db", "resolver", "auth", "idp"] as const) {
       const expressions = app.lists.get(service);
       if (!expressions) continue;
-      const text =
-        service === "auth" || service === "idp"
-          ? `${service}: ${expressions[0]}`
-          : `${service}: [${expressions.join(", ")}]`;
-      pieces.push({ text, indent: "" });
+      pieces.push({
+        text:
+          service === "auth" || service === "idp"
+            ? `${service}: ${expressions[0]}`
+            : `${service}: [${expressions.join(", ")}]`,
+        indent: "",
+      });
     }
     const key = isIdentifier(app.name) ? app.name : JSON.stringify(app.name);
-    lines.push(`    ${key}: ${inlineOrBlock(pieces, "    ", "{", key.length + 6, true)},`);
+    addLine(`    ${key}: `, inlineOrBlock(pieces, "    ", "{", key.length + 6, true));
   }
-  lines.push("  },", "}");
-  return lines.join("\n");
+  return { text: `${text}\n  },\n}`, placements };
 }
