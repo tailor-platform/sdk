@@ -312,8 +312,8 @@ export default {
           if (!block) return;
           const documented = paramNamesFromJsdoc(block);
           for (const slot of functionParamSlots(node)) {
-            // A slot with no extractable names (e.g. a TypeScript-only
-            // `this:` parameter) is treated as documented.
+            // A slot with no extractable names (e.g. a constructor parameter
+            // property) is treated as documented.
             if (slot.names.length === 0) continue;
             const missing = slot.names.find((n) => !documented.has(n));
             if (missing) {
