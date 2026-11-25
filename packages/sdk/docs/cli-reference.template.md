@@ -291,8 +291,8 @@ read them:
   without a checkpoint, do not match `0000`.
 - `MIGRATION_TEST_SOURCE_AHEAD`: a source namespace's checkpoint is past the latest local migration.
 - `MIGRATION_TEST_SOURCE_REPAIR_PENDING`: a source namespace's checkpoint is waiting for the reset
-  to `0000` that a deploy applies after a re-baseline. When the namespace also records a migration
-  in progress, `test` reports the error that deploy stops with instead.
+  to `0000` that a deploy applies after a re-baseline. When any namespace waiting for that reset
+  also records a migration in progress, `test` reports the error that deploy stops with instead.
 - `MIGRATION_TEST_SOURCE_CLEANUP_PENDING`: a source namespace still has tables that the migration
   at its checkpoint removed.
 - `MIGRATION_TEST_SOURCE_CHANGED`: with `--data clone`, the source workspace changed between

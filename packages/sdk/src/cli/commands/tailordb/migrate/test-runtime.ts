@@ -607,13 +607,16 @@ export function assertSourceMatchesCheckpoints(
         : `Run ${validateHint} to check the migration history and source schema, or ${statusHint} to inspect the source workspace's checkpoint.`,
     });
   }
-  const pendingRepair = checks.find((check) => check.checkpointRepair);
-  if (pendingRepair) {
-    const conflict = checkpointRepairInProgressConflict(pendingRepair.namespace, {
-      inProgress: pendingRepair.migrationInProgress ?? null,
-      inProgressInvalid: pendingRepair.migrationInProgressInvalid ?? false,
+  const pendingRepairs = checks.filter((check) => check.checkpointRepair);
+  for (const repair of pendingRepairs) {
+    const conflict = checkpointRepairInProgressConflict(repair.namespace, {
+      inProgress: repair.migrationInProgress ?? null,
+      inProgressInvalid: repair.migrationInProgressInvalid ?? false,
     });
     if (conflict) throw conflict;
+  }
+  const pendingRepair = pendingRepairs[0];
+  if (pendingRepair) {
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
       message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,

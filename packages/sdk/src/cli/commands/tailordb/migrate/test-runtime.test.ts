@@ -965,14 +965,22 @@ describe("migration test runtime", () => {
       },
     },
   ])(
-    "rejects a source with a pending checkpoint repair and $record with the error its deploy stops with",
+    "rejects source namespaces with pending checkpoint repairs, the later one with $record, with the error the deploy stops with",
     ({ inProgress, error }) => {
+      const checkpointRepair = {
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      } as const;
       expect(() =>
         assertSourceMatchesCheckpoints(
           [
+            sourceCheck({ namespace: "a", remoteMigrationNumber: 5, checkpointRepair }),
             sourceCheck({
+              namespace: "b",
               remoteMigrationNumber: 5,
-              checkpointRepair: { from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
+              checkpointRepair,
               ...inProgress,
             }),
           ],
