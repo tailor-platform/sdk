@@ -91,7 +91,7 @@ class Conversion {
       return;
     }
     if (idps.length > 1) {
-      const sections = collectSections([member], member.path, groupFacts([member]));
+      const sections = collectSections(this.cache, [member], member.path, groupFacts([member]));
       if (sections.stops.length > 0) {
         this.changes.findings.push(...sections.stops);
         return;
@@ -137,7 +137,7 @@ class Conversion {
     }
     const composed = composeMembers(this.cache, members, outputPath);
     const facts = groupFacts(composed.members);
-    const sections = collectSections(composed.members, outputPath, facts);
+    const sections = collectSections(this.cache, composed.members, outputPath, facts);
     const stops = [...composed.stops, ...sections.stops];
     const plugins = composed.plugins ?? [];
     if (plugins.some((plugin) => /^seedPlugin\s*\(/u.test(plugin))) {

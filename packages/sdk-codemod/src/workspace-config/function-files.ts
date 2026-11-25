@@ -2,7 +2,13 @@ import * as path from "pathe";
 import picomatch from "picomatch";
 import { arrayElements, entryKey, objectEntries, pairValue } from "../ast-grep-helpers";
 import { SOURCE_EXTENSIONS } from "../walk-files";
-import { callArguments, calleeName, type ConfigModule } from "./config-module";
+import {
+  callArguments,
+  calleeName,
+  entryValue,
+  resolveString,
+  type ConfigModule,
+} from "./config-module";
 import { literalText, type ModuleCache, type Report } from "./project";
 import { addProperty, applyEdits, replaceNode, type TextEdit } from "./text";
 import type { GroupFacts } from "./sections";
@@ -186,10 +192,12 @@ export function rewriteFunctionFiles(
     };
 
     if (facts.authCount > 1) {
-      for (const pair of module.root.findAll({ rule: { kind: "pair" } })) {
+      for (const pair of module.root.findAll({
+        rule: { any: [{ kind: "pair" }, { kind: "shorthand_property_identifier" }] },
+      })) {
         if (entryKey(pair) !== "invoker") continue;
-        const value = pairValue(pair);
-        const name = literalText(value);
+        const value = entryValue(pair);
+        const name = resolveString(cache, module, value);
         if (name === null || !value) continue;
         if (facts.machineUsers === null) {
           report(
@@ -205,7 +213,7 @@ export function rewriteFunctionFiles(
         needs(pair, "Auth service", owner?.authName, (auth) =>
           replaceNode(
             value,
-            `{ namespace: ${JSON.stringify(auth)}, machineUserName: ${JSON.stringify(name)} }`,
+            `${value === pair ? "invoker: " : ""}{ namespace: ${JSON.stringify(auth)}, machineUserName: ${value.text()} }`,
           ),
         );
       }

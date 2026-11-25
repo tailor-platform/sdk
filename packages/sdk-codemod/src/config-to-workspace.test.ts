@@ -211,6 +211,17 @@ describe("v3/config-to-workspace", () => {
         '  operation: { kind: "function", body: () => {}, invoker: "admin" },',
         "});",
       ),
+      "apps/b/executors/report.ts": lines(
+        'import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";',
+        "",
+        'const invoker = "admin";',
+        "",
+        "export default createExecutor({",
+        '  name: "report",',
+        '  trigger: scheduleTrigger({ cron: "0 * * * *" }),',
+        '  operation: { kind: "function", body: () => {}, invoker },',
+        "});",
+      ),
     });
 
     const result = await runOnProject(CODEMODS, project);
@@ -236,6 +247,9 @@ describe("v3/config-to-workspace", () => {
     );
     expect(project.read("apps/b/executors/sync.ts")).toContain(
       'invoker: { namespace: "b-auth", machineUserName: "admin" } },',
+    );
+    expect(project.read("apps/b/executors/report.ts")).toContain(
+      'invoker: { namespace: "b-auth", machineUserName: invoker } },',
     );
     expect(findingsOf(result).map(({ file, message }) => ({ file, message }))).toEqual([
       {
@@ -1031,13 +1045,32 @@ describe("v3/config-to-workspace", () => {
 
   const unreadMigration =
     "`migration` cannot be read from the source, and the merged workspace has several Auth services; set `migration.machineUser` to the machine user migrations ran as, which only one Auth service may define.";
+  const sharedMigrationUser =
+    'Migrations run as machine user "admin", which several Auth services of the merged workspace define, and `migration.machineUser` cannot name the Auth service.';
+  const uncheckedMigrationUser =
+    "The conversion cannot tell whether several Auth services of the merged workspace define the machine user `migration.machineUser` names; check that only one does, since `migration.machineUser` cannot name the Auth service.";
   test.each([
     ["in a variable", "migration", unreadMigration],
     ["with a spread", '{ ...base, directory: "./migrations" }', unreadMigration],
     [
       "with a spread before a machineUser two Auth services define",
       '{ ...base, machineUser: "admin" }',
-      'Migrations run as machine user "admin", which several Auth services of the merged workspace define, and `migration.machineUser` cannot name the Auth service.',
+      sharedMigrationUser,
+    ],
+    [
+      "with a machineUser held in a const",
+      '{ directory: "./migrations", machineUser: mu }',
+      sharedMigrationUser,
+    ],
+    [
+      "with a shorthand machineUser",
+      '{ directory: "./migrations", machineUser }',
+      sharedMigrationUser,
+    ],
+    [
+      "with a machineUser that cannot be read",
+      '{ directory: "./migrations", machineUser: process.env.MIGRATION_USER }',
+      uncheckedMigrationUser,
     ],
   ])(
     "checks the machine user of a migration %s when the merge has several Auth services",
@@ -1049,6 +1082,8 @@ describe("v3/config-to-workspace", () => {
           'const auth = defineAuth("a-auth", { machineUsers: { seeder: {}, admin: {} } });',
           'const migration = { directory: "./migrations" };',
           "const base = {};",
+          'const mu = "admin";',
+          'const machineUser = "admin";',
           `export default defineConfig({ name: "a", auth, db: { a: { files: [], migration: ${migration} } } });`,
         ),
         "b/tailor.config.ts": lines(
@@ -1066,6 +1101,49 @@ describe("v3/config-to-workspace", () => {
           .filter(({ file }) => file === "tailor.config.ts")
           .map((finding) => finding.message),
       ).toEqual([message]);
+    },
+  );
+
+  test.each([
+    ["only one Auth service defines it", '"seeder"', "{ admin: {} }", []],
+    [
+      "no machine user name is defined by several Auth services",
+      "process.env.MIGRATION_USER",
+      "{ other: {} }",
+      [],
+    ],
+    [
+      "an Auth service's machine users cannot be read",
+      '"admin"',
+      "users",
+      [uncheckedMigrationUser],
+    ],
+  ])(
+    "checks the machine user of a migration against the Auth services when %s",
+    async (_, machineUser, bMachineUsers, messages) => {
+      const project = createProject({
+        "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+        "a/tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          'const auth = defineAuth("a-auth", { machineUsers: { seeder: {}, admin: {} } });',
+          `export default defineConfig({ name: "a", auth, db: { a: { files: [], migration: { directory: "./migrations", machineUser: ${machineUser} } } } });`,
+        ),
+        "b/tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          "const users = { admin: {} };",
+          `const bAuth = defineAuth("b-auth", { machineUsers: ${bMachineUsers} });`,
+          'export default defineConfig({ name: "b", auth: bAuth });',
+        ),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      expect(project.read("tailor.config.ts")).toContain(`machineUser: ${machineUser} }`);
+      expect(
+        findingsOf(result)
+          .filter(({ file }) => file === "tailor.config.ts")
+          .map((finding) => finding.message),
+      ).toEqual(messages);
     },
   );
 

@@ -89,11 +89,20 @@ function isIdentifierNode(node: SgNode | null | undefined): node is SgNode {
   return node?.kind() === "identifier" || node?.kind() === "shorthand_property_identifier";
 }
 
+/**
+ * The value of an object entry: the identifier of a shorthand property, or a pair's value.
+ * @param entry - The entry
+ * @returns The value, or null for a spread or a method
+ */
+export function entryValue(entry: SgNode): SgNode | null {
+  return entry.kind() === "shorthand_property_identifier" ? entry : pairValue(entry);
+}
+
 function entriesOf(object: SgNode): ConfigEntry[] {
   return objectEntries(object).map((node) => ({
     key: entryKey(node),
     node,
-    value: node.kind() === "shorthand_property_identifier" ? node : pairValue(node),
+    value: entryValue(node),
   }));
 }
 
@@ -152,7 +161,7 @@ function topLevelInitializer(root: SgNode, name: string): SgNode | null {
  * @param node - Node to read
  * @returns The string, or null
  */
-function resolveString(
+export function resolveString(
   cache: ModuleCache,
   module: SourceModule,
   node: SgNode | null,
@@ -209,8 +218,7 @@ function definitionCall(
 function objectEntryValue(object: SgNode | undefined, key: string): SgNode | null {
   if (object?.kind() !== "object") return null;
   const entry = objectEntries(object).find((candidate) => entryKey(candidate) === key);
-  if (!entry) return null;
-  return entry.kind() === "shorthand_property_identifier" ? entry : pairValue(entry);
+  return entry ? entryValue(entry) : null;
 }
 
 function isExternalObject(node: SgNode | null): boolean {

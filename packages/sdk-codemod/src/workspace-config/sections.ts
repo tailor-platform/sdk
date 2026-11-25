@@ -6,7 +6,8 @@ import {
   pairValue,
   staticEntries,
 } from "../ast-grep-helpers";
-import { literalText, type Report } from "./project";
+import { entryValue, resolveString, type ConfigModule, type ServiceRef } from "./config-module";
+import { literalText, type ModuleCache, type Report } from "./project";
 import {
   addProperty,
   canRebaseFrom,
@@ -17,7 +18,6 @@ import {
   replaceNode,
   type TextEdit,
 } from "./text";
-import type { ConfigModule, ServiceRef } from "./config-module";
 import type { SgNode } from "@ast-grep/napi";
 
 const PATTERN_KEYS: ReadonlySet<string> = new Set(["files", "ignores", "job_files", "job_ignores"]);
@@ -123,6 +123,7 @@ class SectionsBuilder {
   private readonly outputDir: string;
 
   constructor(
+    private readonly cache: ModuleCache,
     private readonly members: readonly ConfigModule[],
     private readonly outputPath: string,
     private readonly facts: GroupFacts,
@@ -621,12 +622,21 @@ class SectionsBuilder {
       [...(this.facts.machineUsers?.values() ?? [])].filter((users) => users.includes(name)).length;
     const machineUser = machineUserAt === -1 ? undefined : entries[machineUserAt];
     if (machineUser) {
-      const name = literalText(pairValue(machineUser));
+      const name = resolveString(this.cache, member.module, entryValue(machineUser));
       if (name !== null && definers(name) > 1) {
         this.stop(
           member,
           machineUser,
           `Migrations run as machine user "${name}", which several Auth services of the merged workspace define, and \`migration.machineUser\` cannot name the Auth service.`,
+        );
+      } else if (
+        this.facts.machineUsers === null ||
+        (name === null && [...this.facts.machineUsers.values()].flat().some((n) => definers(n) > 1))
+      ) {
+        this.report(
+          member,
+          machineUser,
+          "The conversion cannot tell whether several Auth services of the merged workspace define the machine user `migration.machineUser` names; check that only one does, since `migration.machineUser` cannot name the Auth service.",
         );
       }
       return null;
@@ -658,17 +668,19 @@ class SectionsBuilder {
 
 /**
  * Collect the workspace config's sections from the members' `defineConfig()` objects.
+ * @param cache - Module cache, to read the values members import or declare
  * @param members - The configs to merge, in order
  * @param outputPath - Project-relative path of the workspace config
  * @param facts - What the sections need to know about the whole group
  * @returns The sections, warnings, findings, and the reasons the configs cannot be merged
  */
 export function collectSections(
+  cache: ModuleCache,
   members: readonly ConfigModule[],
   outputPath: string,
   facts: GroupFacts,
 ): WorkspaceSections {
-  return new SectionsBuilder(members, outputPath, facts).build();
+  return new SectionsBuilder(cache, members, outputPath, facts).build();
 }
 
 function inlineOrBlock(
