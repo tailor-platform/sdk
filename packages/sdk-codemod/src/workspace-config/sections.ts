@@ -602,13 +602,24 @@ class SectionsBuilder {
   ): TextEdit | null {
     if (this.facts.authCount < 2) return null;
     const migration = objectEntries(namespace).find((entry) => entryKey(entry) === "migration");
-    const migrationObject = migration ? objectValue(pairValue(migration)) : null;
-    if (!migration || !migrationObject) return null;
+    if (!migration) return null;
+    const migrationObject = objectValue(pairValue(migration));
+    const entries = migrationObject ? objectEntries(migrationObject) : [];
+    const machineUserAt = entries.findLastIndex((entry) => entryKey(entry) === "machineUser");
+    if (
+      !migrationObject ||
+      entries.slice(machineUserAt + 1).some((entry) => entryKey(entry) === null)
+    ) {
+      this.report(
+        member,
+        migration,
+        "`migration` cannot be read from the source, and the merged workspace has several Auth services; set `migration.machineUser` to the machine user migrations ran as, which only one Auth service may define.",
+      );
+      return null;
+    }
     const definers = (name: string) =>
       [...(this.facts.machineUsers?.values() ?? [])].filter((users) => users.includes(name)).length;
-    const machineUser = objectEntries(migrationObject).find(
-      (entry) => entryKey(entry) === "machineUser",
-    );
+    const machineUser = machineUserAt === -1 ? undefined : entries[machineUserAt];
     if (machineUser) {
       const name = literalText(pairValue(machineUser));
       if (name !== null && definers(name) > 1) {

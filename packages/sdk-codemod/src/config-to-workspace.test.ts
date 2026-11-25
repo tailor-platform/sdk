@@ -1029,6 +1029,46 @@ describe("v3/config-to-workspace", () => {
     );
   });
 
+  const unreadMigration =
+    "`migration` cannot be read from the source, and the merged workspace has several Auth services; set `migration.machineUser` to the machine user migrations ran as, which only one Auth service may define.";
+  test.each([
+    ["in a variable", "migration", unreadMigration],
+    ["with a spread", '{ ...base, directory: "./migrations" }', unreadMigration],
+    [
+      "with a spread before a machineUser two Auth services define",
+      '{ ...base, machineUser: "admin" }',
+      'Migrations run as machine user "admin", which several Auth services of the merged workspace define, and `migration.machineUser` cannot name the Auth service.',
+    ],
+  ])(
+    "checks the machine user of a migration %s when the merge has several Auth services",
+    async (_, migration, message) => {
+      const project = createProject({
+        "package.json": deployedTogether("tailor.config.ts", "b/tailor.config.ts"),
+        "tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          'const auth = defineAuth("a-auth", { machineUsers: { seeder: {}, admin: {} } });',
+          'const migration = { directory: "./migrations" };',
+          "const base = {};",
+          `export default defineConfig({ name: "a", auth, db: { a: { files: [], migration: ${migration} } } });`,
+        ),
+        "b/tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          'const bAuth = defineAuth("b-auth", { machineUsers: { admin: {} } });',
+          'export default defineConfig({ name: "b", auth: bAuth });',
+        ),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      expect(project.read("tailor.config.ts")).toContain(`migration: ${migration} }`);
+      expect(
+        findingsOf(result)
+          .filter(({ file }) => file === "tailor.config.ts")
+          .map((finding) => finding.message),
+      ).toEqual([message]);
+    },
+  );
+
   test("leaves a second group of configs that would take the same workspace config path", async () => {
     const project = createProject({
       "package.json": `${JSON.stringify({
