@@ -277,6 +277,35 @@ describe("planFunctionRegistry", () => {
       expect(result.takeovers).toEqual([]);
     });
 
+    test("labels a resolver function of a workspace config with the applications that list its namespace", async () => {
+      const entry = { ...createEntry("resolver--orders--list"), pipelineNamespace: "orders" };
+      const listing = (name: string, namespace: string) => ({
+        name,
+        subgraphs: [{ Type: "pipeline", Name: namespace }],
+        authNamespace: undefined,
+        settings: {},
+      });
+
+      await planFunctionRegistry(
+        createMockClient([]),
+        workspaceId,
+        { kind: "workspace" },
+        [entry, createEntry("executor--sync")],
+        undefined,
+        [listing("shop", "orders"), listing("admin", "orders"), listing("landing", "pages")],
+      );
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:function_registry:resolver--orders--list$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.not.objectContaining({ onApps: expect.anything() }),
+      );
+    });
+
     test("labels are left alone when content and sdk version both match", async () => {
       const entry = createEntry("resolver/ns/getUser");
       const client = createMockClient([
@@ -763,10 +792,7 @@ describe("collectFunctionEntries", () => {
       staticWebsiteServices: [],
       secrets: [],
       env: {},
-      applications: [] as Application[],
     } as unknown as Application;
-    // Self-reference for applications array
-    (app as unknown as { applications: Application[] }).applications = [app];
     return app;
   }
 

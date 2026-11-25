@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { precompileTailorDBTypeScripts } from "#/cli/services/tailordb/hooks-validate-bundler";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { makeTempDir } from "#/cli/shared/test-helpers/temp-dir";
+import {
+  brandedDefault,
+  WORKSPACE_DB_SOURCE,
+  writeWorkspaceTables,
+} from "#/cli/shared/test-helpers/workspace-config";
 import { createContentMapperHandlers, evaluateConfigInProcess, type Evaluation } from "./mapper";
 import type * as HooksValidateBundler from "#/cli/services/tailordb/hooks-validate-bundler";
 
@@ -78,6 +83,26 @@ function projectWithoutTables(): ReturnType<typeof project> {
   const p = project();
   fs.writeFileSync(p.config, ORDER_TABLE_CONFIG);
   fs.mkdirSync(path.join(p.dir, "tailordb"));
+  return p;
+}
+
+const WORKSPACE_CONFIG = `import { definePlugins } from "@tailor-platform/sdk";
+import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+${brandedDefault(
+  "workspace-config",
+  `{
+  env: { stage: "dev" },
+  db: ${WORKSPACE_DB_SOURCE},
+  apps: { shop: { db: ["customer-db", "order-db"] } },
+}`,
+)}
+export const plugins = definePlugins(kyselyTypePlugin({ contentMapper: true }));
+`;
+
+function workspaceProject(): ReturnType<typeof project> {
+  const p = project();
+  fs.writeFileSync(p.config, WORKSPACE_CONFIG);
+  writeWorkspaceTables(p.dir, (name) => ORDER_TABLE.replace('"Order"', JSON.stringify(name)));
   return p;
 }
 
@@ -162,6 +187,23 @@ describe("content mapper", () => {
     });
     expect(result.text).toContain('status: "PAID" | "OPEN";');
     expect(result.text).toContain("createGetDB<Namespace>({ temporal: true })");
+  });
+
+  test("types db.tailor and registry.tailor from a workspace config, with every namespace it declares", async () => {
+    using p = workspaceProject();
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const db = await transform(handlers, "", DB_FILE);
+    const registry = await transform(handlers, "", REGISTRY_FILE);
+
+    expect(db.diagnostics).toEqual([]);
+    expect(db.text).toContain('"customer-db": {');
+    expect(db.text).toContain('"order-db": {');
+    expect(db.text).toContain('"ledger-db": {');
+    expect(registry.text).toContain("stage: string;");
+    expect(registry.text).toContain('workspace: "unset";');
   });
 
   test("types db.tailor without bundling the hook and validator scripts of the tables it reads", async () => {

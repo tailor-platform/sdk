@@ -12,8 +12,8 @@ export interface BundleAuthHooksOptions extends FunctionBundleSettings {
   configPath: string;
   /** Auth namespace name */
   authName: string;
-  /** Dot-path expression to reach the handler from the config's default export */
-  handlerAccessPath: string;
+  /** Key of the Auth service under the config's `auth`, when the config keys its Auth services by name */
+  authKey?: string;
   /** Environment variables to inject into the hook args */
   env?: Record<string, string | number | boolean>;
   /** Directory the tsconfig is resolved against */
@@ -32,14 +32,7 @@ export interface BundleAuthHooksOptions extends FunctionBundleSettings {
 export async function bundleAuthHooks(
   options: BundleAuthHooksOptions,
 ): Promise<Map<string, string>> {
-  const {
-    configPath,
-    authName,
-    handlerAccessPath,
-    env = {},
-    bundleLogLevel = "DEBUG",
-    baseDir,
-  } = options;
+  const { configPath, authName, authKey, env = {}, bundleLogLevel = "DEBUG", baseDir } = options;
 
   logger.newline();
   logger.log(`Bundling auth hook for ${styles.info(`"${authName}"`)}`);
@@ -59,7 +52,7 @@ export async function bundleAuthHooks(
     runtimeGlobals: false,
     entry: (absoluteConfigPath) => ml /* js */ `
       import _config from "${absoluteConfigPath}";
-      const __auth_hook_function = _config.${handlerAccessPath};
+      const __auth_hook_function = _config.auth${authKey === undefined ? "" : `[${JSON.stringify(authKey)}]`}.hooks.beforeLogin.handler;
       export async function main(args) {
         const env = ${JSON.stringify(env)};
         return await __auth_hook_function({ ...args, env });

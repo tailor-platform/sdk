@@ -27,10 +27,15 @@ export interface FrontendDefinition {
 export interface FrontendEnvContext {
   /** Upload destination for this frontend. */
   site: DeployedStaticWebsite;
-  /** Application whose config registers this frontend. */
+  /**
+   * Application whose config registers this frontend.
+   * @deprecated Read `applications`, or the config's sites from `staticWebsites`, instead. codemod: v3/plugin-context-application
+   */
   application: DeployedApplication;
   /** Every application in this deploy run. Read other configs' site URLs from their `staticWebsites`. */
   applications: readonly DeployedApplication[];
+  /** Static websites declared in the config that registers this frontend, keyed by name. */
+  staticWebsites: Readonly<Partial<Record<string, DeployedStaticWebsite>>>;
   workspaceId: string;
 }
 

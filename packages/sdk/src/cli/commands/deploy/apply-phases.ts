@@ -9,10 +9,17 @@ import {
   type planApplication,
 } from "./application";
 import { applyAuth, type planAuth } from "./auth";
+import { type DeploymentSource, sourceApplicationName } from "./deployment-target";
 import { applyExecutor, type planExecutor } from "./executor";
 import { applyFunctionRegistry, type planFunctionRegistry } from "./function-registry";
 import { applyIdP, type planIdP } from "./idp";
-import { type DeployOwner, withMetadataWriteBatch } from "./label";
+import {
+  type DeployOwner,
+  type DroppedOnAppLabels,
+  onAppLabelledResourceOf,
+  withMetadataWriteBatch,
+} from "./label";
+import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
@@ -27,17 +34,26 @@ import {
   applyWorkflowJobFunctionExecutionPolicy,
   type planWorkflowJobFunctionExecutionPolicy,
 } from "./workflow-execution-policy";
-import type { Application } from "#/cli/services/application";
+import type { ConfigServices, EnvOverrides } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { DeployApplication } from "./deploy-application";
 import type { MaintenanceReport } from "./tailordb/migration-timing";
 
-/** How long one application's TailorDB migrations kept tables in maintenance mode. */
+/** How long one config's TailorDB migrations kept tables in maintenance mode. */
 export interface TailorDBMaintenance extends MaintenanceReport {
-  application: string;
+  /** The application a `defineConfig()` config deploys; omitted for a workspace config. */
+  application?: string;
 }
 
 export type PlannedDeployment = {
-  readonly application: Readonly<Application>;
+  /** The config file the deployment builds. */
+  readonly source: DeploymentSource;
+  /** The services the deployment's config defines. */
+  readonly application: Readonly<ConfigServices>;
+  /** `env` values each service uses in place of the root values with the same keys. */
+  readonly envOverrides: EnvOverrides;
+  /** Applications the deployment plans. */
+  readonly applications: ReadonlyArray<DeployApplication>;
   /** Owner of the resources the deployment manages. */
   readonly owner: DeployOwner;
   /**
@@ -66,7 +82,10 @@ export type PlannedDeployment = {
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
-export type PlanResults = Omit<PlannedDeployment, "application" | "owner" | "forceApplyAll">;
+export type PlanResults = Omit<
+  PlannedDeployment,
+  "source" | "application" | "envOverrides" | "applications" | "owner" | "forceApplyAll"
+>;
 
 /**
  * Resource kinds whose plan cannot change between a deploy's first plan and
@@ -86,7 +105,10 @@ export type ReusablePlanKind =
 
 export function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
   const {
+    source: _source,
     application: _application,
+    envOverrides: _envOverrides,
+    applications: _applications,
     owner: _owner,
     forceApplyAll: _forceApplyAll,
     ...results
@@ -138,29 +160,53 @@ export async function preflightAllTailorDB(
  * `deployInternal` when `env` still holds an unresolved placeholder -- runs.
  * @param client - Operator client instance
  * @param deployments - Planned deployments to apply
+ * @returns The `sdk-on-app-*` labels left off resources the Platform had no room on
  */
 export async function applyPrerequisiteResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-): Promise<void> {
+): Promise<{ droppedOnAppLabels: OnAppLabelsDropped[] }> {
   const step = makeStep(deployments);
-  await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdatePrerequisiteServices", async () => {
-      await step("apply.secretManager.createUpdate", (d) =>
-        applySecretManager(applyClient, d.secretManager, "create-update", d.application),
-      );
-      await step("apply.staticWebsite.createUpdate", (d) =>
-        applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
-      );
-      await step("apply.aiGateway.createUpdate", (d) =>
-        applyAIGateway(applyClient, d.aiGateway, "create-update"),
-      );
-      await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
-      await step("apply.auth.createUpdatePrerequisites", (d) =>
-        applyAuth(applyClient, d.auth, "create-update-prerequisites"),
-      );
-    });
-  });
+  const droppedOnAppLabels: OnAppLabelsDropped[] = [];
+  await withMetadataWriteBatch(
+    client,
+    async (applyClient) => {
+      await withSpan("apply.createUpdatePrerequisiteServices", async () => {
+        await step("apply.secretManager.createUpdate", (d) =>
+          applySecretManager(applyClient, d.secretManager, "create-update", d.application),
+        );
+        await step("apply.staticWebsite.createUpdate", (d) =>
+          applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
+        );
+        await step("apply.aiGateway.createUpdate", (d) =>
+          applyAIGateway(applyClient, d.aiGateway, "create-update"),
+        );
+        await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
+        await step("apply.auth.createUpdatePrerequisites", (d) =>
+          applyAuth(applyClient, d.auth, "create-update-prerequisites"),
+        );
+      });
+    },
+    recordDroppedOnAppLabels(droppedOnAppLabels),
+  );
+  return { droppedOnAppLabels };
+}
+
+/** A resource the Platform had no room on for the `sdk-on-app-*` labels of these applications. */
+export type OnAppLabelsDropped = {
+  resourceType: ManagedResourceType;
+  name: string;
+  applications: string[];
+};
+
+function recordDroppedOnAppLabels(dropped: OnAppLabelsDropped[]) {
+  return ({ trn, applications }: DroppedOnAppLabels) => {
+    const { resourceType, name } = onAppLabelledResourceOf(trn);
+    dropped.push({ resourceType, name, applications });
+    logger.warn(
+      `${MANAGED_RESOURCE_LABELS[resourceType]} "${name}" has no room for more labels, so it is not labelled for these applications: ${applications.join(", ")}. Remove labels that tailor does not set from it to make room.`,
+    );
+  };
 }
 
 type HeldMaintenanceMode = {
@@ -185,7 +231,7 @@ async function releaseMaintenanceModes(
   for (const { deployment, release } of held) {
     try {
       const report = await release(client);
-      if (report) maintenance.push({ application: deployment.application.name, ...report });
+      if (report) maintenance.push(maintenanceOf(deployment, report));
     } catch (error) {
       if (!applyFailed && !firstError) {
         firstError = { error };
@@ -215,6 +261,8 @@ export type RemainingApplyResult = {
   maintenance: TailorDBMaintenance[];
   /** Applications whose labels the platform rejected for their count. */
   labelRejections: ApplicationLabelRejection[];
+  /** `sdk-on-app-*` labels left off resources the Platform had no room on. */
+  droppedOnAppLabels: OnAppLabelsDropped[];
 };
 
 /**
@@ -229,11 +277,13 @@ export async function applyRemainingResources(
 ): Promise<RemainingApplyResult> {
   const held: HeldMaintenanceMode[] = [];
   const labelRejections: ApplicationLabelRejection[] = [];
+  const droppedOnAppLabels: OnAppLabelsDropped[] = [];
   let maintenance: TailorDBMaintenance[];
   try {
     maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
       held,
       labelRejections,
+      droppedOnAppLabels,
     });
   } catch (error) {
     await releaseMaintenanceModes(client, held, true);
@@ -241,19 +291,29 @@ export async function applyRemainingResources(
   }
   const released = await releaseMaintenanceModes(client, held, false);
   const order = new Map(
-    deployments.map((deployment, index) => [deployment.application.name, index]),
+    deployments.map((deployment, index) => [sourceApplicationName(deployment.source), index]),
   );
   return {
     maintenance: [...maintenance, ...released].toSorted(
       (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
     ),
     labelRejections,
+    droppedOnAppLabels,
   };
+}
+
+function maintenanceOf(
+  deployment: PlannedDeployment,
+  report: MaintenanceReport,
+): TailorDBMaintenance {
+  const application = sourceApplicationName(deployment.source);
+  return application === undefined ? report : { application, ...report };
 }
 
 type RemainingApplyOutcomes = {
   held: HeldMaintenanceMode[];
   labelRejections: ApplicationLabelRejection[];
+  droppedOnAppLabels: OnAppLabelsDropped[];
 };
 
 async function applyRemainingResourcesHoldingMaintenanceMode(
@@ -261,63 +321,69 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
   deployments: ReadonlyArray<PlannedDeployment>,
   outcomes: RemainingApplyOutcomes,
 ): Promise<TailorDBMaintenance[]> {
-  const { held, labelRejections } = outcomes;
+  const { held, labelRejections, droppedOnAppLabels } = outcomes;
   const step = makeStep(deployments);
   const maintenance: TailorDBMaintenance[] = [];
 
-  await withMetadataWriteBatch(client, async (applyClient) => {
-    await withSpan("apply.createUpdateServices", async () => {
-      await step("apply.functionRegistry.createUpdate", (d) =>
-        applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
-      );
-      await step("apply.tailorDB.createUpdate", async (d) => {
-        const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
-          holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+  await withMetadataWriteBatch(
+    client,
+    async (applyClient) => {
+      await withSpan("apply.createUpdateServices", async () => {
+        await step("apply.functionRegistry.createUpdate", (d) =>
+          applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
+        );
+        await step("apply.tailorDB.createUpdate", async (d) => {
+          const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
+            holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
+          });
+          if (report) maintenance.push(maintenanceOf(d, report));
         });
-        if (report) maintenance.push({ application: d.application.name, ...report });
+        await step("apply.auth.createUpdateDependents", (d) =>
+          applyAuth(applyClient, d.auth, "create-update-dependents"),
+        );
+        await step("apply.pipeline.createUpdate", (d) =>
+          applyPipeline(applyClient, d.pipeline, "create-update"),
+        );
       });
-      await step("apply.auth.createUpdateDependents", (d) =>
-        applyAuth(applyClient, d.auth, "create-update-dependents"),
-      );
-      await step("apply.pipeline.createUpdate", (d) =>
-        applyPipeline(applyClient, d.pipeline, "create-update"),
-      );
-    });
 
-    await withSpan("apply.deleteSubgraphResources", async () => {
-      await forEachDeployment(deployments, (d) =>
-        applyPipeline(applyClient, d.pipeline, "delete-resources"),
-      );
-      await forEachDeployment(deployments, (d) =>
-        applyAuth(applyClient, d.auth, "delete-resources"),
-      );
-      await forEachDeployment(deployments, (d) => applyIdP(applyClient, d.idp, "delete-resources"));
-    });
-
-    await withSpan("apply.createUpdateApplication", async () => {
-      await forEachDeployment(deployments, async (d) => {
-        labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+      await withSpan("apply.deleteSubgraphResources", async () => {
+        await forEachDeployment(deployments, (d) =>
+          applyPipeline(applyClient, d.pipeline, "delete-resources"),
+        );
+        await forEachDeployment(deployments, (d) =>
+          applyAuth(applyClient, d.auth, "delete-resources"),
+        );
+        await forEachDeployment(deployments, (d) =>
+          applyIdP(applyClient, d.idp, "delete-resources"),
+        );
       });
-    });
 
-    await withSpan("apply.createUpdateDependentServices", async () => {
-      await step("apply.executor.createUpdate", (d) =>
-        applyExecutor(applyClient, d.executor, "create-update"),
-      );
-      // Execution policies must exist before workflow job functions that reference
-      // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-      await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
-        applyWorkflowJobFunctionExecutionPolicy(
-          applyClient,
-          d.workflowExecutionPolicy,
-          "create-update",
-        ),
-      );
-      await step("apply.workflow.createUpdate", (d) =>
-        applyWorkflow(applyClient, d.workflow, "create-update"),
-      );
-    });
-  });
+      await withSpan("apply.createUpdateApplication", async () => {
+        await forEachDeployment(deployments, async (d) => {
+          labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
+        });
+      });
+
+      await withSpan("apply.createUpdateDependentServices", async () => {
+        await step("apply.executor.createUpdate", (d) =>
+          applyExecutor(applyClient, d.executor, "create-update"),
+        );
+        // Execution policies must exist before workflow job functions that reference
+        // them by key, otherwise the runtime rejects the dispatch as an unknown key.
+        await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
+          applyWorkflowJobFunctionExecutionPolicy(
+            applyClient,
+            d.workflowExecutionPolicy,
+            "create-update",
+          ),
+        );
+        await step("apply.workflow.createUpdate", (d) =>
+          applyWorkflow(applyClient, d.workflow, "create-update"),
+        );
+      });
+    },
+    recordDroppedOnAppLabels(droppedOnAppLabels),
+  );
 
   await withSpan("apply.deleteDependentServices", async () => {
     await forEachDeployment(deployments, (d) => applyWorkflow(client, d.workflow, "delete"));

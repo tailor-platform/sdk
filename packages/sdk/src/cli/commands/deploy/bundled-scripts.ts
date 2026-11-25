@@ -53,12 +53,17 @@ export function collectHttpAdapterScripts(
     {
       resourceType: "application",
       resourceLabel: MANAGED_RESOURCE_LABELS.application,
-      namesOf: (target) => (target.httpAdapterBuildResult ? [target.application.name] : []),
+      namesOf: (target) =>
+        target.httpAdapterBuildResult
+          ? target.applications.map((application) => application.name)
+          : [],
     },
   ]);
   return new Map(
-    targets.flatMap(({ application, httpAdapterBuildResult }) =>
-      httpAdapterBuildResult ? [[application.name, httpAdapterBuildResult] as const] : [],
+    targets.flatMap(({ applications, httpAdapterBuildResult }) =>
+      httpAdapterBuildResult
+        ? applications.map((application) => [application.name, httpAdapterBuildResult] as const)
+        : [],
     ),
   );
 }

@@ -676,6 +676,9 @@ describe("mergeUserContent", () => {
     const edited = `${render.content.replace("permissions:", "permissions: &perms")}  mine:\n    runs-on: ubuntu-latest\n    permissions: *perms\n    steps:\n      - run: echo hi\n`;
     expect(hashOf(edited)).toBe(lockHash);
     expect(() => merge(edited, render)).toThrow(ManagedMergeError);
+    expect(() => merge(edited, render)).toThrow(
+      /^Your edits could not be merged into the regenerated file automatically\. Move your changes out, delete the file, and re-run setup\. Reason: \S/,
+    );
   });
 
   test("keeps a user step that reuses a retired id outside its original job", () => {

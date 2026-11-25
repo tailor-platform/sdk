@@ -175,9 +175,10 @@ function createContext(
     client,
     workspaceId,
     application: application ?? createMockApplication(),
+    applications: [],
     owner: applicationOwner(application ?? createMockApplication()),
     forRemoval,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 

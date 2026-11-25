@@ -323,6 +323,16 @@ describe("getApplicableCodemods", () => {
     expect(getApplicableCodemods("1.67.1", "1.99.0-next.1")).toEqual([]);
   });
 
+  test("returns the function script rename only to callers who can have used function script", () => {
+    const ids = (from: string, to: string) =>
+      getApplicableCodemods(from, to).map((codemod) => codemod.id);
+
+    expect(ids("2.5.0", "3.0.0")).toContain("v3/function-script-rename");
+    expect(ids("2.4.0", "3.0.0")).not.toContain("v3/function-script-rename");
+    expect(ids("2.30.0", "2.9.0")).not.toContain("v3/function-script-rename");
+    expect(ids("2.30.0", "3.0.0")).toContain("v3/function-script-rename");
+  });
+
   test("returns empty when both versions are after the codemod boundary", () => {
     expect(getApplicableCodemods("3.0.0", "4.0.0")).toEqual([]);
   });

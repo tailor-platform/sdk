@@ -469,6 +469,18 @@ describe("createResolver", () => {
       expect(resolver.invoker).toBe("batch-user");
     });
 
+    test("creates resolver with an invoker naming its Auth service", () => {
+      const resolver = createResolver({
+        name: "withAuthInvoker",
+        operation: "query",
+        output: t.object({ result: t.string() }),
+        body: () => ({ result: "ok" }),
+        invoker: { namespace: "other-auth", machineUserName: "batch-user" },
+      });
+
+      expect(resolver.invoker).toEqual({ namespace: "other-auth", machineUserName: "batch-user" });
+    });
+
     test("creates resolver with loggedIn permission condition", () => {
       const outputType = t.object({ result: t.string() });
 

@@ -25,9 +25,10 @@ function workspaceContext(): PlanContext {
       aiGatewayServices: [gateway],
       staticWebsiteServices: [],
     } as unknown as Application,
+    applications: [],
     owner: { kind: "workspace" },
     forRemoval: false,
-    config: { path: "/proj/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/proj/tailor.config.ts" },
   };
 }
 

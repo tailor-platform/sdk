@@ -61,7 +61,7 @@ function ctx(
       sourceInfo: new Map(),
       pluginAttachments: new Map(),
     })),
-    auth: undefined,
+    auths: {},
     baseDir: "/test",
     configPath: "tailor.config.ts",
     pluginConfig,

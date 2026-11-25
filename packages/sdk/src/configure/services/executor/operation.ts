@@ -1,5 +1,5 @@
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { MachineUserName } from "#/configure/types/machine-user";
+import type { MachineUserInvoker } from "#/configure/types/machine-user";
 import type { TailorPrincipal } from "#/runtime/types";
 import type {
   FunctionOperation as ParserFunctionOperation,
@@ -12,7 +12,7 @@ import type { DocumentNode } from "graphql";
 /** Function-based executor operation. The body receives the trigger args and the `invoker`. */
 export type FunctionOperation<Args> = Omit<ParserFunctionOperation, "body" | "invoker"> & {
   body: (args: Args & { invoker: TailorPrincipal | null }) => void | Promise<void>;
-  invoker?: MachineUserName;
+  invoker?: MachineUserInvoker;
 };
 
 /** GraphQL-based executor operation. Executes a GraphQL query or mutation. */
@@ -20,7 +20,7 @@ export type GqlOperation<Args> = Omit<ParserGqlOperation, "query" | "variables" 
   query: string | DocumentNode;
   // oxlint-disable-next-line no-explicit-any
   variables?: (args: Args) => { [prop: string]: any } | void | undefined;
-  invoker?: MachineUserName;
+  invoker?: MachineUserInvoker;
 };
 
 type RequestHeader =
@@ -299,7 +299,7 @@ export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   "workflowName" | "args" | "invoker"
 > & {
   workflow: W;
-  invoker?: MachineUserName;
+  invoker?: MachineUserInvoker;
 } & WorkflowArgsProperty<Args, W>;
 
 export type Operation<Args> =

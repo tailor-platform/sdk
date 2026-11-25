@@ -189,9 +189,10 @@ function createContext(client: OperatorClient): PlanContext {
     client,
     workspaceId,
     application: createMockApplication(),
+    applications: [],
     owner: applicationOwner(createMockApplication()),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -212,6 +213,35 @@ describe("planIdP", () => {
     expect(result.changeSet.client.unchanged).toHaveLength(1);
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.client.updates).toHaveLength(0);
+  });
+
+  test("labels a workspace IdP with the applications that list it", async () => {
+    await planIdP({
+      ...createContext(createMockClient({ services: [], clients: {} })),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "idp", Name: "idp-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        {
+          name: "admin",
+          subgraphs: [{ Type: "idp", Name: "idp-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:idp:idp-a$/),
+        onApps: ["shop", "admin"],
+      }),
+    );
   });
 
   test("refreshes the labels of an unchanged idp service whose SDK labels differ", async () => {

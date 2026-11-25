@@ -1,12 +1,14 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import { loadConfig, loadConfigFile } from "#/cli/shared/config-loader";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { errorToJson } from "#/cli/shared/error-json";
 import { extractInlineSourcemap } from "#/cli/shared/stack-trace";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
-import { loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
+import { brandedDefault, loadedWorkspace } from "#/cli/shared/test-helpers/workspace-config";
 import { defineConfig, definePlugins } from "#/configure/config/index";
 import { defineApp, defineWorkspace } from "#/configure/config/workspace";
 import { defineAIGateway } from "#/configure/services/aigateway/index";
@@ -17,8 +19,14 @@ import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
-import { defineApplication, defineWorkspaceServices, loadApplication } from "./application";
+import {
+  defineApplication,
+  defineWorkspaceServices,
+  loadApplication,
+  loadWorkspace,
+} from "./application";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("defineWorkspaceServices", () => {
@@ -1335,12 +1343,10 @@ describe("loadApplication workflow start rewriting", () => {
     }
   });
 
-  test("rewrites .start() on a default-exported workflow created through a helper function", async () => {
+  function workflowConfig(callerBody: string) {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
-    const syncFile = path.join(tmpDir, "sync.ts");
-    const callerFile = path.join(tmpDir, "caller.ts");
     fs.writeFileSync(
-      syncFile,
+      path.join(tmpDir, "sync.ts"),
       `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -1351,27 +1357,472 @@ export default defineSync(syncStep);
 `,
     );
     fs.writeFileSync(
-      callerFile,
+      path.join(tmpDir, "caller.ts"),
       `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 import syncWorkflow from "./sync";
 
 export const callerJob = createWorkflowJob({
   name: "caller-job",
-  body: async () => await syncWorkflow.start({}),
+  body: async () => ${callerBody},
 });
 export default createWorkflow({ name: "caller-workflow", mainJob: callerJob });
 `,
     );
-    const config = {
+    return {
       ...defineConfig({ name: "testApp", workflow: { files: ["sync.ts", "caller.ts"] } }),
       path: path.join(tmpDir, "tailor.config.ts"),
     };
+  }
+
+  test("rewrites .start() on a default-exported workflow created through a helper function", async () => {
+    const config = workflowConfig("await syncWorkflow.start({})");
 
     const { workflowBuildResult } = await loadApplication({ config });
 
     expect(workflowBuildResult?.bundledCode.get("caller-job")).toMatch(
       /startWorkflow\([`'"]sync-gl-balances/,
     );
+  });
+
+  test("stops at a string invoker when the config has no Auth service", async () => {
+    const config = workflowConfig('await syncWorkflow.start({}, { invoker: "admin" })');
+
+    await expect(loadApplication({ config })).rejects.toMatchObject({
+      code: "WORKFLOW_START_INVOKER_AUTH_REQUIRED",
+    });
+  });
+});
+
+async function runHook(dir: string, code: string | undefined): Promise<unknown> {
+  const bundleFile = path.join(dir, `hook-${Math.random().toString(36).slice(2)}.mjs`);
+  fs.writeFileSync(bundleFile, assertDefined(code, "hook bundle missing"));
+  const { main } = await import(pathToFileURL(bundleFile).href);
+  return main({ claims: {}, idpConfigName: "idp" });
+}
+
+describe("loadApplication before-login hook", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function writeConfig() {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+import { db, defineAuth, defineConfig, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const site = defineStaticWebSite("shop-site", { description: "shop" });
+
+export default defineConfig({
+  name: "shop",
+  env: { region: "jp", siteUrl: site.url },
+  staticWebsites: [site],
+  auth: defineAuth("shop-auth", {
+    machineUserAttributes: { role: db.string() },
+    machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+    hooks: {
+      beforeLogin: { handler: async ({ env }) => ({ hook: "shop-auth", env }), invoker: "admin" },
+    },
+  }),
+});
+`,
+    );
+    return (await loadConfig(configFile)).config;
+  }
+
+  test("bundles the Auth service's hook with the config's env", async () => {
+    const config = await writeConfig();
+
+    const { bundledScripts } = await loadApplication({ config });
+
+    await expect(
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({ hook: "shop-auth", env: { region: "jp", siteUrl: "shop-site:url" } });
+  });
+
+  test("rebundles the hook with the URL a reload resolves", async () => {
+    const config = await writeConfig();
+    const first = await loadApplication({
+      config,
+      client: mockOperatorClient({
+        getStaticWebsite: () => Promise.reject(new ConnectError("not found", Code.NotFound)),
+      }),
+      workspaceId: "ws-1",
+    });
+
+    const second = await loadApplication({
+      config,
+      client: mockOperatorClient({
+        getStaticWebsite: { staticwebsite: { url: "https://shop.example.com" } },
+      }),
+      workspaceId: "ws-1",
+      previous: first,
+    });
+
+    await expect(
+      runHook(tmpDir!, second.bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp", siteUrl: "https://shop.example.com" },
+    });
+    expect(second.bundledScripts.resolvers).toBe(first.bundledScripts.resolvers);
+  });
+});
+
+describe("loadWorkspace", () => {
+  let tmpDir: string | undefined;
+
+  afterEach(() => {
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  async function writeWorkspace(kind: "workspace-config" | "app-config" = "workspace-config") {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: (_input: undefined, { env }) => env,
+});
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    const auth = (name: string, tier: string) => `{
+      ...defineAuth(${JSON.stringify(name)}, {
+        machineUserAttributes: { role: db.string() },
+        machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+        hooks: {
+          beforeLogin: {
+            handler: async ({ env }) => ({ hook: ${JSON.stringify(name)}, env }),
+            invoker: "admin",
+          },
+        },
+      }),
+      env: { tier: ${JSON.stringify(tier)} },
+    }`;
+    const workspace =
+      kind === "workspace-config"
+        ? `{
+  env: { region: "jp-region", tier: "root-tier", siteUrl: site.url },
+  staticWebsites: [site],
+  workflow: { files: ["./workflow.ts"], env: { tier: "workflow-tier" } },
+  resolver: { "shop-api": { files: [], env: { tier: "resolver-tier" } } },
+  auth: {
+    "shop-auth": ${auth("shop-auth", "shop-auth-tier")},
+    "admin-auth": ${auth("admin-auth", "admin-auth-tier")},
+  },
+  apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+}`
+        : `{
+  name: "shop",
+  env: { region: "jp-region", tier: "root-tier", siteUrl: site.url },
+  staticWebsites: [site],
+  auth: ${auth("shop-auth", "shop-auth-tier")},
+}`;
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(
+      configFile,
+      `
+import { db, defineAuth, defineStaticWebSite } from "@tailor-platform/sdk";
+
+const site = defineStaticWebSite("shop-site", { description: "shop" });
+
+${brandedDefault(kind, workspace)}
+`,
+    );
+    const loaded = await loadConfigFile(configFile);
+    if (loaded.kind !== "workspace") throw new Error("expected a workspace config");
+    return loaded.workspace;
+  }
+
+  function siteClient(found: boolean): OperatorClient {
+    return mockOperatorClient({
+      getStaticWebsite: (request) =>
+        found
+          ? Promise.resolve({ staticwebsite: { url: `https://${request.name}.example.com` } })
+          : Promise.reject(new ConnectError("not found", Code.NotFound)),
+    });
+  }
+
+  test("bundles the workflow jobs with the root env and the workflow overrides", async () => {
+    const workspace = await writeWorkspace();
+
+    const { workflowBuildResult } = await loadWorkspace({ workspace });
+
+    const code = [...(workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(code).toContain("jp-region");
+    expect(code).toContain("workflow-tier");
+    expect(code).not.toContain("root-tier");
+    expect(code).not.toContain("resolver-tier");
+  });
+
+  test("bundles the hook of every Auth service with its own overrides", async () => {
+    const workspace = await writeWorkspace();
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    await expect(
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
+    });
+    await expect(
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "admin-auth",
+      env: { region: "jp-region", tier: "admin-auth-tier", siteUrl: "shop-site:url" },
+    });
+  });
+
+  test("bundles the hook of a defineApp() config's Auth service", async () => {
+    const workspace = await writeWorkspace("app-config");
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    await expect(
+      runHook(tmpDir!, bundledScripts.authHooks.get("auth-hook--shop-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "shop-auth",
+      env: { region: "jp-region", tier: "shop-auth-tier", siteUrl: "shop-site:url" },
+    });
+  });
+
+  test("resolves static website URLs in the overrides and keeps them apart", async () => {
+    const workspace = await writeWorkspace();
+    workspace.env = { ...workspace.env, api: "none", hook: "none" };
+    workspace.envOverrides.resolver["shop-api"] = { tier: "resolver-tier", api: "shop-site:url" };
+    workspace.envOverrides.executor = { hook: "shop-site:url/executor" };
+    workspace.envOverrides.workflow = { tier: "workflow-tier", hook: "shop-site:url/workflow" };
+
+    const { services } = await loadWorkspace({
+      workspace,
+      client: siteClient(true),
+      workspaceId: "ws-1",
+    });
+
+    expect(services.env).toEqual({
+      region: "jp-region",
+      tier: "root-tier",
+      siteUrl: "https://shop-site.example.com",
+      api: "none",
+      hook: "none",
+    });
+    expect(services.envOverrides).toEqual({
+      resolver: { "shop-api": { tier: "resolver-tier", api: "https://shop-site.example.com" } },
+      executor: { hook: "https://shop-site.example.com/executor" },
+      workflow: { tier: "workflow-tier", hook: "https://shop-site.example.com/workflow" },
+      auth: { "shop-auth": { tier: "shop-auth-tier" }, "admin-auth": { tier: "admin-auth-tier" } },
+    });
+  });
+
+  test("looks up a static website once for the root env and every override", async () => {
+    const workspace = await writeWorkspace();
+    workspace.envOverrides.resolver = {
+      "shop-api": { api: "shop-site:url" },
+      "admin-api": { api: "shop-site:url" },
+    };
+    workspace.envOverrides.auth = {
+      "shop-auth": { hook: "shop-site:url" },
+      "admin-auth": { hook: "shop-site:url" },
+    };
+    const client = siteClient(true);
+
+    await loadWorkspace({ workspace, client, workspaceId: "ws-1" });
+
+    expect(client.getStaticWebsite).toHaveBeenCalledTimes(1);
+  });
+
+  test("names the only Auth service as the invoker of a workflow a resolver starts", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({ name: "main-job", body: () => undefined });
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    fs.mkdirSync(path.join(tmpDir, "resolvers"));
+    fs.writeFileSync(
+      path.join(tmpDir, "resolvers", "start.ts"),
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+import workflow from "../workflow";
+
+export default createResolver({
+  name: "start",
+  operation: "mutation",
+  permission: "allowAnonymous",
+  output: t.string(),
+  body: async () => workflow.start(undefined, { invoker: "admin" }),
+});
+`,
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        workflow: { files: ["./workflow.ts"] },
+        resolver: { "shop-api": { files: ["./resolvers/*.ts"] } },
+        auth: {
+          "shop-auth": defineAuth("shop-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+          }),
+        },
+        apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    expect(bundledScripts.resolvers.get("shop-api:start")).toContain(
+      "authInvoker:{namespace:`shop-auth`,machineUserName:",
+    );
+  });
+
+  test("names the Auth service that defines the string invoker of a workflow a resolver starts", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    fs.writeFileSync(
+      path.join(tmpDir, "workflow.ts"),
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({ name: "main-job", body: () => undefined });
+
+export default createWorkflow({ name: "main-workflow", mainJob });
+`,
+    );
+    fs.mkdirSync(path.join(tmpDir, "resolvers"));
+    fs.writeFileSync(
+      path.join(tmpDir, "resolvers", "start.ts"),
+      `
+import { createResolver, t } from "@tailor-platform/sdk";
+import workflow from "../workflow";
+
+export default createResolver({
+  name: "start",
+  operation: "mutation",
+  permission: "allowAnonymous",
+  output: t.string(),
+  body: async () => workflow.start(undefined, { invoker: "batch" }),
+});
+`,
+    );
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        workflow: { files: ["./workflow.ts"] },
+        resolver: { "shop-api": { files: ["./resolvers/*.ts"] } },
+        auth: {
+          "shop-auth": defineAuth("shop-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+          }),
+          "admin-auth": defineAuth("admin-auth", {
+            machineUserAttributes: { role: db.string() },
+            machineUsers: { batch: { attributes: { role: "ADMIN" } } },
+          }),
+        },
+        apps: { shop: { resolver: ["shop-api"], auth: "shop-auth" } },
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    const { bundledScripts } = await loadWorkspace({ workspace });
+
+    expect(bundledScripts.resolvers.get("shop-api:start")).toContain(
+      "invoker:{namespace:`admin-auth`,machineUserName:`batch`}",
+    );
+  });
+
+  test("asks for table names unique across the workspace", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    for (const namespace of ["customer", "ledger"]) {
+      fs.mkdirSync(path.join(tmpDir, namespace));
+      fs.writeFileSync(
+        path.join(tmpDir, namespace, "table.ts"),
+        `import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const customer = db
+  .table("Customer", { name: db.string() })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
+`,
+      );
+    }
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        db: {
+          "customer-db": { files: ["./customer/*.ts"] },
+          "ledger-db": { files: ["./ledger/*.ts"] },
+        },
+        apps: {},
+      }),
+      path.join(tmpDir, "tailor.config.ts"),
+    );
+
+    await expect(loadWorkspace({ workspace })).rejects.toMatchObject({
+      suggestion:
+        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+    });
+  });
+
+  test("rebundles the workflow jobs and every hook with the URLs a reload resolves", async () => {
+    const workspace = await writeWorkspace();
+    workspace.env = { region: "jp-region", tier: "root-tier", hook: "none", callback: "none" };
+    workspace.envOverrides.workflow = { tier: "workflow-tier", hook: "shop-site:url/hook" };
+    workspace.envOverrides.auth["admin-auth"] = {
+      tier: "admin-auth-tier",
+      callback: "shop-site:url/callback",
+    };
+    const first = await loadWorkspace({
+      workspace,
+      client: siteClient(false),
+      workspaceId: "ws-1",
+    });
+
+    const second = await loadWorkspace({
+      workspace,
+      client: siteClient(true),
+      workspaceId: "ws-1",
+      previous: first,
+    });
+
+    const workflowCode = (result: typeof first) =>
+      [...(result.workflowBuildResult?.bundledCode.values() ?? [])].join("\n");
+    expect(workflowCode(first)).toContain("shop-site:url/hook");
+    expect(workflowCode(second)).toContain("https://shop-site.example.com/hook");
+    await expect(
+      runHook(tmpDir!, second.bundledScripts.authHooks.get("auth-hook--admin-auth--before-login")),
+    ).resolves.toEqual({
+      hook: "admin-auth",
+      env: {
+        region: "jp-region",
+        tier: "admin-auth-tier",
+        hook: "none",
+        callback: "https://shop-site.example.com/callback",
+      },
+    });
+    expect(second.services.envOverrides.auth["admin-auth"]).toEqual({
+      tier: "admin-auth-tier",
+      callback: "https://shop-site.example.com/callback",
+    });
+    expect(second.bundledScripts.resolvers).toBe(first.bundledScripts.resolvers);
   });
 });

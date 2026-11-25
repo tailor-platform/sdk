@@ -24,7 +24,7 @@ import {
   MIGRATION_IN_PROGRESS_LABEL_KEY,
   MIGRATION_LABEL_KEY,
 } from "#/cli/commands/tailordb/migrate/types";
-import { withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
+import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
@@ -32,10 +32,10 @@ import {
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
 import { withMetadataWriteBatch } from "../label";
+import { labelCountRejection } from "../test-helpers/label-count-rejection";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
-  getMigrationMachineUser,
   groupMigrationsByNamespace,
   executeMigrations,
   isMigrationPartiallyApplied,
@@ -201,43 +201,6 @@ describe("migration", () => {
   });
 
   // ==========================================================================
-  // getMigrationMachineUser
-  // ==========================================================================
-  describe("getMigrationMachineUser", () => {
-    test.each<
-      [
-        name: string,
-        config: { machineUser?: string } | undefined,
-        machineUsers: string[] | undefined,
-        expected: string | undefined,
-      ]
-    >([
-      [
-        "returns explicit machineUser from config",
-        { machineUser: "explicit-user" },
-        ["fallback-user"],
-        "explicit-user",
-      ],
-      [
-        "falls back to first machine user from auth",
-        undefined,
-        ["first-user", "second-user"],
-        "first-user",
-      ],
-      [
-        "falls back to first machine user when config has no machineUser",
-        {},
-        ["first-user", "second-user"],
-        "first-user",
-      ],
-      ["returns undefined when no machine users available", undefined, undefined, undefined],
-      ["returns undefined when machine users array is empty", undefined, [], undefined],
-    ])("%s", (_name, config, machineUsers, expected) => {
-      expect(getMigrationMachineUser(config, machineUsers)).toBe(expected);
-    });
-  });
-
-  // ==========================================================================
   // resolveMigrationMachineUsers
   // ==========================================================================
   describe("resolveMigrationMachineUsers", () => {
@@ -263,12 +226,50 @@ describe("migration", () => {
       );
     }
 
+    test("runs as the Auth service an override names as <auth>/<name>", () => {
+      const resolved = resolveMigrationMachineUsers(
+        {
+          application: {
+            authServices: [
+              { config: { name: "corp-auth", machineUsers: { admin: {} } } },
+              { config: { name: "partner-auth", machineUsers: { admin: {} } } },
+            ],
+            env: {},
+          } as unknown as Pick<Application, "authServices" | "env">,
+          config: { path: "/project/tailor.config.ts", db: {} },
+          migrationMachineUserOverride: "partner-auth/admin",
+        },
+        [createMockMigration({ namespace: "namespace-a" })],
+      );
+
+      expect(resolved?.byNamespace.get("namespace-a")).toEqual({
+        namespace: "partner-auth",
+        machineUserName: "admin",
+      });
+    });
+
+    test("reads migration.machineUser as a bare machine user name", () => {
+      expect(() =>
+        resolve({ admin: {} }, { "namespace-a": { migration: { machineUser: "auth/admin" } } }),
+      ).toThrow(expect.objectContaining({ code: "MACHINE_USER_NOT_FOUND" }));
+    });
+
     test("resolves only the namespaces with a script to run", () => {
       expect(resolve({ migrator: {} })).toEqual({
-        authNamespace: "auth",
         byNamespace: new Map([
-          ["namespace-a", "migrator"],
-          ["namespace-b", "migrator"],
+          ["namespace-a", { namespace: "auth", machineUserName: "migrator" }],
+          ["namespace-b", { namespace: "auth", machineUserName: "migrator" }],
+        ]),
+      });
+    });
+
+    test("runs as the first machine user when migration.machineUser is empty", () => {
+      expect(
+        resolve({ migrator: {} }, { "namespace-a": { migration: { machineUser: "" } } }),
+      ).toEqual({
+        byNamespace: new Map([
+          ["namespace-a", { namespace: "auth", machineUserName: "migrator" }],
+          ["namespace-b", { namespace: "auth", machineUserName: "migrator" }],
         ]),
       });
     });
@@ -323,6 +324,112 @@ describe("migration", () => {
           suggestion: "Add 'admin' to auth.machineUsers.",
         }),
       );
+    });
+
+    describe("with several Auth services", () => {
+      function resolveAcross(db: Record<string, { migration: { machineUser?: string } }> = {}) {
+        return resolveMigrationMachineUsers(
+          {
+            application: {
+              authServices: [
+                { config: { name: "shop-auth", machineUsers: { migrator: {}, seeder: {} } } },
+                { config: { name: "admin-auth", machineUsers: { batch: {}, seeder: {} } } },
+              ],
+              env: {},
+            } as unknown as Pick<Application, "authServices" | "env">,
+            config: { path: "/project/tailor.config.ts", db } as unknown as LoadedConfig,
+          },
+          [createMockMigration({ namespace: "namespace-a" })],
+        );
+      }
+
+      test("runs as the configured machine user of the Auth service that defines it", () => {
+        expect(resolveAcross({ "namespace-a": { migration: { machineUser: "batch" } } })).toEqual({
+          byNamespace: new Map([
+            ["namespace-a", { namespace: "admin-auth", machineUserName: "batch" }],
+          ]),
+        });
+      });
+
+      test("names every Auth service when none defines the configured machine user", () => {
+        expect(() =>
+          resolveAcross({ "namespace-a": { migration: { machineUser: "ghost" } } }),
+        ).toThrow(
+          expect.objectContaining({
+            code: "MACHINE_USER_NOT_FOUND",
+            message:
+              "Machine user for migration execution is not defined in any of the Auth services shop-auth, admin-auth: 'ghost' (namespace 'namespace-a').",
+            context: {
+              authNamespaces: ["shop-auth", "admin-auth"],
+              machineUsers: [{ namespace: "namespace-a", machineUser: "ghost" }],
+              file: "/project/tailor.config.ts",
+            },
+          }),
+        );
+      });
+
+      test("asks for migration.machineUser instead of picking one", () => {
+        expect(() => resolveAcross()).toThrow(
+          expect.objectContaining({ code: "MACHINE_USER_REQUIRED" }),
+        );
+      });
+
+      test("rejects a configured machine user that two Auth services define", () => {
+        expect(() =>
+          resolveAcross({ "namespace-a": { migration: { machineUser: "seeder" } } }),
+        ).toThrow(
+          expect.objectContaining({
+            code: "MACHINE_USER_AMBIGUOUS",
+            context: {
+              machineUsers: [
+                {
+                  namespace: "namespace-a",
+                  machineUser: "seeder",
+                  authNamespaces: ["shop-auth", "admin-auth"],
+                },
+              ],
+              file: "/project/tailor.config.ts",
+            },
+          }),
+        );
+      });
+    });
+
+    test.for([
+      {
+        code: "AUTH_CONFIG_REQUIRED",
+        authServices: [],
+        context: { namespaces: ["namespace-a"] },
+      },
+      {
+        code: "MACHINE_USER_REQUIRED",
+        authServices: [{ config: { name: "auth", machineUsers: {} } }],
+        context: { namespaces: ["namespace-a"] },
+      },
+    ])("points $code at the config", ({ code, authServices, context }) => {
+      let error: unknown;
+      try {
+        resolveMigrationMachineUsers(
+          {
+            application: { authServices, env: {} } as unknown as Pick<
+              Application,
+              "authServices" | "env"
+            >,
+            config: { path: "/project/tailor.config.ts" },
+          },
+          [createMockMigration({ namespace: "namespace-a" })],
+        );
+      } catch (thrown) {
+        error = thrown;
+      }
+
+      expect(error).toMatchObject({
+        code,
+        context: { ...context, file: "/project/tailor.config.ts" },
+      });
+      expect(getErrorDiagnostics(error as Error).location).toEqual({
+        file: "/project/tailor.config.ts",
+      });
     });
   });
 
@@ -811,6 +918,27 @@ describe("migration", () => {
       });
     });
 
+    test("drops sdk-on-app labels to keep the checkpoint when the namespace holds no more labels", async () => {
+      const client = createMetadataClient({
+        labels: { "sdk-managed": "workspace", "sdk-on-app-admin": "", "sdk-on-app-shop": "" },
+      });
+      client.setMetadata.mockImplementation(async ({ labels }) => {
+        if (Object.keys(labels ?? {}).length > 3) throw labelCountRejection();
+        return {};
+      });
+
+      await updateMigrationLabel(client, workspaceId, namespace, 2);
+
+      expect(client.setMetadata).toHaveBeenLastCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "sdk-managed": "workspace",
+          "sdk-on-app-admin": "",
+          [MIGRATION_LABEL_KEY]: "m0002",
+        },
+      });
+    });
+
     test("removes a stale history ID for a markerless local history", async () => {
       const client = createMetadataClient({
         labels: {
@@ -892,8 +1020,9 @@ describe("migration", () => {
       return {
         client: mockOperatorClient({}),
         workspaceId,
-        authNamespace: "auth",
-        machineUserByNamespace: new Map([["tailordb", "test-machine-user"]]),
+        invokerByNamespace: new Map([
+          ["tailordb", { namespace: "auth", machineUserName: "test-machine-user" }],
+        ]),
         env: {},
         configPath: path.join(process.cwd(), "tailor.config.ts"),
         owner: { kind: "application", name: "test-app", id: "test-app-id" },
@@ -924,7 +1053,9 @@ describe("migration", () => {
       await executeMigrations(
         createMockContext({
           client: createMetadataClient({ labels: {} }),
-          machineUserByNamespace: new Map([["tailordb", "migrator"]]),
+          invokerByNamespace: new Map([
+            ["tailordb", { namespace: "auth", machineUserName: "migrator" }],
+          ]),
         }),
         [createMockMigration()],
         checkpoints,
@@ -1247,6 +1378,9 @@ describe("migration", () => {
           "tailor tailordb migration resolve --rollback --namespace tailordb",
         ),
       });
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Could not clear the in-progress record of migration tailordb/0003: [unavailable] unavailable",
+      );
     });
 
     test("asks to check the record when it can be neither cleared nor read", async () => {

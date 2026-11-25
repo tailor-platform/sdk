@@ -34,7 +34,9 @@ export {
   TAILOR_LOCK_VERSION,
   appIdLockKey,
   findAppIdLock,
+  lockVersionFor,
   parseAppIds,
+  parseLockWorkspaces,
   planAppIds,
   removeAdoptedConfigIds,
   resolveAppId,
@@ -44,6 +46,7 @@ export {
   type AppIdPlan,
   type AppIdPlanMode,
   type AppIds,
+  type LockVersionInput,
   type PlanAppIdsParams,
   type RemoveAdoptedConfigIdsResult,
   type ResolveAppIdParams,
@@ -54,12 +57,18 @@ export { listProfileInfos } from "./commands/profile/list";
 export { createProfile, type CreateProfileOptions } from "./commands/profile/create";
 export { listLoggedInUsers } from "./commands/user/list";
 export type { ProfileInfo } from "./commands/profile/types";
-export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export {
+  loadConfig,
+  loadConfigFile,
+  type LoadedConfig,
+  type LoadedConfigFile,
+  type LoadedWorkspaceConfig,
+} from "./shared/config-loader";
 export { extractOwnedNamespaces } from "./shared/config";
 export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { annotateTerminalError, withSourceLocation } from "./shared/github-actions";
 export type { ErrorSourceLocation } from "./shared/error-diagnostics";
-export { generateUserTypes } from "./shared/type-generator";
+export { generateUserTypes, generateWorkspaceUserTypes } from "./shared/type-generator";
 export {
   loadTailorDBNamespaces,
   type TailorDBNamespaceSelector,
@@ -96,6 +105,7 @@ export {
   type AIGatewayInfo,
   type ShowStaticWebsiteInfo,
   type ShowOAuth2ClientInfo,
+  type ShowSubgraphInfo,
 } from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";

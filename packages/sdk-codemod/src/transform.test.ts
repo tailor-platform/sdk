@@ -578,6 +578,10 @@ export function read(plugins: unknown) { return generators; }
     await expect(runFixtureCases("v3/function-test-run-rename")).resolves.toBeUndefined();
   });
 
+  test("v3/function-script-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v3/function-script-rename")).resolves.toBeUndefined();
+  });
+
   test("v3/relation-toward-table transforms correctly", async () => {
     await expect(runFixtureCases("v3/relation-toward-table")).resolves.toBeUndefined();
   });

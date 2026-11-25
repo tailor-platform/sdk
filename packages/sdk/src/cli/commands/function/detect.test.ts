@@ -242,6 +242,71 @@ export default {
       expect(result.exportName).toBe("my_job");
     });
 
+    describe("main job of the workflow a file exports", () => {
+      const workflowSource = `${multiJobSource}
+export default {
+  name: "my-workflow",
+  mainJob: { name: "job-b", start: () => {}, body: () => {} },
+  start: () => {},
+};
+`;
+
+      test("is selected without a job name when the caller asks for it", async () => {
+        const filePath = writeFile("workflow-main.mjs", workflowSource);
+
+        const result = await detectFunctionType({ filePath, useWorkflowMainJob: true });
+
+        expect(result.name).toBe("job-b");
+        expect(result.exportName).toBe("job_b");
+      });
+
+      test("is not picked unless the caller asks for it, so function run still asks for --name", async () => {
+        const filePath = writeFile("workflow-main-default.mjs", workflowSource);
+
+        await expect(detectFunctionType({ filePath })).rejects.toThrow(
+          "Multiple workflow jobs found",
+        );
+      });
+
+      const importedMain = `export default {
+  name: "my-workflow",
+  mainJob: { name: "job-b", start: () => {}, body: () => {} },
+  start: () => {},
+};
+`;
+
+      test("is refused with a code of its own when the file only imports it", async () => {
+        const filePath = writeFile("workflow-main-imported.mjs", importedMain);
+
+        await expect(detectFunctionType({ filePath, useWorkflowMainJob: true })).rejects.toThrow(
+          expect.objectContaining({ code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED" }),
+        );
+      });
+
+      test("is refused the same way when the file exports another job but not the main one", async () => {
+        const filePath = writeFile(
+          "workflow-main-imported-other.mjs",
+          `export const job_a = { name: "job-a", start: () => {}, body: () => {} };\n${importedMain}`,
+        );
+
+        await expect(detectFunctionType({ filePath, useWorkflowMainJob: true })).rejects.toThrow(
+          expect.objectContaining({ code: "WORKFLOW_RUN_MAIN_JOB_IMPORTED" }),
+        );
+      });
+
+      test("yields to a job name that was given", async () => {
+        const filePath = writeFile("workflow-main-named.mjs", workflowSource);
+
+        const result = await detectFunctionType({
+          filePath,
+          jobName: "job-a",
+          useWorkflowMainJob: true,
+        });
+
+        expect(result.name).toBe("job-a");
+      });
+    });
+
     test("selects a workflow job by --name", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
@@ -257,6 +322,22 @@ export default {
       await expect(detectFunctionType({ filePath })).rejects.toThrow(
         "Multiple workflow jobs found",
       );
+    });
+
+    test("points to workflow run when the caller names no flag", async () => {
+      const filePath = writeFile("multi-jobs.mjs", multiJobSource);
+
+      await expect(detectFunctionType({ filePath })).rejects.toMatchObject({
+        suggestion: "Run `tailor workflow run <file> --job <name>` to select one.",
+      });
+    });
+
+    test("names the flag of the command asking", async () => {
+      const filePath = writeFile("multi-jobs.mjs", multiJobSource);
+
+      await expect(detectFunctionType({ filePath, jobFlag: "--job" })).rejects.toMatchObject({
+        suggestion: "Specify one with --job.",
+      });
     });
 
     test("throws when --name does not match any job", async () => {

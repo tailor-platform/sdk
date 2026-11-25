@@ -71,7 +71,9 @@ export type FieldOptions = {
  * writes one entry per application into `tailor.d.ts`, keyed by the app name:
  * `declare module "@tailor-platform/sdk" { interface DateRepresentationRegistry { shop: "temporal" } }`.
  * An app without the setting is recorded as `"unset"`. Application names are
- * unique within a workspace, so two entries never share a key.
+ * unique within a workspace, so two entries never share a key. A workspace
+ * config, which has one setting for all its applications, is recorded under the
+ * key `workspace`; it is not used together with `defineConfig()` configs.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface DateRepresentationRegistry {}

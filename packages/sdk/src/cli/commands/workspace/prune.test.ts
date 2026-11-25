@@ -1155,7 +1155,9 @@ describe("workspace prune command", () => {
 
       expect(result.success).toBe(true);
       expect(client.deleteWorkspace).not.toHaveBeenCalled();
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("permission denied"));
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^Keeping ws-unreadable \(.+\): .*permission denied$/),
+      );
     });
 
     test("still honours delete protection and --exclude", async () => {

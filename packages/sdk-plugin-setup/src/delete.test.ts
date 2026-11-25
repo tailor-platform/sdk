@@ -5,7 +5,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { setupAutofix } from "./autofix";
 import { setupDelete } from "./delete";
 import { setupTarget } from "./generate";
-import { readLock } from "./lock";
+import { readLock, writeLock } from "./lock";
 import { autofixSetupOptions } from "./test-helpers/autofix";
 
 vi.mock("@tailor-platform/sdk/cli", async (importOriginal) => ({
@@ -129,7 +129,25 @@ describe("setupDelete", () => {
       outputDir: testDir,
     });
 
-    expect(readLock(testDir)).toMatchObject({ targets: [], appIds });
+    expect(readLock(testDir)).toMatchObject({ version: 2, targets: [], appIds });
+  });
+
+  test("keeps version 3 and the workspace configs of a lock that records them", async () => {
+    await setupTarget(branchOpts("my-app"));
+    const lock = readLock(testDir);
+    writeLock(testDir, { ...lock!, version: 3, workspaces: ["apps/shop/tailor.config.ts"] });
+
+    await setupDelete({
+      files: [".github/workflows/tailor-my-app.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    expect(readLock(testDir)).toMatchObject({
+      version: 3,
+      targets: [],
+      workspaces: ["apps/shop/tailor.config.ts"],
+    });
   });
 
   test("prompts for confirmation and fails without deleting when declined", async () => {

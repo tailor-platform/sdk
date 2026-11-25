@@ -20,6 +20,7 @@ import {
   shouldForceApplyAll,
 } from "./deploy";
 import { buildDeploymentTargets, parseDeployConfigPaths } from "./deployment-target";
+import { resourceTrn } from "./label";
 import {
   assertUniqueGlobalResourceNames,
   computeRenamedAppDeletions,
@@ -55,7 +56,14 @@ function plannedDeployment(
   owner: DeployOwner = { kind: "application", name, id: undefined },
 ): PlannedDeployment {
   return {
-    application: { name },
+    source: {
+      kind: "config",
+      config: { name, path: `/${name}/tailor.config.ts` },
+      application: { name },
+    },
+    application: {},
+    envOverrides: { resolver: {}, auth: {} },
+    applications: [{ name, subgraphs: [], authNamespace: undefined, settings: {} }],
     owner,
     ...results,
   } as unknown as PlannedDeployment;
@@ -75,19 +83,19 @@ describe("shouldForceApplyAll", () => {
 
   function minimalApplication(): App {
     return {
-      name: "test-app",
-      id: "test-app-id",
-      subgraphs: [],
-      staticWebsiteServices: [],
-      aiGatewayServices: [],
-      resolverServices: [],
-      idpServices: [],
-      authServices: [],
-      executorService: undefined,
-      workflowService: undefined,
-      tailorDBServices: [],
-      secrets: [],
-    } as unknown as App;
+      application: {
+        staticWebsiteServices: [],
+        aiGatewayServices: [],
+        resolverServices: [],
+        idpServices: [],
+        authServices: [],
+        executorService: undefined,
+        workflowService: undefined,
+        tailorDBServices: [],
+        secrets: [],
+      } as unknown as App["application"],
+      applications: [{ name: "test-app", subgraphs: [] }],
+    };
   }
 
   test("fetches candidate metadata concurrently", async () => {
@@ -174,6 +182,30 @@ describe("shouldForceApplyAll", () => {
     );
 
     expect(result).toBe(true);
+  });
+
+  test("checks the application of every app the config deploys with subgraphs", async () => {
+    const client = mockOperatorClient({ getMetadata: { metadata: { labels: {} } } });
+
+    await shouldForceApplyAll(
+      client,
+      "test-workspace",
+      { kind: "workspace" },
+      {
+        ...minimalApplication(),
+        applications: [
+          { name: "shop", subgraphs: [{ Type: "tailordb", Name: "main" }] },
+          { name: "backoffice", subgraphs: [{ Type: "pipeline", Name: "api" }] },
+          { name: "landing", subgraphs: [] },
+        ],
+      },
+      [],
+    );
+
+    expect(client.getMetadata.mock.calls.map(([request]) => request.trn)).toEqual([
+      resourceTrn("test-workspace", "application", "shop"),
+      resourceTrn("test-workspace", "application", "backoffice"),
+    ]);
   });
 
   test("propagates a fetch failure when no mismatch was detected", async () => {
@@ -419,19 +451,25 @@ describe("parseDeployConfigPaths", () => {
 });
 
 describe("visible same-run namespaces", () => {
+  type VisibleConfig = Parameters<typeof collectVisibleIdpNames>[0];
+  const visibleConfig = (
+    services: object,
+    subgraphs: Array<{ Type: string; Name: string }> = [],
+  ): VisibleConfig => ({
+    application: services as VisibleConfig["application"],
+    applications: [{ subgraphs }],
+  });
+
   test("ignores TailorDB tables in namespaces not visible to the current app", () => {
-    const current = {
-      tailorDBServices: [],
-      externalTailorDBNamespaces: ["shared"],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const sharedOwner = {
+    const current = visibleConfig({ tailorDBServices: [], externalTailorDBNamespaces: ["shared"] });
+    const sharedOwner = visibleConfig({
       tailorDBServices: [{ namespace: "shared", types: { User: {} } }],
       externalTailorDBNamespaces: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const unrelated = {
+    });
+    const unrelated = visibleConfig({
       tailorDBServices: [{ namespace: "analytics", types: { User: {} } }],
       externalTailorDBNamespaces: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    });
 
     const result = collectVisibleTailorDBTypeNamespaces(current, [current, sharedOwner, unrelated]);
 
@@ -439,52 +477,71 @@ describe("visible same-run namespaces", () => {
   });
 
   test("ignores resolvers in namespaces not visible to the current app", () => {
-    const current = {
-      subgraphs: [{ Type: "pipeline", Name: "shared-pipeline" }],
-      resolverServices: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const sharedOwner = {
-      subgraphs: [{ Type: "pipeline", Name: "shared-pipeline" }],
-      resolverServices: [
-        { namespace: "shared-pipeline", resolvers: { findUser: { name: "findUser" } } },
-      ],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const unrelated = {
-      subgraphs: [{ Type: "pipeline", Name: "analytics-pipeline" }],
-      resolverServices: [
-        { namespace: "analytics-pipeline", resolvers: { findUser: { name: "findUser" } } },
-      ],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const current = visibleConfig({ resolverServices: [] }, [
+      { Type: "pipeline", Name: "shared-pipeline" },
+    ]);
+    const sharedOwner = visibleConfig(
+      {
+        resolverServices: [
+          { namespace: "shared-pipeline", resolvers: { findUser: { name: "findUser" } } },
+        ],
+      },
+      [{ Type: "pipeline", Name: "shared-pipeline" }],
+    );
+    const unrelated = visibleConfig(
+      {
+        resolverServices: [
+          { namespace: "analytics-pipeline", resolvers: { findUser: { name: "findUser" } } },
+        ],
+      },
+      [{ Type: "pipeline", Name: "analytics-pipeline" }],
+    );
 
     const result = collectVisibleResolverNamespaces(current, [current, sharedOwner, unrelated]);
 
     expect(result.get("findUser")).toBe("shared-pipeline");
   });
 
+  test("sees the resolver namespaces every application of the current config exposes", () => {
+    const current: VisibleConfig = {
+      application: { resolverServices: [] } as unknown as VisibleConfig["application"],
+      applications: [
+        { subgraphs: [{ Type: "pipeline", Name: "shop-pipeline" }] },
+        { subgraphs: [{ Type: "pipeline", Name: "admin-pipeline" }] },
+      ],
+    };
+    const peer = visibleConfig({
+      resolverServices: [
+        { namespace: "admin-pipeline", resolvers: { listUsers: { name: "listUsers" } } },
+      ],
+    });
+
+    const result = collectVisibleResolverNamespaces(current, [current, peer]);
+
+    expect(result.get("listUsers")).toBe("admin-pipeline");
+  });
+
   test("collects IdP names declared by peer configs when the current app references them", () => {
-    const current = {
-      idpServices: [],
-      subgraphs: [{ Type: "idp", Name: "peer-idp" }],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const peer = {
-      idpServices: [{ name: "peer-idp" }],
-      subgraphs: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const current = visibleConfig({ idpServices: [] }, [{ Type: "idp", Name: "peer-idp" }]);
+    const peer = visibleConfig({ idpServices: [{ name: "peer-idp" }] });
 
     const result = collectVisibleIdpNames(current, [current, peer]);
 
     expect(result.has("peer-idp")).toBe(true);
   });
 
+  test("sees an IdP any application of the current config exposes", () => {
+    const current: VisibleConfig = {
+      application: { idpServices: [] } as unknown as VisibleConfig["application"],
+      applications: [{ subgraphs: [] }, { subgraphs: [{ Type: "idp", Name: "peer-idp" }] }],
+    };
+
+    expect(collectVisibleIdpNames(current, [current]).has("peer-idp")).toBe(true);
+  });
+
   test("collects IdPs owned by peer configs even when the current app declares none", () => {
-    const current = {
-      idpServices: [],
-      subgraphs: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
-    const peer = {
-      idpServices: [{ name: "peer-idp" }],
-      subgraphs: [],
-    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const current = visibleConfig({ idpServices: [] });
+    const peer = visibleConfig({ idpServices: [{ name: "peer-idp" }] });
 
     const result = collectVisibleIdpNames(current, [current, peer]);
 
@@ -764,6 +821,28 @@ describe("scheduleRenamedAppDeletes", () => {
     ]);
   });
 
+  test("keeps every application a deployment plans", () => {
+    const results = emptyPlanResults();
+    results.tailorDB.conflicts.push({
+      resourceType: "tailordb.service",
+      resourceLabel: "TailorDB namespace",
+      resourceName: "shared",
+      currentOwner: "backoffice",
+    });
+
+    scheduleRenamedAppDeletes([
+      {
+        ...plannedDeployment("shop", results),
+        applications: [
+          { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+          { name: "backoffice", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+      },
+    ]);
+
+    expect(results.app.deletes).toEqual([]);
+  });
+
   test("does not add a delete the application plan already carries under the same name", () => {
     const results = emptyPlanResults();
     results.tailorDB.conflicts.push({
@@ -982,6 +1061,24 @@ describe("confirmDeploymentPlans", () => {
     );
   });
 
+  test.for([
+    { label: "a workspace config asks", owner: { kind: "workspace" } as const, asked: true },
+    { label: "a renamed application config does not ask", owner: undefined, asked: false },
+  ])("deleting an application while keeping another: $label", async ({ owner, asked }) => {
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
+    const results = emptyPlanResults();
+    results.app.updates.push({ name: "shop" } as never);
+    results.app.deletes.push({ name: "landing", request: {} });
+
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("my-config", results, owner)],
+      yes: false,
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(asked ? 1 : 0);
+  });
+
   test("still asks before deleting a table in a namespace the workspace config takes over", async () => {
     using _logger = silenceLogger("warn", "log", "success", "newline");
     using confirm = vi.spyOn(prompt, "confirm").mockResolvedValue(true);
@@ -1187,6 +1284,12 @@ describe("printPlanResults", () => {
         resourceLabel: "TailorDB namespace",
         resourceName: "legacy",
       },
+      {
+        resourceType: "tailordb.service",
+        resourceLabel: "TailorDB namespace",
+        resourceName: "shared",
+        managedBy: "workspace",
+      },
     ];
     results.secretManager.skippedSecrets = ["my-vault/DB_PASSWORD"];
 
@@ -1197,6 +1300,12 @@ describe("printPlanResults", () => {
     };
     expect(payload.warnings).toEqual([
       { type: "unmanaged", resourceType: "tailordb.service", name: "legacy" },
+      {
+        type: "unmanaged",
+        resourceType: "tailordb.service",
+        name: "shared",
+        managedBy: "workspace",
+      },
       { type: "skippedSecret", resourceType: "secret.secret", name: "my-vault/DB_PASSWORD" },
     ]);
   });
@@ -1793,9 +1902,21 @@ function fakeTarget(
   fakeTargetSequence += 1;
   const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
   const resolverNames = Object.keys(bundles.resolvers ?? {});
+  const appName = bundles.appName ?? `fake-app-${fakeTargetSequence}`;
+  const configPath = fakeConfigPath(bundles.configDir ?? `apps/fake-app-${fakeTargetSequence}`);
   return {
+    source: {
+      kind: "config",
+      config: { name: appName, path: configPath },
+      application: { name: appName },
+    },
+    envOverrides: { resolver: {}, auth: {} },
+    owner: { kind: "application", name: appName, id: undefined },
+    applications: [
+      { name: appName, subgraphs: [], authNamespace: bundles.authNamespace, settings: {} },
+    ],
     application: {
-      name: bundles.appName ?? `fake-app-${fakeTargetSequence}`,
+      name: appName,
       executorService: {
         executors: Object.fromEntries(executorNames.map((name) => [`/${name}.ts`, { name }])),
       },
@@ -1825,7 +1946,7 @@ function fakeTarget(
       secrets: (bundles.vaultNames ?? []).map((vaultName) => ({ vaultName })),
     },
     config: {
-      path: fakeConfigPath(bundles.configDir ?? `apps/fake-app-${fakeTargetSequence}`),
+      path: configPath,
       workflow: {
         executionPolicies: Object.fromEntries(
           (bundles.executionPolicyNames ?? []).map((name) => [name, { name }]),
@@ -1910,11 +2031,11 @@ describe("multi-config deployment orchestration", () => {
       workspaceId: "workspace-id",
       noSchemaCheck: false,
       planTarget: async (params) => {
-        started.push(params.target.application.name);
+        started.push(params.target.applications[0]!.name);
         await new Promise<void>((resolve) => {
           releases.push(resolve);
         });
-        return plannedDeployment(params.target.application.name, emptyPlanResults());
+        return plannedDeployment(params.target.applications[0]!.name, emptyPlanResults());
       },
     });
 
@@ -1924,11 +2045,14 @@ describe("multi-config deployment orchestration", () => {
     await expect(planPromise).resolves.toHaveLength(2);
   });
 
-  test("forwards skip and matches previous deployments by application name", async () => {
+  test("forwards skip and matches previous deployments by config path", async () => {
     const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
     const skip = new Set(["staticWebsite"] as const);
-    const previousBuyer = plannedDeployment("buyer", emptyPlanResults());
-    const previousSupplier = plannedDeployment("supplier", emptyPlanResults());
+    const previousBuyer = { ...plannedDeployment("buyer", emptyPlanResults()), ...targets[0] };
+    const previousSupplier = {
+      ...plannedDeployment("supplier", emptyPlanResults()),
+      ...targets[1],
+    };
     const received: Array<{ appName: string; skip: unknown; previous: unknown }> = [];
 
     await planDeploymentTargets({
@@ -1941,11 +2065,11 @@ describe("multi-config deployment orchestration", () => {
       previousDeployments: [previousSupplier, previousBuyer],
       planTarget: async (params) => {
         received.push({
-          appName: params.target.application.name,
+          appName: params.target.applications[0]!.name,
           skip: params.skip,
           previous: params.previous,
         });
-        return plannedDeployment(params.target.application.name, emptyPlanResults());
+        return plannedDeployment(params.target.applications[0]!.name, emptyPlanResults());
       },
     });
 
@@ -1957,9 +2081,23 @@ describe("multi-config deployment orchestration", () => {
 });
 
 describe("needsEnvRebuild", () => {
-  function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
-    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+  function deploymentWithEnv(
+    env: Record<string, string | number | boolean>,
+    envOverrides: PlannedDeployment["envOverrides"] = { resolver: {}, auth: {} },
+  ): PlannedDeployment {
+    return { application: { env }, envOverrides } as unknown as PlannedDeployment;
   }
+
+  test("is true when only an env override references a site this deploy declares", () => {
+    const deployments = [
+      deploymentWithEnv(
+        { siteUrl: "https://already-resolved.example.com" },
+        { resolver: {}, auth: { "shop-auth": { callbackUrl: "my-site:url/callback" } } },
+      ),
+    ];
+
+    expect(needsEnvRebuild(deployments, new Set(["my-site"]))).toBe(true);
+  });
 
   test("is true when env references a site this deploy declares", () => {
     const deployments = [deploymentWithEnv({ siteUrl: "my-site:url" })];
@@ -1991,7 +2129,10 @@ describe("needsEnvRebuild", () => {
 
 describe("assertEnvResolvedAfterRebuild", () => {
   function deploymentWithEnv(env: Record<string, string | number | boolean>): PlannedDeployment {
-    return { application: { name: "app", env } } as unknown as PlannedDeployment;
+    return {
+      application: { env },
+      envOverrides: { resolver: {}, auth: {} },
+    } as unknown as PlannedDeployment;
   }
 
   test("does not throw when env holds no placeholder for a locally declared site", () => {
@@ -2018,9 +2159,6 @@ describe("adjustApplicationForMigrationTest", () => {
       executorService: { executors: {} },
       authServices: [{ config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } }],
       staticWebsiteServices: [{ name: "site", customDomains: ["example.com"] }],
-      get applications() {
-        return [application];
-      },
     } as unknown as AdjustedApplication;
     return application;
   }
@@ -2042,7 +2180,6 @@ describe("adjustApplicationForMigrationTest", () => {
     expect(adjusted.authServices[0]?.userProfile).toBeUndefined();
     expect(adjusted.authServices[0]?.config.name).toBe("auth-a");
     expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
-    expect(adjusted.applications).toEqual([adjusted]);
   });
 
   test("keeps executors and user profiles for the final migration deploy", () => {
@@ -2377,6 +2514,20 @@ describe("assertUniqueGlobalResourceNames", () => {
     ).toThrow('- Application "shared-app": ');
   });
 
+  test("throws when another config defines the name of any application a config deploys", () => {
+    const twoApplications = {
+      ...fakeTarget({ appName: "shop" }),
+      applications: [
+        { name: "shop", subgraphs: [], authNamespace: undefined, settings: {} },
+        { name: "backoffice", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    };
+
+    expect(() =>
+      assertUniqueGlobalResourceNames([twoApplications, fakeTarget({ appName: "backoffice" })]),
+    ).toThrow('- Application "backoffice": ');
+  });
+
   test("throws when two configs define the same workflow job name", () => {
     expect(() =>
       assertUniqueGlobalResourceNames([
@@ -2560,7 +2711,7 @@ describe("collectPlannedMachineUsers", () => {
 
 describe("collectExpectedLocalStaticWebsiteNamesFromConfigs", () => {
   function loadedConfig(staticWebsites: ReadonlyArray<{ name: string }>) {
-    return { config: { staticWebsites } } as never;
+    return { kind: "config", config: { staticWebsites } } as never;
   }
 
   test("collects static website names across every config", () => {

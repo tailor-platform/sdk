@@ -14,7 +14,8 @@ import {
   planApplication,
   recomposeApplication,
 } from "./application";
-import { applicationOwner, withMetadataWriteBatch } from "./label";
+import { deployApplicationOf } from "./deploy-application";
+import { applicationOwner, buildMetaRequest, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
@@ -152,9 +153,10 @@ function createContext(client: OperatorClient, application = createMockApplicati
     client,
     workspaceId,
     application,
+    applications: [deployApplicationOf(application)],
     owner: applicationOwner(application),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -501,6 +503,89 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(0);
   });
 
+  test("labels each application of a workspace config with its own name", async () => {
+    await planApplication({
+      ...createContext(createMockClient([])),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:application:shop$/),
+        onApps: ["shop"],
+      }),
+    );
+  });
+
+  test("plans every application of the config with its own subgraphs, Auth, and settings", async () => {
+    const managed = { extraLabels: { "sdk-managed": "workspace" } };
+    const client = createMockClient([
+      { name: "shop", subgraphs: matchingSubgraphs, ...managed },
+      { name: "landing", subgraphs: matchingSubgraphs, ...managed },
+      { name: "unrelated", subgraphs: matchingSubgraphs, ...managed },
+    ]);
+
+    const result = await planApplication({
+      ...createContext(client),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: "auth-a",
+          settings: { cors: ["https://shop.example.com"] },
+        },
+        {
+          name: "backoffice",
+          subgraphs: [{ Type: "pipeline", Name: "pipeline-a" }],
+          authNamespace: undefined,
+          settings: { disableIntrospection: true },
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(result.updates.map(({ name, request }) => ({ name, request }))).toEqual([
+      {
+        name: "shop",
+        request: expect.objectContaining({
+          applicationName: "shop",
+          authNamespace: "auth-a",
+          authIdpConfigName: "idp-a",
+          cors: ["https://shop.example.com"],
+          subgraphs: [
+            { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
+          ],
+          disableIntrospection: undefined,
+        }),
+      },
+    ]);
+    expect(result.creates.map(({ name, request }) => ({ name, request }))).toEqual([
+      {
+        name: "backoffice",
+        request: expect.objectContaining({
+          applicationName: "backoffice",
+          authNamespace: undefined,
+          authIdpConfigName: undefined,
+          cors: undefined,
+          subgraphs: [
+            { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
+          ],
+          disableIntrospection: true,
+        }),
+      },
+    ]);
+    expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
+  });
+
   test("reports a conflict for a same-name application this config does not own", async () => {
     // Without a conflict the take-over is never confirmed, and the id label is
     // rewritten (or dropped) on an application that belongs to someone else.
@@ -552,13 +637,15 @@ describe("planApplication", () => {
       expect(result.deletes[0]!.name).toBe(oldName);
     });
 
-    test("does not delete the other applications a workspace config manages", async () => {
+    test("deletes the applications that a workspace config marks or an application config deployed, once apps no longer lists them", async () => {
       const client = createMockClient([
         {
           name: "backoffice",
           subgraphs: matchingSubgraphs,
           extraLabels: { "sdk-managed": "workspace" },
         },
+        { name: "legacy", label: "legacy", sdkAppId: "old-id", subgraphs: matchingSubgraphs },
+        { name: "neighbor", label: "neighbor", subgraphs: matchingSubgraphs },
       ]);
       const application = createMockApplication({ name: appName, id: "stable-id" });
 
@@ -567,7 +654,10 @@ describe("planApplication", () => {
         owner: { kind: "workspace" },
       });
 
-      expect(result.deletes).toEqual([]);
+      expect(result.deletes.map(({ name }) => name)).toEqual(["backoffice", "legacy"]);
+      expect(result.takeovers).toEqual([
+        expect.objectContaining({ resourceName: "legacy", action: "delete" }),
+      ]);
     });
 
     test("ignores apps with the same id when name still matches", async () => {
@@ -828,7 +918,7 @@ describe("planApplication", () => {
 
       const first = await planApplication(createContext(client, application));
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
-      expect(first.existingLabels).toBeUndefined();
+      expect(first.existingLabels).toEqual(new Map([[appName, undefined]]));
 
       const second = await planApplication(createContext(client, application), undefined, {
         existingApplications: first.existingApplications,
@@ -838,7 +928,7 @@ describe("planApplication", () => {
       // `previous` was given, so the cached `undefined` is honored as-is
       // instead of being treated as "no previous fetch happened".
       expect(client.getMetadata).toHaveBeenCalledTimes(1);
-      expect(second.existingLabels).toBeUndefined();
+      expect(second.existingLabels).toEqual(new Map([[appName, undefined]]));
     });
   });
 });

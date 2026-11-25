@@ -620,4 +620,14 @@ import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
 
 TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, `getDB()` accepts no namespace name, so every call fails to type-check; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
 
+To let some of your code reach only some namespaces, create a `getDB` narrowed to them with `createScopedGetDB` from the same module, and import that one in place of the SDK's:
+
+```typescript
+import { createScopedGetDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+
+export const getDB = createScopedGetDB<"customer-db" | "order-db">();
+```
+
+Passing this `getDB` another namespace, or a table of another namespace, fails to type-check. It is the same `getDB` when your code runs, so it restricts nothing at runtime. To keep code from importing the unrestricted `getDB`, forbid `@tailor-platform/sdk/plugin/kysely-type/db` with your linter's `no-restricted-imports` outside the file that calls `createScopedGetDB`.
+
 The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.

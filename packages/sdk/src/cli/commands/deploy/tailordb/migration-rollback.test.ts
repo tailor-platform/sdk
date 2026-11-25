@@ -1287,6 +1287,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       ],
     });
     const client = createMockClient();
+    client.listTailorDBTypes.mockResolvedValue({ tailordbTypes: [{ name: tableName }] });
     const order: string[] = [];
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(
       async (_client, _workspaceId, _namespace, number, historyId) => {
@@ -1540,8 +1541,8 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
             ? Promise.reject(new Error("migration 2 failed"))
             : Promise.resolve(undefined),
       );
-      vi.spyOn(logger, "warn").mockImplementation(() => {});
-      vi.spyOn(logger, "log").mockImplementation(() => {});
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
 
       const error = await applyTailorDB(client, planResult, "create-update").catch(
         (thrown: Error) => thrown,
@@ -1556,6 +1557,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         },
       });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Could not verify ownership of migration checkpoint test-ns\/\S+ before restoring table settings\. Skipping restoration for this namespace and aborting this deployment\. Reason: metadata unavailable$/,
+        ),
+      );
+      expect(log.mock.calls.at(-1)).toEqual(["The original migration error is reported below."]);
     });
 
     test("keeps a failed restoration as structured context of the original failure", async () => {
@@ -1568,7 +1575,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
         new Error("original migration failure"),
       );
-      vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
       vi.spyOn(logger, "log").mockImplementation(() => {});
 
       const error = await applyTailorDB(client, planResult, "create-update").catch(
@@ -1584,6 +1591,11 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         },
       });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^Could not restore every TailorDB table after the migration failed\. Still restricted \(.+\): namespace 'test-ns': GoodsReceipt\. Reason: .*settings write refused$/,
+        ),
+      );
     });
 
     test("tells how to inspect the checkpoint when another deploy advanced it", async () => {
@@ -1960,10 +1972,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       warnTablesLeftRestricted(
         "Could not restore every TailorDB table after the migration failed.",
         [{ namespace: "test-ns", tables: [] }],
-        { namesUnknown: true },
+        { namesUnknown: true, cause: new Error("settings write refused") },
       );
 
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Could not restore"));
+      expect(warn).toHaveBeenCalledWith(
+        "Could not restore every TailorDB table after the migration failed. Reason: settings write refused",
+      );
       expect(log).toHaveBeenCalledWith(expect.stringContaining("Deploy again"));
       warn.mockRestore();
       log.mockRestore();
@@ -2122,6 +2136,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       });
       const goodsReceiptWrites = failPostPhase(client);
       const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const log = vi.spyOn(logger, "log").mockImplementation(() => {});
       const planResult = withInputs(createUpdatePlanResult());
       planResult.context.pendingMigrations = setPendingMigrations([
         mkAddFieldMigration(1, "GoodsReceipt", "note"),
@@ -2139,10 +2154,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           /`tailor tailordb migration resolve --complete --namespace test-ns --config=\S+ --workspace-id=test-workspace --profile=staging`/,
         ),
       });
-      const warnings = warn.mock.calls.map(([line]) => line).join("\n");
-      expect(warnings).toContain("Could not clear the in-progress record");
-      expect(warnings).toContain("tailor tailordb migration resolve");
-      expect(warnings).not.toContain("deploy again to resume it");
+      expect(warn).toHaveBeenCalledWith(
+        "Could not clear the in-progress record of migration test-ns/0001: label write rejected",
+      );
+      expect(log).toHaveBeenCalledWith(
+        expect.stringContaining("settle it with 'tailor tailordb migration resolve'."),
+      );
+      expect(log).not.toHaveBeenCalledWith(expect.stringContaining("deploy again to resume it"));
       expect(goodsReceiptWrites[3]).toEqual(goodsReceiptWrites[1]);
       expect(removeMigrationWorkflowResources).not.toHaveBeenCalled();
     });
@@ -2538,6 +2556,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           throw runEndedPartiallyApplied();
         });
         const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+        const log = vi.spyOn(logger, "log").mockImplementation(() => {});
 
         await withOverriddenSnapshot(
           (migrationsDir, maxVersion) => {
@@ -2554,10 +2573,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
           },
         );
 
-        expect(warn.mock.calls.map(([line]) => line).join("\n")).toContain(
-          "Could not read migration test-ns/0001 or its prior checkpoint",
+        expect(warn).toHaveBeenCalledWith(
+          "Could not read migration test-ns/0001 or its prior checkpoint: snapshot unreadable",
         );
+        expect(log).toHaveBeenCalledWith("Only what this deploy wrote is rolled back.");
         warn.mockRestore();
+        log.mockRestore();
       });
 
       test("does not roll back while the run may still be executing", async () => {

@@ -185,6 +185,12 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
+The triggers subscribe to the Auth service the executor's config uses: its own `defineAuth()` or the external Auth service it references. Pass `auth` to name it explicitly; the name is type-narrowed via the generated `AuthNamespaceName` type, and `deploy` fails when `auth` names any other Auth service. Unlike `idp`, `auth` does not resolve against the other configs in a `tailor deploy -c` run; to subscribe to an Auth service another config owns, reference it as external in the executor's config.
+
+```typescript
+authAccessTokenIssuedTrigger({ auth: "my-auth" });
+```
+
 These triggers require the Auth service to publish access token events. Set `publishSessionEvents: true` in the `defineAuth()` of the Auth service that the executor's config uses; when that config references the Auth service as external, set it where the Auth service is defined. `deploy` does not enable it automatically. See [Auth service - Session Events](./auth.md#session-events).
 
 ### Workflow Execution Triggers
@@ -264,6 +270,7 @@ idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
 
 ```typescript
 authAccessTokenTrigger({ events: ["issued", "revoked"] });
+authAccessTokenTrigger({ events: ["issued", "revoked"], auth: "my-auth" });
 ```
 
 #### `workflowExecutionTrigger()` and `workflowJobExecutionTrigger()`
@@ -427,7 +434,7 @@ export default createExecutor({
 });
 ```
 
-The machine user is resolved in your application's auth namespace — the name of your Auth service, local or external. `webhook` is the only operation kind that does not accept `invoker`, since it calls an external URL rather than acting inside your workspace.
+A machine user name given as a string is resolved in your application's auth namespace — the name of your Auth service, local or external. To name the Auth service as well, pass `{ namespace, machineUserName }`; see [Specifying a machine user invoker](./auth.md#specifying-a-machine-user-invoker). `webhook` is the only operation kind that does not accept `invoker`, since it calls an external URL rather than acting inside your workspace.
 
 Without an `invoker`, the operation runs as whoever raised the trigger event, or anonymously when there is no such principal — as with a `schedule` trigger. Declare an `invoker` whenever the operation needs an identity of its own.
 

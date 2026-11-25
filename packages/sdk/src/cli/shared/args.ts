@@ -392,7 +392,7 @@ interface NamedOption {
  * @param option - Option field as `extractFields` describes it
  * @returns `-x` for each one-letter name, and the kebab-case and camelCase forms of each longer one
  */
-export function flagTokensOf(option: NamedOption): string[] {
+function flagTokensOf(option: NamedOption): string[] {
   return [option.cliName, ...(option.alias ?? [])].flatMap((name) =>
     name.length === 1 ? [`-${name}`] : [`--${name}`, `--${toCamelCase(name)}`],
   );
@@ -588,6 +588,21 @@ export const configArg = {
     completion: { type: "file", extensions: ["ts"] },
   }),
 } satisfies ArgsShape;
+
+/**
+ * Arg for commands that act on one application of the config
+ * @param withSeveral - What happens without it when the config defines several applications
+ * @param subject - What the option names
+ * @returns The `--app` arg
+ */
+export function appArg(withSeveral: string, subject = "Application of the config") {
+  return {
+    app: arg(z.string().optional(), {
+      description: `${subject} (default: the only application the config defines; with several, ${withSeveral})`,
+      completion: { type: "none" },
+    }),
+  } satisfies ArgsShape;
+}
 
 /**
  * Shared config arg for commands that accept one or more comma-separated config file paths

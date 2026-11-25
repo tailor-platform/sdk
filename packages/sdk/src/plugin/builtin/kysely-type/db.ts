@@ -12,3 +12,13 @@ export const getDB = createGetDB({
     (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL ===
     "true",
 });
+
+/**
+ * **Beta:** Get a `getDB` that accepts only the given TailorDB namespaces, such as
+ * `createScopedGetDB<"customer-db" | "order-db">()`, typed by the content mapper. The returned
+ * `getDB` is the one this module exports.
+ * @returns `getDB`
+ */
+export function createScopedGetDB(): typeof getDB {
+  return getDB;
+}

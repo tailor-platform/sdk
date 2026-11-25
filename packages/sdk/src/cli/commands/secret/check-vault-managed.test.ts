@@ -5,7 +5,8 @@ import { checkVaultManaged, releaseVaultOwnership } from "./check-vault-managed"
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { MetadataSchema } from "@tailor-platform/tailor-proto/metadata_resource_pb";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     warn: vi.fn(),
     info: vi.fn(),

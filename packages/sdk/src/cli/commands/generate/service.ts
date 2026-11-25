@@ -3,19 +3,26 @@ import * as path from "pathe";
 import {
   defineApplication,
   definePluginResolverServices,
+  defineWorkspaceServices,
   generatePluginFilesIfNeeded,
-  type Application,
+  type ConfigServices,
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { getAuthInput } from "#/cli/shared/auth-input";
-import { soleAuthService } from "#/cli/shared/auth-namespace";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import {
+  isLoadedWorkspaceConfig,
+  loadConfigFile,
+  tailorDBTypeNameScopeOf,
+  type LoadedConfig,
+  type LoadedWorkspaceConfig,
+} from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
 import { logger, plainRedacted, styles } from "#/cli/shared/logger";
-import { generateUserTypes } from "#/cli/shared/type-generator";
+import { generateUserTypes, generateWorkspaceUserTypes } from "#/cli/shared/type-generator";
+import { defineUnambiguousContextField } from "#/cli/shared/unambiguous-context-field";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
@@ -41,7 +48,7 @@ type TypeInfo = {
  * Generation manager type.
  */
 export type GenerationManager = {
-  readonly application: Application;
+  readonly configServices: ConfigServices;
   readonly baseDir: string;
   readonly services: {
     tailordb: Record<string, TypeInfo>;
@@ -51,21 +58,37 @@ export type GenerationManager = {
   generate: () => Promise<void>;
 };
 
+function generationTarget(config: LoadedConfig | LoadedWorkspaceConfig): string {
+  if (!isLoadedWorkspaceConfig(config)) {
+    return `application: ${styles.highlight(config.name)}`;
+  }
+  const [appName] = Object.keys(config.apps);
+  return config.definedBy === "defineApp" && appName !== undefined
+    ? `application: ${styles.highlight(appName)}`
+    : `workspace: ${styles.highlight(path.relative(process.cwd(), config.path))}`;
+}
+
+/**
+ * Parameters for creating a generation manager
+ */
+export interface CreateGenerationManagerParams {
+  /** Services the config defines */
+  configServices: ConfigServices;
+  /** The `defineConfig()` or workspace config the services come from */
+  config: LoadedConfig | LoadedWorkspaceConfig;
+  /** Plugin manager for processing plugins */
+  pluginManager?: PluginManager;
+}
+
 /**
  * Creates a generation manager.
  * @param params - Parameters for creating the generation manager
- * @param params.application - Application instance to generate code for
- * @param params.config - Loaded configuration
- * @param params.pluginManager - Plugin manager for processing plugins
  * @returns GenerationManager instance
  */
-export function createGenerationManager(params: {
-  application: Application;
-  config: LoadedConfig;
-  pluginManager?: PluginManager;
-}): GenerationManager {
-  const { application, config, pluginManager } = params;
-  const configDir = path.dirname(config.path);
+export function createGenerationManager(params: CreateGenerationManagerParams): GenerationManager {
+  const { configServices, config, pluginManager } = params;
+  const configPath = config.path;
+  const configDir = path.dirname(configPath);
   const baseDir = path.resolve(getDistDir(), "generated");
   fs.mkdirSync(baseDir, { recursive: true });
 
@@ -120,8 +143,19 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const authService = soleAuthService(application);
-    const auth = authService && getAuthInput(authService);
+    const auths = Object.fromEntries(
+      configServices.authServices.map((authService) => [
+        authService.config.name,
+        getAuthInput(authService),
+      ]),
+    );
+    const withAuthField = <Context extends object>(context: Context) =>
+      defineUnambiguousContextField(context, {
+        key: "auth",
+        candidates: auths,
+        candidatesLabel: "Auth services",
+        replacement: "auths",
+      });
     const tailordb = buildTailorDBData();
 
     let result: GeneratorResult;
@@ -131,40 +165,46 @@ export function createGenerationManager(params: {
         result = await assertDefined(
           plugin.onTailorDBReady,
           "plugin.onTailorDBReady hook missing",
-        )({
-          tailordb,
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          withAuthField({
+            tailordb,
+            auths,
+            baseDir: pluginBaseDir,
+            configPath,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
       case "onResolverReady":
         result = await assertDefined(
           plugin.onResolverReady,
           "plugin.onResolverReady hook missing",
-        )({
-          tailordb,
-          resolvers: buildResolverData(),
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          withAuthField({
+            tailordb,
+            resolvers: buildResolverData(),
+            auths,
+            baseDir: pluginBaseDir,
+            configPath,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
       case "onExecutorReady":
         result = await assertDefined(
           plugin.onExecutorReady,
           "plugin.onExecutorReady hook missing",
-        )({
-          tailordb,
-          resolvers: buildResolverData(),
-          executors: { ...services.executor },
-          auth,
-          baseDir: pluginBaseDir,
-          configPath: config.path,
-          pluginConfig: plugin.pluginConfig,
-        });
+        )(
+          withAuthField({
+            tailordb,
+            resolvers: buildResolverData(),
+            executors: { ...services.executor },
+            auths,
+            baseDir: pluginBaseDir,
+            configPath,
+            pluginConfig: plugin.pluginConfig,
+          }),
+        );
         break;
     }
 
@@ -263,20 +303,18 @@ export function createGenerationManager(params: {
   }
 
   return {
-    application,
+    configServices,
     baseDir,
     services,
 
     async generate(): Promise<void> {
       logger.newline();
-      logger.log(`Generation for application: ${styles.highlight(application.config.name)}`);
-
-      const app = application;
+      logger.log(`Generation for ${generationTarget(config)}`);
 
       // Load TailorDB tables (includes plugin-generated tables)
       await withSpan("generate.loadTailorDBTypes", async (span) => {
-        span.setAttribute("generate.namespace_count", app.tailorDBServices.length);
-        for (const db of app.tailorDBServices) {
+        span.setAttribute("generate.namespace_count", configServices.tailorDBServices.length);
+        for (const db of configServices.tailorDBServices) {
           const namespace = db.namespace;
           await withSpan(`generate.loadTypes.${namespace}`, async () => {
             try {
@@ -299,7 +337,8 @@ export function createGenerationManager(params: {
         }
         try {
           assertUniqueLocalTailorDBTypeNames({
-            tailorDBServices: app.tailorDBServices,
+            tailorDBServices: configServices.tailorDBServices,
+            scope: tailorDBTypeNameScopeOf(config),
           });
         } catch (error) {
           logger.error("Error validating TailorDB table names");
@@ -307,7 +346,7 @@ export function createGenerationManager(params: {
         }
       });
       const resolverServices = [
-        ...app.resolverServices,
+        ...configServices.resolverServices,
         ...definePluginResolverServices(config, pluginManager),
       ];
 
@@ -318,29 +357,29 @@ export function createGenerationManager(params: {
         async () => {
           const pluginExecutorFiles = generatePluginFilesIfNeeded(
             pluginManager,
-            app.tailorDBServices,
-            config.path,
+            configServices.tailorDBServices,
+            configPath,
           );
           const executorService =
-            app.executorService ??
+            configServices.executorService ??
             (pluginExecutorFiles.length > 0
-              ? createExecutorService({ config: { files: [] }, baseDir: path.dirname(config.path) })
+              ? createExecutorService({ config: { files: [] }, baseDir: configDir })
               : undefined);
           return { pluginExecutorFiles, executorService };
         },
       );
 
       // Resolve Auth namespaces (depends on TailorDB)
-      if (app.authServices.length > 0) {
+      if (configServices.authServices.length > 0) {
         await withSpan("generate.resolveAuthNamespaces", async () => {
-          for (const authService of app.authServices) {
+          for (const authService of configServices.authServices) {
             await authService.resolveNamespaces();
           }
         });
       }
 
       // Add blank line after TailorDB tables loaded
-      if (app.tailorDBServices.length > 0 || pluginExecutorFiles.length > 0) {
+      if (configServices.tailorDBServices.length > 0 || pluginExecutorFiles.length > 0) {
         logger.newline();
       }
 
@@ -419,28 +458,40 @@ export function createGenerationManager(params: {
  */
 export async function generate(options?: GenerateOptions) {
   return withSpan("generate", async (rootSpan) => {
-    // Load and validate options
-    const { config, plugins } = await withSpan("generate.loadConfig", async () => {
-      return loadConfig(options?.configPath);
+    const loaded = await withSpan("generate.loadConfig", async () => {
+      return loadConfigFile(options?.configPath);
     });
+    const pluginManager = loaded.plugins.length > 0 ? new PluginManager(loaded.plugins) : undefined;
 
-    // Generate user types from loaded config
+    if (loaded.kind === "workspace") {
+      const { workspace } = loaded;
+      await withSpan("generate.generateUserTypes", async () =>
+        generateWorkspaceUserTypes({ workspace }),
+      );
+      const configServices = defineWorkspaceServices({ workspace, pluginManager });
+      await createGenerationManager({
+        configServices,
+        config: workspace,
+        pluginManager,
+      }).generate();
+      return;
+    }
+
+    const { config } = loaded;
     await withSpan("generate.generateUserTypes", async () =>
       generateUserTypes({ config, configPath: config.path }),
     );
-
-    // Initialize plugin manager if plugins are provided
-    let pluginManager: PluginManager | undefined;
-    if (plugins.length > 0) {
-      pluginManager = new PluginManager(plugins);
-    }
 
     // Create a lightweight application (tables not yet loaded)
     const application = defineApplication({ config, pluginManager });
 
     rootSpan.setAttribute("app.name", application.config.name);
 
-    const manager = createGenerationManager({ application, config, pluginManager });
+    const manager = createGenerationManager({
+      configServices: application,
+      config,
+      pluginManager,
+    });
     await manager.generate();
   });
 }

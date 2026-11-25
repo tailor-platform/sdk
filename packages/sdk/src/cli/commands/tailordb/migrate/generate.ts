@@ -14,7 +14,8 @@ import { z } from "zod";
 import { configArg, confirmationArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf, defineConfigFileServices } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
@@ -23,7 +24,6 @@ import { printMutationResult } from "#/cli/shared/mutation-result";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
-import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -279,7 +279,9 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   logBetaWarning("tailordb migration");
 
   // Load configuration
-  const { config, plugins } = await loadConfig(options.configPath);
+  const loaded = await loadConfigFile(options.configPath);
+  const { plugins } = loaded;
+  const config = configOf(loaded);
   const configDir = path.dirname(config.path);
   const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
   const dateDefault = effectiveDateDefault(config);
@@ -391,15 +393,8 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
     assertNoNestedNamespaceMigrations(initTarget, namespacesWithMigrations);
   }
 
-  // Initialize plugin manager if plugins are provided
-  let pluginManager: PluginManager | undefined;
-  if (plugins.length > 0) {
-    pluginManager = new PluginManager(plugins);
-  }
-
   // Load application and all tables
-  const { defineApplication } = await import("#/cli/services/application");
-  const application = defineApplication({ config, pluginManager });
+  const application = await defineConfigFileServices(loaded);
 
   // Schema generation loads every namespace before writing so --rename flags
   // can be validated globally; --data-only and --init --namespace load only their target.
