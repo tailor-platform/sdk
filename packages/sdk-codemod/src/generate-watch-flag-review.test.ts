@@ -19,6 +19,16 @@ describe("generate --watch review", () => {
       JSON.stringify({ scripts: { build: "tsc", gen: "tailor generate -W" } }),
     ],
     [
+      "a backslash-newline continuation before --watch in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { gen: "tailor generate \\\n  --watch" } }),
+    ],
+    [
+      "the watch option of generate() in a node -e script of a package.json",
+      "package.json",
+      JSON.stringify({ scripts: { gen: 'node -e "generate({ watch: true })"' } }),
+    ],
+    [
       "a command outside scripts of a compact package.json",
       "package.json",
       JSON.stringify({ "lint-staged": { "*.ts": "tailor generate --watch" } }),
@@ -28,6 +38,10 @@ describe("generate --watch review", () => {
   });
 
   test.each([
+    [
+      "generate( and watch: in two scripts of a compact package.json",
+      JSON.stringify({ scripts: { a: 'node -e "generate()"', b: "echo watch: on" } }),
+    ],
     [
       "--watch of another command in the next script of a compact package.json",
       JSON.stringify({ scripts: { gen: "tailor generate", dev: "vite --watch" } }),
