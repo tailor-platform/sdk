@@ -471,6 +471,7 @@ test("runs hooks before failing on application labels the platform rejected", as
   });
   expect(hook).toHaveBeenCalledOnce();
   expect(logger.success).not.toHaveBeenCalled();
+  expect(workspaceLabelWrites()).toEqual([{ "sdk-version": "v1-2-3" }]);
 });
 
 test("fails a JSON deploy on rejected application labels without loading the result", async () => {
@@ -939,6 +940,18 @@ test("still succeeds and warns when the Platform fails to record the SDK version
   await deploy({ yes: true, noValidate: true });
   expect(logger.warn).toHaveBeenCalledWith(
     'Could not record the SDK version on workspace "ws": [unavailable] upstream down. The next deploy tries again.',
+  );
+  expect(logger.success).toHaveBeenCalledWith("Successfully applied changes.");
+});
+
+test("still succeeds and warns when the connection drops while recording the SDK version on the workspace", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  client.setMetadata.mockRejectedValueOnce(
+    Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+  );
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.warn).toHaveBeenCalledWith(
+    'Could not record the SDK version on workspace "ws": connection reset. The next deploy tries again.',
   );
   expect(logger.success).toHaveBeenCalledWith("Successfully applied changes.");
 });

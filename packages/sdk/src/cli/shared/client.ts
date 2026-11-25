@@ -887,6 +887,15 @@ function isTransportDisconnectError(error: unknown): error is Error & { code: st
   );
 }
 
+/**
+ * Whether a request failed at the Platform or on the way to it, rather than in the SDK.
+ * @param error - Error thrown by the request
+ * @returns True for a `ConnectError` or a raw transport disconnect
+ */
+export function isRequestFailure(error: unknown): error is Error {
+  return error instanceof ConnectError || isTransportDisconnectError(error);
+}
+
 // Node error codes connect-node maps to `Unavailable` that occur before a connection
 // is open, so no request reached the server.
 const CONNECTION_NOT_OPENED_ERROR_CODES: ReadonlySet<string> = new Set([

@@ -283,7 +283,7 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
+Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above, or `warnings`, described below. Each is left out when it has no entries.
 
 After applying, `deploy` records its SDK version on the workspace as the `sdk-version` label, keeping the workspace's other labels. When it cannot, such as when the workspace has no room for more labels, the deploy still succeeds, prints a warning, and adds `{ "type": "workspaceSdkVersionNotRecorded", "details": "<error>" }` to `warnings`.
 

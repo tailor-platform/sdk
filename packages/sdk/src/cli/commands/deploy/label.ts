@@ -441,8 +441,8 @@ export function dependencyLabelWrite(
 }
 
 /**
- * The `sdk-version` label value for this SDK: its version with each dot as a dash, which a label
- * value cannot contain.
+ * The `sdk-version` label value for this SDK: `v` followed by its version with each dot as a dash,
+ * since a label value must start with a letter and cannot contain dots.
  * @returns The label value, or `unknown` when the SDK's package.json has no version
  */
 export async function sdkVersionLabelValue(): Promise<string> {

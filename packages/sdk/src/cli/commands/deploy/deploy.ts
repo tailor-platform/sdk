@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import { ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { type ConfigServices } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
@@ -7,6 +6,7 @@ import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
+  isRequestFailure,
   staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -935,7 +935,7 @@ type WorkspaceSdkVersionNotRecorded = { type: "workspaceSdkVersionNotRecorded"; 
  * Record on the workspace the SDK version that applied its resources, keeping its other labels.
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
- * @returns The warning to report when the Platform refused the write, which leaves the deploy applied
+ * @returns The warning to report when the Platform rejected the write or the request failed, which leaves the deploy applied
  */
 async function recordWorkspaceSdkVersion(
   client: OperatorClient,
@@ -948,7 +948,7 @@ async function recordWorkspaceSdkVersion(
     });
     return undefined;
   } catch (error) {
-    if (!(error instanceof ConnectError)) throw error;
+    if (!isRequestFailure(error)) throw error;
     logger.warn(
       labelCountViolation(error) === undefined
         ? `Could not record the SDK version on workspace "${workspaceId}": ${error.message}. The next deploy tries again.`
