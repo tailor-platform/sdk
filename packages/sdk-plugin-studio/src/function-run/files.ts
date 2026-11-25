@@ -88,13 +88,13 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
     for (const listener of listeners) listener(change);
   };
 
-  function applyArg(text: string, editedAt?: number): string | undefined {
+  function applyArg(text: string): string | undefined {
     const normalized = normalizeArg(text);
     if (normalized === undefined) return ARG_NOT_READABLE;
     if (normalized !== runArg) {
       writeAtomic(options.runArgFile, normalized);
       runArg = normalized;
-      touch(editedAt);
+      touch();
     }
     return undefined;
   }
@@ -172,7 +172,7 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
         const argOnDisk = readIfExists(options.argFile);
         if (argOnDisk !== undefined && argOnDisk !== arg) {
           arg = argOnDisk;
-          argError = applyArg(arg, savedAt(options.argFile));
+          argError = applyArg(arg);
           emit({ arg: argOnDisk });
         }
       });

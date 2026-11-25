@@ -269,6 +269,24 @@ describe("running", () => {
     expect(session.snapshot().running).toBe(false);
   });
 
+  test("waits for the run an argument edit triggers when an old run ended between the save and the copy the watch sees", async () => {
+    const { session, run, at } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    at(1200);
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+    at(1300);
+    session.markInputsChanged(1300);
+    const whileRunning = session.snapshot().running;
+    run.push({ type: "stdout", line: runOf(3) });
+    await settle();
+
+    expect([whileRunning, session.snapshot().running]).toEqual([true, false]);
+  });
+
   test("still waits when a run reported back right after the edit, since it started before it", async () => {
     const { session, run, at } = setup();
     session.start();

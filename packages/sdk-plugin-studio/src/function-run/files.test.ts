@@ -188,6 +188,21 @@ describe("when an edit happened", () => {
     expect(Math.abs(edits[0]! - saved)).toBeLessThan(5);
   });
 
+  test("is the time the run's copy of the argument was written, since that is the file the watch sees", async () => {
+    const { files, edits } = setupWithClock();
+    await files.init();
+    edits.length = 0;
+    const argFile = path.join(dir, "studio", "function.arg.json5");
+    fs.writeFileSync(argFile, "{a: 2}");
+    const saved = Date.now() - 200;
+    fs.utimesSync(argFile, saved / 1000, saved / 1000);
+    const before = Date.now();
+
+    await files.refresh();
+
+    expect(edits[0]).toBeGreaterThanOrEqual(before);
+  });
+
   test("is not taken from a file time older than a poll, which would hide a run that is on its way", async () => {
     const { files, file, edits } = setupWithClock();
     await files.init();
