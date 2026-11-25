@@ -127,6 +127,24 @@ describe("function run --name review", () => {
       "execSync(\"tailor function run a.ts --arg '{\\n}' --name job\");\n",
     ],
     [
+      "--name in the second script of a compact package.json",
+      "package.json",
+      JSON.stringify({ scripts: { a: "tailor deploy", b: "tailor function run a.ts --name x" } }),
+    ],
+    [
+      "--name in a command outside scripts of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor deploy" },
+        "lint-staged": { "*.ts": "tailor function run a.ts --name x" },
+      }),
+    ],
+    [
+      "--name in a package.json that is not valid JSON",
+      "package.json",
+      '{"scripts":{"a":"tailor function run a.ts --name x",}}',
+    ],
+    [
       "a template substitution right after --name in a string of a TypeScript file",
       "run.ts",
       "execSync(`tailor function run a.ts --name${suffix} x`);\n",
@@ -181,6 +199,25 @@ describe("function run --name review", () => {
       "--name of function get in the next quoted step of a workflow",
       ".github/workflows/job.yml",
       'steps:\n  - run: "tailor function run a.ts"\n  - run: "tailor function get --name x"\n',
+    ],
+    [
+      "--name of function get in the next script of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor function get --name x" },
+      }),
+    ],
+    [
+      "--name of another command in the next script of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor workspace create --name x" },
+      }),
+    ],
+    [
+      "-n in a later key of a compact package.json",
+      "package.json",
+      JSON.stringify({ scripts: { a: "tailor function run a.ts" }, description: "x -n y" }),
     ],
     [
       "many lines opening a quote without closing it, without taking quadratic time",

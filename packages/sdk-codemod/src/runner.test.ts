@@ -13,6 +13,7 @@ type TestCodemodExtra = Pick<
   | "sourceTextLegacyPatterns"
   | "suspiciousPatterns"
   | "sourceStringSuspiciousPatterns"
+  | "jsonStringSuspiciousPatterns"
   | "prompt"
   | "reviewSupersededBy"
 >;
@@ -2059,6 +2060,74 @@ describe("runCodemods", () => {
       );
 
       expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
+    });
+
+    describe("jsonStringSuspiciousPatterns", () => {
+      async function reviewedFiles(
+        json: string,
+        extra: Pick<TestCodemodExtra, "suspiciousPatterns" | "jsonStringSuspiciousPatterns">,
+      ): Promise<string[]> {
+        const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-json-test-"));
+        tmpDir = dir;
+        await fs.promises.writeFile(path.join(dir, "a.json"), json);
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.json"], undefined, {
+                ...extra,
+                prompt: "Review by hand.",
+              }),
+              scriptPath: partialTransformPath,
+            },
+          ],
+          dir,
+          true,
+        );
+        return result.llmReviews.flatMap((review) => review.files);
+      }
+
+      test("matches inside one string value", async () => {
+        const files = await reviewedFiles('{"x":"one two"}', {
+          jsonStringSuspiciousPatterns: [/\bone\b[^\0]*\btwo\b/],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
+
+      test("does not match across two string values", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          jsonStringSuspiciousPatterns: [/\bone\b[^\0]*\btwo\b/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("does not match a key", async () => {
+        const files = await reviewedFiles('{"one":"x"}', {
+          jsonStringSuspiciousPatterns: [/\bone\b/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("replaces suspiciousPatterns for a JSON file that parses", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          suspiciousPatterns: [/one[^\0]*two/],
+          jsonStringSuspiciousPatterns: [/\bnever\b/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("falls back to suspiciousPatterns for a JSON file that does not parse", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two",}', {
+          suspiciousPatterns: [/one[^\0]*two/],
+          jsonStringSuspiciousPatterns: [/\bnever\b/],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
     });
 
     test.each([

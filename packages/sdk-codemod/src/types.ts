@@ -86,8 +86,18 @@ export interface CodemodPackage {
    */
   sourceStringSuspiciousPatterns?: CodemodPatternGroup[];
   /**
+   * Patterns to detect inside the string values of `.json` files for
+   * LLM-assisted review. Each value is decoded and matched on its own, so a
+   * match cannot cross from one value into the next in a single-line file.
+   * For a `.json` file that parses, `suspiciousPatterns` are not matched
+   * against its raw text; a file that does not parse falls back to them.
+   * Has no effect unless `prompt` is also set.
+   */
+  jsonStringSuspiciousPatterns?: CodemodPatternGroup[];
+  /**
    * Prompt that instructs an LLM how to finish the migration for files matched
-   * by `suspiciousPatterns` or `sourceStringSuspiciousPatterns`.
+   * by `suspiciousPatterns`, `sourceStringSuspiciousPatterns`, or
+   * `jsonStringSuspiciousPatterns`.
    */
   prompt?: string;
   /** Codemod ids whose LLM review prompt supersedes this prompt when both are selected. */

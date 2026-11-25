@@ -159,6 +159,7 @@ interface LoadedTransform {
   sourceTextLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   sourceStringSuspiciousPatterns: CodemodPatternGroup[];
+  jsonStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -260,6 +261,30 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function jsonStringContentForResidualMatching(relative: string, content: string): string | null {
+  if (path.extname(relative).toLowerCase() !== ".json") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return null;
+  }
+
+  const strings: string[] = [];
+  const visit = (value: unknown): void => {
+    if (typeof value === "string") {
+      strings.push(value);
+    } else if (Array.isArray(value)) {
+      value.forEach(visit);
+    } else if (value !== null && typeof value === "object") {
+      Object.values(value).forEach(visit);
+    }
+  };
+  visit(parsed);
+  return strings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -551,6 +576,7 @@ export async function runCodemods(
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
+      jsonStringSuspiciousPatterns: codemod.jsonStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
@@ -602,13 +628,19 @@ export async function runCodemods(
       }
     }
 
-    const residualBySnapshot = new Map<string, { residual: string; sourceString: string | null }>();
-    const residualFor = (content: string): { residual: string; sourceString: string | null } => {
+    const residualBySnapshot = new Map<
+      string,
+      { residual: string; sourceString: string | null; jsonString: string | null }
+    >();
+    const residualFor = (
+      content: string,
+    ): { residual: string; sourceString: string | null; jsonString: string | null } => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
+          jsonString: jsonStringContentForResidualMatching(relative, content),
         };
         residualBySnapshot.set(content, entry);
       }
@@ -660,15 +692,25 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
-      if (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0) {
+      if (
+        lt.suspiciousPatterns.length === 0 &&
+        lt.sourceStringSuspiciousPatterns.length === 0 &&
+        lt.jsonStringSuspiciousPatterns.length === 0
+      ) {
         continue;
       }
-      const { residual, sourceString } = residualFor(snapshot);
+      const { residual, sourceString, jsonString } = residualFor(snapshot);
+      const readsJsonStrings = jsonString != null && lt.jsonStringSuspiciousPatterns.length > 0;
       const matchesSource =
-        lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
+        (!readsJsonStrings &&
+          lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null)) ||
         (sourceString != null &&
           lt.sourceStringSuspiciousPatterns.some(
             (p) => matchResidualPattern(sourceString, p) !== null,
+          )) ||
+        (jsonString != null &&
+          lt.jsonStringSuspiciousPatterns.some(
+            (p) => matchResidualPattern(jsonString, p) !== null,
           ));
       if (matchesSource) {
         filesForReview().add(relative);
@@ -684,6 +726,7 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.jsonStringSuspiciousPatterns.length > 0 ||
       lt.reviewFindings ||
       lt.reviewFindingsBeforeTransform
     ) {

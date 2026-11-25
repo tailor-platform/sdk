@@ -54,7 +54,7 @@ function functionRunNamePattern(quotedNewline: boolean): RegExp {
   );
 }
 const FUNCTION_RUN_NAME_PATTERN = functionRunNamePattern(false);
-const FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN = functionRunNamePattern(true);
+const FUNCTION_RUN_NAME_DECODED_STRING_PATTERN = functionRunNamePattern(true);
 
 const FUNCTION_SCRIPT_COMMAND_PATTERN =
   /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
@@ -2339,7 +2339,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
-    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_DECODED_STRING_PATTERN],
+    jsonStringSuspiciousPatterns: [FUNCTION_RUN_NAME_DECODED_STRING_PATTERN],
     examples: [
       {
         before: "tailor function run workflows/sample.ts --name validate-order",
