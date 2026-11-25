@@ -14,7 +14,7 @@
   "timezone": "Asia/Tokyo",
   "schedule": ["* 9-18 * * 1-5"],
   "constraints": {
-    "ghActionsLock": "v0.4.1"
+    "ghActionsLock": "v0.5.1"
   },
   "customManagers": [
     {

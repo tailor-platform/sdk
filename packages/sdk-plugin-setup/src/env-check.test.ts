@@ -671,7 +671,7 @@ describe("checkEnv when gh cannot read the repository", () => {
     });
 
     expect(() => check(gh, () => null)).toThrow(
-      /Could not tell which GitHub repository to check.*known GitHub host.*clone of the repository/,
+      /^Could not tell which GitHub repository to check from the current directory\. Run the check in a clone of the repository whose remote points at GitHub\. Reason: none of the git remotes configured for this repository point to a known GitHub host$/,
     );
   });
 
@@ -679,7 +679,7 @@ describe("checkEnv when gh cannot read the repository", () => {
     const gh = fakeGh({ host: "ghe$(id).example.com" });
 
     expect(() => check(gh, () => null)).toThrow(
-      /Could not tell which GitHub repository to check.*cannot be embedded in commands/,
+      /Could not tell which GitHub repository to check.*Reason: gh named a repository that cannot be embedded in commands \(.*\)$/,
     );
   });
 
@@ -717,7 +717,7 @@ describe("checkEnv when gh cannot read the repository", () => {
 
     expect(() => check(gh)).toThrow(
       new RegExp(
-        `GitHub denied listing the ${what} of acme/app: Resource not accessible by personal access token`,
+        `^GitHub denied listing the ${what} of acme/app\\. The token gh uses needs read access .+ a fine-grained one\\. Reason: Resource not accessible by personal access token \\(HTTP 403\\)$`,
       ),
     );
   });

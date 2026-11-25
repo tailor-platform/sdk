@@ -102,20 +102,21 @@ export async function runMigrationTest(
       expiryRecorded = true;
     } catch (expiryError) {
       logger.warn(
-        `Failed to record an expiry on temporary workspace ${workspace.id}: ${expiryError instanceof Error ? expiryError.message : String(expiryError)}. Record one with ${formatCommandHint(
-          {
-            command: "tailor",
-            args: [
-              "workspace",
-              "ttl",
-              "set",
-              "--ttl",
-              expiryTtl,
-              `--workspace-id=${workspace.id}`,
-              ...(options.profile ? [`--profile=${options.profile}`] : []),
-            ],
-          },
-        )}.`,
+        `Failed to record an expiry on temporary workspace ${workspace.id}: ${expiryError instanceof Error ? expiryError.message : String(expiryError)}`,
+      );
+      logger.log(
+        `Record one with ${formatCommandHint({
+          command: "tailor",
+          args: [
+            "workspace",
+            "ttl",
+            "set",
+            "--ttl",
+            expiryTtl,
+            `--workspace-id=${workspace.id}`,
+            ...(options.profile ? [`--profile=${options.profile}`] : []),
+          ],
+        })}.`,
       );
     }
   }

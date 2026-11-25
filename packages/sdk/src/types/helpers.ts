@@ -20,6 +20,7 @@ export type IsUnion<T, U extends T = T> = T extends unknown
     : true
   : never;
 
+/** @lintignore exported for the type-checked source in temporal-types.test.ts */
 export type DeepWritable<T> = T extends
   | Date
   | Temporal.PlainDate

@@ -1,7 +1,7 @@
 import { runCommand } from "@politty/zod";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile, type LoadedConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { getMachineUserToken, tokenCommand } from "./token";
@@ -18,7 +18,7 @@ vi.mock("#/cli/shared/client", () => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 function createClient() {
@@ -38,11 +38,11 @@ describe("getMachineUserToken", () => {
   aroundEach(async (runTest) => {
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
-    vi.mocked(loadConfig).mockResolvedValue({
-      config: {
-        name: "my-app",
-      },
-    } as Awaited<ReturnType<typeof loadConfig>>);
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
+      config: { name: "my-app" } as LoadedConfig,
+      plugins: [],
+    });
 
     client = createClient();
     vi.mocked(initOperatorClient).mockResolvedValue(client);

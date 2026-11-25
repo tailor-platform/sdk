@@ -9,7 +9,7 @@ import {
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import * as path from "pathe";
-import { describe, test, expect, vi, aroundEach } from "vitest";
+import { assert, describe, test, expect, vi, aroundEach } from "vitest";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
@@ -40,6 +40,7 @@ import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
 import { logMigrationPlanNotices } from "./migration-validation";
 import {
   gqlPermissionDeletion,
+  trackRemoteTables,
   typeDeletion,
   typeMetaRequest,
 } from "./test-helpers/migration-apply";
@@ -280,6 +281,7 @@ describe("planTailorDB (service level)", () => {
       client,
       workspaceId,
       application,
+      applications: [],
       owner: applicationOwner(application),
       forRemoval: false,
       config: mockConfig,
@@ -333,6 +335,7 @@ describe("planTailorDB (service level)", () => {
       client: createMockClient([]),
       workspaceId,
       application: createMockApplication([tailordb]),
+      applications: [],
       owner: appOwner,
       forRemoval: false,
       config: mockConfig,
@@ -357,6 +360,7 @@ describe("planTailorDB (service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application: createMockApplication([createMockTailorDBService("tailordb")]),
+        applications: [],
         owner: appOwner,
         forRemoval,
         config: sharedDirectoryConfig,
@@ -377,6 +381,7 @@ describe("planTailorDB (service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application: createMockApplication([createMockTailorDBService("tailordb")]),
+        applications: [],
         owner: appOwner,
         forRemoval: false,
         config: mockConfig,
@@ -400,6 +405,7 @@ describe("planTailorDB (service level)", () => {
       client: createMockClient([]),
       workspaceId,
       application: createMockApplication([createMockTailorDBService("tailordb")]),
+      applications: [],
       owner: appOwner,
       forRemoval: false,
       config: mockConfig,
@@ -418,6 +424,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -444,6 +451,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -471,6 +479,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -496,6 +505,7 @@ describe("planTailorDB (service level)", () => {
           client,
           workspaceId,
           application,
+          applications: [],
           owner: applicationOwner(application),
           forRemoval: false,
           config: mockConfig,
@@ -522,6 +532,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: appOwner,
         forRemoval: false,
         config: mockConfig,
@@ -534,6 +545,43 @@ describe("planTailorDB (service level)", () => {
       ]);
     });
 
+    test("labels a workspace namespace with the applications that list it", async () => {
+      const client = createMockClient([]);
+      const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
+
+      await planTailorDB({
+        client,
+        workspaceId,
+        application,
+        applications: [
+          {
+            name: "shop",
+            subgraphs: [{ Type: "tailordb", Name: "my-tailordb" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          {
+            name: "admin",
+            subgraphs: [{ Type: "tailordb", Name: "my-tailordb" }],
+            authNamespace: undefined,
+            settings: {},
+          },
+          { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+        ],
+        owner: { kind: "workspace" },
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      });
+
+      expect(buildMetaRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          trn: expect.stringMatching(/:tailordb:my-tailordb$/),
+          onApps: ["shop", "admin"],
+        }),
+      );
+    });
+
     test("reports an unmanaged service with its resource type and label", async () => {
       const client = createMockClient([{ name: "my-tailordb" }]);
       const application = createMockApplication([createMockTailorDBService("my-tailordb")]);
@@ -542,6 +590,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -598,6 +647,7 @@ describe("planTailorDB (service level)", () => {
         client: createMockClient([]),
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -646,6 +696,7 @@ describe("planTailorDB (service level)", () => {
           client: remote === undefined ? createMockClient([]) : createClientWithRemoteType(remote),
           workspaceId,
           application: createMockApplication([tailorDBService]),
+          applications: [],
           owner: appOwner,
           forRemoval: false,
           config: mockConfig,
@@ -695,6 +746,7 @@ describe("planTailorDB (service level)", () => {
             client,
             workspaceId,
             application: createMockApplication([tailorDBService]),
+            applications: [],
             owner: appOwner,
             forRemoval: false,
             config: mockConfig,
@@ -790,6 +842,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -900,6 +953,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -972,6 +1026,7 @@ describe("planTailorDB (service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([tailorDBService]),
+          applications: [],
           owner: appOwner,
           forRemoval: false,
           config: mockConfig,
@@ -1044,6 +1099,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1091,6 +1147,7 @@ describe("planTailorDB (service level)", () => {
         };
         const baseCtx = {
           workspaceId,
+          applications: [],
           owner: { kind: "application" as const, name: appName, id: undefined },
           forRemoval: false,
           config: mockConfig,
@@ -1190,6 +1247,7 @@ describe("planTailorDB (service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([tailorDBService]),
+          applications: [],
           owner: appOwner,
           forRemoval: false,
           config: mockConfig,
@@ -1307,6 +1365,7 @@ describe("planTailorDB (service level)", () => {
           client,
           workspaceId,
           application: createMockApplication([tailorDBService]),
+          applications: [],
           owner: appOwner,
           forRemoval: false,
           config: mockConfig,
@@ -1380,6 +1439,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
@@ -1442,6 +1502,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application: createMockApplication([createMockTailorDBService("test-tailordb")]),
+        applications: [],
         owner: applicationOwner(
           createMockApplication([createMockTailorDBService("test-tailordb")]),
         ),
@@ -1473,6 +1534,7 @@ describe("planTailorDB (service level)", () => {
         client,
         workspaceId,
         application: createMockApplication([createMockTailorDBService("test-tailordb")]),
+        applications: [],
         owner: applicationOwner(
           createMockApplication([createMockTailorDBService("test-tailordb")]),
         ),
@@ -1529,6 +1591,7 @@ describe("planTailorDB (service level)", () => {
             ...createMockApplication([createMockTailorDBService("test-tailordb")]),
             authServices: authService === undefined ? [] : [authService],
           } as unknown as Application,
+          applications: [],
           owner: { kind: "application", name: appName, id: undefined },
           forRemoval: false,
           config: {
@@ -2677,27 +2740,29 @@ describe("applyTailorDB migration label reconciliation", () => {
     remoteLabels: Record<string, string>,
     options: MigrationClientOptions<K> = {},
   ) {
-    const client = withOperatorClientMocks(
+    const client = trackRemoteTables(
       withOperatorClientMocks(
-        mockOperatorClient({
-          getMetadata: { metadata: { labels: remoteLabels } },
-          setMetadata: {},
-          createTailorDBService: {},
-          createTailorDBType: {},
-          updateTailorDBType: {},
-          createTailorDBGQLPermission: {},
-          updateTailorDBGQLPermission: {},
-          deleteTailorDBGQLPermission: {},
-          deleteTailorDBType: {},
-        }),
-        options.includeRemoteSchema
-          ? {
-              listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
-              listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
-            }
-          : undefined,
+        withOperatorClientMocks(
+          mockOperatorClient({
+            getMetadata: { metadata: { labels: remoteLabels } },
+            setMetadata: {},
+            createTailorDBService: {},
+            createTailorDBType: {},
+            updateTailorDBType: {},
+            createTailorDBGQLPermission: {},
+            updateTailorDBGQLPermission: {},
+            deleteTailorDBGQLPermission: {},
+            deleteTailorDBType: {},
+          }),
+          options.includeRemoteSchema
+            ? {
+                listTailorDBTypes: { tailordbTypes: [], nextPageToken: "" },
+                listTailorDBGQLPermissions: { permissions: [], nextPageToken: "" },
+              }
+            : undefined,
+        ),
+        options.overrides,
       ),
-      options.overrides,
     );
     return { client, getMetadata: client.getMetadata, setMetadata: client.setMetadata };
   }
@@ -2806,13 +2871,14 @@ describe("applyTailorDB migration label reconciliation", () => {
   test("keeps the deploy's workspace and profile in the checkpoint recovery commands while planning", async () => {
     const { client } = createMigrationClient({ "sdk-migration": "m0002" });
     using _stderr = captureStderr();
-    const { application, config } = makePlanResult().context;
+    const { application, config, owner } = makePlanResult().context;
 
     const error = await planTailorDB({
       client,
       workspaceId: "test-workspace",
       application,
-      owner: applicationOwner(application),
+      applications: [],
+      owner,
       forRemoval: false,
       config,
       noSchemaCheck: true,
@@ -3189,46 +3255,48 @@ describe("applyTailorDB migration label reconciliation", () => {
   function schemaVerificationClient(
     remoteSettings: MessageInitShape<typeof TailorDBType_TypeSettingSchema>,
   ) {
-    return mockOperatorClient({
-      getMetadata: {
-        metadata: { labels: { "sdk-migration": "m0000" } },
-      },
-      setMetadata: {},
-      listTailorDBTypes: {
-        tailordbTypes: [
-          {
-            name: "User",
-            schema: {
-              fields: {
-                id: {
-                  type: "uuid",
-                  required: true,
-                  allowedValues: [],
-                  validate: [],
-                  fields: {},
+    return trackRemoteTables(
+      mockOperatorClient({
+        getMetadata: {
+          metadata: { labels: { "sdk-migration": "m0000" } },
+        },
+        setMetadata: {},
+        listTailorDBTypes: {
+          tailordbTypes: [
+            {
+              name: "User",
+              schema: {
+                fields: {
+                  id: {
+                    type: "uuid",
+                    required: true,
+                    allowedValues: [],
+                    validate: [],
+                    fields: {},
+                  },
                 },
+                settings: remoteSettings,
+                relationships: {},
+                indexes: {},
+                files: {},
               },
-              settings: remoteSettings,
-              relationships: {},
-              indexes: {},
-              files: {},
             },
-          },
-        ],
-        nextPageToken: "",
-      },
-      listTailorDBGQLPermissions: {
-        permissions: [],
-        nextPageToken: "",
-      },
-      createTailorDBService: {},
-      createTailorDBType: {},
-      updateTailorDBType: {},
-      createTailorDBGQLPermission: {},
-      updateTailorDBGQLPermission: {},
-      deleteTailorDBGQLPermission: {},
-      deleteTailorDBType: {},
-    });
+          ],
+          nextPageToken: "",
+        },
+        listTailorDBGQLPermissions: {
+          permissions: [],
+          nextPageToken: "",
+        },
+        createTailorDBService: {},
+        createTailorDBType: {},
+        updateTailorDBType: {},
+        createTailorDBGQLPermission: {},
+        updateTailorDBGQLPermission: {},
+        deleteTailorDBGQLPermission: {},
+        deleteTailorDBType: {},
+      }),
+    );
   }
 
   type VerificationClient = ReturnType<typeof schemaVerificationClient>;
@@ -3972,10 +4040,13 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   function dropUserOnceDeleted(client: VerificationClient): void {
     const listUser = client.listTailorDBTypes.getMockImplementation();
+    const deleteType = client.deleteTailorDBType.getMockImplementation();
+    assert(deleteType);
     let userDeleted = false;
-    client.deleteTailorDBType.mockImplementation(async () => {
+    client.deleteTailorDBType.mockImplementation(async (request, options) => {
+      const response = await deleteType(request, options);
       userDeleted = true;
-      return {};
+      return response;
     });
     client.listTailorDBTypes.mockImplementation(async (request) =>
       listUser && request.namespaceName === "test-tailordb" && !userDeleted
@@ -4939,11 +5010,14 @@ describe("applyTailorDB migration label reconciliation", () => {
     });
 
     const planResult = makePlanResult();
-    planResult.context.config.db = {
-      "test-tailordb": {
-        files: [],
-        migration: { directory: "." },
-        gqlOperations: { create: false },
+    planResult.context.config = {
+      ...planResult.context.config,
+      db: {
+        "test-tailordb": {
+          files: [],
+          migration: { directory: "." },
+          gqlOperations: { create: false },
+        },
       },
     };
 
@@ -5086,7 +5160,7 @@ describe("applyTailorDB table apply concurrency", () => {
       context: tailorDBPlanResultContext({
         workspaceId: "test-workspace",
         application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
-        config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
+        config: { path: "/nonexistent/tailor.config.ts", db: {} },
         noSchemaCheck: true,
       }),
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;

@@ -46,7 +46,7 @@ vi.mock("../shared/client", () => ({
 }));
 
 vi.mock("../shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("../bundler/query/query-bundler", () => ({
@@ -62,7 +62,7 @@ vi.mock("../shared/config", () => ({
 }));
 
 vi.mock("../shared/tailordb-namespace", () => ({
-  resolveTableNamespaces: vi.fn(),
+  resolveUniqueTableNamespaces: vi.fn(),
 }));
 
 vi.mock("./sql-type-extractor", () => ({
@@ -94,11 +94,11 @@ describe("query", () => {
     const { loadAccessToken, loadWorkspaceId, loadMachineUserName } =
       await import("../shared/context");
     const { initOperatorClient, fetchMachineUserToken } = await import("../shared/client");
-    const { loadConfig } = await import("../shared/config-loader");
+    const { loadConfigFile } = await import("../shared/config-loader");
     const { extractAllNamespaces } = await import("../shared/config");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
     const { executeScript } = await import("../shared/script-executor");
-    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveUniqueTableNamespaces } = await import("../shared/tailordb-namespace");
     const { extractTableNamesFromSql, extractColumnTemplate } =
       await import("./sql-type-extractor");
     const { loadTypeFieldOrder } = await import("./type-field-order");
@@ -110,11 +110,13 @@ describe("query", () => {
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
     vi.mocked(loadMachineUserName).mockImplementation(async (opts) => opts?.machineUser ?? "bot");
     vi.mocked(initOperatorClient).mockResolvedValue(mockClient);
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         name: "sample-app",
         path: "/project/tailor.config.ts",
       },
+      plugins: [],
     } as never);
     vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb"]);
     vi.mocked(bundleQueryScript).mockResolvedValue("export async function main() {}\n");
@@ -126,7 +128,7 @@ describe("query", () => {
     vi.mocked(fetchMachineUserToken).mockResolvedValue({
       access_token: "mu-token",
     } as never);
-    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
+    vi.mocked(resolveUniqueTableNamespaces).mockResolvedValue(new Map([["User", "tailordb"]]));
     vi.mocked(extractTableNamesFromSql).mockReturnValue(["User"]);
     vi.mocked(extractColumnTemplate).mockReturnValue(null);
     vi.mocked(loadTypeFieldOrder).mockResolvedValue(new Map());
@@ -151,7 +153,7 @@ describe("query", () => {
   test("executes SQL query with bundled script and inferred namespace", async () => {
     const { executeScript } = await import("../shared/script-executor");
     const { bundleQueryScript } = await import("../bundler/query/query-bundler");
-    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveUniqueTableNamespaces } = await import("../shared/tailordb-namespace");
 
     const result = await query({
       workspaceId: "workspace-1",
@@ -162,7 +164,7 @@ describe("query", () => {
     });
 
     expect(bundleQueryScript).toHaveBeenCalledWith("sql", "/project");
-    expect(resolveTableNamespaces).not.toHaveBeenCalled();
+    expect(resolveUniqueTableNamespaces).not.toHaveBeenCalled();
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: "workspace-1",
@@ -184,11 +186,11 @@ describe("query", () => {
 
   test("resolves namespace from SQL type names when multiple namespaces exist", async () => {
     const { extractAllNamespaces } = await import("../shared/config");
-    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveUniqueTableNamespaces } = await import("../shared/tailordb-namespace");
     const { executeScript } = await import("../shared/script-executor");
 
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
-    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
+    vi.mocked(resolveUniqueTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
 
     await query({
       workspaceId: "workspace-1",
@@ -198,7 +200,7 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(resolveTableNamespaces).toHaveBeenCalledWith({
+    expect(resolveUniqueTableNamespaces).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
       namespaces: ["crm", "sales"],
       tableNames: ["User"],
@@ -262,7 +264,8 @@ describe("query", () => {
     ).rejects.toMatchObject({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: "Could not infer namespace from query. Detected namespaces: crm, sales.",
-      suggestion: "Reference a TailorDB table in the query; its namespace is resolved from it.",
+      suggestion:
+        "Reference a TailorDB table in the query, whose namespace is resolved from it, or pass --namespace.",
       context: { namespaces: ["crm", "sales"] },
     });
   });
@@ -287,11 +290,11 @@ describe("query", () => {
 
   test("rejects a SQL query whose tables are in no namespace", async () => {
     const { extractAllNamespaces } = await import("../shared/config");
-    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveUniqueTableNamespaces } = await import("../shared/tailordb-namespace");
     const { extractTableNamesFromSql } = await import("./sql-type-extractor");
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
     vi.mocked(extractTableNamesFromSql).mockReturnValue(["User", "Ghost"]);
-    vi.mocked(resolveTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
+    vi.mocked(resolveUniqueTableNamespaces).mockResolvedValue(new Map([["User", "sales"]]));
 
     await expect(
       query({
@@ -304,18 +307,19 @@ describe("query", () => {
     ).rejects.toMatchObject({
       code: "QUERY_NAMESPACE_UNRESOLVED",
       message: "Could not find namespace for tables in query: Ghost.",
-      suggestion: "Check the table names against the types deployed in namespaces: crm, sales.",
+      suggestion:
+        "Check the table names against the types deployed in namespaces: crm, sales, or pass --namespace.",
       context: { tables: ["Ghost"], namespaces: ["crm", "sales"] },
     });
   });
 
   test("rejects a SQL query whose tables span namespaces", async () => {
     const { extractAllNamespaces } = await import("../shared/config");
-    const { resolveTableNamespaces } = await import("../shared/tailordb-namespace");
+    const { resolveUniqueTableNamespaces } = await import("../shared/tailordb-namespace");
     const { extractTableNamesFromSql } = await import("./sql-type-extractor");
     vi.mocked(extractAllNamespaces).mockReturnValue(["crm", "sales"]);
     vi.mocked(extractTableNamesFromSql).mockReturnValue(["User", "Order"]);
-    vi.mocked(resolveTableNamespaces).mockResolvedValue(
+    vi.mocked(resolveUniqueTableNamespaces).mockResolvedValue(
       new Map([
         ["User", "crm"],
         ["Order", "sales"],

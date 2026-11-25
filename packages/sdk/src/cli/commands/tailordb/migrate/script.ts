@@ -16,7 +16,8 @@ import { z } from "zod";
 import { configArg } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { CLIError } from "#/cli/shared/errors";
@@ -345,7 +346,9 @@ async function script(options: ScriptOptions): Promise<void> {
     });
   }
 
-  const { config, plugins } = await loadConfig(options.configPath);
+  const loaded = await loadConfigFile(options.configPath);
+  const { plugins } = loaded;
+  const config = configOf(loaded);
   const configDir = path.dirname(config.path);
   const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
   const dateDefault = effectiveDateDefault(config);

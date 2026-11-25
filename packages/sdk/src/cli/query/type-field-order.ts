@@ -3,18 +3,18 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { LoadedConfig, LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
 
 type TypeFieldOrderMap = Map<string, string[]>;
 
 /**
  * Load field definition order for all TailorDB tables in a namespace.
- * @param config - Loaded application configuration
+ * @param config - Loaded config of either kind
  * @param namespace - TailorDB namespace name
  * @returns Map of table name to field names in definition order
  */
 export async function loadTypeFieldOrder(
-  config: LoadedConfig,
+  config: LoadedConfig | LoadedWorkspaceConfig,
   namespace: string,
 ): Promise<TypeFieldOrderMap> {
   const fieldOrder: TypeFieldOrderMap = new Map();

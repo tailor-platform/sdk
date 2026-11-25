@@ -10,7 +10,7 @@ import type {
   WorkspaceTakeover,
 } from "./confirm";
 import type { BuiltDeploymentTarget } from "./deployment-target";
-import type { UnchangedAnnotation } from "./label";
+import type { DeployOwner, UnchangedAnnotation } from "./label";
 import type { OwnershipResult } from "./owned-resource";
 
 /**
@@ -321,9 +321,13 @@ function deletesNeedingConfirmation(
 
 export function collectImportantResourceDeletions(
   results: PlanResults,
+  owner: DeployOwner,
 ): ImportantResourceDeletion[] {
   const { app } = results;
-  const keepsApplication = app.creates.length + app.updates.length + app.unchanged.length > 0;
+  // A defineConfig() config that keeps its application deletes the others only when renamed.
+  const keepsApplication =
+    owner.kind === "application" &&
+    app.creates.length + app.updates.length + app.unchanged.length > 0;
   return [
     ...deletesNeedingConfirmation(results, "tailordb.type"),
     ...deletesNeedingConfirmation(results, "staticwebsite"),
@@ -405,7 +409,10 @@ function retainDeletesNotClaimed(
 const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   Pick<ResourceNameCheck, "namesOf"> & { resourceType: ManagedResourceType }
 > = [
-  { resourceType: "application", namesOf: (target) => [target.application.name] },
+  {
+    resourceType: "application",
+    namesOf: (target) => target.applications.map((application) => application.name),
+  },
   {
     resourceType: "executor",
     namesOf: (target) =>
@@ -540,7 +547,9 @@ function collectDeploymentResourceOwners(
  * @param deployments - Planned deployments of this run
  */
 export function scheduleRenamedAppDeletes(deployments: ReadonlyArray<PlannedDeployment>): void {
-  const protectedAppNames = new Set(deployments.map((deployment) => deployment.application.name));
+  const protectedAppNames = new Set(
+    deployments.flatMap((deployment) => deployment.applications.map(({ name }) => name)),
+  );
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduled = new Set(
     deployments.flatMap((deployment) => deployment.app.deletes.map((del) => del.name)),

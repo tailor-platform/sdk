@@ -4,7 +4,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { errorToJson } from "#/cli/shared/error-json";
 import { CLIError } from "#/cli/shared/errors";
 import { prompt } from "#/cli/shared/prompt";
@@ -33,7 +33,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/context", () => ({
@@ -130,13 +130,14 @@ describe("tailordb migration resolve", () => {
     writeDiff(state.migrationsDir, 2, [
       { kind: "table_added", typeName: "Comment", after: snapshotType("Comment") },
     ]);
-    vi.mocked(loadConfig).mockResolvedValue({
+    vi.mocked(loadConfigFile).mockResolvedValue({
+      kind: "config",
       config: {
         path: path.join(tmpDir, "tailor.config.ts"),
         db: { tailordb: { migration: { directory: state.migrationsDir } } },
       },
       plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
     state.localTypes = {
       User: parsedType("User"),
       Post: parsedType("Post"),
@@ -536,7 +537,7 @@ describe("tailordb migration resolve", () => {
 
     expect(result.success).toBe(true);
     expect(state.stderr.join("")).toMatch(
-      /Could not remove the temporary resources of migration tailordb\/0002: cleanup failed\. A later deploy removes them\./,
+      /Could not remove the temporary resources of migration tailordb\/0002: cleanup failed\nA later deploy removes them\.\n/,
     );
   });
 

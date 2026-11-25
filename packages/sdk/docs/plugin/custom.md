@@ -203,13 +203,14 @@ onTailorDBNamespaceLoaded(context) {
 
 **Context** (`TailorDBReadyContext`):
 
-| Field          | Type                      | Description                                                     |
-| -------------- | ------------------------- | --------------------------------------------------------------- |
-| `tailordb`     | `TailorDBNamespaceData[]` | All namespaces with tables, source info, and plugin attachments |
-| `auth`         | `GeneratorAuthInput?`     | Auth configuration (machine users, OAuth2 clients, etc.)        |
-| `baseDir`      | `string`                  | Output directory for generated files                            |
-| `configPath`   | `string`                  | Path to `tailor.config.ts`                                      |
-| `pluginConfig` | `PluginConfig`            | Plugin-level config from `definePlugins()`                      |
+| Field          | Type                                 | Description                                                                                                           |
+| -------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `tailordb`     | `TailorDBNamespaceData[]`            | All namespaces with tables, source info, and plugin attachments                                                       |
+| `auths`        | `Record<string, GeneratorAuthInput>` | Every Auth service of the config (machine users, OAuth2 clients, etc.), keyed by its name                             |
+| `auth`         | `GeneratorAuthInput?`                | Deprecated: use `auths`. The only Auth service; with several, reading it throws and a `{ ...ctx }` copy leaves it out |
+| `baseDir`      | `string`                             | Output directory for generated files                                                                                  |
+| `configPath`   | `string`                             | Path to `tailor.config.ts`                                                                                            |
+| `pluginConfig` | `PluginConfig`                       | Plugin-level config from `definePlugins()`                                                                            |
 
 `TailorDBNamespaceData` contains:
 
@@ -319,11 +320,15 @@ Runs once after every application in the deploy has been applied, including when
 there are no resource changes. Hooks run sequentially in config order, then in
 `definePlugins()` registration order. No `importPath` or table attachment is required.
 
-Use `ctx.application` for the registering application's ID, URL, domain, AI
-Gateway URLs, static websites, and public OAuth client IDs. `ctx.application.id`
-is the `id` from `defineConfig()` and is `undefined` when the config has none.
-`ctx.applications` contains all applications in a multi-config deploy with the
-same fields. OAuth client secrets are never included.
+`ctx.applications` lists every application in the deploy, including those of other
+configs in a multi-config deploy, with its ID, URL, domain, AI Gateway URLs, static
+websites, and public OAuth client IDs. An application's `id` is the `id` from
+`defineConfig()` and is `undefined` when the config has none. OAuth client secrets
+are never included. `ctx.staticWebsites` holds the static websites of the
+registering config. `ctx.application`, the registering application, is deprecated
+and will be removed in v3: the registering config's applications are the entries of
+`ctx.applications` whose `configPath` equals `ctx.configPath`, and its sites are in
+`ctx.staticWebsites`.
 
 `ctx.configPath` is the absolute path of the registering config. `ctx.workspaceId`
 and `ctx.pluginConfig` identify the deployment workspace and the plugin's options.
@@ -340,7 +345,8 @@ const deployedInfo: Plugin = {
   id: "@example/deployed-info",
   description: "Reports the deployed application URL",
   onDeployed(ctx) {
-    const url = ctx.application.url;
+    const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);
+    const url = app?.url;
     if (!url) return;
     ctx.logger.success(`Application ready: ${url}`);
     return { outputs: { url } };
@@ -350,7 +356,7 @@ const deployedInfo: Plugin = {
 export const plugins = definePlugins(deployedInfo);
 ```
 
-To publish assets, look up the site with `ctx.application.staticWebsites[name]`
+To publish assets, look up the site with `ctx.staticWebsites[name]`
 and await its `publish(dir)` with an absolute directory path. Only websites
 declared in the registering config appear there; any other name is `undefined`,
 so check the site before publishing. Websites of other configs are listed under
@@ -392,11 +398,11 @@ API runs hooks under the same conditions as `tailor deploy`.
 
 Each generation-time hook runs at its own pipeline phase, regardless of what other hooks the same plugin implements:
 
-| Hook              | Runs after       | Data provided                                   |
-| ----------------- | ---------------- | ----------------------------------------------- |
-| `onTailorDBReady` | TailorDB loaded  | `tailordb` + `auth`                             |
-| `onResolverReady` | Resolvers loaded | `tailordb` + `resolvers` + `auth`               |
-| `onExecutorReady` | Executors loaded | `tailordb` + `resolvers` + `executors` + `auth` |
+| Hook              | Runs after       | Data provided                                    |
+| ----------------- | ---------------- | ------------------------------------------------ |
+| `onTailorDBReady` | TailorDB loaded  | `tailordb` + `auths`                             |
+| `onResolverReady` | Resolvers loaded | `tailordb` + `resolvers` + `auths`               |
+| `onExecutorReady` | Executors loaded | `tailordb` + `resolvers` + `executors` + `auths` |
 
 A plugin implementing multiple hooks (e.g., both `onTailorDBReady` and `onResolverReady`) will have each hook called at its natural phase. This ensures that files generated by `onTailorDBReady` are available when resolvers are loaded, before `onResolverReady` runs.
 

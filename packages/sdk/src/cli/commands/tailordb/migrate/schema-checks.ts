@@ -71,8 +71,8 @@ import {
   type RemoteSchemaVerificationResult,
   type SchemaDrift,
 } from "./types";
+import type { ServiceSettings } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { NamespaceWithMigrations } from "./config";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
@@ -191,7 +191,7 @@ function definedWhenNotEmpty<T extends object>(value: T): T | undefined {
 }
 
 function namespaceConfig(
-  config: LoadedConfig,
+  config: ServiceSettings,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   namespace: string,
 ): TailorDBServiceConfig | undefined {
@@ -200,7 +200,7 @@ function namespaceConfig(
 }
 
 function namespaceGqlOperations(
-  config: LoadedConfig,
+  config: ServiceSettings,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   namespace: string,
 ): DeployGqlOperations {
@@ -379,7 +379,7 @@ function compareRemoteSchemaWithSnapshot(
   remote: RemoteSchema,
   namespace: string,
   snapshot: SchemaSnapshot,
-  config: LoadedConfig,
+  config: ServiceSettings,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   ignoredSettings: readonly (keyof SnapshotSettings)[] = [],
   ignoredSettingsTables: "all" | "maintenance-mode" = "all",
@@ -525,7 +525,7 @@ type InterruptedMigrationCheck = {
   migrationsDir: string;
   checkpoint: number;
   checkpointSnapshot: SchemaSnapshot;
-  config: LoadedConfig;
+  config: ServiceSettings;
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>;
 };
 
@@ -631,7 +631,7 @@ export interface RemoteSchemaVerificationOptions {
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
- * @param {LoadedConfig} config - Loaded application config
+ * @param {ServiceSettings} config - Settings of the config the namespaces belong to
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @param {RemoteSchemaVerificationOptions} options - Verification options
  * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
@@ -640,7 +640,7 @@ export async function verifyRemoteSchema(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
-  config: LoadedConfig,
+  config: ServiceSettings,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   options: RemoteSchemaVerificationOptions = {},
 ): Promise<RemoteSchemaVerificationResult[]> {

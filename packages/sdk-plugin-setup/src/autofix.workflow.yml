@@ -580,7 +580,7 @@ jobs:
       - id: tailor-claude
         continue-on-error: true
         timeout-minutes: 20
-        uses: anthropics/claude-code-action@c84e279f859e2591391e95bd309286eb111c345f # v1.0.284
+        uses: anthropics/claude-code-action@eb56b6666facdbd501035f4a0269d8caee2e7a8b # v1.0.289
         env:
           ANTHROPIC_MODEL: ${{ vars.TAILOR_AUTOFIX_CLAUDE_MODEL }}
         with:

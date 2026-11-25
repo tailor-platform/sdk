@@ -3,7 +3,7 @@ import * as os from "node:os";
 import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -26,7 +26,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(),
+  loadConfigFile: vi.fn(),
 }));
 
 vi.mock("#/cli/shared/prompt", () => ({
@@ -88,9 +88,10 @@ beforeEach(() => {
   vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
   state.namespaces = [];
-  vi.mocked(loadConfig).mockImplementation(
+  vi.mocked(loadConfigFile).mockImplementation(
     async () =>
       ({
+        kind: "config",
         config: {
           path: path.join(tmpDir, "tailor.config.ts"),
           db: Object.fromEntries(
@@ -101,7 +102,7 @@ beforeEach(() => {
           ),
         },
         plugins: [],
-      }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+      }) as unknown as Awaited<ReturnType<typeof loadConfigFile>>,
   );
   vi.mocked(canPrompt).mockReturnValue(false);
 });

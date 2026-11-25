@@ -12,7 +12,7 @@ import {
 } from "#/cli/commands/deploy/workflow-execution-policy";
 import { defineApplication } from "#/cli/services/application";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
@@ -20,12 +20,14 @@ import {
   type OperatorClientMocks,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
+import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
 import {
   emptyPlanResults,
   plannedDeleteLists,
   PLANNED_ITEM,
 } from "./deploy/test-helpers/plan-results";
 import { removeCommand } from "./remove";
+import type * as ConfigLoader from "#/cli/shared/config-loader";
 import type { PlanResults } from "./deploy/apply-phases";
 
 const mocks = vi.hoisted(() => ({
@@ -97,16 +99,28 @@ vi.mock(import("#/cli/commands/deploy/workflow-execution-policy"), async (origin
   };
 });
 vi.mock("#/cli/services/application", () => ({
-  defineApplication: vi.fn(() => ({ name: "my-app", id: "app-id" })),
+  defineApplication: vi.fn(() => ({
+    name: "my-app",
+    id: "app-id",
+    config: {},
+    subgraphs: [],
+    authServices: [],
+  })),
 }));
 vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
-vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn(async () => ({ config: { path: "/tailor.config.ts" } })),
+vi.mock("#/cli/shared/config-loader", async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadConfigFile: vi.fn(async () => ({
+    kind: "config",
+    config: { path: "/tailor.config.ts" },
+    plugins: [],
+  })),
 }));
-vi.mock("#/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", async (importOriginal) => ({
+  ...(await importOriginal()),
   loadAccessToken: vi.fn(async () => "token"),
   loadWorkspaceId: vi.fn(async () => "workspace-id"),
 }));
@@ -373,7 +387,8 @@ describe("remove command", () => {
       );
       const configPath = path.join(root, "tailor.config.ts");
       fs.writeFileSync(configPath, "");
-      vi.mocked(loadConfig).mockResolvedValueOnce({
+      vi.mocked(loadConfigFile).mockResolvedValueOnce({
+        kind: "config",
         config: { name: "my-app", path: configPath },
         plugins: [],
       });
@@ -424,5 +439,48 @@ describe("remove command", () => {
       application: "my-app",
       complete: false,
     });
+  });
+
+  test("rejects a workspace config before reaching the Platform, pointing to deploy and workspace delete", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "remove-workspace-"));
+    try {
+      const configPath = path.join(root, "tailor.config.ts");
+      fs.writeFileSync(
+        configPath,
+        brandedDefault(
+          "workspace-config",
+          `{ db: { "main-db": { files: [] } }, apps: { shop: { db: ["main-db"] } } }`,
+        ),
+      );
+      const actual = await vi.importActual<typeof ConfigLoader>("#/cli/shared/config-loader");
+      vi.mocked(loadConfigFile).mockImplementationOnce(actual.loadConfigFile);
+      vi.mocked(initOperatorClient).mockClear();
+
+      const workspaceId = "33333333-3333-4333-8333-333333333333";
+
+      const result = await runCommand(removeCommand, [
+        "--config",
+        configPath,
+        "--workspace-id",
+        workspaceId,
+        "--profile",
+        "dev",
+        "--yes",
+      ]);
+
+      expect(result.error).toMatchObject({
+        code: "CONFIG_KIND_UNSUPPORTED",
+        suggestion: expect.stringMatching(
+          new RegExp(
+            `\`tailor deploy --workspace-id=${workspaceId} --profile=dev --config=[^\`]+\`.*\`tailor workspace delete --workspace-id=${workspaceId}\``,
+            "s",
+          ),
+        ),
+      });
+      expect(initOperatorClient).not.toHaveBeenCalled();
+      expect(defineApplication).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

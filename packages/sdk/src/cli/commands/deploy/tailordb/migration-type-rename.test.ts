@@ -136,6 +136,12 @@ describe("applyTailorDB: type rename migration flow", () => {
     return checkpoint.mockPending(migrations);
   }
 
+  function createClient() {
+    return checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "User" }] },
+    });
+  }
+
   let checkpoint: RemoteCheckpoint;
 
   beforeEach(() => {
@@ -147,9 +153,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("creates the new table before the script and drops the old table after the checkpoint", async () => {
-    const client = checkpoint.createMockClient({
-      listTailorDBTypes: { tailordbTypes: [{ name: "User" }] },
-    });
+    const client = createClient();
     const planResult = buildPlanResult();
     planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
 
@@ -186,7 +190,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("keeps the old type and does not advance the checkpoint when the script fails", async () => {
-    const client = checkpoint.createMockClient();
+    const client = createClient();
     const planResult = buildPlanResult();
     planResult.context.pendingMigrations = setPendingMigrations([mkTypeRenameMigration(1)]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
@@ -206,7 +210,7 @@ describe("applyTailorDB: type rename migration flow", () => {
   });
 
   test("restores retargeted tables before deleting the new table on rollback", async () => {
-    const client = checkpoint.createMockClient();
+    const client = createClient();
     const planResult = buildPlanResult({ withOrderUpdate: true });
     planResult.context.pendingMigrations = setPendingMigrations([
       mkTypeRenameMigration(1, { withOrderRetarget: true }),

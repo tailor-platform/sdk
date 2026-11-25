@@ -83,9 +83,10 @@ function createContext(client: OperatorClient): PlanContext {
     client,
     workspaceId,
     application: createMockApplication(),
+    applications: [],
     owner: applicationOwner(createMockApplication()),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -258,9 +259,10 @@ describe("planAIGateway", () => {
       client,
       workspaceId,
       application,
+      applications: [],
       owner: applicationOwner(application),
       forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      config: { path: "/test/tailor.config.ts" },
     });
 
     expect(result.changeSet.unchanged).toHaveLength(1);

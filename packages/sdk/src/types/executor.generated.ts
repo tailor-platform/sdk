@@ -75,6 +75,8 @@ export type AuthAccessTokenTrigger = {
     | "auth.access_token.refreshed"
     | "auth.access_token.revoked"
   )[];
+  /** Auth namespace name to subscribe to. Must be the config's Auth service; defaults to it. */
+  auth?: string | undefined;
 };
 export type AuthAccessTokenTriggerInput = AuthAccessTokenTrigger;
 

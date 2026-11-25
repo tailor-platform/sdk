@@ -17,6 +17,7 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
+import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger, symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { defineConfig } from "#/configure/config/index";
@@ -484,9 +485,10 @@ function createContext(
     client,
     workspaceId,
     application,
+    applications: [],
     owner: applicationOwner(application),
     forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+    config: { path: "/test/tailor.config.ts" },
   };
 }
 
@@ -543,6 +545,35 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("labels a workspace Auth service with the applications that use it", async () => {
+    await planAuth({
+      ...createContext(createMockClient()),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        {
+          name: "admin",
+          subgraphs: [{ Type: "auth", Name: "auth-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+        { name: "landing", subgraphs: [], authNamespace: undefined, settings: {} },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:auth:auth-a$/),
+        onApps: ["shop", "admin"],
+      }),
+    );
   });
 
   test("refreshes the labels of an unchanged auth service whose SDK labels differ", async () => {
@@ -959,9 +990,10 @@ describe("planAuth", () => {
       client,
       workspaceId,
       application,
+      applications: [],
       owner: applicationOwner(application),
       forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+      config: { path: "/test/tailor.config.ts" },
     });
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
@@ -1019,9 +1051,10 @@ describe("planAuth", () => {
         client,
         workspaceId,
         application,
+        applications: [],
         owner: applicationOwner(application),
         forRemoval: false,
-        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
+        config: { path: "/test/tailor.config.ts" },
       });
 
       expect(
@@ -1190,14 +1223,22 @@ describe("planAuth", () => {
       machineUsers: remoteMachineUsers.map((name) => ({ name, attributes: [], attributeMap: {} })),
     });
 
-    await expect(
-      planAuth(createContext(client, createMockApplicationNamingMachineUsers(references))),
-    ).rejects.toMatchObject({
+    const error = (await planAuth(
+      createContext(client, createMockApplicationNamingMachineUsers(references)),
+    ).catch((error: unknown) => error)) as Error;
+
+    expect(error).toMatchObject({
       code: "AUTH_MACHINE_USER_NOT_FOUND",
       message,
       suggestion,
-      context: { authNamespace: "auth-a", missing, machineUsers: references.machineUsers },
+      context: {
+        authNamespace: "auth-a",
+        missing,
+        machineUsers: references.machineUsers,
+        file: "/test/tailor.config.ts",
+      },
     });
+    expect(getErrorDiagnostics(error).location).toEqual({ file: "/test/tailor.config.ts" });
   });
 
   test("does not mark a forceApplyAll idpConfig update that has nothing to compare against, and deletes a stale config beside it", async () => {

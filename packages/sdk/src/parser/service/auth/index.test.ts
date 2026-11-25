@@ -2,7 +2,7 @@ import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
-import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
+import { AuthConfigSchema, AuthInvokerSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type { OptionalKeysOf } from "type-fest";
@@ -585,5 +585,22 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       throw new Error("Expected AuthConfigSchema parsing to fail");
     }
     expect(JSON.stringify(result.error.issues)).toContain("unsupported");
+  });
+});
+
+describe("AuthInvokerSchema", () => {
+  test("accepts a machine user name or an object naming its Auth namespace", () => {
+    expect(AuthInvokerSchema.safeParse("admin").success).toBe(true);
+    expect(
+      AuthInvokerSchema.safeParse({ namespace: "other-auth", machineUserName: "admin" }).success,
+    ).toBe(true);
+  });
+
+  test.for([
+    { namespace: "", machineUserName: "admin" },
+    { namespace: "Other_Auth", machineUserName: "admin" },
+    { namespace: "other-auth", machineUserName: "" },
+  ])("rejects the object form $namespace / $machineUserName", (invoker) => {
+    expect(AuthInvokerSchema.safeParse(invoker).success).toBe(false);
   });
 });

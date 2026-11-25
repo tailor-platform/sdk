@@ -34,7 +34,7 @@ type ListTailorDBTypesClient = {
   listTailorDBTypes(args: ListTailorDBTypesArgs): Promise<ListTailorDBTypesResult>;
 };
 
-export interface CollectLocalTailorDBTypeNameSourcesArgs {
+interface CollectLocalTailorDBTypeNameSourcesArgs {
   /** Loaded local TailorDB services. */
   tailorDBServices: ReadonlyArray<LocalTailorDBService>;
 }
@@ -51,6 +51,13 @@ export interface FetchExternalTailorDBTypeNameSourcesArgs {
 interface AssertUniqueTailorDBTypeNamesArgs {
   /** Table-name sources to validate. */
   sources: ReadonlyArray<TailorDBTypeNameSource>;
+  /** Where the names must be unique, as the suggestion names it. */
+  uniqueAcross?: string;
+}
+
+export interface AssertUniqueLocalTailorDBTypeNamesArgs extends CollectLocalTailorDBTypeNameSourcesArgs {
+  /** Whether the services are an application's or a whole workspace's. Defaults to `"application"`. */
+  scope?: "application" | "workspace";
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
@@ -198,7 +205,7 @@ export async function fetchExternalTailorDBTypeNameSources(
 function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs): void {
   assertUniqueDefinitionNames({
     kind: "tailordb-type",
-    uniqueAcross: "all TailorDB namespaces in the application",
+    uniqueAcross: args.uniqueAcross ?? "all TailorDB namespaces in the application",
     definitions: args.sources.map((source) => {
       const namespaceLabel =
         source.kind === "external"
@@ -220,10 +227,11 @@ function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs):
  * @param args - Validation inputs
  */
 export function assertUniqueLocalTailorDBTypeNames(
-  args: CollectLocalTailorDBTypeNameSourcesArgs,
+  args: AssertUniqueLocalTailorDBTypeNamesArgs,
 ): void {
   assertUniqueTailorDBTypeNames({
     sources: collectLocalTailorDBTypeNameSources(args),
+    uniqueAcross: `all TailorDB namespaces in the ${args.scope ?? "application"}`,
   });
 }
 

@@ -7,6 +7,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
+import { logger } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
 import {
@@ -721,7 +722,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /Could not verify ownership.*ownership read failed/i,
+      /^Could not verify ownership of migration checkpoint .+ before restoring table settings\. Skipping restoration for this namespace and aborting this deployment\. Reason: ownership read failed$/,
     );
     expect(publishFlagWrites(client).filter(([name]) => name === "Order")).toEqual([
       ["Order", false],
@@ -1545,7 +1546,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         (client: OperatorClient) => {
           vi.mocked(client.getMetadata).mockRejectedValueOnce(new Error("ownership read failed"));
         },
-        /Could not verify ownership.*ownership read failed/i,
+        /^Could not verify ownership of migration checkpoint .+ before restoring table settings\. Leaving its table settings unchanged\. Reason: ownership read failed$/,
       ],
     ] as const)(
       '"deploy" keeps a namespace restricted when its checkpoint %s while held',
@@ -1602,6 +1603,31 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       await releases[0]?.(client);
 
       expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
+    });
+
+    test("ends the warning with the error when the held release cannot remove its record", async () => {
+      const client = createMockClient();
+      const planResult = createMockPlanResult({
+        creates: ["Order"],
+        subscribedTables: ["Order"],
+        maintenanceMode: "deploy",
+      });
+      planResult.context.pendingMigrations = mockAddedOrderMigration();
+
+      const releases: MaintenanceModeRelease[] = [];
+      await applyTailorDB(client, planResult, "create-update", {
+        holdMaintenanceMode: (release) => releases.push(release),
+      });
+      vi.mocked(client.setMetadata).mockRejectedValueOnce(new Error("Token expired."));
+      using warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      using log = vi.spyOn(logger, "log").mockImplementation(() => {});
+
+      await releases[0]?.(client);
+
+      expect(warn).toHaveBeenCalledWith(
+        "Namespace 'test-ns' left maintenance mode, but its record could not be removed: Token expired.",
+      );
+      expect(log).toHaveBeenCalledWith("A later deploy removes it.");
     });
 
     test("records the maintenance mode with every checkpoint of a namespace", async () => {

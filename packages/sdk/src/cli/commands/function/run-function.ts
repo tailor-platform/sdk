@@ -6,6 +6,7 @@ import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { effectiveDateDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
+import { functionEnv } from "#/cli/shared/function-env";
 import { logger, styles } from "#/cli/shared/logger";
 import {
   executeScriptReportingStart,
@@ -15,7 +16,7 @@ import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { bundleForRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType } from "./detect";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { LoadedConfig, LoadedWorkspaceConfig } from "#/cli/shared/config-loader";
 import type { Jsonifiable } from "type-fest";
 
 /** The function `function run` executes and the context it runs in */
@@ -24,8 +25,8 @@ export interface FunctionRunTarget {
   filePath: string;
   /** Workflow job name to run */
   jobName: string | undefined;
-  /** Loaded application config */
-  config: LoadedConfig;
+  /** Loaded config of either kind */
+  config: LoadedConfig | LoadedWorkspaceConfig;
   kyselyTemporal?: boolean;
   /** Operator client */
   client: OperatorClient;
@@ -91,23 +92,34 @@ export function displayPath(filePath: string): string {
 
 const ARG_FLAG = "--arg";
 
+/** Commands that take the argument options. */
+export type ArgCommandName = "function run" | "workflow run";
+
+function argErrorCode(command: ArgCommandName, kind: "INVALID" | "FILE_UNREADABLE"): string {
+  return `${command === "function run" ? "FUNCTION" : "WORKFLOW_RUN"}_ARG_${kind}`;
+}
+
 /**
  * Parse the JSON given with `--arg`.
  * @param text - JSON text
+ * @param command - Command whose error guidance a failure carries
  * @returns Parsed argument
  */
-export function parseArgOption(text: string): FunctionArg {
-  return { value: parseArgJson(text, `Invalid ${ARG_FLAG} JSON`), label: ARG_FLAG };
+export function parseArgOption(
+  text: string,
+  command: ArgCommandName = "function run",
+): FunctionArg {
+  return { value: parseArgJson(text, `Invalid ${ARG_FLAG} JSON`, command), label: ARG_FLAG };
 }
 
-function parseArgJson(text: string, failure: string): Jsonifiable {
+function parseArgJson(text: string, failure: string, command: ArgCommandName): Jsonifiable {
   try {
     return JSON.parse(text) as Jsonifiable;
   } catch (error) {
     throw CLIError({
-      code: "FUNCTION_ARG_INVALID",
+      code: argErrorCode(command, "INVALID"),
       message: `${failure}: ${error instanceof Error ? error.message : error}`,
-      command: "function run",
+      command,
       cause: error,
     });
   }
@@ -130,9 +142,13 @@ export function argFileNotFoundError(filePath: string, cause?: unknown): CLIErro
 /**
  * Read and parse an argument file.
  * @param filePath - Absolute path of the argument file
+ * @param command - Command whose error guidance a failure carries
  * @returns Parsed argument
  */
-export function readFunctionArgFile(filePath: string): FunctionArg {
+export function readFunctionArgFile(
+  filePath: string,
+  command: ArgCommandName = "function run",
+): FunctionArg {
   const label = displayPath(filePath);
   let text: string;
   try {
@@ -142,12 +158,13 @@ export function readFunctionArgFile(filePath: string): FunctionArg {
       throw argFileNotFoundError(filePath, error);
     }
     throw CLIError({
-      code: "FUNCTION_ARG_FILE_UNREADABLE",
+      code: argErrorCode(command, "FILE_UNREADABLE"),
       message: `Cannot read argument file ${filePath}: ${error instanceof Error ? error.message : error}`,
+      command,
       cause: error,
     });
   }
-  return { value: parseArgJson(text, `Invalid JSON in ${label}`), label };
+  return { value: parseArgJson(text, `Invalid JSON in ${label}`, command), label };
 }
 
 /**
@@ -173,7 +190,10 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
   }
 
   progress(`Detecting function type from ${styles.path(displayPath(filePath))}`);
-  const detected = await detectFunctionType({ filePath, jobName: target.jobName });
+  const detected = await detectFunctionType({
+    filePath,
+    jobName: target.jobName,
+  });
   progress(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
   progress("Bundling...");
@@ -192,7 +212,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
             configPath: config.path,
           })
         : undefined,
-    env: config.env ?? {},
+    env: functionEnv(config, detected.type, filePath),
     inlineSourcemap: buildOptions.inlineSourcemap,
     inlineSourcemapDependencySources: buildOptions.inlineSourcemapDependencySources,
     inlineSourcemapProjectSources: projectSourcesOf({ buildOptions, baseDir }),
@@ -254,6 +274,24 @@ export async function executeFunction(
     }),
     onStart,
   });
+}
+
+/**
+ * Warn that a workflow job runs alone, unless `--name` selected it and its deprecation warning
+ * already named `workflow run`.
+ * @param target - Function run target
+ * @param prepared - Prepared script
+ * @returns Whether the warning was printed
+ */
+export function warnStartedJobsSkipped(
+  target: FunctionRunTarget,
+  prepared: PreparedFunction,
+): boolean {
+  if (prepared.functionType !== "workflow-job" || target.jobName !== undefined) return false;
+  logger.warn(
+    `Only the body of workflow job "${prepared.functionName}" runs, and the jobs it starts with \`.start()\` do not. Use \`tailor workflow run <file> --job <name>\` to run them too.`,
+  );
+  return true;
 }
 
 /**

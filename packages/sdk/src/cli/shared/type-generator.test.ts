@@ -1,15 +1,23 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { defineWorkspace } from "#/configure/config/workspace";
+import { defineAIGateway } from "#/configure/services/aigateway/index";
 import { defineAuth } from "#/configure/services/auth/index";
+import { defineIdp } from "#/configure/services/idp/index";
+import { defineSecretManager } from "#/configure/services/secrets/index";
+import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
 import { logger } from "./logger";
 import { tempDir } from "./test-helpers/temp-dir";
+import { loadedWorkspace } from "./test-helpers/workspace-config";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
   generateTypeDefinitionFromConfig,
+  generateTypeDefinitionFromWorkspace,
   generateUserTypes,
+  generateWorkspaceUserTypes,
   resolveTypeDefinitionPath,
 } from "./type-generator";
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
@@ -684,6 +692,18 @@ describe("generateUserTypes", () => {
     expect(fs.readFileSync(dts, "utf8")).toContain('declare module "@tailor-platform/sdk"');
   });
 
+  test("writes tailor.d.ts next to a workspace config with the workspace's registries", async () => {
+    const { t, configPath, dts } = project("{}");
+    using _t = t;
+    vi.spyOn(logger, "success").mockImplementation(() => {});
+
+    await generateWorkspaceUserTypes({
+      workspace: loadedWorkspace(defineWorkspace({ env: { stage: "dev" }, apps: {} }), configPath),
+    });
+
+    expect(fs.readFileSync(dts, "utf8")).toContain("stage: string;");
+  });
+
   test("does not write tailor.d.ts when the tsconfig enables the content mapper", async () => {
     const { t, configPath, dts } = project(MAPPER_TSCONFIG);
     using _t = t;
@@ -725,5 +745,130 @@ describe("generateUserTypes", () => {
     await generateUserTypes({ config: { name: "app" }, configPath });
 
     expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("generateTypeDefinitionFromWorkspace", () => {
+  test("declares the names of every Auth service once, and their attributes as one map", () => {
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        env: { stage: "dev" },
+        auth: {
+          "corp-auth": defineAuth("corp-auth", {
+            machineUserAttributes: { role: t.enum(["ADMIN", "WORKER"]), tenant: t.string() },
+            machineUsers: {
+              admin: { attributes: { role: "ADMIN", tenant: "corp" } },
+              seeder: { attributes: { role: "WORKER", tenant: "corp" } },
+            },
+          }),
+          "partner-auth": defineAuth("partner-auth", {
+            machineUserAttributes: { role: t.string(), region: t.string() },
+            machineUsers: { seeder: { attributes: { role: "partner", region: "eu" } } },
+          }),
+        },
+        apps: {},
+      }),
+    );
+
+    const content = generateTypeDefinitionFromWorkspace(workspace);
+
+    expect(content).toContain('role: "ADMIN" | "WORKER" | string;');
+    expect(content).toContain("tenant?: string;");
+    expect(content).toContain("region?: string;");
+    expect(content.match(/^ {4}seeder: true;$/gm)).toHaveLength(1);
+    expect(content).toContain("admin: true;");
+    expect(content).toContain('"corp-auth": true;');
+    expect(content).toContain('"partner-auth": true;');
+    expect(content).toContain("stage: string;");
+    expect(content).toContain('workspace: "unset";');
+  });
+
+  test("declares the IdPs, AI Gateways, secrets, and connections the workspace defines", () => {
+    const google = {
+      type: "oauth2",
+      providerUrl: "https://accounts.google.com",
+      issuerUrl: "https://accounts.google.com",
+      clientId: "x",
+      clientSecret: "y",
+    } as const;
+    const workspace = loadedWorkspace(
+      defineWorkspace({
+        auth: {
+          "corp-auth": defineAuth("corp-auth", {
+            machineUserAttributes: {},
+            machineUsers: {},
+            connections: { google, slack: google },
+          }),
+          "partner-auth": defineAuth("partner-auth", {
+            machineUserAttributes: {},
+            machineUsers: {},
+            connections: { google },
+          }),
+        },
+        idp: { "corp-idp": defineIdp("corp-idp", { clients: ["default"] }) },
+        aiGateways: [defineAIGateway("assistant", { authNamespace: "corp-auth" })],
+        secrets: defineSecretManager({ "api-keys": { stripe: "sk_test" } }),
+        apps: {},
+      }),
+    );
+
+    const content = generateTypeDefinitionFromWorkspace(workspace);
+
+    expect(content.match(/^ {4}google: true;$/gm)).toHaveLength(1);
+    expect(content).toContain("slack: true;");
+    expect(content).toContain('"corp-idp": true;');
+    expect(content).toContain("assistant: true;");
+    expect(content).toContain('"api-keys": "stripe";');
+  });
+
+  test("declares the attributes of a single Auth service as a defineConfig() config does", () => {
+    const auth = defineAuth("corp-auth", {
+      machineUserAttributes: { role: t.enum(["ADMIN", "WORKER"]) },
+      machineUsers: { admin: { attributes: { role: "ADMIN" } } },
+    });
+
+    const content = generateTypeDefinitionFromWorkspace(
+      loadedWorkspace(defineWorkspace({ auth: { "corp-auth": auth }, apps: {} })),
+    );
+
+    expect(content).toContain('role: "ADMIN" | "WORKER";');
+  });
+
+  test("keeps the attribute list tuple only when every Auth service lists as many attributes", () => {
+    const user = db.table("User", {
+      email: db.string().unique(),
+      tenant: db.uuid(),
+      team: db.uuid(),
+    });
+    const listingTenant = defineAuth("a", {
+      userProfile: { type: user, usernameField: "email", attributeList: ["tenant"] },
+      machineUsers: {},
+    });
+    const listingTeam = defineAuth("b", {
+      userProfile: { type: user, usernameField: "email", attributeList: ["team"] },
+      machineUsers: {},
+    });
+    const listingBoth = defineAuth("b", {
+      userProfile: { type: user, usernameField: "email", attributeList: ["tenant", "team"] },
+      machineUsers: {},
+    });
+
+    const sameLength = generateTypeDefinitionFromWorkspace(
+      loadedWorkspace(defineWorkspace({ auth: { a: listingTenant, b: listingTeam }, apps: {} })),
+    );
+    const differentLength = generateTypeDefinitionFromWorkspace(
+      loadedWorkspace(defineWorkspace({ auth: { a: listingTenant, b: listingBoth }, apps: {} })),
+    );
+
+    expect(sameLength).toContain("__tuple?: [string];");
+    expect(differentLength).toContain("__tuple?: [];");
+  });
+
+  test("records the workspace's defaultDateRepresentation under one key, whatever its apps", () => {
+    const content = generateTypeDefinitionFromWorkspace(
+      loadedWorkspace(defineWorkspace({ defaultDateRepresentation: "temporal", apps: {} })),
+    );
+
+    expect(content).toContain('workspace: "temporal";');
   });
 });

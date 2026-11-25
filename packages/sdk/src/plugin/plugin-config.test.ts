@@ -86,7 +86,7 @@ test("accepts only JSON values as deploy hook outputs", () => {
 });
 
 test("models static websites the config does not declare as possibly missing", () => {
-  expectTypeOf<DeployedContext["application"]["staticWebsites"]["web"]>().toEqualTypeOf<
+  expectTypeOf<DeployedContext["staticWebsites"]["web"]>().toEqualTypeOf<
     PublishableStaticWebsite | undefined
   >();
 });

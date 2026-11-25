@@ -20,13 +20,13 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                               | Aliases    | Description                                                     |
-| ------------------------------------- | ---------- | --------------------------------------------------------------- |
-| [`function get`](#function-get)       | -          | Get a function registry by name                                 |
-| [`function list`](#function-list)     | -          | List function registries in a workspace                         |
-| [`function logs`](#function-logs)     | -          | List or get function execution logs.                            |
-| [`function run`](#function-run)       | `test-run` | Run a function on the Tailor Platform server without deploying. |
-| [`function script`](#function-script) | -          | Scaffold a one-off script to run with `function run`.           |
+| Command                                   | Aliases    | Description                                                     |
+| ----------------------------------------- | ---------- | --------------------------------------------------------------- |
+| [`function get`](#function-get)           | -          | Get a function registry by name                                 |
+| [`function list`](#function-list)         | -          | List function registries in a workspace                         |
+| [`function logs`](#function-logs)         | -          | List or get function execution logs.                            |
+| [`function run`](#function-run)           | `test-run` | Run a function on the Tailor Platform server without deploying. |
+| [`function scaffold`](#function-scaffold) | `script`   | Scaffold a one-off script to run with `function run`.           |
 
 ### function get
 
@@ -165,17 +165,20 @@ tailor function run [options] <file>
 
 **Options**
 
-| Option                          | Alias | Description                                                                                             | Required | Default | Env                                 |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                            | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                       | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
-| `--name <NAME>`                 | `-n`  | Workflow job name to run (matches the `name` field of createWorkflowJob)                                | No       | -       | -                                   |
-| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                                   | No       | -       | -                                   |
-| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                                        | No       | -       | -                                   |
-| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes              | No       | `false` | -                                   |
-| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.          | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory) | No       | -       | `TAILOR_CONFIG_PATH`                |
-| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                                 | No       | `false` | -                                   |
+| Option                          | Alias | Description                                                                                                                              | Required | Default | Env                                 |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- | ----------------------------------- |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                             | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID`      |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                        | No       | -       | `TAILOR_PLATFORM_PROFILE`           |
+| `--name <NAME>`                 | `-n`  | Deprecated: use `tailor workflow run --job`. Workflow job name to run (matches the `name` field of createWorkflowJob)                    | No       | -       | -                                   |
+| `--arg <ARG>`                   | `-a`  | JSON argument to pass to the function                                                                                                    | No       | -       | -                                   |
+| `--arg-file <ARG_FILE>`         | -     | Path to a JSON file holding the argument to pass to the function                                                                         | No       | -       | -                                   |
+| `--watch`                       | -     | Run the function again each time the file, a file it imports, or the argument file changes                                               | No       | `false` | -                                   |
+| `--async`                       | -     | Run the function as an asynchronous job, which is not bound by the time limit of a synchronous run, and wait for it to finish            | No       | `false` | -                                   |
+| `--interval <INTERVAL>`         | `-i`  | With --async, the polling interval while waiting, at most 1m (e.g., '3s', '500ms', '1m'); 3s when omitted                                | No       | -       | -                                   |
+| `--timeout <TIMEOUT>`           | `-t`  | With --async, the maximum time to wait for the run, not a limit on the function; waits without a limit when omitted (e.g., '30s', '10m') | No       | -       | -                                   |
+| `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user.                                           | No       | -       | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file (default: the nearest tailor.config.ts in the current or a parent directory)                                  | No       | -       | `TAILOR_CONFIG_PATH`                |
+| `--allow-schema-drift`          | -     | Run a scaffolded script even when its schema snapshot no longer matches                                                                  | No       | `false` | -                                   |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -193,16 +196,16 @@ $ tailor function run resolvers/add.ts --arg '{"a":1,"b":2}'
 $ tailor function run resolvers/add.ts --arg-file args/add.json
 ```
 
+**Run a long script as an asynchronous job and wait for it to finish**
+
+```bash
+$ tailor function run scripts/backfill.ts --async --arg '{"from":"2026-01-01"}'
+```
+
 **Run a resolver again on every save, with its argument in a temporary file**
 
 ```bash
 $ tailor function run resolvers/add.ts --watch
-```
-
-**Run a specific workflow job by name**
-
-```bash
-$ tailor function run workflows/sample.ts --name validate-order
 ```
 
 **Run a pre-bundled .js file directly**
@@ -216,7 +219,7 @@ $ tailor function run build/resolvers/add.js --arg '{"a":1,"b":2}'
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
-A script scaffolded by `function script` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
+A script scaffolded by `function scaffold` with a generated `db.ts` is checked against its `db.snapshot.json` before execution and refused on schema drift; pass `--allow-schema-drift` to run it anyway. The check compares table and field structure; hook and validator code changes are not detected.
 
 `--arg-file` reads the argument from a JSON file instead of `--arg`; the two cannot be combined.
 
@@ -224,22 +227,28 @@ A script scaffolded by `function script` with a generated `db.ts` is checked aga
 
 Each run prints a `-->` line when the Platform accepts it and a `<--` line with `[OK]` or `[FAILED]` when it finishes, followed by its logs and result. Both lines carry the execution ID, which `function logs` accepts. When reading the argument file, loading or bundling the function, or the request to the Platform fails, the command prints an `[ERROR]` line and keeps watching. Until the function loads and bundles again, adding a file anywhere in the project also starts a run, so a file that an import names can be created after the import. A save during a run starts one more run after it finishes. With `--json`, each run writes one JSON object per line to stdout, including its `executionId`, and each failure writes an error object to stderr.
 
+A synchronous run is stopped by the Platform when it takes too long. `--async` runs the function as an asynchronous job instead, which the Platform ends after 5 minutes. The command registers the function as a temporary resource, starts it, waits for it to finish, prints its logs and result the way a synchronous run does, and removes the temporary resource. `--timeout` limits how long the command waits, not how long the function may run; `--interval` sets how often it checks. When the wait stops (`--timeout` elapsed, or Ctrl+C), the function keeps running and its temporary resource stays in place: the command prints the run ID and the execution ID, `tailor function logs <execution ID>` reads the outcome, and `tailor workflow prune` removes the resource of runs that have finished. A function that is given no argument receives an empty object, as in a synchronous run. `--async` cannot be combined with `--watch` or `--name`; `--timeout` and `--interval` need `--async`.
+
 Changes to `tailor.config.ts`, `tsconfig.json`, `package.json`, env files, and installed packages are not picked up; restart the command after changing them.
 
 `test-run` is a deprecated alias of this command and will be removed in v3.
 
+`--name` is deprecated and will be removed in v3. Use `tailor workflow run <file> --job <name>`, which also runs the jobs the job starts with `.start()`.
+
 > [!WARNING]
-> Workflow job `.start()` calls do not work in this mode.
+> Workflow job `.start()` calls do not work in this mode, with or without `--name`.
 > Started jobs are not executed; only the target job's `body` function runs in isolation.
 
-### function script
+### function scaffold
 
 Scaffold a one-off script to run with `function run`.
+
+**Aliases:** `script`
 
 **Usage**
 
 ```
-tailor function script [options] <file>
+tailor function scaffold [options] <file>
 ```
 
 **Arguments**
@@ -265,19 +274,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Scaffold a one-off script (single-namespace project)**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts
+$ tailor function scaffold scripts/fix-prices.ts
 ```
 
 **Scaffold a script targeting a specific namespace**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts --namespace tailordb
+$ tailor function scaffold scripts/fix-prices.ts --namespace tailordb
 ```
 
 **Scaffold from a deployed or external namespace**
 
 ```bash
-$ tailor function script scripts/fix-prices.ts --namespace shared --remote
+$ tailor function scaffold scripts/fix-prices.ts --namespace shared --remote
 ```
 
 **Notes**
@@ -287,3 +296,5 @@ The scaffolded script is a plain default-exported function; execute it with `tai
 By default, when the project configures `kyselyTypePlugin`, the skeleton imports `getDB()` from the plugin's generated types, or from `@tailor-platform/sdk/plugin/kysely-type/db` when the plugin sets `contentMapper: true`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped `db.ts` plus a `db.snapshot.json` next to the script; `function run` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
 Pass `--remote` to generate the script-scoped files from the deployed schema instead, even when `kyselyTypePlugin` is configured. This is required for an external namespace. Re-running the command refreshes `db.ts` and `db.snapshot.json` from the selected source and leaves the script itself untouched.
+
+`script` is a deprecated alias of this command and will be removed in v3.

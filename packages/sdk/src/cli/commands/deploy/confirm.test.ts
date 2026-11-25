@@ -12,7 +12,8 @@ import {
 import type { logger as loggerModule } from "#/cli/shared/logger";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
-vi.mock("#/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", async (importOriginal) => ({
+  ...(await importOriginal()),
   logger: {
     log: vi.fn(),
     info: vi.fn(),
@@ -235,6 +236,49 @@ describe("confirmUnmanagedResources", () => {
     );
 
     expect(vi.mocked(logger.log).mock.calls.flat()).toContain('    • Executor "ex-1"');
+  });
+
+  test("says a workspace config manages a resource it marked, instead of another tool", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.log).mockClear();
+
+    await confirmUnmanagedResources(
+      [
+        {
+          resourceType: "tailordb.service",
+          resourceLabel: "TailorDB namespace",
+          resourceName: "main",
+          managedBy: "workspace",
+        },
+      ],
+      "my-app",
+      "dry-run",
+    );
+
+    const lines = vi.mocked(logger.log).mock.calls.flat().join("\n");
+    expect(logger.warn).toHaveBeenCalledWith("Resources managed by a workspace config were found:");
+    expect(lines).toContain('    • TailorDB namespace "main"');
+    expect(lines).toContain('Continuing moves them to "my-app"');
+    expect(lines).not.toContain("older SDK versions");
+  });
+
+  test.for([
+    { label: "an application", appName: "my-app", owner: '"my-app"' },
+    { label: "a workspace config", appName: undefined, owner: "this workspace config" },
+  ])("names $label in the prompt", async ({ appName, owner }) => {
+    const { prompt } = await import("#/cli/shared/prompt");
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(true);
+
+    await confirmUnmanagedResources(
+      [{ resourceType: "executor", resourceLabel: "Executor", resourceName: "ex-1" }],
+      appName,
+      "prompt",
+    );
+
+    expect(prompt.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ message: `Allow tailor to manage these resources for ${owner}?` }),
+    );
   });
 });
 
