@@ -88,7 +88,8 @@ export interface CodemodPackage {
   /**
    * Patterns to detect inside the string values of `.json` files for
    * LLM-assisted review. Each value is decoded and matched on its own, so a
-   * match cannot cross from one value into the next in a single-line file.
+   * match cannot cross from one value into the next in a single-line file,
+   * and every pattern of an array group must match inside the same value.
    * For a `.json` file that parses, `suspiciousPatterns` are not matched
    * against its raw text; a file that does not parse falls back to them.
    * Has no effect unless `prompt` is also set.

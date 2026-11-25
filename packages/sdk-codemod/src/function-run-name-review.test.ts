@@ -215,6 +215,13 @@ describe("function run --name review", () => {
       }),
     ],
     [
+      "--name of another command in the next script of a compact package.json that starts with a byte order mark",
+      "package.json",
+      `\uFEFF${JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor workspace create --name x" },
+      })}`,
+    ],
+    [
       "-n in a later key of a compact package.json",
       "package.json",
       JSON.stringify({ scripts: { a: "tailor function run a.ts" }, description: "x -n y" }),

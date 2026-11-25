@@ -268,22 +268,21 @@ function jsonStringContentForResidualMatching(relative: string, content: string)
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(content);
+    parsed = JSON.parse(content.replace(/^\uFEFF/, ""));
   } catch {
     return null;
   }
 
   const strings: string[] = [];
-  const visit = (value: unknown): void => {
+  const pending: unknown[] = [parsed];
+  while (pending.length > 0) {
+    const value = pending.pop();
     if (typeof value === "string") {
       strings.push(value);
-    } else if (Array.isArray(value)) {
-      value.forEach(visit);
     } else if (value !== null && typeof value === "object") {
-      Object.values(value).forEach(visit);
+      for (const child of Object.values(value)) pending.push(child);
     }
-  };
-  visit(parsed);
+  }
   return strings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
@@ -582,6 +581,8 @@ export async function runCodemods(
     });
   }
 
+  const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
+
   const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
   const warnings: string[] = [];
@@ -640,7 +641,9 @@ export async function runCodemods(
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
-          jsonString: jsonStringContentForResidualMatching(relative, content),
+          jsonString: needsJsonStrings
+            ? jsonStringContentForResidualMatching(relative, content)
+            : null,
         };
         residualBySnapshot.set(content, entry);
       }
@@ -710,7 +713,7 @@ export async function runCodemods(
           )) ||
         (jsonString != null &&
           lt.jsonStringSuspiciousPatterns.some(
-            (p) => matchResidualPattern(jsonString, p) !== null,
+            (p) => matchResidualPatternFragment(jsonString, p) !== null,
           ));
       if (matchesSource) {
         filesForReview().add(relative);

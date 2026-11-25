@@ -2103,6 +2103,32 @@ describe("runCodemods", () => {
         expect(files).toEqual([]);
       });
 
+      test("does not match across two string values even when the pattern allows any character", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          jsonStringSuspiciousPatterns: [/one[\s\S]*two/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("requires every pattern of a group to match inside the same string value", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          jsonStringSuspiciousPatterns: [["one", "two"]],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test.each([
+        ["with jsonStringSuspiciousPatterns", { jsonStringSuspiciousPatterns: [/\bnever\b/] }],
+        ["without jsonStringSuspiciousPatterns", { suspiciousPatterns: [/\bnever\b/] }],
+      ])("reads a deeply nested JSON file %s", async (_name, extra) => {
+        const depth = 20000;
+        const files = await reviewedFiles(`{"a":${"[".repeat(depth)}${"]".repeat(depth)}}`, extra);
+
+        expect(files).toEqual([]);
+      });
+
       test("does not match a key", async () => {
         const files = await reviewedFiles('{"one":"x"}', {
           jsonStringSuspiciousPatterns: [/\bone\b/],
