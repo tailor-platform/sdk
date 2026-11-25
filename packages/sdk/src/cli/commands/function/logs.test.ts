@@ -39,7 +39,11 @@ import type {
   FunctionExecutionSummary,
 } from "@tailor-platform/tailor-proto/function_resource_pb";
 
-function makeDownloadClient(chunks: Uint8Array[], metadata?: { updatedAt: Date }) {
+interface MakeDownloadClientMetadata {
+  updatedAt: Date;
+}
+
+function makeDownloadClient(chunks: Uint8Array[], metadata?: MakeDownloadClientMetadata) {
   return mockOperatorClient({
     async *downloadFunctionRegistryScript() {
       yield {

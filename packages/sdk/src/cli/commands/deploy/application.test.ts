@@ -64,16 +64,16 @@ const matchingSubgraphs = [
   { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
 ] satisfies Array<MessageInitShape<typeof SubgraphSchema>>;
 
-function createMockApplication(
-  overrides: {
-    name?: string;
-    id?: string | undefined;
-    cors?: string[];
-    metadata?: Record<string, string> | undefined;
-    subgraphs?: Array<{ Type: string; Name: string }>;
-    staticWebsiteServices?: Array<{ name: string }>;
-  } = {},
-): Application {
+type CreateMockApplicationOverrides = {
+  name?: string;
+  id?: string | undefined;
+  cors?: string[];
+  metadata?: Record<string, string> | undefined;
+  subgraphs?: Array<{ Type: string; Name: string }>;
+  staticWebsiteServices?: Array<{ name: string }>;
+};
+
+function createMockApplication(overrides: CreateMockApplicationOverrides = {}): Application {
   return {
     name: overrides.name ?? appName,
     id: overrides.id,
@@ -936,7 +936,9 @@ describe("planApplication", () => {
 });
 
 describe("diffHttpAdapterDisplay", () => {
-  function adapter(name: string, overrides: { pathPattern?: string; priority?: number } = {}) {
+  type AdapterOverrides = { pathPattern?: string; priority?: number };
+
+  function adapter(name: string, overrides: AdapterOverrides = {}) {
     return {
       name,
       pathPattern: overrides.pathPattern ?? `/${name}`,

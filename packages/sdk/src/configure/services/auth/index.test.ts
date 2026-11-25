@@ -308,7 +308,8 @@ describe("defineAuth", () => {
 
   describe("beforeLogin hook", () => {
     test("includes beforeLogin in auth config when provided", () => {
-      const handler = async (_args: { claims: JsonObject; idpConfigName: string }) => {
+      type HandlerArgs = { claims: JsonObject; idpConfigName: string };
+      const handler = async (_args: HandlerArgs) => {
         // no return value
       };
       const authConfig = defineAuth("hook-auth", {

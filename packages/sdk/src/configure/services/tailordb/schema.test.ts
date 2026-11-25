@@ -1169,9 +1169,12 @@ describe("TailorDBType type-level validate (function form) tests", () => {
   });
 
   test("table type built inside a generic factory stays assignable when threaded through another generic factory's explicitly-parameterized signature", () => {
-    function defineItemModule<CustomFields extends Record<string, TailorAnyDBField>>(params: {
+    interface DefineItemModuleParams<CustomFields extends Record<string, TailorAnyDBField>> {
       fields: CustomFields;
-    }) {
+    }
+    function defineItemModule<CustomFields extends Record<string, TailorAnyDBField>>(
+      params: DefineItemModuleParams<CustomFields>,
+    ) {
       return {
         item: db.table("Item", {
           unitId: db.string(),
@@ -1184,9 +1187,12 @@ describe("TailorDBType type-level validate (function form) tests", () => {
       fields: { customField: db.string({ optional: true }).description("test") },
     });
 
-    function defineProductModule<CustomFields extends Record<string, TailorAnyDBField>>(params: {
+    interface DefineProductModuleParams<CustomFields extends Record<string, TailorAnyDBField>> {
       item: ReturnType<typeof defineItemModule<CustomFields>>["item"];
-    }) {
+    }
+    function defineProductModule<CustomFields extends Record<string, TailorAnyDBField>>(
+      params: DefineProductModuleParams<CustomFields>,
+    ) {
       return params;
     }
 

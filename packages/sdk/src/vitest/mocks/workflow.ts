@@ -115,9 +115,13 @@ function replaceProcedure<Procedure extends ProcedureFn>(
   };
 }
 
-function replaceStart<Start extends ProcedureFn>(definition: {
+interface ReplaceStartDefinition<Start> {
   start: Start;
-}): { mock: Mock<Start>; scoped: ScopedMock } {
+}
+
+function replaceStart<Start extends ProcedureFn>(
+  definition: ReplaceStartDefinition<Start>,
+): { mock: Mock<Start>; scoped: ScopedMock } {
   return replaceProcedure(definition, "start", definition.start);
 }
 

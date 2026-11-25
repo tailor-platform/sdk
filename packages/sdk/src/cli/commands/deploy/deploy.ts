@@ -1042,13 +1042,11 @@ async function deployInternal(
     // pipeline, application, executor, workflow) read metadata for those
     // kinds, so the first pass's batch cannot be stale for them.
     let firstMetadataClient: OperatorClient | undefined;
-    const plan = async (
-      targets: ReadonlyArray<BuiltDeploymentTarget>,
-      reuse?: {
-        skip: ReadonlySet<ReusablePlanKind>;
-        previousDeployments: ReadonlyArray<PlannedDeployment>;
-      },
-    ) => {
+    type PlanReuse = {
+      skip: ReadonlySet<ReusablePlanKind>;
+      previousDeployments: ReadonlyArray<PlannedDeployment>;
+    };
+    const plan = async (targets: ReadonlyArray<BuiltDeploymentTarget>, reuse?: PlanReuse) => {
       const planTargets = targets.map((target) => ({
         ...target,
         application: adjustApplicationForMigrationTest(target.application, internalContext),

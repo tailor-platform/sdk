@@ -151,6 +151,12 @@ function buildCtx(
 }
 
 describe("planPipeline (resolver service level)", () => {
+  type PipelineResolverFixture = {
+    name: string;
+    operation: Resolver["operation"];
+    [key: string]: unknown;
+  };
+
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
       const client = createMockClient([{ name: "old-resolver", label: appName }]);
@@ -183,11 +189,13 @@ describe("planPipeline (resolver service level)", () => {
       } as unknown as ResolverService;
     }
 
-    async function planWith(params: {
+    type PlanWithParams = {
       publishEvents: boolean | undefined;
       subscribed: boolean;
       remote?: boolean;
-    }) {
+    };
+
+    async function planWith(params: PlanWithParams) {
       const { publishEvents, subscribed, remote } = params;
       const client =
         remote === undefined
@@ -605,12 +613,6 @@ describe("planPipeline (resolver service level)", () => {
   });
 
   describe("resolver no-op detection", () => {
-    type PipelineResolverFixture = {
-      name: string;
-      operation: Resolver["operation"];
-      [key: string]: unknown;
-    };
-
     function createPipeline(resolver: PipelineResolverFixture): ResolverService {
       return {
         namespace: "my-resolver",
@@ -785,11 +787,7 @@ describe("planPipeline (resolver service level)", () => {
   });
 
   describe("previousExisting reuse", () => {
-    function createPipeline(resolver: {
-      name: string;
-      operation: Resolver["operation"];
-      [key: string]: unknown;
-    }): ResolverService {
+    function createPipeline(resolver: PipelineResolverFixture): ResolverService {
       return {
         namespace: "my-resolver",
         config: {},

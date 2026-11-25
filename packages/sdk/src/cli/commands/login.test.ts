@@ -15,7 +15,9 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
-function failureText(result: { error?: Error }): string {
+type FailureTextResult = { error?: Error };
+
+function failureText(result: FailureTextResult): string {
   const { error } = result;
   if (!isCLIError(error)) return error?.message ?? "";
   return [error.message, error.details, error.suggestion].filter(Boolean).join("\n");

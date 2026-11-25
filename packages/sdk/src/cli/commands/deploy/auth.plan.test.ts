@@ -55,13 +55,15 @@ const workspaceId = "test-workspace";
 const appName = "test-app";
 const sdkVersion = "v1-0-0";
 
-function remoteOAuth2Client(overrides: {
+type RemoteOAuth2ClientOverrides = {
   description?: string;
   redirectUris: string[];
   accessTokenLifetime: { seconds: bigint };
   refreshTokenLifetime: { seconds: bigint };
   refreshTokenIdleLifetime?: { seconds: bigint } | undefined;
-}) {
+};
+
+function remoteOAuth2Client(overrides: RemoteOAuth2ClientOverrides) {
   return {
     name: "sample",
     description: overrides.description ?? "Sample client",

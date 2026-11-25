@@ -712,14 +712,16 @@ async function generateDataOnlyMigration(
   return generatedMigration(namespace, result);
 }
 
+type PgliteSchemaResult = {
+  pgliteSchemaFilePath?: string | undefined;
+  pgliteSchemaError?: string | undefined;
+};
+
 /**
  * Report where db.pglite.ts landed, or why it was skipped.
  * @param result - Files written for the migration
  */
-function logPgliteSchemaResult(result: {
-  pgliteSchemaFilePath?: string | undefined;
-  pgliteSchemaError?: string | undefined;
-}): void {
+function logPgliteSchemaResult(result: PgliteSchemaResult): void {
   if (result.pgliteSchemaFilePath) {
     logger.info(`  PGlite schema: ${result.pgliteSchemaFilePath}`);
   }

@@ -1136,7 +1136,11 @@ describe("loadApplication kysely temporal", () => {
     }
   });
 
-  async function bundledExecutor(options: { temporal?: boolean }): Promise<string> {
+  interface BundledExecutorOptions {
+    temporal?: boolean;
+  }
+
+  async function bundledExecutor(options: BundledExecutorOptions): Promise<string> {
     tmpDir ??= fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
     const executorFile = path.join(tmpDir, "executor.ts");
     fs.writeFileSync(

@@ -31,6 +31,10 @@ type DefinedSecrets<T extends SecretsVaultsInputNullish> = SecretsDefinition<T> 
   ): Promise<(string | undefined)[]>;
 } & SecretsDefinitionBrand;
 
+interface DefineSecretManagerOptions {
+  ignoreNullishValues?: boolean;
+}
+
 /**
  * Define secrets configuration for the Tailor SDK.
  * Each key is a vault name, and its value is a record of secret name to secret value.
@@ -59,7 +63,7 @@ export function defineSecretManager<const T extends SecretsVaultsInputNullish>(
 /* @__NO_SIDE_EFFECTS__ */
 export function defineSecretManager<const T extends SecretsVaultsInputNullish>(
   config: T,
-  options?: { ignoreNullishValues?: boolean },
+  options?: DefineSecretManagerOptions,
 ): DefinedSecrets<T> {
   const result: Record<string, unknown> = {
     vaults: config,

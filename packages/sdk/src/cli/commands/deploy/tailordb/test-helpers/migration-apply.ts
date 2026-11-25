@@ -78,9 +78,13 @@ export function trackRemoteTables<C extends OperatorClientMock<RemoteTableWrite>
     if (value === undefined) map.delete(key);
     else map.set(key, value);
   };
+  interface RecordWriteNext {
+    table?: boolean | undefined;
+    permission?: boolean | undefined;
+  }
   const recordWrite = async <T>(
     key: string,
-    next: { table?: boolean | undefined; permission?: boolean | undefined },
+    next: RecordWriteNext,
     write: () => T,
   ): Promise<Awaited<T>> => {
     const before = { table: tables.get(key), permission: permissions.get(key) };
@@ -326,10 +330,11 @@ export function tailordbTypeWrites(client: OperatorClient) {
  * @returns Invocation order of each table deletion and each GraphQL permission deletion
  */
 export function deleteOrders(client: OperatorClient, namespace: string, tableName: string) {
-  const ordersOf = (
-    mock: { calls: unknown[][]; invocationCallOrder: number[] },
-    matches: (request: Record<string, unknown>) => boolean,
-  ) =>
+  interface OrdersOfMock {
+    calls: unknown[][];
+    invocationCallOrder: number[];
+  }
+  const ordersOf = (mock: OrdersOfMock, matches: (request: Record<string, unknown>) => boolean) =>
     mock.calls.flatMap((call, index) => {
       const order = mock.invocationCallOrder[index];
       return order !== undefined && matches(call[0] as Record<string, unknown>) ? [order] : [];

@@ -153,6 +153,8 @@ describe("generateIdpSeedScriptCode", () => {
     operations: string[];
   };
 
+  type UpdateUserInput = { id: string; password?: string };
+
   const stubIdp = (existingByName: Record<string, { id: string }>): IdpCalls => {
     const calls: IdpCalls = { created: [], updated: [], lookups: [], operations: [] };
     (globalThis as { tailor?: unknown }).tailor = {
@@ -173,7 +175,7 @@ describe("generateIdpSeedScriptCode", () => {
             if (!found) throw new Error(`not found: ${name}`);
             return found;
           }
-          async updateUser(input: { id: string; password?: string }) {
+          async updateUser(input: UpdateUserInput) {
             calls.operations.push(`update:${input.id}`);
             calls.updated.push(input);
             return { id: input.id };
@@ -333,7 +335,7 @@ describe("generateIdpSeedScriptCode", () => {
             if (!createAttempted) throw new Error("not found");
             return { id: "racing-user" };
           }
-          async updateUser(input: { id: string; password?: string }) {
+          async updateUser(input: UpdateUserInput) {
             updated.push(input);
           }
         },
@@ -386,10 +388,11 @@ describe("generateIdpSeedScriptCode", () => {
     });
 
     test("reports a missing name on every row instead of calling it a duplicate", async () => {
+      type CreateUserInput = { name?: string };
       (globalThis as { tailor?: unknown }).tailor = {
         idp: {
           Client: class {
-            async createUser(input: { name?: string }) {
+            async createUser(input: CreateUserInput) {
               if (typeof input.name !== "string") throw new Error("name required");
               return { id: input.name };
             }
@@ -508,10 +511,11 @@ function installPagedClient(): {
     ],
     nextPageToken: null,
   };
+  type UsersOptions = { after?: string };
   (globalThis as { tailor?: unknown }).tailor = {
     idp: {
       Client: class {
-        async users(options?: { after?: string }): Promise<IdpUserPage> {
+        async users(options?: UsersOptions): Promise<IdpUserPage> {
           requests.push(options);
           return options?.after === "page2" ? secondPage : firstPage;
         }

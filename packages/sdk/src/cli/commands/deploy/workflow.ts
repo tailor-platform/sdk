@@ -158,6 +158,8 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
   }
 }
 
+type JobFunctionVersions = { [key: string]: bigint };
+
 /**
  * Filter job function versions to only include those used by a workflow
  * @param allVersions - Map of job function names to versions
@@ -165,7 +167,7 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
  * @returns Filtered job function versions
  */
 function filterJobFunctionVersions(
-  allVersions: { [key: string]: bigint },
+  allVersions: JobFunctionVersions,
   usedJobNames: string[],
 ): { [key: string]: bigint } {
   const filtered: { [key: string]: bigint } = {};
@@ -827,10 +829,12 @@ export function formatWorkflowChangeEntries(
   ];
 }
 
-function getExistingWorkflowJobNames(existing: {
+type ExistingWorkflowJobs = {
   mainJobFunctionName?: string | undefined;
   jobFunctions?: Record<string, string | bigint> | undefined;
-}) {
+};
+
+function getExistingWorkflowJobNames(existing: ExistingWorkflowJobs) {
   const jobNames = new Set(Object.keys(existing.jobFunctions ?? {}));
   if (existing.mainJobFunctionName) {
     jobNames.add(existing.mainJobFunctionName);

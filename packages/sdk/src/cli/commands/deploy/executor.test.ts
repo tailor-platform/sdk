@@ -163,17 +163,19 @@ describe("planExecutor", () => {
     } as unknown as ExecutorService;
   }
 
+  type CreateMockApplicationOptions = {
+    tailorDBTypes?: Record<string, string>;
+    resolverNames?: Record<string, string>;
+    idpNames?: ReadonlyArray<string>;
+    authName?: string;
+    authMachineUsers?: ReadonlyArray<string>;
+    externalAuthName?: string;
+  };
+
   // Helper to create mock application
   function createMockApplication(
     executors: Executor[],
-    options?: {
-      tailorDBTypes?: Record<string, string>;
-      resolverNames?: Record<string, string>;
-      idpNames?: ReadonlyArray<string>;
-      authName?: string;
-      authMachineUsers?: ReadonlyArray<string>;
-      externalAuthName?: string;
-    },
+    options?: CreateMockApplicationOptions,
   ): Application {
     const tailorDBServices = Object.entries(
       Object.groupBy(Object.entries(options?.tailorDBTypes ?? {}), ([, ns]) => ns),
@@ -616,7 +618,9 @@ describe("planExecutor", () => {
   });
 
   describe("application env passthrough", () => {
-    function variablesExprOf(create: { request: { executor?: unknown } }): string {
+    type VariablesExprOfCreate = { request: { executor?: unknown } };
+
+    function variablesExprOf(create: VariablesExprOfCreate): string {
       return (
         (create.request.executor as { targetConfig?: { config?: unknown } }).targetConfig
           ?.config as {

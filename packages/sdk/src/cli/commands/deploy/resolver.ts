@@ -385,6 +385,8 @@ async function planResolvers(
   >("Pipeline resolvers");
   const { owner, dependentApps, runAppIds } = records;
 
+  type ResolverMetaInput = { name: string; publishEvents?: boolean | undefined };
+
   /**
    * Build one resolver's metadata write, carrying the dependency records that
    * belong to it. The resolver is what publishes, so the record lives there.
@@ -392,10 +394,7 @@ async function planResolvers(
    * @param resolver - Resolver being planned
    * @returns The resolver's metadata write
    */
-  const resolverMetaRequest = async (
-    namespace: string,
-    resolver: { name: string; publishEvents?: boolean | undefined },
-  ) => {
+  const resolverMetaRequest = async (namespace: string, resolver: ResolverMetaInput) => {
     const trn = resolverTrn(workspaceId, namespace, resolver.name);
     return addDependencyRecords(await buildMetaRequest({ trn, owner }), {
       owner,

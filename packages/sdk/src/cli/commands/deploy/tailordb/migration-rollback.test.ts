@@ -202,10 +202,13 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     });
   }
 
-  function changeSetGroup(
-    title: string,
-    entries: { creates?: unknown[]; updates?: unknown[]; deletes?: unknown[] } = {},
-  ) {
+  interface ChangeSetGroupEntries {
+    creates?: unknown[];
+    updates?: unknown[];
+    deletes?: unknown[];
+  }
+
+  function changeSetGroup(title: string, entries: ChangeSetGroupEntries = {}) {
     const creates = entries.creates ?? [];
     const updates = entries.updates ?? [];
     const deletes = entries.deletes ?? [];
@@ -221,8 +224,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
   }
 
   function buildPlanResult(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    typeChanges: { creates?: any[]; updates?: any[]; deletes?: any[] },
+    typeChanges: ChangeSetGroupEntries,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any {
     const mockService = {

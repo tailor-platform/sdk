@@ -71,9 +71,11 @@ type MockIdpServiceOpts = {
   permission?: Record<string, unknown>;
 };
 
-function createMockApplication(opts?: {
+type CreateMockApplicationOptions = {
   idpServices?: ReadonlyArray<MockIdpServiceOpts>;
-}): Application {
+};
+
+function createMockApplication(opts?: CreateMockApplicationOptions): Application {
   const serviceOpts = opts?.idpServices ?? [{}];
   return {
     name: appName,
@@ -150,10 +152,12 @@ function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): Mo
 
 type RemoteIdPClients = Record<string, Array<MessageInitShape<typeof IdPClientSummarySchema>>>;
 
-function createMockClient(opts?: {
+type CreateMockClientOptions = {
   services?: MockRemoteService[];
   clients?: RemoteIdPClients;
-}): OperatorClient {
+};
+
+function createMockClient(opts?: CreateMockClientOptions): OperatorClient {
   const services = opts?.services ?? [];
   const clients = opts?.clients ?? {};
 

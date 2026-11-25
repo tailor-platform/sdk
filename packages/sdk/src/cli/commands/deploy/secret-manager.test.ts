@@ -112,6 +112,14 @@ function createMockPlanClient(
 
 type DeclaredSecret = Application["secrets"][number]["secrets"][number];
 
+interface CreatePlanContextOverrides {
+  appName?: string;
+  appId?: string;
+  workspaceId?: string;
+  forRemoval?: boolean;
+  idpServices?: Array<{ name: string; clients: string[] }>;
+}
+
 function createPlanContext(
   client: OperatorClient,
   secrets: Array<{
@@ -120,13 +128,7 @@ function createPlanContext(
       Omit<DeclaredSecret, "createOnly"> & Partial<Pick<DeclaredSecret, "createOnly">>
     >;
   }>,
-  overrides: {
-    appName?: string;
-    appId?: string;
-    workspaceId?: string;
-    forRemoval?: boolean;
-    idpServices?: Array<{ name: string; clients: string[] }>;
-  } = {},
+  overrides: CreatePlanContextOverrides = {},
 ): PlanContext {
   return {
     client,

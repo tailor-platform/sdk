@@ -91,7 +91,11 @@ vi.mock("#/cli/services/application", () => ({
   })),
 }));
 
-function mockConfig(migration: { machineUser?: string } = {}): void {
+interface MockConfigMigration {
+  machineUser?: string;
+}
+
+function mockConfig(migration: MockConfigMigration = {}): void {
   vi.mocked(loadConfigFile).mockResolvedValue({
     kind: "config",
     config: {
