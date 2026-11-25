@@ -1,5 +1,11 @@
 import * as path from "pathe";
-import { arrayElements, entryKey, objectEntries, pairValue } from "../ast-grep-helpers";
+import {
+  arrayElements,
+  entryKey,
+  objectEntries,
+  pairValue,
+  staticEntries,
+} from "../ast-grep-helpers";
 import { literalText, type Report } from "./project";
 import {
   addProperty,
@@ -42,6 +48,7 @@ type SectionKey = (typeof SECTION_ORDER)[number];
 const IGNORED_KEYS: ReadonlySet<string> = new Set(["name", "id"]);
 const INLINE_SECTIONS: ReadonlySet<SectionKey> = new Set(["auth", "idp", "executor", "workflow"]);
 const MAX_INLINE = 80;
+const UNREAD_FILES = "so the conversion cannot read which files it names.";
 
 /** Source text placed in the workspace config, with the indentation it was written at. */
 type Piece = {
@@ -182,7 +189,7 @@ class SectionsBuilder {
       this.stop(
         member,
         member.call,
-        `The config's directory name holds glob syntax, so its files patterns cannot be rewritten relative to ${this.outputDir}.`,
+        `The config's directory name holds glob syntax, so its files patterns cannot be rewritten for ${this.outputPath}.`,
       );
       return;
     }
@@ -333,11 +340,11 @@ class SectionsBuilder {
       list(key, ref.nameExpression);
       if (ref.external) continue;
       const namespaceObject = objectValue(pairValue(namespace));
-      if (!namespaceObject && member.dir !== this.outputDir) {
+      if (!namespaceObject && this.members.length > 1) {
         this.stop(
           member,
           namespace,
-          `The \`${key}\` namespace "${ref.name}" is not an object literal, so its files patterns cannot be rewritten relative to ${this.outputDir}.`,
+          `The \`${key}\` namespace "${ref.name}" is not an object literal, ${UNREAD_FILES}`,
         );
         continue;
       }
@@ -369,12 +376,8 @@ class SectionsBuilder {
     }
     const object = objectValue(value);
     if (!object) {
-      if (this.members.length > 1 || member.dir !== this.outputDir) {
-        this.stop(
-          member,
-          node,
-          `\`${key}\` is not an object literal, so its files patterns cannot be rewritten.`,
-        );
+      if (this.members.length > 1) {
+        this.stop(member, node, `\`${key}\` is not an object literal, ${UNREAD_FILES}`);
       } else this.contribute(key, "{", [], pieceOf(member, value));
       return;
     }
@@ -516,15 +519,16 @@ class SectionsBuilder {
       return;
     }
     if (!first?.entry?.value) return;
+    const options = staticEntries(first.entry.value);
     if (
       setting === "buildOptions" &&
-      new Set(this.members.map((member) => member.dir)).size > 1 &&
-      first.entry.value.text().includes("inlineSourcemapProjectSources")
+      this.members.some((member) => member.dir !== this.outputDir) &&
+      (!options || options.some((entry) => entryKey(entry) === "inlineSourcemapProjectSources"))
     ) {
       this.stop(
         first.member,
         first.entry.node,
-        "`buildOptions.inlineSourcemapProjectSources` holds globs relative to each config's directory, which differ between the configs.",
+        `\`buildOptions\` sets, or may set, \`inlineSourcemapProjectSources\`, whose globs are relative to each config's directory and are not rewritten for ${this.outputPath}.`,
       );
       return;
     }
@@ -533,21 +537,15 @@ class SectionsBuilder {
 
   /**
    * Edits that rewrite the files patterns and the migration directory of a service config so
-   * that they name the same files relative to the workspace config's directory.
+   * that they name the same files relative to the workspace config's directory, and stops the
+   * merge on those it cannot read.
    */
   private rebaseEdits(member: ConfigModule, service: SgNode): TextEdit[] {
-    if (member.dir === this.outputDir) return [];
+    if (this.members.length === 1) return [];
+    const moved = member.dir !== this.outputDir;
     const edits: TextEdit[] = [];
-    const rebase = (node: SgNode, what: string) => {
-      const literal = literalText(node);
-      if (literal === null) {
-        this.report(
-          member,
-          node,
-          `${what} is not a literal, so it still names files relative to ${member.dir}.`,
-        );
-        return;
-      }
+    const rebase = (node: SgNode, literal: string) => {
+      if (!moved) return;
       const quote = node.text()[0]!;
       edits.push(
         replaceNode(node, `${quote}${rebasePattern(literal, member.dir, this.outputDir)}${quote}`),
@@ -556,22 +554,38 @@ class SectionsBuilder {
     for (const entry of objectEntries(service)) {
       const key = entryKey(entry);
       const value = entry.kind() === "pair" ? pairValue(entry) : null;
-      if (key !== null && PATTERN_KEYS.has(key)) {
+      if (key === null) {
+        this.stop(
+          member,
+          entry,
+          "This spread or computed key may hold files patterns, which the conversion cannot read.",
+        );
+      } else if (PATTERN_KEYS.has(key)) {
         if (value?.kind() !== "array") {
-          this.report(
-            member,
-            entry,
-            `\`${key}\` is not an array literal, so its patterns still name files relative to ${member.dir}.`,
-          );
+          this.stop(member, entry, `\`${key}\` is not an array literal, ${UNREAD_FILES}`);
           continue;
         }
-        for (const element of arrayElements(value)) rebase(element, `This \`${key}\` pattern`);
-      } else if (key === "migration") {
-        const directory = objectEntries(objectValue(value) ?? service).find(
-          (candidate) => objectValue(value) !== null && entryKey(candidate) === "directory",
+        for (const element of arrayElements(value)) {
+          const literal = literalText(element);
+          if (literal === null) {
+            this.stop(member, element, `This \`${key}\` pattern is not a literal, ${UNREAD_FILES}`);
+          } else rebase(element, literal);
+        }
+      } else if (key === "migration" && moved) {
+        const directory = staticEntries(value)?.find(
+          (candidate) => entryKey(candidate) === "directory",
         );
         const directoryValue = directory ? pairValue(directory) : null;
-        if (directoryValue) rebase(directoryValue, "`migration.directory`");
+        const literal = literalText(directoryValue);
+        if (directoryValue && literal !== null) {
+          rebase(directoryValue, literal);
+        } else {
+          this.stop(
+            member,
+            entry,
+            `\`migration.directory\` cannot be read from the source, so it cannot be rewritten for ${this.outputPath}.`,
+          );
+        }
       }
     }
     return edits;

@@ -649,43 +649,6 @@ describe("v3/config-to-workspace", () => {
     ).toEqual(expected);
   });
 
-  test.each([
-    [
-      "they set maintenanceMode differently",
-      'maintenanceMode: "deploy", ',
-      "",
-      'The configs set `maintenanceMode` differently (a/tailor.config.ts: "deploy", b/tailor.config.ts: "migration"); a workspace config has one.',
-    ],
-    [
-      "httpAdapter would serve several applications",
-      'httpAdapter: { files: ["./http/*.ts"] }, ',
-      "",
-      "`httpAdapter` serves one application, and the merged workspace has several.",
-    ],
-    [
-      "they both set executor.env",
-      'executor: { files: [], env: { A: "1" } }, ',
-      'executor: { files: [], env: { A: "1" } }, ',
-      "Another config also sets `executor.env`; a workspace config has one.",
-    ],
-  ])("leaves the configs when %s", async (_, aExtra, bExtra, message) => {
-    const files = {
-      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": dbConfig("a", aExtra),
-      "b/tailor.config.ts": dbConfig("b", bExtra),
-    };
-    const project = createProject(files);
-
-    const result = await runOnProject(CODEMODS, project);
-
-    expect(project.files()).toEqual(Object.keys(files).toSorted());
-    expect(findingsOf(result).map((finding) => finding.message)).toEqual([message]);
-    expect(result.warnings).toEqual([
-      "a/tailor.config.ts: still defineConfig(), which v3 removes.",
-      "b/tailor.config.ts: still defineConfig(), which v3 removes.",
-    ]);
-  });
-
   test("warns that deploying a config left as defineConfig() to the workspace of one converted to defineApp() hands its resources back", async () => {
     const project = createProject({
       "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
@@ -760,56 +723,201 @@ describe("v3/config-to-workspace", () => {
     expect(loaded.kind).toBe("workspace");
   });
 
-  test("reports what it could not rewrite in a merged config at the workspace config", async () => {
-    const project = createProject({
-      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": lines(
-        SDK_IMPORT,
-        'const dir = "db";',
-        'export default defineConfig({ name: "a", db: { a: { files: [`./${dir}/*.ts`] } } });',
-      ),
-      "b/tailor.config.ts": lines(
-        SDK_IMPORT,
-        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
-      ),
-    });
+  test.each<[string, Record<string, string>, string]>([
+    [
+      "they set maintenanceMode differently",
+      {
+        "a/tailor.config.ts": dbConfig("a", 'maintenanceMode: "deploy", '),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      'The configs set `maintenanceMode` differently (a/tailor.config.ts: "deploy", b/tailor.config.ts: "migration"); a workspace config has one.',
+    ],
+    [
+      "httpAdapter would serve several applications",
+      {
+        "a/tailor.config.ts": dbConfig("a", 'httpAdapter: { files: ["./http/*.ts"] }, '),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      "`httpAdapter` serves one application, and the merged workspace has several.",
+    ],
+    [
+      "they both set executor.env",
+      {
+        "a/tailor.config.ts": dbConfig("a", 'executor: { files: [], env: { A: "1" } }, '),
+        "b/tailor.config.ts": dbConfig("b", 'executor: { files: [], env: { A: "1" } }, '),
+      },
+      "Another config also sets `executor.env`; a workspace config has one.",
+    ],
+    [
+      "a files pattern is not a literal",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const dir = "db";',
+          'export default defineConfig({ name: "a", db: { a: { files: [`./${dir}/*.ts`] } } });',
+        ),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      "This `files` pattern is not a literal, so the conversion cannot read which files it names.",
+    ],
+    [
+      "ignores is not an array literal",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const skipped = ["./db/skip.ts"];',
+          'export default defineConfig({ name: "a", db: { a: { files: ["./db/*.ts"], ignores: skipped } } });',
+        ),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      "`ignores` is not an array literal, so the conversion cannot read which files it names.",
+    ],
+    [
+      "a namespace has a spread",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const base = { files: ["./db/*.ts"] };',
+          'export default defineConfig({ name: "a", db: { a: { ...base } } });',
+        ),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      "This spread or computed key may hold files patterns, which the conversion cannot read.",
+    ],
+    [
+      "a namespace is not an object literal",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const shared = { files: ["./db/*.ts"] };',
+          'export default defineConfig({ name: "a", db: { shared } });',
+        ),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      'The `db` namespace "shared" is not an object literal, so the conversion cannot read which files it names.',
+    ],
+    [
+      "a config that stays in place merges a files pattern it cannot read",
+      {
+        "tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const executors = ["./executors/*.ts"];',
+          'export default defineConfig({ name: "root", db: { root: { files: [] } }, executor: { files: executors } });',
+        ),
+        "web/tailor.config.ts": dbConfig("web", 'executor: { files: ["./executors/*.ts"] }, '),
+      },
+      "`files` is not an array literal, so the conversion cannot read which files it names.",
+    ],
+    [
+      "a config that stays in place merges an executor it cannot read",
+      {
+        "tailor.config.ts": lines(
+          SDK_IMPORT,
+          'const executor = { files: ["./executors/*.ts"] };',
+          'export default defineConfig({ name: "root", db: { root: { files: [] } }, executor });',
+        ),
+        "web/tailor.config.ts": dbConfig("web"),
+      },
+      "`executor` is not an object literal, so the conversion cannot read which files it names.",
+    ],
+    ...[
+      ["is not a literal", 'const dir = "./migrations";', "{ directory: dir }"],
+      ["is a shorthand property", 'const directory = "./migrations";', "{ directory }"],
+      ["is in a spread", 'const base = { directory: "./migrations" };', "{ ...base }"],
+      ["is in a variable", 'const migration = { directory: "./migrations" };', "migration"],
+    ].map(([title, declaration, migration]): [string, Record<string, string>, string] => [
+      `migration.directory ${title}`,
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          declaration!,
+          `export default defineConfig({ name: "a", db: { a: { files: [], migration: ${migration} } } });`,
+        ),
+        "b/tailor.config.ts": dbConfig("b"),
+      },
+      "`migration.directory` cannot be read from the source, so it cannot be rewritten for tailor.config.ts.",
+    ]),
+    [
+      "inlineSourcemapProjectSources is relative to a directory both configs share",
+      {
+        "apps/a.config.ts": dbConfig(
+          "a",
+          'buildOptions: { inlineSourcemapProjectSources: { include: ["./src/**"] } }, ',
+        ),
+        "apps/b.config.ts": dbConfig(
+          "b",
+          'buildOptions: { inlineSourcemapProjectSources: { include: ["./src/**"] } }, ',
+        ),
+      },
+      "`buildOptions` sets, or may set, `inlineSourcemapProjectSources`, whose globs are relative to each config's directory and are not rewritten for tailor.config.ts.",
+    ],
+    [
+      "buildOptions of configs that move has a spread",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'import { shared } from "../build-options";',
+          'export default defineConfig({ name: "a", buildOptions: { ...shared }, db: { a: { files: [] } } });',
+        ),
+        "b/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'import { shared } from "../build-options";',
+          'export default defineConfig({ name: "b", buildOptions: { ...shared }, db: { b: { files: [] } } });',
+        ),
+      },
+      "`buildOptions` sets, or may set, `inlineSourcemapProjectSources`, whose globs are relative to each config's directory and are not rewritten for tailor.config.ts.",
+    ],
+    [
+      "buildOptions of configs that move is not an object literal",
+      {
+        "a/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'import { buildOptions } from "../build-options";',
+          'export default defineConfig({ name: "a", buildOptions, db: { a: { files: [] } } });',
+        ),
+        "b/tailor.config.ts": lines(
+          SDK_IMPORT,
+          'import { buildOptions } from "../build-options";',
+          'export default defineConfig({ name: "b", buildOptions, db: { b: { files: [] } } });',
+        ),
+      },
+      "`buildOptions` sets, or may set, `inlineSourcemapProjectSources`, whose globs are relative to each config's directory and are not rewritten for tailor.config.ts.",
+    ],
+  ])("leaves the configs when %s", async (_, configs, message) => {
+    const files = { "package.json": deployedTogether(...Object.keys(configs)), ...configs };
+    const project = createProject(files);
 
     const result = await runOnProject(CODEMODS, project);
 
-    const output = project.read("tailor.config.ts")!;
-    expect(
-      findingsOf(result)
-        .filter(({ file }) => file === "tailor.config.ts")
-        .map(({ file, line, message }) => ({ file, line, message })),
-    ).toEqual([
-      {
-        file: "tailor.config.ts",
-        line: output.split("\n").findIndex((line) => line.includes("`./${dir}/*.ts`")) + 1,
-        message: "This `files` pattern is not a literal, so it still names files relative to a.",
-      },
-    ]);
+    expect(Object.fromEntries(project.files().map((file) => [file, project.read(file)]))).toEqual(
+      files,
+    );
+    expect(findingsOf(result).map((finding) => finding.message)).toEqual([message]);
+    expect(result.warnings).toEqual(
+      Object.keys(configs).map(
+        (configPath) => `${configPath}: still defineConfig(), which v3 removes.`,
+      ),
+    );
   });
 
-  test("leaves the configs when a namespace is not an object literal", async () => {
+  test("merges configs that stay in place whatever their migration and inlineSourcemapProjectSources", async () => {
+    const buildOptions =
+      'buildOptions: { inlineSourcemapProjectSources: { include: ["./src/**"] } }, ';
     const project = createProject({
-      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": lines(
+      "package.json": deployedTogether("tailor.config.ts", "b.config.ts"),
+      "tailor.config.ts": lines(
         SDK_IMPORT,
-        'const shared = { files: ["./db/*.ts"] };',
-        'export default defineConfig({ name: "a", db: { shared } });',
+        'const migration = { directory: "./migrations" };',
+        `export default defineConfig({ name: "a", ${buildOptions}db: { a: { files: [], migration } } });`,
       ),
-      "b/tailor.config.ts": lines(
-        SDK_IMPORT,
-        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
-      ),
+      "b.config.ts": dbConfig("b", buildOptions),
     });
 
     const result = await runOnProject(CODEMODS, project);
 
-    expect(project.read("tailor.config.ts")).toBeUndefined();
-    expect(findingsOf(result).map((finding) => finding.message)).toEqual([
-      'The `db` namespace "shared" is not an object literal, so its files patterns cannot be rewritten relative to ..',
-    ]);
+    expect(project.files()).toEqual(["package.json", "tailor.config.ts"]);
+    expect(project.read("tailor.config.ts")).toContain("a: { files: [], migration },");
+    expect(findingsOf(result).filter(({ file }) => file !== "package.json")).toEqual([]);
   });
 
   test("treats settings that differ only in quotes as the same", async () => {

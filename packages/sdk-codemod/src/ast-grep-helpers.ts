@@ -124,6 +124,13 @@ export function entryKey(entry: SgNode): string | null {
   return stringValue(key);
 }
 
+/** The entries of an object literal whose every key is static, or null for any other node. */
+export function staticEntries(node: SgNode | null | undefined): SgNode[] | null {
+  if (node?.kind() !== "object") return null;
+  const entries = objectEntries(node);
+  return entries.every((entry) => entryKey(entry) !== null) ? entries : null;
+}
+
 /** The comma that separates `node` from the next element or entry, skipping comments. */
 export function followingComma(node: SgNode): SgNode | null {
   const end = node.range().end.index;
