@@ -154,6 +154,7 @@ describe("createResultWriter", () => {
         }
       })(),
       stop: vi.fn(),
+      exited: Promise.resolve(),
     };
     const push = (event: RunEvent) => {
       queue.push(event);

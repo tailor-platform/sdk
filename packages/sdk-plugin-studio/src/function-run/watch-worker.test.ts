@@ -80,6 +80,7 @@ console.log(JSON.stringify({ workerData, kept: process.env.KEPT, home: process.e
         argFile: "/tmp/arg.json",
         profile: "dev",
         workspaceId: "ws-1",
+        runOnStart: true,
       },
       kept: "yes",
       home: null,
@@ -162,58 +163,95 @@ parentPort.postMessage({ type: "ready", argFile: "a" });`,
     expect(seen.at(-1)).toEqual({ type: "exit", code: 1 });
   });
 
-  test("moves the watch to a fresh thread after the given number of runs, without ending it", async () => {
+  test("moves an idle watch to a fresh thread after the given number of runs, which does not run on start", async () => {
     const file = workerFile(
       "recycles",
-      `import { parentPort, threadId } from "node:worker_threads";
+      `import { parentPort, workerData } from "node:worker_threads";
 parentPort.on("message", (message) => { if (message.type === "stop") process.exit(0); });
 parentPort.postMessage({ type: "ready", argFile: "a" });
-parentPort.postMessage({ type: "started" });
-parentPort.postMessage({ type: "finished", record: { success: true, executionId: String(threadId) } });`,
+if (workerData.runOnStart === false) {
+  setTimeout(() => console.log("fresh thread, runOnStart=" + workerData.runOnStart), 100);
+} else {
+  parentPort.postMessage({ type: "started" });
+  parentPort.postMessage({ type: "finished", record: { success: true } });
+}`,
     );
     const run = startWatchWorker(input, { workerFile: file, recycleAfterRuns: 1 });
     const seen: RunEvent[] = [];
-    let finished = 0;
 
     for await (const event of run.events) {
       seen.push(event);
-      if (event.type === "finished" && ++finished === 3) run.stop();
+      if (event.type === "note") run.stop();
     }
+
+    expect(seen).toEqual([
+      { type: "ready" },
+      { type: "started" },
+      { type: "finished", record: { success: true } },
+      { type: "note", text: "fresh thread, runOnStart=false" },
+      { type: "exit", code: 0 },
+    ]);
+  });
+
+  test("gives up the move when a change arrives before the fresh thread is ready", async () => {
+    const file = workerFile(
+      "gives-up",
+      `import { parentPort, workerData } from "node:worker_threads";
+parentPort.on("message", (message) => { if (message.type === "stop") process.exit(0); });
+if (workerData.runOnStart === false) {
+  setTimeout(() => {
+    parentPort.postMessage({ type: "ready", argFile: "a" });
+    console.log("fresh thread became ready");
+  }, 300);
+} else {
+  parentPort.postMessage({ type: "ready", argFile: "a" });
+  parentPort.postMessage({ type: "started" });
+  parentPort.postMessage({ type: "finished", record: { success: true } });
+  setTimeout(() => parentPort.postMessage({ type: "scheduled" }), 30);
+}`,
+    );
+    const run = startWatchWorker(input, { workerFile: file, recycleAfterRuns: 1 });
+    const seen: RunEvent[] = [];
+
+    for await (const event of run.events) {
+      seen.push(event);
+      if (event.type === "scheduled") setTimeout(run.stop, 500);
+    }
+    await run.exited;
 
     expect(seen.map((event) => event.type)).toEqual([
       "ready",
       "started",
       "finished",
-      "started",
-      "finished",
-      "started",
-      "finished",
+      "scheduled",
       "exit",
     ]);
-    const threads = seen.flatMap((event) =>
-      event.type === "finished" ? [event.record.executionId] : [],
-    );
-    expect(new Set(threads).size).toBe(3);
   });
 
-  test("ends the watch when it is stopped while a thread is being replaced", async () => {
+  test("settles exited once every thread is gone after a stop", async () => {
     const file = workerFile(
-      "stops-while-recycling",
+      "exits-after-stop",
       `import { parentPort } from "node:worker_threads";
-parentPort.on("message", (message) => { if (message.type === "stop") setTimeout(() => process.exit(0), 50); });
-parentPort.postMessage({ type: "finished", record: { success: true } });`,
+parentPort.on("message", (message) => { if (message.type === "stop") setTimeout(() => process.exit(0), 80); });
+parentPort.postMessage({ type: "ready", argFile: "a" });`,
     );
-    const run = startWatchWorker(input, { workerFile: file, recycleAfterRuns: 1 });
+    const run = startWatchWorker(input, { workerFile: file });
+    let settled = false;
+    void run.exited.then(() => {
+      settled = true;
+    });
     const seen: RunEvent[] = [];
+    let settledAtStop: boolean | undefined;
 
     for await (const event of run.events) {
       seen.push(event);
-      if (event.type === "finished") run.stop();
+      if (event.type === "ready") {
+        settledAtStop = settled;
+        run.stop();
+      }
     }
+    await run.exited;
 
-    expect(seen).toEqual([
-      { type: "finished", record: { success: true } },
-      { type: "exit", code: 0 },
-    ]);
+    expect([seen.at(-1), settledAtStop, settled]).toEqual([{ type: "exit", code: 0 }, false, true]);
   });
 });

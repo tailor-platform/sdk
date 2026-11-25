@@ -8,6 +8,8 @@ import type { FunctionRunWatchEvent } from "@tailor-platform/sdk/cli";
 export interface WatchWorkerInput {
   file: string;
   argFile: string;
+  /** Run once as soon as the watch is set up; true when undefined */
+  runOnStart?: boolean | undefined;
   profile?: string | undefined;
   workspaceId?: string | undefined;
 }
@@ -63,15 +65,16 @@ function toRunEvent(message: WatchWorkerMessage): RunEvent {
 /**
  * Run the function watch in a worker thread. Anything the project's code does while it is
  * loaded, such as calling `process.exit()`, ends the thread and not the process that hosts it.
- * Every run loads the project's modules again and the thread keeps the ones it loaded, so after
- * a number of runs the watch moves to a fresh thread, which frees them; its first run reads the
- * files as they are then, so a save made meanwhile is not lost.
+ * Every run loads the project's modules again and the thread keeps them, so once the watch is
+ * idle after a number of runs it moves to a fresh thread, which frees them. The fresh thread
+ * does not run the function on start, so moving never executes it; the move is given up when a
+ * change arrives before the fresh thread is ready, since the old thread is the one to run it.
  * @param input - The function, its argument file, the workspace and the worker's environment
  * @param options - Where the worker's code is, how long a stop may take and when to replace it
  * @param options.workerFile - Module the worker runs
  * @param options.stopTimeoutMs - How long to wait for a worker to stop before ending it
- * @param options.recycleAfterRuns - Runs after which the watch moves to a fresh thread
- * @returns The watch's events and a function that stops it
+ * @param options.recycleAfterRuns - Runs after which an idle watch moves to a fresh thread
+ * @returns The watch's events, a function that stops it, and a promise for every thread being gone
  */
 export function startWatchWorker(
   input: RunInput,
@@ -88,31 +91,115 @@ export function startWatchWorker(
       ? {}
       : { workspaceId: input.workspace.workspaceId }),
   };
+  let resolveExited: () => void = () => {};
+  const exited = new Promise<void>((resolve) => {
+    resolveExited = resolve;
+  });
+  const live = new Set<Worker>();
   let stopped = false;
+  let finished = false;
   let announcedReady = false;
   let current: WatchThread;
+  let successor: WatchThread | undefined;
 
   interface WatchThread {
     worker: Worker;
-    leaving: boolean;
+    role: "active" | "successor" | "leaving";
+    armed: boolean;
+    queued: boolean;
+    inRun: boolean;
+    runs: number;
     stopTimer: NodeJS.Timeout | undefined;
   }
+
+  const idle = (thread: WatchThread) => !thread.armed && !thread.queued && !thread.inRun;
 
   function ask(thread: WatchThread) {
     thread.worker.postMessage({ type: "stop" } satisfies WatchWorkerCommand);
     thread.stopTimer ??= setTimeout(() => void thread.worker.terminate(), stopTimeoutMs);
   }
 
-  function launch() {
+  function abandonSuccessor() {
+    if (successor === undefined) return;
+    const gone = successor;
+    successor = undefined;
+    gone.role = "leaving";
+    void gone.worker.terminate();
+  }
+
+  function track(thread: WatchThread, message: WatchWorkerMessage) {
+    switch (message.type) {
+      case "scheduled":
+        thread.armed = true;
+        break;
+      case "queued":
+        thread.armed = false;
+        thread.queued = true;
+        break;
+      case "started":
+        thread.armed = false;
+        thread.queued = false;
+        thread.inRun = true;
+        break;
+      case "finished":
+      case "failed":
+        thread.inRun = false;
+        thread.runs += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
+  function onMessage(thread: WatchThread, message: WatchWorkerMessage) {
+    if (thread.role === "leaving") return;
+    if (thread.role === "successor") {
+      if (message.type !== "ready") return;
+      const old = current;
+      old.role = "leaving";
+      ask(old);
+      thread.role = "active";
+      current = thread;
+      successor = undefined;
+      return;
+    }
+    if (message.type === "ready") {
+      if (announcedReady) return;
+      announcedReady = true;
+    }
+    track(thread, message);
+    push(toRunEvent(message));
+    if (message.type === "scheduled" || message.type === "queued" || message.type === "started") {
+      abandonSuccessor();
+    }
+    if (
+      (message.type === "finished" || message.type === "failed") &&
+      thread.runs >= recycleAfterRuns &&
+      idle(thread) &&
+      successor === undefined &&
+      !stopped
+    ) {
+      successor = launch(false, "successor");
+    }
+  }
+
+  function launch(runOnStart: boolean, role: WatchThread["role"]): WatchThread {
     const worker = new Worker(options.workerFile, {
-      workerData,
+      workerData: { ...workerData, runOnStart },
       env: input.env,
       stdout: true,
       stderr: true,
     });
-    const thread: WatchThread = { worker, leaving: false, stopTimer: undefined };
-    current = thread;
-    let runs = 0;
+    live.add(worker);
+    const thread: WatchThread = {
+      worker,
+      role,
+      armed: false,
+      queued: false,
+      inRun: false,
+      runs: 0,
+      stopTimer: undefined,
+    };
     const drained = [worker.stdout, worker.stderr].map(
       (stream) =>
         new Promise<void>((resolve) => {
@@ -121,36 +208,30 @@ export function startWatchWorker(
           lines.on("close", resolve);
         }),
     );
-    worker.on("message", (message: WatchWorkerMessage) => {
-      if (thread.leaving) return;
-      if (message.type === "ready") {
-        if (announcedReady) return;
-        announcedReady = true;
-      }
-      push(toRunEvent(message));
-      if (
-        (message.type === "finished" || message.type === "failed") &&
-        ++runs >= recycleAfterRuns
-      ) {
-        thread.leaving = true;
-        ask(thread);
-      }
-    });
+    worker.on("message", (message: WatchWorkerMessage) => onMessage(thread, message));
     worker.on("error", (error: Error) => push({ type: "note", text: error.message }));
     worker.on("exit", (code) => {
       clearTimeout(thread.stopTimer);
       void Promise.all(drained).then(() => {
-        if (thread.leaving && !stopped) launch();
-        else push({ type: "exit", code });
+        live.delete(worker);
+        if (thread === successor) successor = undefined;
+        if (thread.role === "active") {
+          finished = true;
+          push({ type: "exit", code });
+        }
+        if (finished && live.size === 0) resolveExited();
       });
     });
+    return thread;
   }
 
-  launch();
+  current = launch(true, "active");
   return {
     events,
+    exited,
     stop: () => {
       stopped = true;
+      abandonSuccessor();
       ask(current);
     },
   };

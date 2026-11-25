@@ -40,10 +40,16 @@ export interface SessionOptions {
 const NO_WORKSPACE = "Select a workspace in the bar at the top of the page.";
 
 interface ActiveRun {
-  handle: RunHandle;
-  workspaceArgs: string[];
+  /** Undefined while the run waits for the one it replaces to be gone */
+  handle: RunHandle | undefined;
+  /** Profile and workspace ID the run was started for, to see the selection move */
+  target: string;
   workspace: WorkspaceSelection;
   phase: RunPhase;
+}
+
+function targetOf(selection: WorkspaceSelection): string {
+  return JSON.stringify([selection.profile ?? null, selection.workspaceId ?? null]);
 }
 
 /** What the watch has said that still leaves a run to report back */
@@ -81,6 +87,7 @@ export function createRunSession(options: SessionOptions) {
   let workspace: WorkspaceSelection | undefined;
   let active: ActiveRun | undefined;
   let latestRun: SessionSnapshot["latestRun"];
+  const exiting = new Set<Promise<void>>();
 
   const emit = (event: SessionEvent) => {
     for (const listener of listeners) listener(event);
@@ -149,8 +156,8 @@ export function createRunSession(options: SessionOptions) {
     setRunning(isBusy(phase));
   }
 
-  async function consume(run: ActiveRun) {
-    for await (const event of run.handle.events) {
+  async function consume(run: ActiveRun, handle: RunHandle) {
+    for await (const event of handle.events) {
       if (active !== run) return;
       if (event.type !== "exit") {
         applyEvent(run, event);
@@ -168,44 +175,58 @@ export function createRunSession(options: SessionOptions) {
     const run = active;
     if (run === undefined) return;
     active = undefined;
-    run.handle.stop();
+    if (run.handle !== undefined) {
+      const { handle } = run;
+      handle.stop();
+      exiting.add(handle.exited);
+      void handle.exited.then(() => exiting.delete(handle.exited));
+    }
     setStatus("stopped", why);
+  }
+
+  function launch(run: ActiveRun): { ok: true } | { ok: false; reason: string } {
+    if (active !== run) return { ok: true };
+    const { profile, workspaceId } = run.workspace;
+    let handle: RunHandle;
+    try {
+      handle = options.startRun({
+        file: options.file,
+        argFile: options.runArgFile,
+        workspace: profile === undefined ? { workspaceId } : { profile },
+        env: selectionEnv(run.workspace),
+      });
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      active = undefined;
+      record({ type: "failure", text });
+      setStatus("stopped", text);
+      return { ok: false, reason: text };
+    }
+    run.handle = handle;
+    void consume(run, handle);
+    return { ok: true };
   }
 
   return {
     start(): { ok: true } | { ok: false; reason: string } {
       if (active !== undefined) return { ok: true };
       const selection = options.getSelection();
-      const workspaceArgs = selectionArgs(selection);
-      if (workspaceArgs.length === 0) return { ok: false, reason: NO_WORKSPACE };
+      if (selectionArgs(selection).length === 0) return { ok: false, reason: NO_WORKSPACE };
 
       entries = [];
       latestRun = undefined;
       workspace = { ...selection };
       emit({ type: "reset" });
-      let handle: RunHandle;
-      try {
-        handle = options.startRun({
-          file: options.file,
-          argFile: options.runArgFile,
-          workspace: { ...selection },
-          env: selectionEnv(selection),
-        });
-      } catch (error) {
-        const text = error instanceof Error ? error.message : String(error);
-        record({ type: "failure", text });
-        setStatus("stopped", text);
-        return { ok: false, reason: text };
-      }
       const run: ActiveRun = {
-        handle,
-        workspaceArgs,
+        handle: undefined,
+        target: targetOf(selection),
         workspace: { ...selection },
         phase: { booting: true, armed: false, inRun: false, queued: false },
       };
       active = run;
       setStatus("watching");
-      void consume(run);
+      if (exiting.size === 0) return launch(run);
+      void Promise.all(exiting).then(() => launch(run));
       return { ok: true };
     },
 
@@ -222,7 +243,7 @@ export function createRunSession(options: SessionOptions) {
       const run = active;
       if (run === undefined) return;
       const next = options.getSelection();
-      if (selectionArgs(next).join(" ") === run.workspaceArgs.join(" ")) return;
+      if (targetOf(next) === run.target) return;
       const change = `The selected workspace changed (${describeWorkspace(run.workspace)} to ${describeWorkspace(next)})`;
       stopRun(`${change}, so the watch was stopped.`);
       const restarted = this.start();

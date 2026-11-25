@@ -20,6 +20,14 @@ import type { RunHandle, RunInput } from "./run-types";
 const FILE_POLL_MS = 300;
 const WORKER_FILE = new URL("./function-run/worker.js", import.meta.url);
 
+function canonicalPath(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return file;
+  }
+}
+
 export interface FunctionRunTabOptions {
   projectDir: string;
   /** Edit this existing file instead of the scratch function. */
@@ -51,7 +59,7 @@ export async function createFunctionRunTab(
   const editsScratch = options.file === undefined;
   const file = editsScratch
     ? path.join(studioDir, "function.ts")
-    : path.resolve(options.projectDir, options.file!);
+    : canonicalPath(path.resolve(options.projectDir, options.file!));
   const name = path.basename(file).replace(/\.[^.]+$/, "");
   const argFile = path.join(studioDir, `${name}.arg.json5`);
   const resultFile = path.join(studioDir, `${name}.result.json`);

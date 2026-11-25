@@ -30,14 +30,21 @@ afterAll(() => {
   fs.rmSync(base, { recursive: true, force: true });
 });
 
-function controllableRun() {
+function controllableRun(holdExit = false) {
   const queue: RunEvent[] = [];
   let wake: (() => void) | undefined;
   const push = (event: RunEvent) => {
     queue.push(event);
     wake?.();
   };
-  const stop = vi.fn(() => push({ type: "exit", code: null }));
+  let released: () => void = () => {};
+  const exited = new Promise<void>((resolve) => {
+    released = resolve;
+  });
+  const stop = vi.fn(() => {
+    push({ type: "exit", code: null });
+    if (!holdExit) released();
+  });
   const handle: RunHandle = {
     events: (async function* () {
       for (;;) {
@@ -53,8 +60,9 @@ function controllableRun() {
       }
     })(),
     stop,
+    exited,
   };
-  return { handle, push, stop };
+  return { handle, push, stop, release: () => released() };
 }
 
 async function setup(options: { selection?: { profile?: string; workspaceId?: string } } = {}) {
@@ -349,7 +357,7 @@ describe("POST /start and /stop", () => {
 
     expect([response.status, startRun.mock.calls[0]![0].workspace]).toEqual([
       204,
-      { profile: "test", workspaceId: "ws-1" },
+      { profile: "test" },
     ]);
   });
 

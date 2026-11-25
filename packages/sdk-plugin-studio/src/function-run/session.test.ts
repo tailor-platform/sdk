@@ -2,10 +2,17 @@ import { describe, expect, test, vi } from "vitest";
 import { createRunSession, type SessionEvent } from "./session";
 import type { RunEvent, RunHandle, RunInput } from "./run-types";
 
-function controllableRun() {
+function controllableRun(holdExit = false) {
   const queue: RunEvent[] = [];
   let wake: (() => void) | undefined;
-  const stop = vi.fn(() => push({ type: "exit", code: null }));
+  let released: () => void = () => {};
+  const exited = new Promise<void>((resolve) => {
+    released = resolve;
+  });
+  const stop = vi.fn(() => {
+    push({ type: "exit", code: null });
+    if (!holdExit) released();
+  });
   const push = (event: RunEvent) => {
     queue.push(event);
     wake?.();
@@ -25,8 +32,9 @@ function controllableRun() {
       }
     })(),
     stop,
+    exited,
   };
-  return { handle, push, stop };
+  return { handle, push, stop, release: () => released() };
 }
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -76,7 +84,7 @@ describe("start", () => {
       expect.objectContaining({
         file: "/p/function.ts",
         argFile: "/tmp/arg.json",
-        workspace: { profile: "test", workspaceId: "ws-1" },
+        workspace: { profile: "test" },
       }),
     );
   });
@@ -362,12 +370,13 @@ describe("stop", () => {
     });
   });
 
-  test("lets the watch be started again", () => {
+  test("lets the watch be started again", async () => {
     const { session, startRun } = setup();
     session.start();
     session.stop();
 
     session.start();
+    await settle();
 
     expect(startRun).toHaveBeenCalledTimes(2);
   });
@@ -394,12 +403,13 @@ describe("when the process ends by itself", () => {
 });
 
 describe("checkSelection", () => {
-  test("restarts the watch on the newly selected workspace and notes the change", () => {
+  test("restarts the watch on the newly selected workspace and notes the change", async () => {
     const { session, run, select, startRun } = setup();
     session.start();
 
     select({ profile: "dev", workspaceId: "ws-2" });
     session.checkSelection();
+    await settle();
 
     expect([
       run.stop.mock.calls.length,
@@ -408,10 +418,7 @@ describe("checkSelection", () => {
       session.snapshot().entries.map((entry) => entry.message),
     ]).toEqual([
       1,
-      [
-        { profile: "test", workspaceId: "ws-1" },
-        { profile: "dev", workspaceId: "ws-2" },
-      ],
+      [{ profile: "test" }, { profile: "dev" }],
       "watching",
       [
         {
@@ -420,6 +427,65 @@ describe("checkSelection", () => {
         },
       ],
     ]);
+  });
+
+  test("restarts the watch when the profile now points to another workspace", async () => {
+    const { session, run, select, startRun } = setup();
+    session.start();
+
+    select({ profile: "test", workspaceId: "ws-2" });
+    session.checkSelection();
+    await settle();
+
+    expect([run.stop.mock.calls.length, startRun.mock.calls.length]).toEqual([1, 2]);
+  });
+
+  test("starts the new watch only once the old one is gone, so the two never bundle at once", async () => {
+    const first = controllableRun(true);
+    const second = controllableRun();
+    const handles = [first.handle, second.handle];
+    const startRun = vi.fn((_input: RunInput) => handles.shift()!);
+    let current: { profile?: string; workspaceId?: string } = { profile: "a", workspaceId: "w1" };
+    const session = createRunSession({
+      startRun,
+      file: "f",
+      runArgFile: "a",
+      getSelection: () => current,
+    });
+    session.start();
+
+    current = { profile: "b", workspaceId: "w2" };
+    session.checkSelection();
+    await settle();
+    const whileOldIsExiting = startRun.mock.calls.length;
+    first.release();
+    await settle();
+
+    expect([whileOldIsExiting, startRun.mock.calls.length, session.snapshot().status]).toEqual([
+      1,
+      2,
+      "watching",
+    ]);
+  });
+
+  test("starts nothing for a watch that was stopped while it waited for the old one", async () => {
+    const first = controllableRun(true);
+    const startRun = vi.fn((_input: RunInput) => first.handle);
+    const session = createRunSession({
+      startRun,
+      file: "f",
+      runArgFile: "a",
+      getSelection: () => ({ profile: "a", workspaceId: "w1" }),
+    });
+    session.start();
+    session.stop();
+    session.start();
+
+    session.stop();
+    first.release();
+    await settle();
+
+    expect([startRun.mock.calls.length, session.snapshot().status]).toEqual([1, "stopped"]);
   });
 
   test("stops the watch and says why when the selection is cleared", () => {

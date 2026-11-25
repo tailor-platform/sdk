@@ -14,6 +14,8 @@ export type RunEvent =
 export interface RunHandle {
   events: AsyncIterable<RunEvent>;
   stop: () => void;
+  /** Settles once nothing of the watch is running any more, which is after a stop has taken effect. */
+  exited: Promise<void>;
 }
 
 export interface RunInput {
