@@ -609,6 +609,38 @@ describe("startFunctionRunWatch", () => {
       expect(executeScriptReportingStart).toHaveBeenCalledTimes(1);
     });
 
+    test("watches the files the function reads when it does not run on start, without executing it", async () => {
+      const { events, onEvent } = collect();
+      const helper = path.join(cwd, "helper.ts");
+      vi.mocked(bundleForRun).mockResolvedValue({
+        bundledCode: "code",
+        scriptName: "test-run--fn.js",
+        sourceFiles: [fnPath, helper],
+      });
+
+      await start({ onEvent, runOnStart: false });
+      await vi.waitFor(() => expect(watcher.add).toHaveBeenCalledWith([helper]));
+      const executedOnStart = vi.mocked(executeScriptReportingStart).mock.calls.length;
+      watcher.emit("change", helper);
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+
+      expect([executedOnStart, types(events)]).toEqual([
+        0,
+        ["ready", "scheduled", "started", "finished"],
+      ]);
+    });
+
+    test("still runs on the first change when the function cannot be bundled at start", async () => {
+      const { events, onEvent } = collect();
+      vi.mocked(bundleForRun).mockRejectedValueOnce(new Error("bundle boom"));
+
+      await start({ onEvent, runOnStart: false });
+      watcher.emit("add", path.join(cwd, "lib", "sum.ts"));
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+
+      expect(types(events)).toEqual(["ready", "scheduled", "started", "finished"]);
+    });
+
     test("does not register signal handlers when handleSignals is false", async () => {
       const signalHandlers = STOP_SIGNALS.map((signal) => process.listeners(signal));
 

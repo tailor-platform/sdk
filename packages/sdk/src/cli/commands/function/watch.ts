@@ -292,6 +292,19 @@ export async function startFunctionRunWatch(
   );
   await new Promise<void>((resolve) => watcher.once("ready", () => resolve()));
 
+  const runOnStart = options.runOnStart ?? true;
+  if (!runOnStart) {
+    try {
+      beginUserModuleRun();
+      const prepared = await prepareFunction({
+        target,
+        progress: (message) => logger.debug(message),
+      });
+      updateWatched(prepared.sourceFiles);
+    } catch {
+      preparationFailed = true;
+    }
+  }
   if (onEvent) {
     onEvent({ type: "ready", argFile });
   } else {
@@ -300,7 +313,7 @@ export async function startFunctionRunWatch(
       `${tty}Ready! Running ${styles.path(displayPath(target.filePath))} on every save. Edit ${styles.path(displayPath(options.argFile ?? argFile))} to change its argument (^C to quit)`,
     );
   }
-  if (options.runOnStart ?? true) void cycle();
+  if (runOnStart) void cycle();
 
   let resolveClosed: () => void = () => {};
   const closed = new Promise<void>((resolve) => {
