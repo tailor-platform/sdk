@@ -75,6 +75,7 @@ function run(t, scenario, { timeout = "30" } = {}) {
   }
   writeFileSync(join(dir, "scenario.json"), JSON.stringify(scenario));
   writeFileSync(join(dir, "calls.log"), "");
+  writeFileSync(join(dir, "github-env"), "");
   const result = spawnSync(process.execPath, [script, "--timeout", timeout, "--interval", "0.01"], {
     encoding: "utf8",
     env: {
@@ -83,10 +84,16 @@ function run(t, scenario, { timeout = "30" } = {}) {
       FAKE_SCENARIO: join(dir, "scenario.json"),
       FAKE_LOG: join(dir, "calls.log"),
       CHANGESETS_OUTPUT: join(dir, "changesets-output.ndjson"),
+      GITHUB_ENV: join(dir, "github-env"),
     },
   });
   const calls = readFileSync(join(dir, "calls.log"), "utf8").split("\n").filter(Boolean);
-  return { ...result, calls, publishCount: calls.filter((call) => call === "publish").length };
+  return {
+    ...result,
+    githubEnv: readFileSync(join(dir, "github-env"), "utf8"),
+    calls,
+    publishCount: calls.filter((call) => call === "publish").length,
+  };
 }
 
 const seed = "@tailor-platform/sdk-plugin-seed@0.6.1";
@@ -156,22 +163,27 @@ test("waits until npm lists every version the publish tagged", (t) => {
   assert.ok(result.stdout.includes(successOutput), "forwards the publish output");
 });
 
-test("fails with pnpm's last error when a version does not show up before the deadline", (t) => {
+test("succeeds with a warning and records unconfirmed packages when npm visibility times out", (t) => {
   const result = run(
     t,
     {
       publishes: [
-        { code: 0, output: successOutput, tags: ["@tailor-platform/sdk-plugin-new@0.1.0"] },
+        { code: 0, output: successOutput, tags: ["@tailor-platform/sdk-plugin-new@0.1.0", seed] },
       ],
       unlistedCalls: { "@tailor-platform/sdk-plugin-new@0.1.0": -1 },
       firstPublish: ["@tailor-platform/sdk-plugin-new"],
     },
     { timeout: "0.2" },
   );
-  assert.equal(result.status, 1);
+  assert.equal(result.status, 0);
+  assert.equal(
+    result.githubEnv,
+    `NPM_UNCONFIRMED_PACKAGES=["@tailor-platform/sdk-plugin-new@0.1.0","${seed}"]\n`,
+  );
+  assert.doesNotMatch(result.stdout, /::error::/);
   assert.match(
     result.stdout,
-    /::error::@tailor-platform\/sdk-plugin-new@0\.1\.0 is not visible on npm after 0\.2s/,
+    /::warning::@tailor-platform\/sdk-plugin-new@0\.1\.0 is not visible on npm after 0\.2s/,
   );
   assert.match(result.stderr, /ERR_PNPM_FETCH_404/);
 });
@@ -301,3 +313,60 @@ test("gives the final wait its own deadline after a slow second publish", (t) =>
   );
   assert.equal(result.status, 0, result.stderr);
 });
+
+test("preserves publish failures even when published packages remain unconfirmed", (t) => {
+  const result = run(
+    t,
+    {
+      publishes: [{ code: 3, output: "Publish failed", tags: [seed] }],
+      unlistedCalls: { [seed]: -1 },
+    },
+    { timeout: "0.2" },
+  );
+  assert.equal(result.status, 3);
+});
+
+for (const unconfirmed of [[], [seed]]) {
+  test(`Slack notification ${unconfirmed.length ? "includes" : "omits"} the npm confirmation warning`, (t) => {
+    const workflow = readFileSync(new URL("../workflows/release.yml", import.meta.url), "utf8");
+    const shell = workflow
+      .split("      - name: Notify Slack on publish\n")[1]
+      .split("\n      - name:")[0]
+      .split("        run: |\n")[1]
+      .split("\n")
+      .map((line) => line.slice(10))
+      .join("\n");
+    const dir = mkdtempSync(join(tmpdir(), "release-slack-"));
+    t.after(() => rmSync(dir, { recursive: true }));
+    writeFileSync(join(dir, "curl"), "#!/bin/sh\ncat\n");
+    chmodSync(join(dir, "curl"), 0o755);
+    const env = {
+      ...process.env,
+      PATH: `${dir}:${process.env.PATH}`,
+      RUN_URL: "https://example.com/run",
+      RELEASES_URL: "https://example.com/releases",
+      PUBLISHED_PACKAGES: JSON.stringify([
+        { name: "@tailor-platform/sdk-plugin-seed", version: "0.6.1" },
+      ]),
+      SLACK_WEBHOOK_URL: "https://example.com/webhook",
+    };
+    delete env.NPM_UNCONFIRMED_PACKAGES;
+    if (unconfirmed.length) env.NPM_UNCONFIRMED_PACKAGES = JSON.stringify(unconfirmed);
+    const result = spawnSync("bash", ["-e", "-o", "pipefail", "-c", shell], {
+      encoding: "utf8",
+      env,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const { text } = JSON.parse(result.stdout);
+    assert.match(text, /Release <https:\/\/example.com\/run\|succeeded>/);
+    assert.match(text, /sdk-plugin-seed@0\.6\.1/);
+    if (unconfirmed.length) {
+      assert.match(
+        text,
+        /npm での公開確認はまだ取れていません: @tailor-platform\/sdk-plugin-seed@0\.6\.1/,
+      );
+    } else {
+      assert.doesNotMatch(text, /:warning:/);
+    }
+  });
+}
