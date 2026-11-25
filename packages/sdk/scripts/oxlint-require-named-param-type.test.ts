@@ -97,6 +97,11 @@ const fixture = [
   " */",
   "export function destructuredAfterThis(this: Named, { a }: { a: string }) { return [this, a]; }",
   "export function destructuredDefault({ a }: { a?: string } = {}) { return a; }",
+  "export function empty(p: {}) { return p; }",
+  "/**",
+  " * @param p.a - A",
+  " */",
+  "export function documentedWithoutParent(p: { a: string }) { return p; }",
   "",
 ].join("\n");
 
