@@ -183,7 +183,9 @@ describe("configure input types are accepted by the schema that parses them", ()
   });
 
   test("defineTailorDBReplication", () => {
-    type Input = Omit<TailorDBReplicationDefinition, "add">;
+    type Input = Omit<TailorDBReplicationDefinition, "add" | "destination"> & {
+      destination: string;
+    };
     expectTypeOf<Input>().toExtend<TailorDBReplicationInput>();
     expectTypeOf<ExtraKeyPaths<Input, TailorDBReplicationInput>>().toEqualTypeOf<never>();
   });

@@ -14,7 +14,7 @@ TailorDB replication copies the records of the tables you choose into a BigQuery
 
 ## Destinations
 
-Define a destination with `defineTailorDBReplicationDestination()` and list it in `dbReplicationDestinations`:
+Define a destination with `defineTailorDBReplicationDestination()`. A replication that writes into it deploys it, so a destination needs no other entry in the config. To deploy a destination that no replication uses yet, for example to grant access before adding replications, list it in `dbReplicationDestinations`:
 
 ```typescript
 import { defineConfig, defineTailorDBReplicationDestination } from "@tailor-platform/sdk";
@@ -31,6 +31,7 @@ export default defineConfig({
 
 - Destination names are unique across the workspace, and each destination writes to a different dataset.
 - A destination's project and dataset cannot be changed. To write to another dataset, define a destination with a new name and point the replications at it.
+- A destination that is neither used by a replication nor listed in `dbReplicationDestinations` is deleted.
 
 ### Granting access
 
@@ -62,7 +63,7 @@ const warehouse = defineTailorDBReplicationDestination("warehouse", {
 
 const analytics = defineTailorDBReplication("analytics", {
   source: { namespace: "main-db" },
-  destination: "warehouse",
+  destination: warehouse,
   tablePrefix: "shop_",
 })
   .add(user, { excludeFields: ["email", "phone"] })
@@ -71,13 +72,12 @@ const analytics = defineTailorDBReplication("analytics", {
 export default defineConfig({
   name: "shop",
   db: { "main-db": { files: ["./tailordb/*.ts"] } },
-  dbReplicationDestinations: [warehouse],
   dbReplications: [analytics],
 });
 ```
 
 - `source.namespace` must be a namespace this config defines in `db`; an external namespace is replicated from the config that defines it.
-- `destination` must be a destination listed in `dbReplicationDestinations` of the same config.
+- `destination` is the value `defineTailorDBReplicationDestination()` returned. Two different destinations cannot share a name.
 - Each table passed to `.add()` must be loaded by the namespace's `files`, and can be added once.
 - `.add()` returns a new replication and leaves the one it was called on unchanged.
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.

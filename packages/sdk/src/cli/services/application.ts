@@ -699,13 +699,47 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
     });
   }
 
-  const dbReplicationDestinations = destinationInputs.map((input, index) =>
-    parseServiceConfig(TailorDBReplicationDestinationSchema, input, {
-      file: config.path,
-      configKey: "dbReplicationDestinations",
-      key: index,
-      name: input.name,
-    }),
+  const issues: FlatIssue[] = [];
+  const declared = [
+    ...destinationInputs.map((input, index) => ({
+      input,
+      path: ["dbReplicationDestinations", index],
+    })),
+    ...replicationInputs.flatMap((replication, index) =>
+      typeof replication.destination === "object"
+        ? [{ input: replication.destination, path: ["dbReplications", index, "destination"] }]
+        : [],
+    ),
+  ];
+  const destinationsByName = new Map<
+    string,
+    { destination: TailorDBReplicationDestination; path: FlatIssue["path"] }
+  >();
+  for (const { input, path } of declared) {
+    const result = TailorDBReplicationDestinationSchema.safeParse(input);
+    if (!result.success) {
+      throw configInvalidError({
+        file: config.path,
+        exportName: "default",
+        subject: `config for TailorDB replication destination${typeof input.name === "string" ? ` "${input.name}"` : ""}`,
+        error: result.error,
+        pathPrefix: path,
+        service: { configKey: "dbReplicationDestinations", name: input.name },
+      });
+    }
+    const destination = result.data;
+    const known = destinationsByName.get(destination.name);
+    if (!known) {
+      destinationsByName.set(destination.name, { destination, path });
+    } else if (datasetKey(known.destination) !== datasetKey(destination)) {
+      issues.push({
+        path,
+        message: `Two different destinations are named "${destination.name}"`,
+      });
+    }
+  }
+  const dbReplicationDestinations = [...destinationsByName.values()].map(
+    ({ destination }) => destination,
   );
   const dbReplications = replicationInputs.map((input, index) =>
     parseServiceConfig(
@@ -713,7 +747,8 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
       {
         name: input.name,
         source: input.source,
-        destination: input.destination,
+        destination:
+          typeof input.destination === "object" ? input.destination.name : input.destination,
         tablePrefix: input.tablePrefix,
         enabled: input.enabled,
         types: input.types,
@@ -722,13 +757,12 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
     ),
   );
 
-  const issues: FlatIssue[] = [];
   const destinationByDataset = new Map<string, string>();
-  dbReplicationDestinations.forEach((destination, index) => {
+  destinationsByName.forEach(({ destination, path }) => {
     const other = destinationByDataset.get(datasetKey(destination));
     if (other !== undefined) {
       issues.push({
-        path: ["dbReplicationDestinations", index, "bigquery"],
+        path: [...path, "bigquery"],
         message: `Destination "${destination.name}" writes to the same dataset as destination "${other}"`,
       });
     }
@@ -740,7 +774,7 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
     if (!destinationNames.has(replication.destination)) {
       issues.push({
         path: ["dbReplications", index, "destination"],
-        message: `Destination "${replication.destination}" is not in dbReplicationDestinations`,
+        message: `Destination "${replication.destination}" is not defined; pass the destination itself instead of its name`,
       });
     }
   });

@@ -19,16 +19,19 @@ describe("defineTailorDBReplicationDestination", () => {
 });
 
 describe("defineTailorDBReplication", () => {
+  const warehouse = defineTailorDBReplicationDestination("warehouse", {
+    bigquery: { project: "acme-analytics", dataset: "tailor" },
+  });
   const empty = defineTailorDBReplication("analytics", {
     source: { namespace: "main-db" },
-    destination: "warehouse",
+    destination: warehouse,
   });
 
   test("starts with no types", () => {
     expect(empty).toEqual({
       name: "analytics",
       source: { namespace: "main-db" },
-      destination: "warehouse",
+      destination: warehouse,
       types: [],
     });
   });

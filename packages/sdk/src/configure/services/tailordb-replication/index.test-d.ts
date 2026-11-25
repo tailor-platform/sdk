@@ -10,9 +10,13 @@ const user = db.table("User", {
   embedding: db.string().vector(),
 });
 
+const warehouse = defineTailorDBReplicationDestination("warehouse", {
+  bigquery: { project: "acme-analytics", dataset: "tailor" },
+});
+
 const replication = defineTailorDBReplication("analytics", {
   source: { namespace: "main-db" },
-  destination: "warehouse",
+  destination: warehouse,
 });
 
 describe("TailorDB replication types", () => {
@@ -50,14 +54,20 @@ describe("TailorDB replication types", () => {
     expectTypeOf(replication.add(user)).toEqualTypeOf(replication);
   });
 
+  test("rejects a destination given by name", () => {
+    assertType(
+      defineTailorDBReplication("analytics", {
+        source: { namespace: "main-db" },
+        // @ts-expect-error pass the destination itself
+        destination: "warehouse",
+      }),
+    );
+  });
+
   test("defineConfig accepts only defined replications and destinations", () => {
-    const warehouse = defineTailorDBReplicationDestination("warehouse", {
-      bigquery: { project: "acme-analytics", dataset: "tailor" },
-    });
     assertType(
       defineConfig({
         name: "shop",
-        dbReplicationDestinations: [warehouse],
         dbReplications: [replication.add(user)],
       }),
     );

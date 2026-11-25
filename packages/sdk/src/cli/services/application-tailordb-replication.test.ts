@@ -34,7 +34,7 @@ describe("defineApplication TailorDB replications", () => {
   test("parses destinations and replications, enabling a replication by default", () => {
     const replication = defineTailorDBReplication("analytics", {
       source: { namespace: "main-db" },
-      destination: "warehouse",
+      destination: warehouse,
       tablePrefix: "shop_",
     }).add(user, { excludeFields: ["email"] });
 
@@ -60,10 +60,53 @@ describe("defineApplication TailorDB replications", () => {
     ]);
   });
 
-  test("rejects a replication whose destination is not listed", () => {
+  test("deploys a destination a replication references without listing it", () => {
     const replication = defineTailorDBReplication("analytics", {
       source: { namespace: "main-db" },
-      destination: "lake",
+      destination: warehouse,
+    });
+
+    const application = defineApplication({ config: configOf({ dbReplications: [replication] }) });
+
+    expect(application.dbReplicationDestinations).toEqual([
+      { name: "warehouse", bigquery: { project: "acme-analytics", dataset: "tailor" } },
+    ]);
+  });
+
+  test("keeps a listed destination no replication uses", () => {
+    const application = defineApplication({
+      config: configOf({ dbReplicationDestinations: [warehouse] }),
+    });
+
+    expect(application.dbReplicationDestinations.map(({ name }) => name)).toEqual(["warehouse"]);
+  });
+
+  test("rejects two different destinations with the same name", () => {
+    const other = defineTailorDBReplicationDestination("warehouse", {
+      bigquery: { project: "acme-analytics", dataset: "lake" },
+    });
+    const replication = defineTailorDBReplication("analytics", {
+      source: { namespace: "main-db" },
+      destination: other,
+    });
+
+    expect(() =>
+      defineApplication({
+        config: configOf({ dbReplicationDestinations: [warehouse], dbReplications: [replication] }),
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'dbReplications.0.destination: Two different destinations are named "warehouse"',
+        ),
+      }),
+    );
+  });
+
+  test("rejects a destination given by a name it cannot resolve", () => {
+    const replication = defineTailorDBReplication("analytics", {
+      source: { namespace: "main-db" },
+      destination: "lake" as never,
     });
 
     expect(() =>
@@ -72,7 +115,7 @@ describe("defineApplication TailorDB replications", () => {
       expect.objectContaining({
         code: "CONFIG_INVALID",
         message: expect.stringContaining(
-          'dbReplications.0.destination: Destination "lake" is not in dbReplicationDestinations',
+          'dbReplications.0.destination: Destination "lake" is not defined',
         ),
       }),
     );
@@ -99,7 +142,7 @@ describe("defineApplication TailorDB replications", () => {
   test("rejects two replications with the same name", () => {
     const replication = defineTailorDBReplication("analytics", {
       source: { namespace: "main-db" },
-      destination: "warehouse",
+      destination: warehouse,
     });
 
     expect(() =>
@@ -115,7 +158,7 @@ describe("defineApplication TailorDB replications", () => {
   test("rejects a type listing both excludeFields and includeFields", () => {
     const replication = defineTailorDBReplication("analytics", {
       source: { namespace: "main-db" },
-      destination: "warehouse",
+      destination: warehouse,
     }).add(user, { excludeFields: ["email"], includeFields: ["name"] } as never);
 
     expect(() =>
@@ -180,7 +223,7 @@ export const user = db
   }
 
   const base = (namespace = "main-db") =>
-    defineTailorDBReplication("analytics", { source: { namespace }, destination: "warehouse" });
+    defineTailorDBReplication("analytics", { source: { namespace }, destination: warehouse });
 
   test("accepts types the namespace loads, with their fields", async () => {
     const { application } = await load(base().add(user, { includeFields: ["name", "email"] }));

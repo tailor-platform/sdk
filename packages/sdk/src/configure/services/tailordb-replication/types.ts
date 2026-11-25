@@ -25,12 +25,18 @@ export type TailorDBReplicationDestinationServiceInput = Omit<
   "name"
 >;
 
-/** Type accepted by `AppConfig.dbReplicationDestinations`. Only values returned by `defineTailorDBReplicationDestination()` satisfy this. */
+/** Type accepted by `destination` of a replication and by `AppConfig.dbReplicationDestinations`. Only values returned by `defineTailorDBReplicationDestination()` satisfy this. */
 export type TailorDBReplicationDestinationConfig = TailorDBReplicationDestinationInput &
   TailorDBReplicationDestinationDefinitionBrand;
 
 /** Replication settings accepted by `defineTailorDBReplication()`. Types are added with `.add()`. */
-export type TailorDBReplicationServiceInput = Omit<TailorDBReplicationInput, "name" | "types">;
+export type TailorDBReplicationServiceInput = Omit<
+  TailorDBReplicationInput,
+  "name" | "types" | "destination"
+> & {
+  /** Destination to write into, as returned by `defineTailorDBReplicationDestination()`. It is deployed with the replication. */
+  destination: TailorDBReplicationDestinationConfig;
+};
 
 type ReplicableFieldName<Fields> = Exclude<keyof Fields & string, "id">;
 

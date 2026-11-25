@@ -309,7 +309,12 @@ export interface AppConfig<
   staticWebsites?: StaticWebsites;
   /** AI Gateway configurations. Must be an array, e.g. `[gateway]`. */
   aiGateways?: AIGateways;
-  /** BigQuery datasets that TailorDB replications write into. Must be an array, e.g. `[warehouse]`. */
+  /**
+   * BigQuery datasets that TailorDB replications write into, e.g. `[warehouse]`.
+   * A replication's `destination` is deployed without being listed here; list a
+   * destination to keep it while no replication uses it, for example to grant
+   * its service account access before adding replications.
+   */
   dbReplicationDestinations?: TailorDBReplicationDestinationConfig[];
   /** Replications of TailorDB types into `dbReplicationDestinations`. Must be an array, e.g. `[analytics]`. */
   dbReplications?: TailorDBReplicationConfig[];
