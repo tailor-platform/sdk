@@ -147,6 +147,40 @@ describe("workspace context", () => {
   });
 
   test.each([
+    ["an absolute", (root: string) => join(root, "shared")],
+    ["a parent-relative", () => join("..", "shared")],
+  ])(
+    "keeps contexts separate for configuration files in different directories sharing %s build output directory",
+    async (_kind, outputDirectory) => {
+      const root = await temporaryDirectory();
+      process.env.TAILOR_BUILD_OUTPUT_DIR = outputDirectory(root);
+      const firstConfigPath = join(root, "first", "tailor.config.ts");
+      const secondConfigPath = join(root, "second", "tailor.config.ts");
+      const firstContext = {
+        version: 1 as const,
+        platformUrl: "https://api.tailor.tech",
+        workspaceId: "11111111-1111-4111-8111-111111111111",
+      };
+      const secondContext = {
+        ...firstContext,
+        workspaceId: "22222222-2222-4222-8222-222222222222",
+      };
+
+      await saveWorkspaceContext(firstContext, firstConfigPath);
+      await saveWorkspaceContext(secondContext, secondConfigPath);
+
+      await expect(
+        loadWorkspaceContext("https://api.tailor.tech", firstConfigPath),
+      ).resolves.toEqual(firstContext);
+      await expect(
+        loadWorkspaceContext("https://api.tailor.tech", secondConfigPath),
+      ).resolves.toEqual(secondContext);
+      await expect(readdir(root)).resolves.toEqual(["shared"]);
+      await expect(readdir(join(root, "shared"))).resolves.toHaveLength(2);
+    },
+  );
+
+  test.each([
     ["missing", undefined],
     ["malformed", "not json"],
     ["stale schema", JSON.stringify({ version: 1 })],
