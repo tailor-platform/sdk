@@ -2095,14 +2095,6 @@ describe("runCodemods", () => {
         expect(files).toEqual(["a.json"]);
       });
 
-      test("does not match across two string values", async () => {
-        const files = await reviewedFiles('{"x":"one","y":"two"}', {
-          jsonStringSuspiciousPatterns: [/\bone\b[^\0]*\btwo\b/],
-        });
-
-        expect(files).toEqual([]);
-      });
-
       test("does not match across two string values even when the pattern allows any character", async () => {
         const files = await reviewedFiles('{"x":"one","y":"two"}', {
           jsonStringSuspiciousPatterns: [/one[\s\S]*two/],

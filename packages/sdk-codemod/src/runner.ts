@@ -169,6 +169,12 @@ function contentForResidualMatching(relative: string, content: string): string {
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
 
+type ResidualEntry = {
+  residual: string;
+  sourceString: string | null;
+  jsonStrings: string[] | null;
+};
+
 const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
 
 function sourceStringEscapeForResidualMatching(escape: string): string {
@@ -280,7 +286,8 @@ function jsonStringValuesForResidualMatching(relative: string, content: string):
     if (typeof value === "string") {
       strings.push(value);
     } else if (value !== null && typeof value === "object") {
-      for (const child of Object.values(value)) pending.push(child);
+      const children = Object.values(value);
+      for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
     }
   }
   return strings;
@@ -629,13 +636,8 @@ export async function runCodemods(
       }
     }
 
-    const residualBySnapshot = new Map<
-      string,
-      { residual: string; sourceString: string | null; jsonStrings: string[] | null }
-    >();
-    const residualFor = (
-      content: string,
-    ): { residual: string; sourceString: string | null; jsonStrings: string[] | null } => {
+    const residualBySnapshot = new Map<string, ResidualEntry>();
+    const residualFor = (content: string): ResidualEntry => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {

@@ -1,24 +1,8 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { allCodemods } from "./registry";
-import { runCodemods } from "./runner";
+import { reportedFiles as reportedFilesOf } from "./test-helpers/review-files";
 
-const codemod = allCodemods.find((entry) => entry.id === "v3/function-run-name-to-workflow-run")!;
-
-async function reportedFiles(relativePath: string, source: string): Promise<string[]> {
-  const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "function-run-name-"));
-  try {
-    const file = path.join(projectDir, relativePath);
-    await fs.promises.mkdir(path.dirname(file), { recursive: true });
-    await fs.promises.writeFile(file, source, "utf-8");
-    const result = await runCodemods([{ codemod }], projectDir, true);
-    return result.llmReviews.flatMap((review) => review.files);
-  } finally {
-    await fs.promises.rm(projectDir, { recursive: true, force: true });
-  }
-}
+const reportedFiles = (relativePath: string, source: string): Promise<string[]> =>
+  reportedFilesOf("v3/function-run-name-to-workflow-run", relativePath, source);
 
 describe("function run --name review", () => {
   test.each([
