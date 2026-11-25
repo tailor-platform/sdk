@@ -45,8 +45,13 @@ function paramNamesFromJsdoc(block) {
   return names;
 }
 
-// Returns one [{ astNode, names: string[] }] entry per function parameter.
-// `names` is the set of identifier names that must be documented in JSDoc:
+function isThisParam(param) {
+  return param.type === "Identifier" && param.name === "this";
+}
+
+// Returns one [{ astNode, names: string[] }] entry per function parameter
+// other than `this`. `names` is the set of identifier names that must be
+// documented in JSDoc:
 // the parameter itself for plain identifiers, the destructured leaves for
 // object/array patterns (matching the repo JSDoc convention of one
 // `@param obj.prop` per leaf).
@@ -77,7 +82,7 @@ function functionParamSlots(node) {
     }
     return [];
   }
-  return node.params.map((p) => ({ astNode: p, names: collect(p) }));
+  return node.params.filter((p) => !isThisParam(p)).map((p) => ({ astNode: p, names: collect(p) }));
 }
 
 // Find the nearest enclosing node that the JSDoc block could be
@@ -363,6 +368,7 @@ export default {
           }
           let documented;
           for (const param of node.params) {
+            if (isThisParam(param)) continue;
             const declared = param.type === "TSParameterProperty" ? param.parameter : param;
             const target = declared.type === "AssignmentPattern" ? declared.left : declared;
             if (target.type !== "Identifier") continue;

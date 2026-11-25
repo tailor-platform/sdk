@@ -66,6 +66,7 @@ const fixture = [
   "export const documentedArrow = (p: { a: string }) => p;",
   "export class D { constructor(private readonly p: { a: string }) { void this.p; } }",
   "export class E { handle = (p: { a: string }) => p; }",
+  "export function bound(this: { a: string }, x: number) { return [this, x]; }",
   "",
 ].join("\n");
 
