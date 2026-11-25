@@ -2129,6 +2129,30 @@ describe("runCodemods", () => {
         expect(files).toEqual([]);
       });
 
+      test("keeps a string value that holds a NUL character as one value", async () => {
+        const files = await reviewedFiles('{"x":"one\\u0000two"}', {
+          jsonStringSuspiciousPatterns: [["one", "two"]],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
+
+      test("does not match an anchored pattern against part of a value that holds a NUL character", async () => {
+        const files = await reviewedFiles('{"x":"one\\u0000two"}', {
+          jsonStringSuspiciousPatterns: [/^one$/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("does not match an empty pattern in a JSON file without string values", async () => {
+        const files = await reviewedFiles('{"a":1}', {
+          jsonStringSuspiciousPatterns: [/^$/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
       test("does not match a key", async () => {
         const files = await reviewedFiles('{"one":"x"}', {
           jsonStringSuspiciousPatterns: [/\bone\b/],

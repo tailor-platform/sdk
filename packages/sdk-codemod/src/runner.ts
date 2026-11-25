@@ -263,7 +263,7 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
 }
 
-function jsonStringContentForResidualMatching(relative: string, content: string): string | null {
+function jsonStringValuesForResidualMatching(relative: string, content: string): string[] | null {
   if (path.extname(relative).toLowerCase() !== ".json") return null;
 
   let parsed: unknown;
@@ -283,7 +283,7 @@ function jsonStringContentForResidualMatching(relative: string, content: string)
       for (const child of Object.values(value)) pending.push(child);
     }
   }
-  return strings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+  return strings;
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -631,18 +631,18 @@ export async function runCodemods(
 
     const residualBySnapshot = new Map<
       string,
-      { residual: string; sourceString: string | null; jsonString: string | null }
+      { residual: string; sourceString: string | null; jsonStrings: string[] | null }
     >();
     const residualFor = (
       content: string,
-    ): { residual: string; sourceString: string | null; jsonString: string | null } => {
+    ): { residual: string; sourceString: string | null; jsonStrings: string[] | null } => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
-          jsonString: needsJsonStrings
-            ? jsonStringContentForResidualMatching(relative, content)
+          jsonStrings: needsJsonStrings
+            ? jsonStringValuesForResidualMatching(relative, content)
             : null,
         };
         residualBySnapshot.set(content, entry);
@@ -702,8 +702,8 @@ export async function runCodemods(
       ) {
         continue;
       }
-      const { residual, sourceString, jsonString } = residualFor(snapshot);
-      const readsJsonStrings = jsonString != null && lt.jsonStringSuspiciousPatterns.length > 0;
+      const { residual, sourceString, jsonStrings } = residualFor(snapshot);
+      const readsJsonStrings = jsonStrings != null && lt.jsonStringSuspiciousPatterns.length > 0;
       const matchesSource =
         (!readsJsonStrings &&
           lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null)) ||
@@ -711,9 +711,9 @@ export async function runCodemods(
           lt.sourceStringSuspiciousPatterns.some(
             (p) => matchResidualPattern(sourceString, p) !== null,
           )) ||
-        (jsonString != null &&
-          lt.jsonStringSuspiciousPatterns.some(
-            (p) => matchResidualPatternFragment(jsonString, p) !== null,
+        (jsonStrings != null &&
+          jsonStrings.some((value) =>
+            lt.jsonStringSuspiciousPatterns.some((p) => matchResidualPattern(value, p) !== null),
           ));
       if (matchesSource) {
         filesForReview().add(relative);
