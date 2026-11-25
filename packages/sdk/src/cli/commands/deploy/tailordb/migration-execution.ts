@@ -145,12 +145,52 @@ function entriesOfNamespace<T extends NamespacedEntry>(
 }
 
 /**
+ * List the tables a migration changes that the workspace lacks while the local definitions and the
+ * last pending migration omit them: the tables the migration adds and a later pending migration
+ * removes or renames away. The plan does not create them, so the migration creates them for its
+ * script, and the migration that removes them deletes them again. A namespace without local
+ * definitions is left alone.
+ * @param changeSet - TailorDB change set
+ * @param migration - The migration about to run
+ * @param finalMigration - The last pending migration of the namespace
+ * @param phaseSettings - How this deploy's migration phases write table settings
+ * @returns Names of the tables
+ */
+function missingTableNames(
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+  finalMigration: PendingMigration,
+  phaseSettings: MigrationPhaseSettings,
+): string[] {
+  const localTables = phaseSettings.tailorDBInputs.find(
+    (input) => input.namespace === migration.namespace,
+  )?.types;
+  if (!localTables) return [];
+  const finalTables = migrationSnapshotCache.load(finalMigration).tables;
+  const deleted = new Set(
+    entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+  );
+  return [...getAffectedTableNames(migration)].filter((tableName) => {
+    const key = namespacedTableKey(migration.namespace, tableName);
+    const workspaceLacks =
+      !processedTables.created.has(key) &&
+      (!deleted.has(tableName) || deletedResources.types.has(key));
+    return (
+      workspaceLacks &&
+      !Object.hasOwn(localTables, tableName) &&
+      !Object.hasOwn(finalTables, tableName)
+    );
+  });
+}
+
+/**
  * List the tables a migration changes that the deploy plan neither creates nor updates, yet the
  * workspace holds while the migration runs: a table a later migration removes, which this deploy
- * created from the baseline snapshot or which the plan deletes, and a table the plan leaves
- * unchanged because a later migration changes it back. Their schema follows the history like any
- * other table's, so the script sees the shape its migration defines. An unchanged table the
- * migration adds is left out: rolling the migration back deletes the tables it adds.
+ * created, from the baseline snapshot or for the migration that adds it, or which the plan
+ * deletes, and a table the plan leaves unchanged because a later migration changes it back. Their
+ * schema follows the history like any other table's, so the script sees the shape its migration
+ * defines. An unchanged table the migration adds is left out: rolling the migration back deletes
+ * the tables it adds.
  * @param changeSet - TailorDB change set
  * @param migration - The migration about to run
  * @returns Names of the tables
@@ -333,6 +373,7 @@ export async function awaitAllSettledOrThrow(
  * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
+ * @param finalMigration - The last pending migration of the namespace
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @param gqlPermissionUndo - Records how to undo each GraphQL permission this migration writes
@@ -343,6 +384,7 @@ export async function executeSingleMigrationPrePhase(
   workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  finalMigration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
   gqlPermissionUndo: GqlPermissionUndo,
@@ -397,6 +439,22 @@ export async function executeSingleMigrationPrePhase(
     await client.createTailorDBType(clonedRequest);
   }
 
+  // Listed before the creates below, which need no update right after.
+  const planlessTables = planlessTableNames(changeSet, migration);
+  for (const tableName of missingTableNames(changeSet, migration, finalMigration, phaseSettings)) {
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
+
+    processedTables.created.add(tableKey(tableName));
+    deletedResources.types.delete(tableKey(tableName));
+    attemptedTables.add(tableName);
+    await client.createTailorDBType({
+      workspaceId,
+      namespaceName: migration.namespace,
+      tailordbType,
+    });
+  }
+
   for (const create of typeCreates) {
     const tableName = create.request.tailordbType?.name;
     if (
@@ -433,7 +491,7 @@ export async function executeSingleMigrationPrePhase(
     await client.updateTailorDBType(clonedRequest);
   }
 
-  for (const tableName of planlessTableNames(changeSet, migration)) {
+  for (const tableName of planlessTables) {
     const tailordbType = prePhaseManifest(tableName);
     if (!tailordbType) continue;
 

@@ -410,6 +410,7 @@ export async function preflightTailorDB(
  * @param workspaceId - Workspace ID
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
+ * @param finalMigration - The last pending migration of the namespace
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
  * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
@@ -419,6 +420,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  finalMigration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
   gqlPermissionUndo: GqlPermissionUndo,
@@ -429,6 +431,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       workspaceId,
       changeSet,
       migration,
+      finalMigration,
       phaseSettings,
       attemptedTables,
       gqlPermissionUndo,
@@ -879,6 +882,8 @@ interface MigrationRunLog {
 
 interface MigrationAttempt {
   migration: PendingMigration;
+  /** The last pending migration of the namespace. */
+  finalMigration: PendingMigration;
   attemptedTables: Set<string>;
   inProgress: boolean;
   /** Whether an earlier deploy may have applied this migration's Pre-phase, recorded or not. */
@@ -1320,6 +1325,10 @@ async function runMigration(
   const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
   const attempt: MigrationAttempt = {
     migration,
+    finalMigration: assertDefined(
+      flow.pending.lastByNamespace.get(migration.namespace),
+      "every pending migration's namespace is indexed",
+    ),
     attemptedTables,
     inProgress,
     resumesPrePhase:
@@ -1344,7 +1353,14 @@ async function runPreMigrationPhase(
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings, migrationCtx } = flow;
-  const { migration, attemptedTables, inProgress, rollsBackOnFailure, gqlPermissionUndo } = attempt;
+  const {
+    migration,
+    finalMigration,
+    attemptedTables,
+    inProgress,
+    rollsBackOnFailure,
+    gqlPermissionUndo,
+  } = attempt;
   flow.timeline?.enter("preMigration");
   try {
     // Pre-migration phase: Create/update tables with breaking fields as optional
@@ -1354,6 +1370,7 @@ async function runPreMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1409,6 +1426,7 @@ async function runPostMigrationPhase(
   const { client, changeSet, phaseSettings } = flow;
   const {
     migration,
+    finalMigration,
     attemptedTables,
     inProgress,
     runsSteps,
@@ -1435,6 +1453,7 @@ async function runPostMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1448,6 +1467,7 @@ async function runPostMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1479,7 +1499,14 @@ async function rollbackMigration(
   recordMayExist: boolean,
 ): Promise<unknown> {
   const { client, migrationContext, phaseSettings } = flow;
-  const { migration, rollsBackOnFailure, runsMain, resumesPrePhase, gqlPermissionUndo } = attempt;
+  const {
+    migration,
+    finalMigration,
+    rollsBackOnFailure,
+    runsMain,
+    resumesPrePhase,
+    gqlPermissionUndo,
+  } = attempt;
   const { workspaceId } = migrationContext;
   const kind = runsMain ? "main" : "steps";
   const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
@@ -1497,7 +1524,6 @@ async function rollbackMigration(
     );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
-  const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
   for (const tableName of readRollbackScope(
     migration,
     finalMigration,

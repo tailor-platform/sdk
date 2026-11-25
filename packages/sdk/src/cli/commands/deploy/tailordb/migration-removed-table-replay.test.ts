@@ -4,6 +4,8 @@
  * runs, including every table a later migration removes or renames away. The
  * deploy plan holds no entry for such a table (the workspace lacks it and the
  * final schema omits it), so the migration that removes it deletes it itself.
+ * Likewise, a table a pending migration adds and a later one removes exists from
+ * the adding migration's script until the removing migration's checkpoint.
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
@@ -53,7 +55,7 @@ const snapshotState = { tablesByVersion: {} as SnapshotTablesByVersion };
 const NAMESPACE = "test-ns";
 const nameField = { name: { type: "string", required: true } } as const;
 
-describe("migration flow: replaying a history that removes tables into a fresh workspace", () => {
+describe("migration flow: replaying a history that removes tables", () => {
   let checkpoint: RemoteCheckpoint;
 
   beforeEach(() => {
@@ -82,6 +84,40 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     const mock = vi.mocked(migrationModule.updateMigrationLabel).mock;
     const index = mock.calls.findIndex((call) => call[3] === number);
     return mock.invocationCallOrder[index]!;
+  }
+
+  function scriptOrder(number: number) {
+    const mock = vi.mocked(migrationModule.executeMigrations).mock;
+    const index = mock.calls.findIndex((call) => call[1][0]?.number === number);
+    return mock.invocationCallOrder[index]!;
+  }
+
+  function startAtCheckpoint(number: number) {
+    checkpoint = createRemoteCheckpoint(number);
+    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+  }
+
+  const item = snapshotTable("Item", nameField);
+  const archive = snapshotTable("Archive", nameField);
+
+  function addAndRemoveArchive(options?: Parameters<typeof createPlanResult>[0]) {
+    snapshotState.tablesByVersion = {
+      0: { Item: item },
+      1: { Item: item, Archive: archive },
+      2: { Item: item },
+    };
+    startAtCheckpoint(0);
+    const planResult = createPlanResult(options);
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Archive" } as any]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Archive", before: archive } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    return planResult;
   }
 
   test("creates a baseline table that a later migration removes before the first script, and deletes it once after the removing migration's checkpoint", async () => {
@@ -220,7 +256,7 @@ describe("migration flow: replaying a history that removes tables into a fresh w
       1: { A: after, C: tableC },
       2: { C: tableC },
     };
-    const planResult = createPlanResult({ type: { creates: [typeEntry("C")] } });
+    const planResult = createPlanResult({ type: { creates: [typeEntry("C")] }, local: [tableC] });
     planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([
         {
@@ -252,25 +288,15 @@ describe("migration flow: replaying a history that removes tables into a fresh w
     expect(withSource[1]).toBeGreaterThan(firstScriptOrder());
   });
 
-  test("does not write a table the plan deletes after an earlier migration of this deploy already deleted it", async () => {
+  test("creates a table the plan deletes again where a pending migration adds it back after an earlier one deleted it, and deletes it at the next removal", async () => {
     const tableA = snapshotTable("A", nameField);
     snapshotState.tablesByVersion = { 0: { A: tableA }, 1: {}, 2: { A: tableA }, 3: {} };
     const planResult = createPlanResult({
-      type: {
-        deletes: [
-          {
-            name: "A",
-            request: {
-              workspaceId: "test-workspace",
-              namespaceName: NAMESPACE,
-              tailordbTypeName: "A",
-            },
-          },
-        ],
-      },
+      type: { deletes: [typeDeletion("A")] },
+      gqlPermission: { deletes: [gqlPermissionDeletion("A")] },
+      local: [],
     });
-    checkpoint = createRemoteCheckpoint(0);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    startAtCheckpoint(0);
     planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -278,10 +304,7 @@ describe("migration flow: replaying a history that removes tables into a fresh w
         { number: 1, hasScript: false },
       ),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mkPendingMigration([{ kind: "table_added", tableName: "A" } as any], {
-        number: 2,
-        hasScript: false,
-      }),
+      mkPendingMigration([{ kind: "table_added", tableName: "A" } as any], { number: 2 }),
       mkPendingMigration(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         [{ kind: "table_removed", tableName: "A", before: tableA } as any],
@@ -294,11 +317,233 @@ describe("migration flow: replaying a history that removes tables into a fresh w
 
     await applyTailorDB(client, planResult, "create-update");
 
-    const updatedA = vi
-      .mocked(client.updateTailorDBType)
-      .mock.calls.filter((call) => call[0].tailordbType?.name === "A");
-    expect(updatedA).toHaveLength(0);
-    expect(deleteOrders(client, NAMESPACE, "A").table).toHaveLength(1);
+    const created = createOrdersOf(client, "A");
+    expect(created).toHaveLength(1);
+    const { table, permission } = deleteOrders(client, NAMESPACE, "A");
+    expect(table).toHaveLength(2);
+    expect(permission).toHaveLength(1);
+    expect(created[0]).toBeGreaterThan(table[0]!);
+    expect(created[0]).toBeLessThan(scriptOrder(2));
+    expect(table[1]).toBeGreaterThan(checkpointOrder(3));
+    const updates = vi.mocked(client.updateTailorDBType).mock;
+    const updatesOfA = updates.invocationCallOrder.filter(
+      (_order, index) => updates.calls[index]?.[0].tailordbType?.name === "A",
+    );
+    expect(updatesOfA.filter((order) => order > table[0]!)).toHaveLength(0);
+  });
+
+  test("creates a table that a pending migration adds and a later one removes before the adding migration's script, and deletes it after the removing migration's checkpoint", async () => {
+    const planResult = addAndRemoveArchive({ local: [item] });
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const created = createOrdersOf(client, "Archive");
+    expect(created).toHaveLength(1);
+    expect(created[0]).toBeLessThan(scriptOrder(1));
+    expect(client.createTailorDBType).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "test-workspace",
+        namespaceName: NAMESPACE,
+        tailordbType: expect.objectContaining({ name: "Archive" }),
+      }),
+    );
+    const { table } = deleteOrders(client, NAMESPACE, "Archive");
+    expect(table).toHaveLength(1);
+    expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+  });
+
+  test("does not create a table that only pending migrations define in a namespace without local definitions", async () => {
+    const planResult = addAndRemoveArchive();
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(createOrdersOf(client, "Archive")).toHaveLength(0);
+  });
+
+  test("deletes the table a failed migration added for its script when it rolls the migration back", async () => {
+    const planResult = addAndRemoveArchive({ local: [item] });
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(new Error("script failed"));
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }] },
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "script failed",
+    );
+
+    expect(createOrdersOf(client, "Archive")).toHaveLength(1);
+    const { table } = deleteOrders(client, NAMESPACE, "Archive");
+    expect(table).toHaveLength(1);
+    expect(table[0]).toBeGreaterThan(scriptOrder(1));
+    expect(checkpoint.state.number).toBe(0);
+  });
+
+  test("creates the table a pending migration renames a table to and a later one renames it away, before the first rename's script", async () => {
+    const oldTable = snapshotTable("Old", nameField);
+    const midTable = snapshotTable("Mid", nameField);
+    const newTable = snapshotTable("New", nameField);
+    snapshotState.tablesByVersion = {
+      0: { Old: oldTable },
+      1: { Mid: midTable },
+      2: { New: newTable },
+    };
+    startAtCheckpoint(0);
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("New")], deletes: [typeDeletion("Old")] },
+      local: [newTable],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([
+        {
+          kind: "table_renamed",
+          tableName: "Mid",
+          previousTableName: "Old",
+          before: oldTable,
+          after: midTable,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+      mkPendingMigration(
+        [
+          {
+            kind: "table_renamed",
+            tableName: "New",
+            previousTableName: "Mid",
+            before: midTable,
+            after: newTable,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        ],
+        { number: 2 },
+      ),
+    ]);
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Old" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const created = createOrdersOf(client, "Mid");
+    expect(created).toHaveLength(1);
+    expect(created[0]).toBeLessThan(scriptOrder(1));
+    const { table } = deleteOrders(client, NAMESPACE, "Mid");
+    expect(table).toHaveLength(1);
+    expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+  });
+
+  test("creates a baseline table again where a pending migration adds it back after the replay deleted it, when the final schema lacks it", async () => {
+    const audit = snapshotTable("Audit", nameField);
+    const draft = snapshotTable("Draft", nameField);
+    snapshotState.tablesByVersion = {
+      0: { Audit: audit, Draft: draft },
+      1: { Audit: audit },
+      2: { Audit: audit, Draft: draft },
+      3: { Audit: audit },
+    };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("Audit")] },
+      local: [audit],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Draft", before: draft } as any],
+        { hasScript: false },
+      ),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Draft" } as any], { number: 2 }),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Draft", before: draft } as any],
+        { number: 3, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const created = createOrdersOf(client, "Draft");
+    expect(created).toHaveLength(2);
+    const { table } = deleteOrders(client, NAMESPACE, "Draft");
+    expect(table).toHaveLength(2);
+    expect(created[1]).toBeGreaterThan(table[0]!);
+    expect(created[1]).toBeLessThan(scriptOrder(2));
+    expect(table[1]).toBeGreaterThan(checkpointOrder(3));
+  });
+
+  test("does not create a table a pending migration adds that the workspace already has", async () => {
+    const planResult = addAndRemoveArchive({
+      type: { deletes: [typeDeletion("Archive")] },
+      local: [item],
+    });
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }, { name: "Archive" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(createOrdersOf(client, "Archive")).toHaveLength(0);
+    expect(deleteOrders(client, NAMESPACE, "Archive").table).toHaveLength(1);
+  });
+
+  test("does not create a table a pending migration adds that the last pending migration keeps while the local definitions lack it, since no migration deletes it again", async () => {
+    snapshotState.tablesByVersion = { 0: { Item: item }, 1: { Item: item, Archive: archive } };
+    startAtCheckpoint(0);
+    const planResult = createPlanResult({ local: [item] });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Archive" } as any], {
+        hasScript: false,
+      }),
+    ]);
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(createOrdersOf(client, "Archive")).toHaveLength(0);
+  });
+
+  test("does not create a table a pending migration adds back while the workspace keeps it for the local definitions", async () => {
+    snapshotState.tablesByVersion = {
+      0: { Item: item, Archive: archive },
+      1: { Item: item },
+      2: { Item: item, Archive: archive },
+      3: { Item: item },
+    };
+    startAtCheckpoint(0);
+    const planResult = createPlanResult({
+      type: { unchanged: [{ name: "Archive" }] },
+      local: [item, archive],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Archive", before: archive } as any],
+        { hasScript: false },
+      ),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mkPendingMigration([{ kind: "table_added", tableName: "Archive" } as any], { number: 2 }),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "Archive", before: archive } as any],
+        { number: 3, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient({
+      listTailorDBTypes: { tailordbTypes: [{ name: "Item" }, { name: "Archive" }] },
+    });
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(createOrdersOf(client, "Archive")).toHaveLength(0);
   });
 
   test("applies a migration's schema change to a table the workspace has and the plan deletes", async () => {
