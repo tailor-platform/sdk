@@ -13,6 +13,7 @@ import {
   INITIAL_SCHEMA_NUMBER,
   isMigrationRestricted,
   type SchemaSnapshot,
+  type SnapshotGqlPermission,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
@@ -329,6 +330,35 @@ export function generateMigrationPhaseManifest(
   });
 }
 
+/**
+ * Create the GraphQL permission a snapshot defines for a table this deploy created from that
+ * snapshot, so the namespace holds the schema a later deploy verifies a resumed migration against.
+ * The migration that removes the table deletes the permission first.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Table this deploy created
+ * @param permission - GraphQL permission the snapshot defines for the table, if any
+ */
+export async function createSnapshotGqlPermission(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+  tableName: string,
+  permission: SnapshotGqlPermission | undefined,
+): Promise<void> {
+  if (!permission) return;
+  const key = namespacedTableKey(namespaceName, tableName);
+  processedTables.gqlPermissionsProcessed.add(key);
+  deletedResources.gqlPermissions.delete(key);
+  await client.createTailorDBGQLPermission({
+    workspaceId,
+    namespaceName,
+    typeName: tableName,
+    permission: protoGqlPermission(permission),
+  });
+}
+
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
   tableName: string,
@@ -453,6 +483,13 @@ export async function executeSingleMigrationPrePhase(
       namespaceName: migration.namespace,
       tailordbType,
     });
+    await createSnapshotGqlPermission(
+      client,
+      workspaceId,
+      migration.namespace,
+      tableName,
+      migrationSnapshotCache.load(migration).tables[tableName]?.permissions?.gql,
+    );
   }
 
   for (const create of typeCreates) {

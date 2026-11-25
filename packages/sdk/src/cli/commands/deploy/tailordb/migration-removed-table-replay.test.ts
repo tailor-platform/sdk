@@ -10,6 +10,7 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import { protoGqlPermission } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import * as migrationModule from "./migration";
 import {
   createPlanResult,
@@ -54,6 +55,7 @@ const snapshotState = { tablesByVersion: {} as SnapshotTablesByVersion };
 
 const NAMESPACE = "test-ns";
 const nameField = { name: { type: "string", required: true } } as const;
+const allowAll = [{ conditions: [], actions: ["all"], permit: "allow" }] as const;
 
 describe("migration flow: replaying a history that removes tables", () => {
   let checkpoint: RemoteCheckpoint;
@@ -73,6 +75,13 @@ describe("migration flow: replaying a history that removes tables", () => {
       (call[0] as { tailordbType?: { name?: string } }).tailordbType?.name === tableName
         ? [mock.invocationCallOrder[index]!]
         : [],
+    );
+  }
+
+  function permissionCreateOrdersOf(client: OperatorClient, tableName: string) {
+    const mock = vi.mocked(client.createTailorDBGQLPermission).mock;
+    return mock.invocationCallOrder.filter(
+      (_order, index) => mock.calls[index]?.[0].typeName === tableName,
     );
   }
 
@@ -98,7 +107,7 @@ describe("migration flow: replaying a history that removes tables", () => {
   }
 
   const item = snapshotTable("Item", nameField);
-  const archive = snapshotTable("Archive", nameField);
+  const archive = { ...snapshotTable("Archive", nameField), permissions: { gql: allowAll } };
 
   function addAndRemoveArchive(options?: Parameters<typeof createPlanResult>[0]) {
     snapshotState.tablesByVersion = {
@@ -162,6 +171,41 @@ describe("migration flow: replaying a history that removes tables", () => {
     const { table } = deleteOrders(client, NAMESPACE, "A");
     expect(table).toHaveLength(1);
     expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+  });
+
+  test("creates the GraphQL permission of a baseline table it creates for a later removal, and deletes the permission before the table", async () => {
+    const tableA = { ...snapshotTable("A", nameField), permissions: { gql: allowAll } };
+    const tableC = snapshotTable("C", nameField);
+    snapshotState.tablesByVersion = {
+      0: { A: tableA, C: tableC },
+      1: { A: tableA, C: tableC },
+      2: { C: tableC },
+    };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("C")] },
+      local: [tableC],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: tableA } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const created = createOrdersOf(client, "A");
+    const permissionCreates = permissionCreateOrdersOf(client, "A");
+    expect(permissionCreates).toHaveLength(1);
+    expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
+    expect(permissionCreates[0]).toBeLessThan(firstScriptOrder());
+    const { table, permission } = deleteOrders(client, NAMESPACE, "A");
+    expect(permission).toHaveLength(1);
+    expect(permission[0]).toBeGreaterThan(checkpointOrder(2));
+    expect(permission[0]).toBeLessThan(table[0]!);
   });
 
   test("creates a table that a later migration removes and re-adds, deletes it at the removal, and creates it again at the re-add", async () => {
@@ -289,7 +333,7 @@ describe("migration flow: replaying a history that removes tables", () => {
   });
 
   test("creates a table the plan deletes again where a pending migration adds it back after an earlier one deleted it, and deletes it at the next removal", async () => {
-    const tableA = snapshotTable("A", nameField);
+    const tableA = { ...snapshotTable("A", nameField), permissions: { gql: allowAll } };
     snapshotState.tablesByVersion = { 0: { A: tableA }, 1: {}, 2: { A: tableA }, 3: {} };
     const planResult = createPlanResult({
       type: { deletes: [typeDeletion("A")] },
@@ -321,7 +365,10 @@ describe("migration flow: replaying a history that removes tables", () => {
     expect(created).toHaveLength(1);
     const { table, permission } = deleteOrders(client, NAMESPACE, "A");
     expect(table).toHaveLength(2);
-    expect(permission).toHaveLength(1);
+    expect(permissionCreateOrdersOf(client, "A")).toHaveLength(1);
+    expect(permission).toHaveLength(2);
+    expect(permission[1]).toBeGreaterThan(checkpointOrder(3));
+    expect(permission[1]).toBeLessThan(table[1]!);
     expect(created[0]).toBeGreaterThan(table[0]!);
     expect(created[0]).toBeLessThan(scriptOrder(2));
     expect(table[1]).toBeGreaterThan(checkpointOrder(3));
@@ -350,9 +397,21 @@ describe("migration flow: replaying a history that removes tables", () => {
         tailordbType: expect.objectContaining({ name: "Archive" }),
       }),
     );
-    const { table } = deleteOrders(client, NAMESPACE, "Archive");
+    const permissionCreates = permissionCreateOrdersOf(client, "Archive");
+    expect(permissionCreates).toHaveLength(1);
+    expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
+    expect(permissionCreates[0]).toBeLessThan(scriptOrder(1));
+    expect(client.createTailorDBGQLPermission).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      namespaceName: NAMESPACE,
+      typeName: "Archive",
+      permission: protoGqlPermission(allowAll),
+    });
+    const { table, permission } = deleteOrders(client, NAMESPACE, "Archive");
     expect(table).toHaveLength(1);
     expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+    expect(permission).toHaveLength(1);
+    expect(permission[0]).toBeLessThan(table[0]!);
   });
 
   test("does not create a table that only pending migrations define in a namespace without local definitions", async () => {

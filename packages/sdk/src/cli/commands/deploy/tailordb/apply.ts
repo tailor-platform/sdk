@@ -81,6 +81,7 @@ import {
   deletePlannedTables,
   deleteRemovedTables,
   executeSingleMigrationPostPhase,
+  createSnapshotGqlPermission,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
   type GqlPermissionUndo,
@@ -1275,6 +1276,13 @@ async function createRemovedBaselineTables(
       namespaceName,
       tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
     });
+    await createSnapshotGqlPermission(
+      client,
+      migrationContext.workspaceId,
+      namespaceName,
+      tableName,
+      priorTable.permissions?.gql,
+    );
   }
 }
 
