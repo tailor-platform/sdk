@@ -63,6 +63,9 @@ type EventConfig = {
   case: string;
   value: Record<string, unknown> & { condition?: { expr: string } | undefined };
 };
+type SuccessArgs = { success: boolean };
+type NewRecordArgs = { newRecord: { active: boolean } };
+type TypeNameArgs = { typeName: string };
 
 describe("planExecutor", () => {
   const workspaceId = "test-workspace";
@@ -95,7 +98,7 @@ describe("planExecutor", () => {
       trigger: {
         kind: "resolverExecuted",
         resolverName: "testResolver",
-        condition: ({ success }: { success: boolean }) => success,
+        condition: ({ success }: SuccessArgs) => success,
       },
       operation: {
         kind: "function",
@@ -1206,7 +1209,7 @@ describe("planExecutor", () => {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
           tableName: "User",
-          condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
+          condition: ({ newRecord }: NewRecordArgs) => newRecord.active,
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1231,7 +1234,7 @@ describe("planExecutor", () => {
           kind: "workflowExecution",
           events: ["workflow.workflow_execution.completed"],
           workflowName: "orders",
-          condition: ({ success }: { success: boolean }) => success,
+          condition: ({ success }: SuccessArgs) => success,
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1808,7 +1811,7 @@ describe("planExecutor", () => {
             "tailordb.type_record.deleted",
           ],
           tableName: "User",
-          condition: ({ typeName }: { typeName: string }) => typeName === "User",
+          condition: ({ typeName }: TypeNameArgs) => typeName === "User",
         },
         operation: { kind: "function", body: () => {} },
       };

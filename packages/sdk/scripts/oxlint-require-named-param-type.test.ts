@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { lintWithLocalRule } from "./test-helpers/local-rule";
+import { lintMessagesWithLocalRule, lintWithLocalRule } from "./test-helpers/local-rule";
 
 const fixture = [
   "interface Named { a: string }",
@@ -67,6 +67,36 @@ const fixture = [
   "export class D { constructor(private readonly p: { a: string }) { void this.p; } }",
   "export class E { handle = (p: { a: string }) => p; }",
   "export function bound(this: { a: string }, x: number) { return [this, x]; }",
+  "/**",
+  " * @param q - Named",
+  " * @param q.a - A",
+  " * @param options - Destructured",
+  " * @param options.a - A",
+  " */",
+  "export function destructuredDocumented(q: { a: string }, { a }: { a: string }) { return [q, a]; }",
+  "/**",
+  " * @param options - Destructured, documented at the first position",
+  " * @param options.a - A",
+  " */",
+  "export function destructuredMisplaced(q: Named, { a }: { a: string }) { return [q, a]; }",
+  "/**",
+  " * @param options - Destructured",
+  " * @param options.a - A",
+  " * @param q - Named",
+  " * @param q.a - A",
+  " */",
+  "export function destructuredOutOfOrder(q: { a: string }, { a }: { a: string }) { return [q, a]; }",
+  "/**",
+  " * @param options.a - A",
+  " */",
+  "export function destructuredRootless({ a }: { a: string }) { return a; }",
+  "/**",
+  " * @param this - Receiver",
+  " * @param options - Destructured after this",
+  " * @param options.a - A",
+  " */",
+  "export function destructuredAfterThis(this: Named, { a }: { a: string }) { return [this, a]; }",
+  "export function destructuredDefault({ a }: { a?: string } = {}) { return a; }",
   "",
 ].join("\n");
 
@@ -82,11 +112,26 @@ function lint(level: "error" | "off") {
 describe("local/require-named-param-type", () => {
   test("flags an inline object parameter type unless JSDoc documents each property", () => {
     expect(lint("error")).toEqual(
-      [2, 3, 4, 5, 6, 6, 7, 8, 9, 14, 21, 44, 55, 57, 63, 64].map((line) => ({
+      [2, 3, 4, 5, 6, 6, 7, 8, 9, 14, 21, 39, 44, 55, 57, 63, 64, 77, 84, 88, 95].map((line) => ({
         rule: "local(require-named-param-type)",
         line,
       })),
     );
+  });
+
+  test("names an identifier parameter and asks a destructured one to be taken whole", () => {
+    const messages = lintMessagesWithLocalRule({
+      rule: "require-named-param-type",
+      level: "error",
+      fileName: "module.ts",
+      source: fixture,
+    });
+    expect(messages.filter(({ line }) => line === 2 || line === 39)).toEqual([
+      expect.objectContaining({ message: expect.stringContaining("parameter 'p'") }),
+      expect.objectContaining({
+        message: expect.stringContaining("destructure it inside the function"),
+      }),
+    ]);
   });
 
   test("reports nothing when disabled, so the fixture itself is clean", () => {

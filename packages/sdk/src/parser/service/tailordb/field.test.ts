@@ -5,6 +5,9 @@ import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig, stringifyFunction } from "./field";
 import { parseTypes } from "./type-parser";
 
+type ValueArgs<V> = { value: V };
+type InputArgs<V> = { input: V };
+
 // Mirrors how consumers embed the result, e.g. `(${normalized})({ value, data, user })`.
 const expectValidIife = (normalized: string, args: string) => {
   const result = parseSync("test.ts", `(${normalized})(${args})`, { sourceType: "module" });
@@ -73,7 +76,7 @@ describe("stringifyFunction", () => {
       // `new Function("create", ...)` below re-supplies `create` as a free
       // variable at call time; this local `create` only satisfies the type
       // checker for the reference inside the method body.
-      create({ value }: { value: number }) {
+      create({ value }: ValueArgs<number>) {
         return [value].map((v) => create(v))[0];
       },
     };
@@ -124,7 +127,7 @@ describe("parseFieldConfig validator expressions", () => {
   test("normalizes a method-shorthand validator whose body contains an arrow function", () => {
     // Method shorthand syntax, obtained the same way a user's helper object would produce it.
     const validators = {
-      isValid({ value }: { value: string }): string | void {
+      isValid({ value }: ValueArgs<string>): string | void {
         if (!([value].map((v) => v.includes("@"))[0] ?? false)) return "invalid email";
       },
     };
@@ -146,7 +149,7 @@ describe("parseFieldConfig script expression validation", () => {
   test("throws a clear error when a hook cannot be converted to valid JavaScript", () => {
     const key = "create";
     const hooks = {
-      [key]({ input }: { input: string | null }) {
+      [key]({ input }: InputArgs<string | null>) {
         return input ?? "generated";
       },
     };
@@ -162,7 +165,7 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("throws a clear error when a validator cannot be converted to valid JavaScript", () => {
-    const check = function check({ value }: { value: string }): string | void {
+    const check = function check({ value }: ValueArgs<string>): string | void {
       if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.table("User", {
@@ -177,7 +180,7 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("includes the table and field path in conversion errors from table parsing", () => {
-    const check = function check({ value }: { value: string }): string | void {
+    const check = function check({ value }: ValueArgs<string>): string | void {
       if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.table("User", {
@@ -203,7 +206,7 @@ describe("parseFieldConfig nested inner field restrictions", () => {
           rawRelation: undefined,
           metadata: {
             hooks: {
-              create: ({ input }: { input: string }) => input,
+              create: ({ input }: InputArgs<string>) => input,
             },
           },
         },

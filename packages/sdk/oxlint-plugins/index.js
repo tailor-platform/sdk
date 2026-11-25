@@ -12,8 +12,8 @@ function jsdocBlockBefore(sourceCode, node) {
   return last;
 }
 
-function paramNamesFromJsdoc(block) {
-  const names = new Set();
+function jsdocParamNames(block) {
+  const names = [];
   for (const line of block.value.split("\n")) {
     const head = line.match(/^\s*\*?\s*@param\s+/);
     if (!head) continue;
@@ -34,10 +34,16 @@ function paramNamesFromJsdoc(block) {
       rest = rest.slice(i).replace(/^\s+/, "");
     }
     const nameMatch = rest.match(/^\[?([\w$.]+)(?:=[^\]]*)?\]?/);
-    if (!nameMatch) continue;
+    if (nameMatch) names.push(nameMatch[1]);
+  }
+  return names;
+}
+
+function paramNamesFromJsdoc(block) {
+  const names = new Set();
+  for (const full of jsdocParamNames(block)) {
     // Record both the full dotted form (`obj.id`) and the leaf identifier
     // (`id`) so the lookup matches either documentation style.
-    const full = nameMatch[1];
     names.add(full);
     const leaf = full.includes(".") ? full.split(".").pop() : full;
     if (leaf) names.add(leaf);
@@ -350,6 +356,8 @@ export default {
         messages: {
           inline:
             "Extract the type of parameter '{{name}}' into a named type or interface, or, when every property has a name, document each with `@param {{name}}.<property>`.",
+          destructured:
+            "Take a single parameter of a named type and destructure it inside the function, or, when every property has a name, document the parameter with a `@param <name>` tag at its position and each property with `@param <name>.<property>`.",
         },
         schema: [],
       },
@@ -366,24 +374,40 @@ export default {
           ) {
             return;
           }
-          let documented;
-          for (const param of node.params) {
-            if (isThisParam(param)) continue;
+          const params = node.params.filter((param) => !isThisParam(param));
+          const targets = params.map((param) => {
             const declared = param.type === "TSParameterProperty" ? param.parameter : param;
-            const target = declared.type === "AssignmentPattern" ? declared.left : declared;
-            if (target.type !== "Identifier") continue;
+            return declared.type === "AssignmentPattern" ? declared.left : declared;
+          });
+          const identifierNames = new Set(
+            targets.filter((target) => target.type === "Identifier").map((target) => target.name),
+          );
+          let documented;
+          let roots;
+          for (const [index, target] of targets.entries()) {
+            const destructured = target.type !== "Identifier";
             const literal = objectLiteralType(target.typeAnnotation?.typeAnnotation);
             if (!literal) continue;
             if (!documented) {
               const block = jsdocBlockBefore(context.sourceCode, jsdocCarrier(node, ancestors));
-              documented = block ? paramNamesFromJsdoc(block) : new Set();
+              const names = block ? jsdocParamNames(block) : [];
+              documented = new Set(names);
+              roots = names.filter((name) => !name.includes(".") && name !== "this");
             }
-            const covered = literal.members.every((member) => {
-              const key = memberKeyName(member);
-              return key !== undefined && documented.has(`${target.name}.${key}`);
-            });
+            // As in eslint-plugin-jsdoc, a destructured parameter takes the root `@param` at its position.
+            const root = destructured ? roots[index] : target.name;
+            const covered =
+              !(destructured && identifierNames.has(root)) &&
+              literal.members.every((member) => {
+                const key = memberKeyName(member);
+                return key !== undefined && documented.has(`${root}.${key}`);
+              });
             if (!covered) {
-              context.report({ node: param, messageId: "inline", data: { name: target.name } });
+              context.report(
+                destructured
+                  ? { node: params[index], messageId: "destructured" }
+                  : { node: params[index], messageId: "inline", data: { name: root } },
+              );
             }
           }
         }

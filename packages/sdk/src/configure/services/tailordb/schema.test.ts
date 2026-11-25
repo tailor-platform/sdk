@@ -1821,7 +1821,7 @@ describe("TailorDBField clone tests", () => {
   });
 
   test("clones validate correctly", () => {
-    const validator = ({ value }: { value: string }) =>
+    const validator: FieldValidateInput<string> = ({ value }) =>
       value.length <= 0 ? "Must not be empty" : undefined;
     const original = db.string().validate(validator);
     const cloned = original.clone();
