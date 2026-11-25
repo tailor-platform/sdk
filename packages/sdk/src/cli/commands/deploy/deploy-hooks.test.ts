@@ -7,7 +7,10 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
-import { applicationLabelRejection } from "./test-helpers/label-count-rejection";
+import {
+  applicationLabelRejection,
+  labelCountRejection,
+} from "./test-helpers/label-count-rejection";
 import { emptyPlanResults } from "./test-helpers/plan-results";
 import type { Plugin } from "#/plugin/types";
 import type { applyRemainingResources, PlanResults } from "./apply-phases";
@@ -40,11 +43,16 @@ vi.mock(import("./deployment-target"), async (original) => ({
   ],
   buildDeploymentTargets: async () => [mocks.target],
 }));
+vi.mock("#/cli/shared/package-json", () => ({
+  readPackageJson: async () => ({ version: "1.2.3" }),
+}));
 const client = mockOperatorClient({
   getApplication: {},
   getStaticWebsite: {},
   getAIGateway: {},
   listAuthOAuth2Clients: {},
+  getMetadata: {},
+  setMetadata: {},
 });
 vi.mock("./workspace", () => ({
   resolveDeployWorkspace: async () => ({ workspaceId: "ws", client }),
@@ -175,6 +183,8 @@ beforeEach(() => {
     oauth2Clients: [{ name: "web", clientId: "public-id" }],
     nextPageToken: "",
   });
+  client.getMetadata.mockReset().mockResolvedValue({ metadata: { labels: {} } });
+  client.setMetadata.mockReset().mockResolvedValue({});
 });
 function register(hook: NonNullable<Plugin["onDeployed"]>) {
   mocks.target.plugins = [{ id: "hook", description: "deploy test", onDeployed: hook }];
@@ -859,4 +869,82 @@ test("reports the sdk-on-app labels the Platform had no room for in the JSON res
       ],
     }),
   );
+});
+
+const workspaceTrn = "trn:v1:workspace:ws";
+function storeWorkspaceLabels(labels: Record<string, string>) {
+  client.getMetadata.mockImplementation(async ({ trn }) => ({
+    metadata: { labels: trn === workspaceTrn ? labels : {} },
+  }));
+}
+function workspaceLabelWrites() {
+  return client.setMetadata.mock.calls
+    .filter(([request]) => request.trn === workspaceTrn)
+    .map(([request]) => request.labels);
+}
+
+test("records the SDK version on the workspace of a static-website-only config, keeping its other labels", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  storeWorkspaceLabels({ "sdk-expires-at": "s-1795597510", "trm-google-token-v1": "token" });
+  await deploy({ yes: true, noValidate: true });
+  expect(workspaceLabelWrites()).toEqual([
+    { "sdk-expires-at": "s-1795597510", "trm-google-token-v1": "token", "sdk-version": "v1-2-3" },
+  ]);
+});
+
+test("does not rewrite a workspace that already records this SDK version", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  storeWorkspaceLabels({ "sdk-version": "v1-2-3" });
+  await deploy({ yes: true, noValidate: true });
+  expect(workspaceLabelWrites()).toEqual([]);
+});
+
+test("does not record the SDK version during a dry run", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  await deploy({ dryRun: true, noValidate: true });
+  expect(workspaceLabelWrites()).toEqual([]);
+});
+
+test("does not record the SDK version when applying resources fails", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  mocks.apply.mockRejectedValueOnce(new Error("apply failed"));
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toThrow("apply failed");
+  expect(workspaceLabelWrites()).toEqual([]);
+});
+
+test("warns that a workspace with no room for more labels does not record the SDK version, and reports it in JSON", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  using _json = jsonMode();
+  client.setMetadata.mockRejectedValueOnce(labelCountRejection());
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.warn).toHaveBeenCalledWith(
+    'Workspace "ws" has no room for more labels, so the SDK version that deployed it is not recorded on it. Remove labels that tailor does not set from it to make room.',
+  );
+  expect(logger.out).toHaveBeenCalledWith(
+    expect.objectContaining({
+      status: "applied",
+      warnings: [
+        {
+          type: "workspaceSdkVersionNotRecorded",
+          details: expect.stringContaining("map must be at most 20 entries"),
+        },
+      ],
+    }),
+  );
+});
+
+test("still succeeds and warns when the Platform fails to record the SDK version on the workspace", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  client.setMetadata.mockRejectedValueOnce(new ConnectError("upstream down", Code.Unavailable));
+  await deploy({ yes: true, noValidate: true });
+  expect(logger.warn).toHaveBeenCalledWith(
+    'Could not record the SDK version on workspace "ws": [unavailable] upstream down. The next deploy tries again.',
+  );
+  expect(logger.success).toHaveBeenCalledWith("Successfully applied changes.");
+});
+
+test("fails the deploy on an error recording the SDK version that did not come from the Platform", async () => {
+  using _logger = silenceLogger("info", "warn", "success", "out", "log");
+  client.setMetadata.mockRejectedValueOnce(new TypeError("broken"));
+  await expect(deploy({ yes: true, noValidate: true })).rejects.toThrow("broken");
 });

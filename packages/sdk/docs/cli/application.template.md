@@ -285,6 +285,8 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 
 Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
 
+After applying, `deploy` records its SDK version on the workspace as the `sdk-version` label, keeping the workspace's other labels. When it cannot, such as when the workspace has no room for more labels, the deploy still succeeds, prints a warning, and adds `{ "type": "workspaceSdkVersionNotRecorded", "details": "<error>" }` to `warnings`.
+
 {{politty:command:remove}}
 {{politty:command:show}}
 {{politty:command:open}}

@@ -440,6 +440,16 @@ export function dependencyLabelWrite(
   return { labels, remove };
 }
 
+/**
+ * The `sdk-version` label value for this SDK: its version with each dot as a dash, which a label
+ * value cannot contain.
+ * @returns The label value, or `unknown` when the SDK's package.json has no version
+ */
+export async function sdkVersionLabelValue(): Promise<string> {
+  const { version } = await readPackageJson();
+  return version ? `v${version.replace(/\./g, "-")}` : "unknown";
+}
+
 export interface BuildMetaRequestParams {
   trn: string;
   owner: DeployOwner;
@@ -468,11 +478,7 @@ export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
   const { trn, owner, onApps = [] } = params;
-  const packageJson = await readPackageJson();
-  // Format version to be suitable for label value
-  const sdkVersion = packageJson.version
-    ? `v${packageJson.version.replace(/\./g, "-")}`
-    : "unknown";
+  const sdkVersion = await sdkVersionLabelValue();
 
   if (owner.kind === "workspace") {
     return {
