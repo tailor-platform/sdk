@@ -5,7 +5,7 @@ import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
-import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
+import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
 import type {
@@ -245,18 +245,25 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   }
 
   const sourceStrings: string[] = [];
+  const valueArgumentIds = new Set<number>();
   const visit = (node: SgNode): void => {
     if (node.kind() === "arguments") {
       const value = sourceArgumentsCommandContent(node, content);
       if (value != null) sourceStrings.push(value);
     }
     if (node.kind() === "array") {
-      const value = sourceArrayCommandContent(node, content);
-      if (value != null) sourceStrings.push(value);
+      const command = sourceArrayCommand(node, content);
+      for (const id of command.valueArgumentIds) valueArgumentIds.add(id);
+      if (command.values.length >= 2) sourceStrings.push(command.values.join(" "));
     }
     const kind = node.kind();
     if (kind === "string" || kind === "template_string") {
-      if (isSourceTailorSdkValueArgument(node, content)) return;
+      if (
+        valueArgumentIds.has(node.id()) &&
+        sourceStaticStringContent(node, content)?.includes("tailor-sdk")
+      ) {
+        return;
+      }
       const sourceString = sourceStringNodeContentForResidualMatching(node, content);
       if (sourceString != null) sourceStrings.push(sourceString);
     }
@@ -324,65 +331,44 @@ function sourceArgumentsCommandContent(node: SgNode, source: string): string | n
   const argv = args[1];
   if (executable == null || argv?.kind() !== "array") return null;
 
-  const values = sourceArrayCommandValues(argv, source);
+  const { values } = sourceArrayCommand(argv, source);
   return values.length === 0 ? null : [executable, ...values].join(" ");
 }
 
-function sourceArrayCommandContent(node: SgNode, source: string): string | null {
-  const values = sourceArrayCommandValues(node, source);
-  return values.length < 2 ? null : values.join(" ");
-}
-
-function sourceArrayCommandValues(node: SgNode, source: string): string[] {
+function sourceArrayCommand(
+  node: SgNode,
+  source: string,
+): { values: string[]; valueArgumentIds: number[] } {
   const values: string[] = [];
+  const valueArgumentIds: number[] = [];
+  let tailorCli = hasTailorCliExecutable(node, source);
+  let previous: string | null = null;
   for (const element of sourceArrayElements(node)) {
-    if (isSourceValueArgument(element, source)) continue;
     const value = sourceStaticStringContent(element, source);
-    if (value != null) values.push(value);
+    if (tailorCli && isSourceCliValueFlag(previous)) {
+      valueArgumentIds.push(element.id());
+    } else if (value != null) {
+      values.push(value);
+    }
+    tailorCli ||= isSourceCliBinary(value);
+    previous = value;
   }
-  return values;
+  return { values, valueArgumentIds };
 }
 
-function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boolean {
-  const text =
-    fragment.kind() === "string_fragment"
-      ? fragment.text()
-      : sourceStaticStringContent(fragment, source);
-  return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
-}
-
-function isSourceValueArgument(fragment: SgNode, source: string): boolean {
-  const stringNode = fragment.kind() === "string_fragment" ? fragment.parent() : fragment;
-  if (stringNode == null) return false;
-  const parent = stringNode.parent();
-  if (parent?.kind() !== "array") return false;
-
-  const elements = sourceArrayElements(parent);
-  const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
-  if (index <= 0) return false;
-  if (!isTailorCliArgumentArray(parent, index, source)) return false;
-
-  const previous = sourceStaticStringContent(elements[index - 1]!, source);
-  return (
-    previous != null &&
-    TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) &&
-    !previous.includes("=")
-  );
-}
-
-function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+function hasTailorCliExecutable(arrayNode: SgNode, source: string): boolean {
   const argumentsNode = arrayNode.parent();
-  if (argumentsNode?.kind() === "arguments") {
-    const callArgs = sourceArrayElements(argumentsNode);
-    const executable = callArgs[0] == null ? null : sourceStaticStringContent(callArgs[0]!, source);
-    if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
-  }
+  if (argumentsNode?.kind() !== "arguments") return false;
+  const executable = sourceArrayElements(argumentsNode)[0];
+  return executable != null && isSourceCliBinary(sourceStaticStringContent(executable, source));
+}
 
-  const elements = sourceArrayElements(arrayNode);
-  return elements.slice(0, index).some((element) => {
-    const value = sourceStaticStringContent(element, source);
-    return value != null && SOURCE_CLI_BINARY_RE.test(value);
-  });
+function isSourceCliBinary(value: string | null): boolean {
+  return value != null && SOURCE_CLI_BINARY_RE.test(value);
+}
+
+function isSourceCliValueFlag(value: string | null): boolean {
+  return value != null && TAILOR_CLI_VALUE_FLAG_SET.has(value);
 }
 
 function sourceLang(relative: string): Lang {

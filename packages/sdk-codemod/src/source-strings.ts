@@ -1,4 +1,4 @@
-import type { SgNode } from "@ast-grep/napi";
+import type { SgNode, SgRoot } from "@ast-grep/napi";
 
 function isSyntaxOnlyNode(node: SgNode): boolean {
   const kind = node.kind();
@@ -55,41 +55,69 @@ function sourceScopedStringVariableContent(identifier: SgNode, source: string): 
   return null;
 }
 
+type SourceStringDeclarations = Map<string, Array<{ end: number; value: string }>>;
+
+const sourceStringDeclarationsByTree = new WeakMap<SgRoot, Map<number, SourceStringDeclarations>>();
+
 function findSourceStringVariableInScope(
   scope: SgNode,
   name: string,
   before: number,
   source: string,
 ): string | null {
-  let value: string | null = null;
-  const visit = (node: SgNode): void => {
-    if (node !== scope && isSourceScopeNode(node)) return;
-    if (node.kind() === "variable_declarator" && node.range().end.index < before) {
-      const declarationValue = sourceStringVariableDeclarationValue(node, name, source);
-      if (declarationValue != null) value = declarationValue;
-      return;
-    }
-    for (const child of node.children()) {
-      visit(child);
-    }
-  };
-  visit(scope);
-  return value;
+  const declarations = sourceStringDeclarationsInScope(scope, source).get(name);
+  return declarations?.findLast((declaration) => declaration.end < before)?.value ?? null;
 }
 
-function sourceStringVariableDeclarationValue(
+function sourceStringDeclarationsInScope(scope: SgNode, source: string): SourceStringDeclarations {
+  const tree = scope.getRoot();
+  let scopes = sourceStringDeclarationsByTree.get(tree);
+  if (!scopes) {
+    scopes = new Map();
+    sourceStringDeclarationsByTree.set(tree, scopes);
+  }
+  let declarations = scopes.get(scope.id());
+  if (!declarations) {
+    declarations = collectSourceStringDeclarations(scope, source);
+    scopes.set(scope.id(), declarations);
+  }
+  return declarations;
+}
+
+function collectSourceStringDeclarations(scope: SgNode, source: string): SourceStringDeclarations {
+  const declarations: SourceStringDeclarations = new Map();
+  const visit = (node: SgNode, isConst: boolean): void => {
+    if (node !== scope && isSourceScopeNode(node)) return;
+    if (isConst && node.kind() === "variable_declarator") {
+      const declaration = sourceStringVariableDeclaration(node, source);
+      if (declaration != null) {
+        const named = declarations.get(declaration.name) ?? [];
+        named.push({ end: node.range().end.index, value: declaration.value });
+        declarations.set(declaration.name, named);
+      }
+    }
+    const children = node.children();
+    const declaresConst = children.some((child) => child.kind() === "const");
+    for (const child of children) {
+      visit(child, declaresConst);
+    }
+  };
+  visit(scope, false);
+  return declarations;
+}
+
+function sourceStringVariableDeclaration(
   node: SgNode,
-  name: string,
   source: string,
-): string | null {
-  if (!isConstVariableDeclarator(node)) return null;
+): { name: string; value: string } | null {
   const children = node.children();
   const identifier = children.find((child) => child.kind() === "identifier");
-  if (identifier?.text() !== name) return null;
+  if (identifier == null) return null;
   const initializer = children.findLast(
     (child) => sourceConstInitializerContent(child, source) != null,
   );
-  return initializer == null ? null : sourceConstInitializerContent(initializer, source);
+  const value = initializer == null ? null : sourceConstInitializerContent(initializer, source);
+  return value == null ? null : { name: identifier.text(), value };
 }
 
 function sourceConstInitializerContent(node: SgNode, source: string): string | null {
@@ -107,15 +135,6 @@ function sourceConstInitializerContent(node: SgNode, source: string): string | n
     if (childValue != null) return childValue;
   }
   return null;
-}
-
-function isConstVariableDeclarator(node: SgNode): boolean {
-  return (
-    node
-      .parent()
-      ?.children()
-      .some((child) => child.kind() === "const") ?? false
-  );
 }
 
 function isSourceScopeNode(node: SgNode): boolean {
