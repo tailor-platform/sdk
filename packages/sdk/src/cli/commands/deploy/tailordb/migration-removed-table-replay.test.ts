@@ -23,6 +23,7 @@ import {
   tailordbTypeWrites,
   typeDeletion,
   typeEntry,
+  typeUnchanged,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -586,6 +587,76 @@ describe("migration flow: replaying a history that removes tables into a fresh w
       const permissionCreates = permissionCreateOrders(client, "A");
       expect(permissionCreates).toHaveLength(1);
       expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
+    });
+
+    test("drops the foreign key of a table the plan leaves unchanged before the removal deletes its target, and adds it back after the re-add", async () => {
+      const toA = { type: "uuid", required: false } as const;
+      const keepWithKey = snapshotTable("Keep", {
+        aId: { ...toA, foreignKey: true, foreignKeyType: "A", foreignKeyField: "id" },
+      });
+      const keepWithoutKey = snapshotTable("Keep", { aId: toA });
+      snapshotState.tablesByVersion = {
+        0: { A: tableA, Keep: keepWithKey },
+        1: { Keep: keepWithoutKey },
+        2: { Keep: keepWithoutKey },
+        3: { A: tableA, Keep: keepWithKey },
+      };
+      const planResult = createPlanResult({
+        type: {
+          creates: [typeEntry("A")],
+          deletes: [typeDeletion("A")],
+          unchanged: [typeUnchanged("Keep")],
+        },
+        local: [tableA, keepWithKey],
+      });
+      checkpoint = createRemoteCheckpoint(0);
+      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+      const client = checkpoint.createMockClient({
+        listTailorDBTypes: { tailordbTypes: [{ name: "A" }, { name: "Keep" }] },
+      });
+      planResult.context.pendingMigrations = checkpoint.mockPending([
+        mkPendingMigration(
+          [
+            { kind: "table_removed", tableName: "A", before: tableA },
+            {
+              kind: "field_modified",
+              tableName: "Keep",
+              fieldName: "aId",
+              before: keepWithKey.fields.aId!,
+              after: toA,
+            },
+          ],
+          { hasScript: false },
+        ),
+        mkPendingMigration([], { number: 2 }),
+        mkPendingMigration(
+          [
+            { kind: "table_added", tableName: "A", after: tableA },
+            {
+              kind: "field_modified",
+              tableName: "Keep",
+              fieldName: "aId",
+              before: toA,
+              after: keepWithKey.fields.aId!,
+            },
+          ],
+          { number: 3, hasScript: false },
+        ),
+      ]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const keepWrites = tailordbTypeWrites(client).filter((write) => write.name === "Keep");
+      const hasKey = (write: (typeof keepWrites)[number]) =>
+        write.tailordbType.schema?.fields?.aId?.foreignKey === true;
+      const { table } = deleteOrders(client, NAMESPACE, "A");
+      expect(table).toHaveLength(1);
+      const beforeDeletion = keepWrites.filter((write) => write.order < table[0]!);
+      expect(beforeDeletion.length).toBeGreaterThan(0);
+      expect(hasKey(beforeDeletion.at(-1)!)).toBe(false);
+      const last = keepWrites.at(-1)!;
+      expect(last.order).toBeGreaterThan(createOrdersOf(client, "A")[0]!);
+      expect(hasKey(last)).toBe(true);
     });
 
     test("deletes the GraphQL permission at the removal only after a migration applied it, when the workspace's table has none", async () => {

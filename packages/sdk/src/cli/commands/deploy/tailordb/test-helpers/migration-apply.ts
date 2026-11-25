@@ -476,6 +476,14 @@ export function typeEntry(tableName: string, options: TypeEntryOptions = {}) {
   };
 }
 
+export function typeUnchanged(tableName: string, namespace = NAMESPACE) {
+  return {
+    name: tableName,
+    request: { namespaceName: namespace },
+    metaRequest: typeMetaRequest(tableName, namespace),
+  };
+}
+
 export function typeDeletion(tableName: string, namespace = NAMESPACE) {
   return {
     name: tableName,

@@ -404,6 +404,7 @@ type UpdateType = {
  */
 type UnchangedType = {
   name: string;
+  request: { namespaceName: string };
   metaRequest?: MetadataLabelWrite | undefined;
 };
 
@@ -536,7 +537,7 @@ async function planTypes(
       create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
       update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
       // The schema matches, but the records may not, so the labels still go.
-      unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+      unchanged: ({ name, metaRequest }) => ({ name, request: { namespaceName }, metaRequest }),
       delete: (tailordbTypeName) => ({
         name: tailordbTypeName,
         request: { workspaceId, namespaceName, tailordbTypeName },

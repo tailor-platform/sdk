@@ -147,8 +147,9 @@ function entriesOfNamespace<T extends NamespacedEntry>(
 /**
  * List the tables a migration changes that the deploy plan neither creates nor updates, yet the
  * workspace holds while the migration runs: a table a later migration removes, which this deploy
- * created from the baseline snapshot or which the plan deletes. Their schema follows the history
- * like any other table's, so the script sees the shape its migration defines.
+ * created from the baseline snapshot or which the plan deletes, and a table the plan leaves
+ * unchanged because a later migration changes it back. Their schema follows the history like any
+ * other table's, so the script sees the shape its migration defines.
  * @param changeSet - TailorDB change set
  * @param migration - The migration about to run
  * @returns Names of the tables
@@ -161,15 +162,18 @@ function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigr
       ...entriesOfNamespace(changeSet.type.updates, migration.namespace),
     ].map((entry) => entry.request.tailordbType?.name),
   );
-  const deleted = new Set(
-    entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+  const held = new Set(
+    [
+      ...entriesOfNamespace(changeSet.type.deletes, migration.namespace),
+      ...entriesOfNamespace(changeSet.type.unchanged, migration.namespace),
+    ].map((entry) => entry.name),
   );
   return [...getAffectedTableNames(migration)].filter(
     (tableName) =>
       tableName in snapshotTables &&
       !planned.has(tableName) &&
       !deletedResources.types.has(namespacedTableKey(migration.namespace, tableName)) &&
-      (deleted.has(tableName) ||
+      (held.has(tableName) ||
         processedTables.created.has(namespacedTableKey(migration.namespace, tableName))),
   );
 }

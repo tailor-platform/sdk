@@ -24,7 +24,7 @@ import {
   type SnapshotTablesByVersion,
   typeDeletion,
   typeEntry,
-  typeMetaRequest,
+  typeUnchanged,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -83,7 +83,7 @@ function deleteEntry(namespace: string, tableName: string) {
 type CreateMockPlanResultOptions = {
   creates?: TypeEntry[];
   updates?: TypeEntry[];
-  unchanged?: Omit<TypeEntry, "request">[];
+  unchanged?: ReturnType<typeof typeUnchanged>[];
   deletes?: DeleteEntry[];
   pendingMigrations: PlannedPendingMigrations;
 };
@@ -365,7 +365,7 @@ describe("migration flow: a table name shared across namespaces", () => {
       mkPendingMigration(MAIN, 1, [tableRemoved("Legacy")], false),
     ]);
     const client = createMockClient();
-    const unchanged = { name: "Legacy", metaRequest: typeMetaRequest("Legacy", SUB) };
+    const unchanged = typeUnchanged("Legacy", SUB);
 
     await applyTailorDB(
       client,

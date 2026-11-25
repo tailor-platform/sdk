@@ -30,7 +30,7 @@ import {
   tailordbTypeWrites,
   typeDeletion,
   typeEntry,
-  typeMetaRequest,
+  typeUnchanged,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB, type MaintenanceModeRelease } from "./index";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -108,10 +108,7 @@ describe("migration flow: local definitions that no pending migration includes",
           typeof entry === "string" ? typeEntry(entry) : entry,
         ),
         updates: (options.updates ?? []).map((name) => typeEntry(name)),
-        unchanged: (options.unchanged ?? []).map((name) => ({
-          name,
-          metaRequest: typeMetaRequest(name),
-        })),
+        unchanged: (options.unchanged ?? []).map((name) => typeUnchanged(name)),
         deletes: (options.deletes ?? []).map((name) => typeDeletion(name)),
       },
       gqlPermission: {
