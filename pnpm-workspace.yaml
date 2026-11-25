@@ -18,6 +18,8 @@ trustPolicyExclude:
   - "@swc/core@1.12.11"
   # npm name transferred to oxc-project/tsrs; this release has its provenance.
   - "tsrs@0.25.0-ts7.1.0-beta"
+  # Security backport of the v9 line, which never had provenance; Quint declares but never loads it.
+  - "@octokit/endpoint@9.0.6"
 
 packages:
   - packages/*
