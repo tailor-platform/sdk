@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { configAuthNamespace, deployApplicationOf } from "./deploy-application";
+import {
+  applicationsListing,
+  configAuthNamespaces,
+  deployApplicationOf,
+  workspaceDeployApplications,
+} from "./deploy-application";
 import type { Application } from "#/cli/services/application";
 import type { DeployApplication } from "./deploy-application";
 
@@ -74,8 +79,9 @@ describe("deployApplicationOf", () => {
   });
 });
 
-describe("configAuthNamespace", () => {
-  const authService = { config: { name: "shop-auth" } } as Application["authServices"][number];
+describe("configAuthNamespaces", () => {
+  const authService = (name: string) =>
+    ({ config: { name } }) as Application["authServices"][number];
   const app = (authNamespace: string | undefined): DeployApplication => ({
     name: "shop",
     subgraphs: [],
@@ -83,21 +89,90 @@ describe("configAuthNamespace", () => {
     settings: {},
   });
 
-  test("returns the Auth service the config defines, or the external Auth its application uses", () => {
+  test("lists the Auth services the config defines and the external Auth its application uses", () => {
     expect(
-      configAuthNamespace({
-        application: { authServices: [authService] },
+      configAuthNamespaces({
+        application: { authServices: [authService("shop-auth")] },
         applications: [app("shop-auth")],
       }),
-    ).toBe("shop-auth");
+    ).toEqual(["shop-auth"]);
     expect(
-      configAuthNamespace({
+      configAuthNamespaces({
         application: { authServices: [] },
         applications: [app("shared-auth")],
       }),
-    ).toBe("shared-auth");
+    ).toEqual(["shared-auth"]);
     expect(
-      configAuthNamespace({ application: { authServices: [] }, applications: [app(undefined)] }),
-    ).toBeUndefined();
+      configAuthNamespaces({ application: { authServices: [] }, applications: [app(undefined)] }),
+    ).toEqual([]);
+  });
+
+  test("lists every Auth service of a workspace config, including ones no application uses", () => {
+    expect(
+      configAuthNamespaces({
+        application: { authServices: [authService("shop-auth"), authService("admin-auth")] },
+        applications: [app("shop-auth"), app(undefined)],
+      }),
+    ).toEqual(["shop-auth", "admin-auth"]);
+  });
+});
+
+describe("workspaceDeployApplications", () => {
+  test("describes every application of a workspace config with the services it lists", () => {
+    expect(
+      workspaceDeployApplications({
+        shop: {
+          db: ["customer-db", "order-db"],
+          resolver: ["shop-api"],
+          idp: "shop-idp",
+          auth: "shop-auth",
+          cors: ["https://shop.example.com"],
+          disableIntrospection: true,
+        },
+        admin: { db: ["order-db"], resolver: [] },
+      }),
+    ).toEqual([
+      {
+        name: "shop",
+        subgraphs: [
+          { Type: "tailordb", Name: "customer-db" },
+          { Type: "tailordb", Name: "order-db" },
+          { Type: "pipeline", Name: "shop-api" },
+          { Type: "idp", Name: "shop-idp" },
+          { Type: "auth", Name: "shop-auth" },
+        ],
+        authNamespace: "shop-auth",
+        settings: { cors: ["https://shop.example.com"], disableIntrospection: true },
+      },
+      {
+        name: "admin",
+        subgraphs: [{ Type: "tailordb", Name: "order-db" }],
+        authNamespace: undefined,
+        settings: {},
+      },
+    ] satisfies DeployApplication[]);
+  });
+});
+
+describe("applicationsListing", () => {
+  test("names the applications whose subgraphs list a service, in config order", () => {
+    const app = (name: string, subgraphs: DeployApplication["subgraphs"]): DeployApplication => ({
+      name,
+      subgraphs,
+      authNamespace: undefined,
+      settings: {},
+    });
+    const applications = [
+      app("shop", [
+        { Type: "tailordb", Name: "main" },
+        { Type: "pipeline", Name: "main" },
+      ]),
+      app("admin", [{ Type: "tailordb", Name: "main" }]),
+      app("landing", [{ Type: "pipeline", Name: "main" }]),
+    ];
+
+    expect(applicationsListing(applications, "tailordb", "main")).toEqual(["shop", "admin"]);
+    expect(applicationsListing(applications, "pipeline", "main")).toEqual(["shop", "landing"]);
+    expect(applicationsListing(applications, "idp", "main")).toEqual([]);
   });
 });

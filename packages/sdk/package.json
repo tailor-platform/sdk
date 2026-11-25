@@ -198,8 +198,8 @@
     "@connectrpc/connect": "2.3.0",
     "@connectrpc/connect-node": "2.3.0",
     "@enlumine/graphql": "0.2.1",
-    "@enlumine/sql": "0.2.0",
-    "@enlumine/terminal": "0.2.0",
+    "@enlumine/sql": "0.2.1",
+    "@enlumine/terminal": "0.2.1",
     "@inquirer/prompts": "8.8.0",
     "@jridgewell/trace-mapping": "0.3.31",
     "@napi-rs/keyring": "2.1.2",
@@ -210,7 +210,7 @@
     "@opentelemetry/sdk-trace": "3.1.1",
     "@opentelemetry/semantic-conventions": "1.45.0",
     "@oxc-project/types": "0.159.0",
-    "@politty/zod": "0.7.5",
+    "@politty/zod": "0.7.8",
     "@secretlint/core": "14.0.1",
     "@standard-schema/spec": "1.1.0",
     "@tailor-platform/function-kysely-tailordb": "0.1.3",
@@ -263,7 +263,7 @@
     "tsx": "4.23.15",
     "typescript": "6.0.3",
     "vitest": "5.1.1",
-    "zinfer": "0.5.4"
+    "zinfer": "0.5.5"
   },
   "peerDependencies": {
     "@electric-sql/pglite": ">=0.2.0",

@@ -11,6 +11,20 @@ import * as crypto from "node:crypto";
 
 const workflowRunLabelKey = "sdk-workflow-run-job";
 
+/** Base-36 digits of the start time in a run id */
+const RUN_ID_SECONDS_LENGTH = 8;
+
+/** Hex digits that tell runs of the same second apart */
+const RUN_ID_RANDOM_LENGTH = 6;
+
+/**
+ * Create the random suffix of a run id.
+ * @returns Lowercase hex string of the length a run id carries
+ */
+export function createRunIdSuffix(): string {
+  return crypto.randomBytes(RUN_ID_RANDOM_LENGTH / 2).toString("hex");
+}
+
 export interface WorkflowRunMarker {
   runId: string;
 }
@@ -24,7 +38,7 @@ export interface WorkflowRunMarker {
 export function createRunId(now: Date, random: string): string {
   const seconds = Math.floor(now.getTime() / 1000)
     .toString(36)
-    .padStart(8, "0");
+    .padStart(RUN_ID_SECONDS_LENGTH, "0");
   return `r${seconds}-${random}`;
 }
 
@@ -50,6 +64,14 @@ export function readWorkflowRunMarker(
 }
 
 const RESOURCE_PREFIX = "tmp-run-";
+
+/** Prefix of the function `function run --async` registers, which has no workflow around it */
+const FUNCTION_RUN_PREFIX = "tmp-fn-";
+
+/** A whole run id: what {@link createRunId} builds, as {@link createRunIdSuffix} makes it */
+const FUNCTION_RUN_ID = new RegExp(
+  `^r[0-9a-z]{${RUN_ID_SECONDS_LENGTH}}-[0-9a-f]{${RUN_ID_RANDOM_LENGTH}}$`,
+);
 
 /** Longest name the Platform accepts for a job function. */
 const MAX_NAME_LENGTH = 63;
@@ -82,12 +104,34 @@ export function workflowRunJobFunctionName(runId: string, jobName: string): stri
 }
 
 /**
- * Whether a resource name is in the namespace `workflow run` creates its resources in.
- * @param name - Resource name
- * @returns True for a name that starts with the prefix of the temporary resources
+ * Name of the function `function run --async` registers for one run.
+ * @param runId - Id of the run
+ * @returns Resource name
  */
-export function isWorkflowRunResourceName(name: string): boolean {
-  return name.startsWith(RESOURCE_PREFIX);
+export function functionRunResourceName(runId: string): string {
+  return `${FUNCTION_RUN_PREFIX}${runId}`;
+}
+
+/**
+ * Whether a resource name is in the namespace the temporary resources of a run are created in.
+ * @param name - Resource name
+ * @returns True for a name that starts with the prefix of `workflow run` or `function run --async`
+ */
+export function isTemporaryRunResourceName(name: string): boolean {
+  return name.startsWith(RESOURCE_PREFIX) || name.startsWith(FUNCTION_RUN_PREFIX);
+}
+
+/**
+ * Tell whether a name is the function `function run --async` registers, as opposed to a
+ * resource of a `workflow run` or a deployed job.
+ * @param name - Resource or script name
+ * @returns True for exactly the name of a run's own function
+ */
+export function isFunctionRunResourceName(name: string): boolean {
+  return (
+    name.startsWith(FUNCTION_RUN_PREFIX) &&
+    FUNCTION_RUN_ID.test(name.slice(FUNCTION_RUN_PREFIX.length))
+  );
 }
 
 /**
@@ -96,7 +140,7 @@ export function isWorkflowRunResourceName(name: string): boolean {
  * @returns Start time truncated to the second, or undefined for any other id
  */
 export function runIdStartedAt(runId: string): Date | undefined {
-  const match = /^r([0-9a-z]{8})-/.exec(runId);
+  const match = new RegExp(`^r([0-9a-z]{${RUN_ID_SECONDS_LENGTH}})-`).exec(runId);
   if (!match?.[1]) return undefined;
   return new Date(Number.parseInt(match[1], 36) * 1000);
 }

@@ -34,7 +34,7 @@ type ListTailorDBTypesClient = {
   listTailorDBTypes(args: ListTailorDBTypesArgs): Promise<ListTailorDBTypesResult>;
 };
 
-export interface CollectLocalTailorDBTypeNameSourcesArgs {
+interface CollectLocalTailorDBTypeNameSourcesArgs {
   /** Loaded local TailorDB services. */
   tailorDBServices: ReadonlyArray<LocalTailorDBService>;
 }

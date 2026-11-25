@@ -26,9 +26,15 @@ import {
   type PlatformClientConfig,
 } from "./client";
 import { type ConfigLockOptions, isConfigLockTimeout, withConfigLock } from "./config-lock";
-import { withErrorDiagnostics } from "./error-diagnostics";
-import { CLIError, formatCommandHint, profileNotFoundError, toError } from "./errors";
+import {
+  CLIError,
+  formatCommandHint,
+  locatedCLIError,
+  profileNotFoundError,
+  toError,
+} from "./errors";
 import { logger } from "./logger";
+import { acceptsPinnedMachineUser } from "./machine-user";
 import { readPackageJson } from "./package-json";
 import { tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
 import {
@@ -563,14 +569,14 @@ function platformConfigInvalidError(
   details: string,
   position?: PlatformConfigPosition,
 ): CLIError {
-  return withErrorDiagnostics(
-    CLIError({
+  return locatedCLIError(
+    { file: configPath, line: position?.line },
+    {
       code: "PLATFORM_CONFIG_INVALID",
       message: "Failed to parse config file.",
       details,
-      context: { file: configPath, ...position },
-    }),
-    { location: { file: configPath, line: position?.line } },
+      context: position && { column: position.column },
+    },
   );
 }
 
@@ -789,7 +795,7 @@ export async function loadMachineUserName(
   }
 
   if (entry.machine_user && entry.machine_user_override === "deny") {
-    if (explicit && explicit !== entry.machine_user) {
+    if (explicit && !acceptsPinnedMachineUser(entry.machine_user, explicit)) {
       const details =
         explicitMachineUser.source === "env"
           ? `The machine user is being set to "${explicit}" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile's pinned machine user "${entry.machine_user}".`

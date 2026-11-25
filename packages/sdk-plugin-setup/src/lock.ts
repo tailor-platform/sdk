@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import { type AppIds, parseAppIds, TAILOR_LOCK_FILENAME } from "@tailor-platform/sdk/cli";
+import {
+  type AppIds,
+  parseAppIds,
+  parseLockWorkspaces,
+  TAILOR_LOCK_FILENAME,
+} from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { planEnvironmentOf, type AutofixProvider } from "./templates";
 
@@ -9,7 +14,7 @@ import { planEnvironmentOf, type AutofixProvider } from "./templates";
  * read from the SDK so an SDK that moves the format on refuses to let an older
  * plugin rewrite the lock.
  */
-export const LOCK_VERSION = 2;
+export const LOCK_VERSION = 3;
 
 const LOCK_FILENAME = TAILOR_LOCK_FILENAME;
 
@@ -148,6 +153,8 @@ export type LockFile = {
   autofix?: LockAutofix;
   /** App ids keyed by repository-relative config path. Absent in version 1 locks. */
   appIds?: AppIds;
+  /** Repository-relative paths of the workspace configs setup generated workflows for. */
+  workspaces?: string[];
 };
 
 /**
@@ -297,6 +304,7 @@ export function readLock(outputDir: string): LockFile | null {
     );
   }
   if (parsed.appIds !== undefined) parseAppIds(parsed.appIds);
+  if (parsed.workspaces !== undefined) parseLockWorkspaces(parsed.workspaces);
   return parsed;
 }
 

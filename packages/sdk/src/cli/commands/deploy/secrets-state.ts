@@ -39,30 +39,33 @@ const PersistedSecretsStateSchema = z.object({
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
 type PersistedSecretsState = z.infer<typeof PersistedSecretsStateSchema>;
 
-export interface SecretsStateScope {
+export type SecretsStateScope = {
   readonly workspaceId: string;
-  readonly applicationId: string | undefined;
-  readonly applicationName: string;
   /** Config being deployed; a relative output directory resolves against its directory. */
   readonly configPath: string;
-}
+} & (
+  | { readonly applicationId: string | undefined; readonly applicationName: string }
+  | { readonly workspace: true }
+);
 
 /**
- * Build the secrets state scope of the application a plan deploys.
+ * Build the secrets state scope of the config a plan deploys: its application, or the workspace
+ * config itself.
  * @param context - Planning context
- * @returns Secrets state scope for the plan's workspace, application, and config
+ * @returns Secrets state scope for the plan's workspace, owner, and config
  */
-export function secretsStateScope(context: PlanContext): SecretsStateScope {
-  const { owner } = context;
-  if (owner.kind !== "application") {
-    throw internalError("Secrets state is kept only for an application config");
-  }
-  return {
-    workspaceId: context.workspaceId,
-    applicationId: owner.id,
-    applicationName: owner.name,
-    configPath: context.config.path,
-  };
+export function secretsStateScope(
+  context: Pick<PlanContext, "owner" | "workspaceId" | "config">,
+): SecretsStateScope {
+  const { owner, workspaceId } = context;
+  const configPath = context.config.path;
+  if (owner.kind === "workspace") return { workspaceId, configPath, workspace: true };
+  return { workspaceId, configPath, applicationId: owner.id, applicationName: owner.name };
+}
+
+function stateKeyOf(scope: SecretsStateScope): string | undefined {
+  if ("workspace" in scope) return "workspace";
+  return scope.applicationId ? `id:${scope.applicationId}` : undefined;
 }
 
 /**
@@ -98,12 +101,11 @@ function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsSt
 }
 
 function applicationStateKey(scope: SecretsStateScope): string {
-  if (!scope.applicationId) {
-    throw internalError(
-      `Application "${scope.applicationName}" has no stable id for secrets state`,
-    );
+  const key = stateKeyOf(scope);
+  if (key === undefined) {
+    throw internalError("An application config without a stable id keeps no secrets state");
   }
-  return `id:${scope.applicationId}`;
+  return key;
 }
 
 /**
@@ -112,7 +114,7 @@ function applicationStateKey(scope: SecretsStateScope): string {
  * @returns Persisted state, or empty state if the scope is missing or the file is invalid
  */
 export function loadSecretsState(scope: SecretsStateScope): SecretsState {
-  if (!scope.applicationId) {
+  if (stateKeyOf(scope) === undefined) {
     return { vaults: {} };
   }
   return loadPersistedSecretsState(scope)?.state ?? { vaults: {} };
@@ -124,7 +126,7 @@ export function loadSecretsState(scope: SecretsStateScope): SecretsState {
  * @param state - The secrets state to persist
  */
 export function saveSecretsState(scope: SecretsStateScope, state: SecretsState): void {
-  if (!scope.applicationId) {
+  if (stateKeyOf(scope) === undefined) {
     return;
   }
   const filePath = getSecretsStatePath(scope);
@@ -191,7 +193,7 @@ export async function withSecretsStateLock<T>(
   scope: SecretsStateScope,
   fn: () => Promise<T>,
 ): Promise<T> {
-  if (!scope.applicationId) {
+  if (stateKeyOf(scope) === undefined) {
     return fn();
   }
   const lockPath = `${getSecretsStatePath(scope)}.lock`;

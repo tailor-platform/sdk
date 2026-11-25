@@ -478,9 +478,7 @@ function mergeAttributeLists(
  * @param workspace - Workspace loaded from a `defineWorkspace()` or `defineApp()` config
  * @returns Extracted names and attributes of every service the workspace declares
  */
-export function extractAttributesFromWorkspace(
-  workspace: LoadedWorkspaceConfig,
-): ExtractedAttributes {
+function extractAttributesFromWorkspace(workspace: LoadedWorkspaceConfig): ExtractedAttributes {
   const auths = Object.values(workspace.auth).map((auth) => collectAuthAttributes(auth));
   return {
     ...collectServiceNames(
@@ -582,6 +580,11 @@ interface GenerateWorkspaceUserTypesOptions {
 /**
  * Generate user type definitions from a workspace config and write them to disk, as
  * {@link generateUserTypes} does for an app config.
+ * Writes nothing when `tsconfig.json` enables the content mapper for this config
+ * (unless `TAILOR_DTS_PATH` is set), since TypeScript then reads the definitions
+ * from the config itself; it only warns when an old file remains.
+ *
+ * **Beta:** This API may change in future releases.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
  */

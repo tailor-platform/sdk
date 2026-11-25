@@ -1,14 +1,7 @@
 import * as fs from "node:fs";
-import { logger, styles, prompt } from "@tailor-platform/sdk/cli";
+import { lockVersionFor, logger, styles, prompt } from "@tailor-platform/sdk/cli";
 import { resolveWithinRoot } from "./check";
-import {
-  AUTOFIX_LABEL,
-  LOCK_VERSION,
-  readManagedLock,
-  targetWorkflows,
-  writeLock,
-  type LockFile,
-} from "./lock";
+import { AUTOFIX_LABEL, readManagedLock, targetWorkflows, writeLock, type LockFile } from "./lock";
 
 export type DeleteOptions = {
   /** Repo-relative paths to managed workflow files, as printed by `setup <target>`. */
@@ -110,7 +103,7 @@ export async function setupDelete(options: DeleteOptions): Promise<void> {
       const { autofix, ...rest } = lock;
       writeLock(outputDir, {
         ...rest,
-        version: LOCK_VERSION,
+        version: lockVersionFor(rest),
         targets: lock.targets.filter(
           (target) => !targetWorkflows(target).every((workflow) => deleted.has(workflow.file)),
         ),

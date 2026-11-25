@@ -5,7 +5,8 @@ import { resourceTrn } from "#/cli/commands/deploy/label";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf } from "#/cli/shared/config-file";
+import { loadConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, errorSummary, formatCommandHint, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
@@ -107,7 +108,7 @@ function formatCheckpointRecovery(
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
-  const { config } = await loadConfig(options.configPath);
+  const config = configOf(await loadConfigFile(options.configPath));
   const configDir = path.dirname(config.path);
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);

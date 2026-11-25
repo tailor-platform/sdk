@@ -48,6 +48,9 @@ const FUNCTION_RUN_NAME_PATTERN = new RegExp(
   String.raw`\bfunction${SHELL_ARGUMENT_UNIT}*?\s(?:run|test-run)(?![\w-])(?!\s*[({])${SHELL_ARGUMENT_UNIT}*?${FUNCTION_RUN_NAME_FLAG}`,
 );
 
+const FUNCTION_SCRIPT_COMMAND_PATTERN =
+  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
+
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
@@ -1754,6 +1757,39 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v3/function-script-rename",
+    name: "function script → function scaffold",
+    description:
+      "Rename `tailor function script` invocations to `tailor function scaffold`. `script` remains as a deprecated alias until it is removed in v3.",
+    since: "2.5.0",
+    until: "3.0.0",
+    scriptPath: "v3/function-script-rename/scripts/transform.js",
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,ps1,cmd,bat,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
+    legacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    examples: [
+      {
+        lang: "sh",
+        before: "tailor function script scripts/fix-prices.ts --namespace tailordb",
+        after: "tailor function scaffold scripts/fix-prices.ts --namespace tailordb",
+      },
+    ],
+    prompt: [
+      "The `tailor function script` subcommand is renamed to `tailor function scaffold`;",
+      "the old name is removed in v3. Replace any remaining `function script`",
+      "invocations the codemod did not rewrite (e.g. wrapped across lines or invoked",
+      "through a package runner such as `npx @tailor-platform/sdk`) with",
+      "`function scaffold`. Leave prose that merely mentions the old subcommand name",
+      "unchanged unless it documents a command to type, and leave `tailordb migrate",
+      "script` and other commands named `script` as they are.",
+    ].join("\n"),
+  },
+  {
     id: "v3/relation-toward-table",
     name: "relation() toward.type → toward.table",
     description:
@@ -2173,6 +2209,51 @@ export const allCodemods: CodemodPackage[] = [
       "pick one by name when it needs a specific one. An empty `auths` means the",
       "config has no Auth service, as an undefined `auth` did. Leave files that only",
       "define these hooks without reading `auth` unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v3/plugin-context-application",
+    name: "onDeployed context application → applications / staticWebsites",
+    description:
+      "The `application` field of the context that `onDeployed` receives is removed in v3. Read the static websites of the registering config, which the plugin can publish, from `staticWebsites`, and the deployed applications from `applications`. `application` keeps returning the registering application until then, but reading it fails when the config deploys several applications. Plugins that read `application` are reported for a manual change.",
+    since: "2.25.0",
+    until: "3.0.0",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      "onDeployed",
+      "DeployedContext",
+      "frontendPlugin",
+      "FrontendEnvContext",
+      "FrontendBuildContext",
+    ],
+    examples: [
+      {
+        before: [
+          "async onDeployed(ctx) {",
+          '  await ctx.application.staticWebsites["web"]?.publish(dir);',
+          "  return { outputs: { url: ctx.application.url } };",
+          "}",
+        ].join("\n"),
+        after: [
+          "async onDeployed(ctx) {",
+          '  await ctx.staticWebsites["web"]?.publish(dir);',
+          "  const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);",
+          "  return { outputs: { url: app?.url } };",
+          "}",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v3, the `application` field of the context passed to the plugin hook",
+      "`onDeployed` (type `DeployedContext`) is removed; `application` in the context of",
+      "`frontendPlugin`'s `env` and `build` callbacks (`FrontendEnvContext`,",
+      "`FrontendBuildContext`) is deprecated as well. For each flagged file that reads",
+      "`application` from such a context, including through destructuring: read a static website of the registering",
+      "config, including one to `publish` to, from `staticWebsites` keyed by its name; read",
+      "an application's `url`, `domain`, `id`, `auth`, or `aiGateways` from its `applications`",
+      "entry: the registering config's own applications are those whose `configPath` equals",
+      "the context's `configPath`, or pick one by `name`. Leave files that only define these hooks",
+      "without reading `application` unchanged.",
     ].join("\n"),
   },
   {

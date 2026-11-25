@@ -1,5 +1,5 @@
 /**
- * `tailor function script` command
+ * `tailor function scaffold` command
  *
  * Scaffolds a one-off script that `tailor function run` executes on the
  * Tailor Platform server without deploying.
@@ -16,12 +16,12 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { workspaceArgs, configArg, formatConfigArg } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
-import { extractAllNamespaces, extractOwnedNamespaces } from "#/cli/shared/config";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
+import { configOf, declaredNamespaces, ownedNamespaces } from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
-import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
+import { loadTailorDBNamespaces, loadWorkspaceNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -36,8 +36,9 @@ import {
 } from "./script-scaffold";
 import type { Plugin } from "#/plugin/types";
 
-export const scriptCommand = defineAppCommand({
-  name: "script",
+export const scaffoldCommand = defineAppCommand({
+  name: "scaffold",
+  aliases: ["script"],
   description: "Scaffold a one-off script to run with `function run`.",
   // strip unknown keys
   args: z.object({
@@ -58,7 +59,9 @@ export const scriptCommand = defineAppCommand({
 
 By default, when the project configures \`kyselyTypePlugin\`, the skeleton imports \`getDB()\` from the plugin's generated types, or from \`@tailor-platform/sdk/plugin/kysely-type/db\` when the plugin sets \`contentMapper: true\`. Without the plugin, the command uses the namespace's local table definitions to write a script-scoped \`db.ts\` plus a \`db.snapshot.json\` next to the script; \`function run\` refuses to run the script when that snapshot no longer matches the deployed or locally defined table and field structure.
 
-Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. This is required for an external namespace. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.`,
+Pass \`--remote\` to generate the script-scoped files from the deployed schema instead, even when \`kyselyTypePlugin\` is configured. This is required for an external namespace. Re-running the command refreshes \`db.ts\` and \`db.snapshot.json\` from the selected source and leaves the script itself untouched.
+
+\`script\` is a deprecated alias of this command and will be removed in v3.`,
   examples: [
     {
       cmd: "scripts/fix-prices.ts",
@@ -74,12 +77,18 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
     },
   ],
   run: async (args) => {
+    if (args.$invocation?.name === "script") {
+      logger.warn(
+        "`tailor function script` is deprecated and will be removed in v3. Use `tailor function scaffold` instead.",
+      );
+    }
+
     const filePath = path.resolve(args.file);
     if (!filePath.endsWith(".ts")) {
       throw CLIError({
         code: "SCRIPT_PATH_INVALID",
         message: `Script path must end with .ts: ${args.file}`,
-        command: "function script",
+        command: "function scaffold",
       });
     }
     const scriptDir = path.dirname(filePath);
@@ -90,11 +99,13 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       throw CLIError({
         code: "SCRIPT_PATH_INVALID",
         message: `${SCRIPT_DB_TYPES_FILE_NAME} is reserved for the generated Kysely types written next to the script. Choose a different script file name.`,
-        command: "function script",
+        command: "function scaffold",
       });
     }
 
-    const { config, plugins } = await loadConfig(args.config);
+    const loaded = await loadConfigFile(args.config);
+    const config = configOf(loaded);
+    const { plugins } = loaded;
     const kyselyPlugin = plugins.find((plugin) => plugin.id === KyselyGeneratorID);
     const hasSnapshotSidecar = fs.existsSync(snapshotPath);
     if (args.remote && kyselyPlugin !== undefined && scriptExists && !hasSnapshotSidecar) {
@@ -119,7 +130,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
       }
     }
     const namespace = resolveNamespace({
-      config,
+      loaded,
       explicit: args.namespace,
       sidecarNamespace: existingSidecarNamespace,
       remote: args.remote,
@@ -169,10 +180,11 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
         snapshot = await fetchRemoteSchemaSnapshot(client, workspaceId, namespace);
       } else {
         logger.info(`Loading local definitions of namespace ${styles.bold(namespace)}...`);
-        const { namespaces } = await loadTailorDBNamespaces({
-          configPath: args.config,
-          namespaces: [namespace],
-        });
+        const namespaces =
+          loaded.kind === "workspace"
+            ? await loadWorkspaceNamespaces(loaded.workspace, plugins, { namespaces: [namespace] })
+            : (await loadTailorDBNamespaces({ configPath: args.config, namespaces: [namespace] }))
+                .namespaces;
         const namespaceData = assertDefined(namespaces[0], `namespace ${namespace}`);
         snapshot = createSnapshotFromLocalTypes(namespaceData.tables, namespace);
       }
@@ -193,7 +205,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
             code: "GENERATED_TYPES_NOT_OWNED",
             message:
               `Refusing to overwrite ${path.relative(process.cwd(), dbTypesPath)}: ` +
-              "it was not generated by `tailor function script`.",
+              "it was not generated by `tailor function scaffold`.",
           });
         }
       }
@@ -258,7 +270,7 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
 });
 
 interface ResolveNamespaceOptions {
-  config: LoadedConfig;
+  loaded: LoadedConfigFile;
   explicit: string | undefined;
   sidecarNamespace: string | undefined;
   remote: boolean;
@@ -270,28 +282,28 @@ interface ResolveNamespaceOptions {
  * @returns The namespace name
  */
 function resolveNamespace(options: ResolveNamespaceOptions): string {
-  const { config, explicit, sidecarNamespace, remote } = options;
-  const allNamespaces = extractAllNamespaces(config);
-  const ownedNamespaces = extractOwnedNamespaces(config);
-  const configured = remote ? allNamespaces : ownedNamespaces;
+  const { loaded, explicit, sidecarNamespace, remote } = options;
+  const allNamespaces = declaredNamespaces(loaded);
+  const owned = ownedNamespaces(loaded);
+  const configured = remote ? allNamespaces : owned;
 
   if (explicit) {
-    if (!remote && !ownedNamespaces.includes(explicit)) {
+    if (!remote && !owned.includes(explicit)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${explicit}" is not owned by the config and requires --remote.`,
-        command: "function script",
+        command: "function scaffold",
       });
     }
     return explicit;
   }
 
   if (sidecarNamespace !== undefined) {
-    if (!remote && !ownedNamespaces.includes(sidecarNamespace)) {
+    if (!remote && !owned.includes(sidecarNamespace)) {
       throw CLIError({
         code: "SCRIPT_NAMESPACE_REQUIRES_REMOTE",
         message: `Namespace "${sidecarNamespace}" is not owned by the config and requires --remote.`,
-        command: "function script",
+        command: "function scaffold",
       });
     }
     return sidecarNamespace;
@@ -305,7 +317,7 @@ function resolveNamespace(options: ResolveNamespaceOptions): string {
     throw CLIError({
       code: "TAILORDB_NAMESPACE_REQUIRED",
       message: `Multiple TailorDB namespaces are defined (${configured.join(", ")}). Specify one with --namespace.`,
-      command: "function script",
+      command: "function scaffold",
     });
   }
   if (!remote && allNamespaces.length > 0) {

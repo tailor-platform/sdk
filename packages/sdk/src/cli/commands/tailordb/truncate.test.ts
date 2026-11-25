@@ -7,10 +7,10 @@ import { truncate, truncateCommand, type TruncateOptions } from "./truncate";
 const client = mockOperatorClient({
   truncateTailorDBType: {},
   truncateTailorDBTypes: {},
-  listTailorDBTypes: {
-    tailordbTypes: [{ name: "User" }, { name: "Order" }],
+  listTailorDBTypes: async ({ namespaceName }) => ({
+    tailordbTypes: namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
     nextPageToken: "",
-  },
+  }),
 });
 
 // Mock dependencies
@@ -29,7 +29,9 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
-  loadConfig: vi.fn().mockResolvedValue({
+  loadConfigFile: vi.fn().mockResolvedValue({
+    kind: "config",
+    plugins: [],
     config: {
       db: {
         tailordb: { files: ["./tailordb/*.ts"] },
@@ -73,7 +75,7 @@ describe("truncate command", () => {
 
   describe("argument validation", () => {
     const mutuallyExclusiveError =
-      "Options --all, --namespace, and table names are mutually exclusive. Please specify only one.";
+      "--all truncates every table, so it takes neither --namespace nor table names.";
 
     test.each<[string, TruncateOptions, string]>([
       [
@@ -89,11 +91,6 @@ describe("truncate command", () => {
       [
         "--all is specified with table names",
         { all: true, tables: ["User"] },
-        mutuallyExclusiveError,
-      ],
-      [
-        "--namespace is specified with table names",
-        { namespace: "tailordb", tables: ["User"] },
         mutuallyExclusiveError,
       ],
       [
@@ -173,15 +170,17 @@ describe("truncate command", () => {
     });
 
     test("excludes external namespaces", async () => {
-      const { loadConfig } = await import("#/cli/shared/config-loader");
-      vi.mocked(loadConfig).mockResolvedValueOnce({
+      const { loadConfigFile } = await import("#/cli/shared/config-loader");
+      vi.mocked(loadConfigFile).mockResolvedValueOnce({
+        kind: "config",
+        plugins: [],
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
             "shared-db": { external: true },
           },
         },
-      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 
       await truncate({ all: true });
 
@@ -193,15 +192,17 @@ describe("truncate command", () => {
     });
 
     test("warns and returns when only external namespaces exist", async () => {
-      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { loadConfigFile } = await import("#/cli/shared/config-loader");
       const { logger } = await import("#/cli/shared/logger");
-      vi.mocked(loadConfig).mockResolvedValueOnce({
+      vi.mocked(loadConfigFile).mockResolvedValueOnce({
+        kind: "config",
+        plugins: [],
         config: {
           db: {
             "shared-db": { external: true },
           },
         },
-      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 
       await truncate({ all: true });
 
@@ -228,15 +229,17 @@ describe("truncate command", () => {
     });
 
     test("rejects external namespaces with a dedicated error", async () => {
-      const { loadConfig } = await import("#/cli/shared/config-loader");
-      vi.mocked(loadConfig).mockResolvedValueOnce({
+      const { loadConfigFile } = await import("#/cli/shared/config-loader");
+      vi.mocked(loadConfigFile).mockResolvedValueOnce({
+        kind: "config",
+        plugins: [],
         config: {
           db: {
             owned: { files: ["./owned/*.ts"] },
             "shared-db": { external: true },
           },
         },
-      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
 
       await expect(truncate({ namespace: "shared-db" })).rejects.toMatchObject({
         code: "TAILORDB_NAMESPACE_EXTERNAL",
@@ -334,10 +337,11 @@ describe("truncate command", () => {
         mockOperatorClient({
           truncateTailorDBType: {},
           truncateTailorDBTypes: {},
-          listTailorDBTypes: {
-            tailordbTypes: [{ name: "User" }, { name: "Order" }],
+          listTailorDBTypes: async ({ namespaceName }) => ({
+            tailordbTypes:
+              namespaceName === "tailordb" ? [{ name: "User" }, { name: "Order" }] : [],
             nextPageToken: "",
-          },
+          }),
         }),
       );
       using _json = jsonMode();
@@ -353,11 +357,13 @@ describe("truncate command", () => {
     });
 
     test("reports no change when no owned namespace exists", async () => {
-      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { loadConfigFile } = await import("#/cli/shared/config-loader");
       const { logger } = await import("#/cli/shared/logger");
-      vi.mocked(loadConfig).mockResolvedValueOnce({
+      vi.mocked(loadConfigFile).mockResolvedValueOnce({
+        kind: "config",
+        plugins: [],
         config: { db: { "shared-db": { external: true } } },
-      } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+      } as unknown as Awaited<ReturnType<typeof loadConfigFile>>);
       using _json = jsonMode();
 
       const result = await runCommand(truncateCommand, ["--all", "--yes"]);

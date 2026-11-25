@@ -959,7 +959,8 @@ interface LoadSource extends ServiceSource {
   envOverrides: EnvOverrides;
 }
 
-const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
+/** The `env` overrides of a `defineConfig()` config, which has none. */
+export const NO_ENV_OVERRIDES: EnvOverrides = { resolver: {}, auth: {} };
 
 function loadSourceOf(config: LoadedConfig | LoadedWorkspaceConfig): LoadSource {
   if (isLoadedWorkspaceConfig(config)) {
@@ -1034,9 +1035,42 @@ function envOverrideServiceLabel(service: EnvOverrideService): string {
   }
 }
 
+/**
+ * How a config's workflow `.start()` calls resolve a string invoker: the config's only Auth
+ * service, or, with several, the Auth services that define each machine user.
+ * @param config - Loaded config of either kind
+ * @returns The start context's Auth namespace and machine user lookup
+ */
+export function startContextAuth(
+  config: LoadedConfig | LoadedWorkspaceConfig,
+): Pick<StartContext, "authNamespace" | "machineUserAuthNamespaces"> {
+  const source = loadSourceOf(config);
+  return {
+    authNamespace: startContextAuthNamespace(source),
+    ...startContextMachineUsers(source),
+  };
+}
+
 function startContextAuthNamespace(source: LoadSource): string | undefined {
   const [auth, ...others] = source.auths;
   return auth && others.length === 0 ? auth.config.name : undefined;
+}
+
+function startContextMachineUsers(
+  source: LoadSource,
+): Pick<StartContext, "machineUserAuthNamespaces"> {
+  if (source.auths.length < 2) return {};
+  const machineUserAuthNamespaces = new Map<string, string[]>();
+  for (const { config } of source.auths) {
+    const machineUsers = "machineUsers" in config ? config.machineUsers : undefined;
+    for (const machineUser of Object.keys(machineUsers ?? {})) {
+      machineUserAuthNamespaces.set(machineUser, [
+        ...(machineUserAuthNamespaces.get(machineUser) ?? []),
+        config.name,
+      ]);
+    }
+  }
+  return { machineUserAuthNamespaces };
 }
 
 interface EnvDependentBundleSettings extends FunctionBundleSettings {
@@ -1197,13 +1231,16 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   const sdkBuilderAnnotationCache: SdkBuilderAnnotationCache = new Map();
 
   // 8. Build start context for workflow/job start transformation
-  const startContext = await buildStartContext(
-    settings.workflow,
-    startContextAuthNamespace(source),
-    baseDir,
-    workflowService?.workflowSources,
-    tsconfigCache,
-  );
+  const startContext: StartContext = {
+    ...(await buildStartContext(
+      settings.workflow,
+      startContextAuthNamespace(source),
+      baseDir,
+      workflowService?.workflowSources,
+      tsconfigCache,
+    )),
+    ...startContextMachineUsers(source),
+  };
 
   // 9. Resolve bundle settings
   const buildOptions = buildOptionsOf(settings);

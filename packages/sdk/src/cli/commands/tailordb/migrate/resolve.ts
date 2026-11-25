@@ -19,7 +19,8 @@ import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig } from "#/cli/shared/config-loader";
+import { configOf } from "#/cli/shared/config-file";
+import { loadConfigFile, type LoadedConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
@@ -220,7 +221,7 @@ async function confirmResolve(options: ResolveOptions, message: string): Promise
 
 type ReleaseMaintenanceModeParams = {
   options: ResolveOptions;
-  loaded: Awaited<ReturnType<typeof loadConfig>>;
+  loaded: LoadedConfigFile;
   target: NamespaceWithMigrations;
   client: OperatorClient;
   workspaceId: string;
@@ -258,7 +259,8 @@ async function releaseMaintenanceMode(
     });
   }
 
-  assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
+  const config = configOf(loaded);
+  assertValidMigrationFiles(target.migrationsDir, namespace, config.path);
   assertLocalMigrationHistoryMatches(state, target);
 
   if (state.cleanupCheckpoint === checkpoint) {
@@ -270,7 +272,7 @@ async function releaseMaintenanceMode(
   }
 
   const verification = (
-    await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+    await verifyRemoteSchema(client, workspaceId, [target], config, [], {
       acceptInterruptedMigration: true,
     })
   )[0];
@@ -367,15 +369,16 @@ async function releaseMaintenanceMode(
 async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   logBetaWarning("tailordb migration");
 
-  const loaded = await loadConfig(options.configPath);
-  const configDir = path.dirname(loaded.config.path);
+  const loaded = await loadConfigFile(options.configPath);
+  const config = configOf(loaded);
+  const configDir = path.dirname(config.path);
   const target = selectTargetNamespace(
-    getNamespacesWithMigrations(loaded.config, configDir),
+    getNamespacesWithMigrations(config, configDir),
     options.namespace,
   );
   const { namespace } = target;
 
-  assertValidMigrationFiles(target.migrationsDir, namespace, loaded.config.path);
+  assertValidMigrationFiles(target.migrationsDir, namespace, config.path);
 
   const { client, workspaceId } = await loadOperatorWorkspaceContext({
     profile: options.profile,
@@ -423,7 +426,7 @@ async function resolve(options: ResolveOptions): Promise<ResolveResult> {
   const verification =
     !record && options.resolution === "rollback"
       ? (
-          await verifyRemoteSchema(client, workspaceId, [target], loaded.config, [], {
+          await verifyRemoteSchema(client, workspaceId, [target], config, [], {
             acceptInterruptedMigration: true,
           })
         )[0]

@@ -1,4 +1,4 @@
-import { CLIError } from "#/cli/shared/errors";
+import { CLIError, locatedCLIError } from "#/cli/shared/errors";
 import {
   eventSourceLabel,
   publishEventsConflict,
@@ -117,7 +117,7 @@ export function collectEventSubscriptions(
   for (const subscriber of targets) {
     const executors = subscriber.application.executorService?.executors ?? {};
     const visibility = collectSubscriberVisibility(subscriber, targets);
-    for (const executor of Object.values(executors)) {
+    for (const [file, executor] of Object.entries(executors)) {
       const lookup = eventSourceLookup(executor, subscriber, visibility);
       if (!lookup) {
         continue;
@@ -149,10 +149,14 @@ export function collectEventSubscriptions(
       }
       const [owner] = owners;
       if (!owner) {
-        throw CLIError({
-          code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
-          message: missingOwnerMessage(executor.name, lookup, subscriber),
-        });
+        throw locatedCLIError(
+          { file: file },
+          {
+            code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+            message: missingOwnerMessage(executor.name, lookup, subscriber),
+            context: { executor: executor.name },
+          },
+        );
       }
       subscriptions.push({
         ...entry,

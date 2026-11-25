@@ -20,6 +20,8 @@ export default {
     ],
     // zinfer reads every exported *Schema from its include files.
     ...Object.fromEntries((zinferConfig.include ?? []).map((glob) => [glob, ["exports"]])),
+    // zinfer emits an input and an output type for every schema, used or not.
+    "src/types/*.generated.ts": ["types"],
   },
   ignoreBinaries: ["knip", "publint"],
   treatConfigHintsAsErrors: true,

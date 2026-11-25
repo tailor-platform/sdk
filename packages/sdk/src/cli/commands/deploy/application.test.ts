@@ -15,7 +15,7 @@ import {
   recomposeApplication,
 } from "./application";
 import { deployApplicationOf } from "./deploy-application";
-import { applicationOwner, withMetadataWriteBatch } from "./label";
+import { applicationOwner, buildMetaRequest, withMetadataWriteBatch } from "./label";
 import {
   applicationLabelRejection,
   labelCountRejection,
@@ -503,6 +503,28 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(0);
   });
 
+  test("labels each application of a workspace config with its own name", async () => {
+    await planApplication({
+      ...createContext(createMockClient([])),
+      owner: { kind: "workspace" },
+      applications: [
+        {
+          name: "shop",
+          subgraphs: [{ Type: "tailordb", Name: "tailordb-a" }],
+          authNamespace: undefined,
+          settings: {},
+        },
+      ],
+    });
+
+    expect(buildMetaRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trn: expect.stringMatching(/:application:shop$/),
+        onApps: ["shop"],
+      }),
+    );
+  });
+
   test("plans every application of the config with its own subgraphs, Auth, and settings", async () => {
     const managed = { extraLabels: { "sdk-managed": "workspace" } };
     const client = createMockClient([
@@ -561,7 +583,7 @@ describe("planApplication", () => {
         }),
       },
     ]);
-    expect(result.deletes.map(({ name }) => name)).toEqual(["landing"]);
+    expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
   });
 
   test("reports a conflict for a same-name application this config does not own", async () => {
@@ -615,13 +637,15 @@ describe("planApplication", () => {
       expect(result.deletes[0]!.name).toBe(oldName);
     });
 
-    test("does not delete the other applications a workspace config manages", async () => {
+    test("deletes the applications that a workspace config marks or an application config deployed, once apps no longer lists them", async () => {
       const client = createMockClient([
         {
           name: "backoffice",
           subgraphs: matchingSubgraphs,
           extraLabels: { "sdk-managed": "workspace" },
         },
+        { name: "legacy", label: "legacy", sdkAppId: "old-id", subgraphs: matchingSubgraphs },
+        { name: "neighbor", label: "neighbor", subgraphs: matchingSubgraphs },
       ]);
       const application = createMockApplication({ name: appName, id: "stable-id" });
 
@@ -630,7 +654,10 @@ describe("planApplication", () => {
         owner: { kind: "workspace" },
       });
 
-      expect(result.deletes).toEqual([]);
+      expect(result.deletes.map(({ name }) => name)).toEqual(["backoffice", "legacy"]);
+      expect(result.takeovers).toEqual([
+        expect.objectContaining({ resourceName: "legacy", action: "delete" }),
+      ]);
     });
 
     test("ignores apps with the same id when name still matches", async () => {

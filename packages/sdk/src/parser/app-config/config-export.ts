@@ -5,7 +5,7 @@ import type { WorkspaceApplication, WorkspaceRepresentation } from "./types";
 import type { z } from "zod";
 
 /** The default export of `tailor.config.ts`, told apart by the function that defined it. */
-export type ParsedConfigExport =
+type ParsedConfigExport =
   | { kind: "config"; config: AppConfig }
   | {
       kind: "workspace";
@@ -33,7 +33,14 @@ interface ServiceEnvOverride<Value> {
   env: Record<string, Value>;
 }
 
-function listEnvOverrides<Value>(overrides: EnvOverrides<Value>): ServiceEnvOverride<Value>[] {
+/**
+ * List every `env` override of a workspace with the service it belongs to.
+ * @param overrides - The workspace's `env` overrides
+ * @returns One entry per service with an override
+ */
+export function listEnvOverrides<Value>(
+  overrides: EnvOverrides<Value>,
+): ServiceEnvOverride<Value>[] {
   const named = (
     kind: "resolver" | "auth",
     records: Record<string, Record<string, Value>>,

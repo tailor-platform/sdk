@@ -189,7 +189,7 @@ snapshots:
 				"@tailor-platform/sdk": "workspace:^",
 				"@types/node": "26.6.6",
 				"eslint-plugin-zod": "5.3.0",
-				"knip": "6.45.1",
+				"knip": "6.47.0",
 				"lefthook": "2.2.1",
 				"madge": "8.0.0",
 				"oxfmt": "0.79.0",
@@ -244,7 +244,7 @@ snapshots:
 		"packages/create-sdk": {
 			"dependencies": {
 				"@clack/prompts": "1.9.0",
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"execa": "10.2.1",
 				"picocolors": "1.1.1",
 				"pkg-types": "2.4.0",
@@ -415,8 +415,8 @@ snapshots:
 				"@connectrpc/connect": "2.3.0",
 				"@connectrpc/connect-node": "2.3.0",
 				"@enlumine/graphql": "0.2.1",
-				"@enlumine/sql": "0.2.0",
-				"@enlumine/terminal": "0.2.0",
+				"@enlumine/sql": "0.2.1",
+				"@enlumine/terminal": "0.2.1",
 				"@inquirer/prompts": "8.8.0",
 				"@jridgewell/trace-mapping": "0.3.31",
 				"@napi-rs/keyring": "2.1.2",
@@ -427,7 +427,7 @@ snapshots:
 				"@opentelemetry/sdk-trace": "3.1.1",
 				"@opentelemetry/semantic-conventions": "1.45.0",
 				"@oxc-project/types": "0.159.0",
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"@secretlint/core": "14.0.1",
 				"@standard-schema/spec": "1.1.0",
 				"@tailor-platform/function-kysely-tailordb": "0.1.3",
@@ -484,14 +484,14 @@ snapshots:
 				"tsx": "4.23.15",
 				"typescript": "6.0.3",
 				"vitest": "5.1.1",
-				"zinfer": "0.5.4",
+				"zinfer": "0.5.5",
 			},
 		},
 
 		"packages/sdk-codemod": {
 			"dependencies": {
 				"@ast-grep/napi": "0.51.3",
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"diff": "9.0.0",
 				"pathe": "2.0.3",
 				"picomatch": "4.0.7",
@@ -531,7 +531,7 @@ snapshots:
 		"packages/sdk-plugin-seed": {
 			"name": "@tailor-platform/sdk-plugin-seed",
 			"dependencies": {
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"lines-db": "0.19.0",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -552,7 +552,7 @@ snapshots:
 		"packages/sdk-plugin-setup": {
 			"dependencies": {
 				"@croct/json5-parser": "0.2.2",
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"json5": "2.2.3",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -576,7 +576,7 @@ snapshots:
 		"packages/sdk-plugin-tailordb-erd": {
 			"name": "@tailor-platform/sdk-plugin-tailordb-erd",
 			"dependencies": {
-				"@politty/zod": "0.7.5",
+				"@politty/zod": "0.7.8",
 				"chokidar": "5.0.0",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
@@ -1171,11 +1171,6 @@ snapshots:
 			},
 		},
 
-		"@enlumine/core@0.2.0": {
-			"integrity": "sha512-ZDcyAWXtTCoQe7DLObMpqjIWoVJ2czAChJ3AboYGghG7nyZ2ckSrS85WRPfzWzt/4DEdxsgbPJOGgJxNoeu49A==",
-			"engines": {"node": ">=22"},
-		},
-
 		"@enlumine/core@0.2.1": {
 			"integrity": "sha512-GRoH33zRfxu9OayriDo/LPaZLZMbg2zJJGL1TqpDsu4BXtpkdoswNVLpoShG7ISUS7zxStxSofAGYm3SigByTA==",
 			"engines": {"node": ">=22"},
@@ -1189,19 +1184,19 @@ snapshots:
 			},
 		},
 
-		"@enlumine/sql@0.2.0": {
-			"integrity": "sha512-b20V94Ilys0gWeL+OqtvLdnMGX6EA7zhD4c4MzLTZf6TOQcLLnb0Hcw4EiFicJjTNTLocb72Gig1puM/zThE3A==",
+		"@enlumine/sql@0.2.1": {
+			"integrity": "sha512-WOI2POSqMKMDKO3mgQ5gg6XdVvb9DoRhvED17yW+Zh1sv8ylItVxkDWoixBjf0/0i0kQ/GbIPpIKC2QsnfXuLg==",
 			"engines": {"node": ">=22"},
 			"dependencies": {
-				"@enlumine/core": "0.2.0",
+				"@enlumine/core": "0.2.1",
 			},
 		},
 
-		"@enlumine/terminal@0.2.0": {
-			"integrity": "sha512-UePUhtcFpX/RNmJOGOOC+VqlcQuF8iDfVSn4c3VukcW//yBx4LLK5ozsrGzTvfh+jZIBUS04Dimu1Wmv+u8RmA==",
+		"@enlumine/terminal@0.2.1": {
+			"integrity": "sha512-1kSCBJYJojMgqwd5TAKqZUHpIleTdSjjN9PJdTGC0lvic9JNTWrOTlH6waG9eSSe/A6Fo0gchOvHje+ua+E79Q==",
 			"engines": {"node": ">=22"},
 			"dependencies": {
-				"@enlumine/core": "0.2.0",
+				"@enlumine/core": "0.2.1",
 			},
 		},
 
@@ -3037,8 +3032,8 @@ snapshots:
 			},
 		},
 
-		"@politty/zod@0.7.5": {
-			"integrity": "sha512-XbaaV5yGD62ZTOA28tmXQimwgwGTJC5rmFdS+H8JspcrNGmaOpFxoT6TbPTijQIyQCIKfYl3h3r5OA+599Z8QQ==",
+		"@politty/zod@0.7.8": {
+			"integrity": "sha512-9oOT6VVOyFQwyS/M4yo+klJnOknXUD8DvC7WCXFFocRO6+pFC83vFYDnBNPgLobU+ECxFyHL3WKidHq7uil8gw==",
 			"engines": {"node": ">=20.12.0 <21.0.0 || >=21.7.0"},
 			"hasBin": true,
 			"peerDependencies": {
@@ -5227,8 +5222,8 @@ snapshots:
 			},
 		},
 
-		"knip@6.45.1": {
-			"integrity": "sha512-zp3zXKy2cZWiIttdlWU5fisKxVQaLSU6471ej0KGz1GdHdaHxpzTAO/LIyFNc3gU3v1W7LJaqvYumoO3l/u+6A==",
+		"knip@6.47.0": {
+			"integrity": "sha512-nYmQnk0YqDXIJrYViJz88c8xw3tBDkpuAmofo58EkVPnKr6DnRKYtf6oIqcGVHZvXDE+gtmFuYx277/QsWng+A==",
 			"engines": {"node": "^20.19.0 || >=22.12.0"},
 			"hasBin": true,
 			"dependencies": {
@@ -7137,8 +7132,8 @@ snapshots:
 			},
 		},
 
-		"zinfer@0.5.4": {
-			"integrity": "sha512-93EGviXIO91K5GpM3sWlPu2Sq8xo9Ji+KXoAHVoe/86Y8PWdp14Sr6zp52fzDjFHxV3HfgKxRImmhEuXnvIJ6Q==",
+		"zinfer@0.5.5": {
+			"integrity": "sha512-q6TekLokyHrUrKZwNhfUHYWsGlpqC9yKQ2ASCLdumZMxZNlUMRfyk+oF6SjAXxeVJ0Eb/T/4PVxoihZGSA2gsA==",
 			"hasBin": true,
 			"peerDependencies": {
 				"zod": {
