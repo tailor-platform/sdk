@@ -18,6 +18,7 @@ import { detectFunctionType } from "./detect";
 import {
   startFunctionRunWatch,
   type FunctionRunWatch,
+  type FunctionRunWatchEvent,
   type FunctionRunWatchOptions,
 } from "./watch";
 import type { FunctionRunTarget } from "./run-function";
@@ -480,6 +481,125 @@ describe("startFunctionRunWatch", () => {
       expect(stderr.output).toContain('{"error":{"code":"FUNCTION_TYPE_UNDETECTED"'),
     );
     expect(stripAnsi(stderr.output)).not.toContain("[ERROR]");
+  });
+
+  describe("onEvent", () => {
+    function collect() {
+      const events: FunctionRunWatchEvent[] = [];
+      return { events, onEvent: (event: FunctionRunWatchEvent) => events.push(event) };
+    }
+    const types = (events: FunctionRunWatchEvent[]) => events.map((event) => event.type);
+
+    test("reports ready, then one started and one finished per run, and prints nothing itself", async () => {
+      using stderr = captureStderr();
+      const { events, onEvent } = collect();
+
+      await start({ onEvent });
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+
+      expect(types(events)).toEqual(["ready", "started", "finished"]);
+      expect(events[2]).toEqual({
+        type: "finished",
+        record: {
+          success: true,
+          scriptName: "test-run--fn.js",
+          functionType: "plain",
+          functionName: "fn",
+          logs: "",
+          result: '{"ok":true}',
+          executionId: "exec-1",
+        },
+      });
+      expect(stripAnsi(stderr.output)).not.toMatch(/Ready!|-->|<--/);
+    });
+
+    test("names the argument file in ready", async () => {
+      const { events, onEvent } = collect();
+      const argFile = path.join(cwd, "arg.json");
+      fs.writeFileSync(argFile, "{}");
+
+      await start({ onEvent, argFile });
+
+      expect(events[0]).toEqual({ type: "ready", argFile: fs.realpathSync(argFile) });
+    });
+
+    test("reports scheduled when a watched file changes, before the run starts", async () => {
+      const { events, onEvent } = collect();
+      await start({ onEvent });
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+      events.length = 0;
+
+      watcher.emit("change", fnPath);
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+
+      expect(types(events)).toEqual(["scheduled", "started", "finished"]);
+    });
+
+    test("reports a failed run as failed with the error envelope, after started", async () => {
+      const { events, onEvent } = collect();
+      vi.mocked(detectFunctionType).mockRejectedValueOnce(
+        CLIError({
+          code: "FUNCTION_TYPE_UNDETECTED",
+          message: "Could not detect function type.",
+          suggestion: "Export a resolver.",
+        }),
+      );
+
+      await start({ onEvent });
+      await vi.waitFor(() => expect(types(events)).toContain("failed"));
+
+      expect(types(events)).toEqual(["ready", "started", "failed"]);
+      expect(events[2]).toMatchObject({
+        type: "failed",
+        error: {
+          error: {
+            code: "FUNCTION_TYPE_UNDETECTED",
+            message: "Could not detect function type.",
+            suggestion: "Export a resolver.",
+          },
+        },
+      });
+    });
+
+    test("reports queued once for any number of changes during a run, and runs once more", async () => {
+      const { events, onEvent } = collect();
+      let release: (() => void) | undefined;
+      vi.mocked(executeScriptReportingStart).mockImplementationOnce(async (options) => {
+        options.onStart?.("exec-1");
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { success: true, logs: "", result: "" };
+      });
+      await start({ onEvent });
+      await vi.waitFor(() => expect(release).toBeDefined());
+
+      watcher.emit("change", fnPath);
+      await settle();
+      watcher.emit("change", fnPath);
+      await settle();
+      release?.();
+      await vi.waitFor(() => expect(types(events).filter((t) => t === "finished")).toHaveLength(2));
+
+      expect(types(events)).toEqual([
+        "ready",
+        "started",
+        "scheduled",
+        "queued",
+        "scheduled",
+        "finished",
+        "started",
+        "finished",
+      ]);
+    });
+
+    test("does not register signal handlers when handleSignals is false", async () => {
+      const signalHandlers = STOP_SIGNALS.map((signal) => process.listeners(signal));
+
+      await start({ onEvent: () => {}, handleSignals: false });
+
+      expect(STOP_SIGNALS.map((signal) => process.listeners(signal))).toEqual(signalHandlers);
+    });
   });
 
   test("warns that the argument is ignored by a resolver without input unless it is {}", async () => {

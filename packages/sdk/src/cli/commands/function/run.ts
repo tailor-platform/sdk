@@ -199,59 +199,17 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       command: "function run",
     });
 
-    // 2. Load config (required)
-    const loaded = await loadConfigFile(args.config);
-    const config = configOf(loaded);
-    const { plugins } = loaded;
-
-    // 3. Resolve workspace and machine user info (needed before bundling)
-    const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    const target = await resolveFunctionRunTarget({
+      filePath,
+      file: args.file,
+      name: args.name,
+      config: args.config,
       profile: args.profile,
       workspaceId: args["workspace-id"],
+      machineUser: args["machine-user"],
+      allowSchemaDrift: args["allow-schema-drift"],
     });
-
-    const { authNamespace, machineUser } = await resolveRunMachineUser({
-      client,
-      workspaceId,
-      loaded,
-      cliMachineUser: args["machine-user"],
-      cliMachineUserSource: resolveMachineUserInputSource(args["machine-user"]),
-      profile: args.profile,
-    });
-
-    // 4. Check a scaffolded script's schema snapshot
-    if (!filePath.endsWith(".js")) {
-      if (args["allow-schema-drift"]) {
-        if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
-          logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
-        }
-      } else {
-        const sidecar = loadScriptSchemaSnapshot(filePath);
-        if (sidecar) {
-          logger.info("Checking the script's schema snapshot for drift...");
-          await verifyScriptSchemaSnapshot({
-            client,
-            workspaceId,
-            loaded,
-            configArgValue: args.config,
-            scriptArgValue: args.file,
-            profileArgValue: args.profile,
-            sidecar,
-          });
-        }
-      }
-    }
-
-    const target: FunctionRunTarget = {
-      filePath,
-      jobName: args.name,
-      config,
-      kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
-      client,
-      workspaceId,
-      authNamespace,
-      machineUser,
-    };
+    const { workspaceId } = target;
 
     if (args.watch) {
       const { startFunctionRunWatch } = await import("./watch");
@@ -312,6 +270,90 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
     if (!result.success) await exitAfterOutput(1);
   },
 });
+
+export interface FunctionRunTargetOptions {
+  /** Absolute path of the function file */
+  filePath: string;
+  /** The file as the user gave it, for the commands a message suggests */
+  file: string;
+  /** Workflow job name for the deprecated `--name` */
+  name?: string | undefined;
+  /** Path of the config file; the default lookup when undefined */
+  config?: string | undefined;
+  /** Profile that selects the workspace */
+  profile?: string | undefined;
+  /** Workspace to run in */
+  workspaceId?: string | undefined;
+  /** Machine user name; the profile's default when undefined */
+  machineUser?: string | undefined;
+  /** Run a scaffolded script even when its schema snapshot no longer matches */
+  allowSchemaDrift: boolean;
+}
+
+/**
+ * Load the config, resolve the workspace and the machine user, check a scaffolded script's
+ * schema snapshot, and gather what a run of the function needs.
+ * @param options - Function file and the options that select the workspace and machine user
+ * @returns What `prepareFunction` and `executeFunction` take
+ */
+export async function resolveFunctionRunTarget(
+  options: FunctionRunTargetOptions,
+): Promise<FunctionRunTarget> {
+  const { filePath } = options;
+  // 2. Load config (required)
+  const loaded = await loadConfigFile(options.config);
+  const config = configOf(loaded);
+  const { plugins } = loaded;
+
+  // 3. Resolve workspace and machine user info (needed before bundling)
+  const { client, workspaceId } = await loadOperatorWorkspaceContext({
+    profile: options.profile,
+    workspaceId: options.workspaceId,
+  });
+
+  const { authNamespace, machineUser } = await resolveRunMachineUser({
+    client,
+    workspaceId,
+    loaded,
+    cliMachineUser: options.machineUser,
+    cliMachineUserSource: resolveMachineUserInputSource(options.machineUser),
+    profile: options.profile,
+  });
+
+  // 4. Check a scaffolded script's schema snapshot
+  if (!filePath.endsWith(".js")) {
+    if (options.allowSchemaDrift) {
+      if (fs.existsSync(path.join(path.dirname(filePath), SCRIPT_SNAPSHOT_FILE_NAME))) {
+        logger.warn("Skipping the schema snapshot check (--allow-schema-drift).");
+      }
+    } else {
+      const sidecar = loadScriptSchemaSnapshot(filePath);
+      if (sidecar) {
+        logger.info("Checking the script's schema snapshot for drift...");
+        await verifyScriptSchemaSnapshot({
+          client,
+          workspaceId,
+          loaded,
+          configArgValue: options.config,
+          scriptArgValue: options.file,
+          profileArgValue: options.profile,
+          sidecar,
+        });
+      }
+    }
+  }
+
+  return {
+    filePath,
+    jobName: options.name,
+    config,
+    kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
+    client,
+    workspaceId,
+    authNamespace,
+    machineUser,
+  };
+}
 
 async function isWritableProfile(profile: string | undefined): Promise<boolean> {
   try {
