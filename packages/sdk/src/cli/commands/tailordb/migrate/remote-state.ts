@@ -375,6 +375,17 @@ export type MaintenanceModeRelease = CLIErrorNextAction & {
 };
 
 /**
+ * A deploy as the release of a maintenance mode record.
+ * @param context - Config and workspace selection of the current run
+ * @returns The deploy
+ */
+export function deployMaintenanceModeRelease(
+  context: MigrationCommandContext,
+): MaintenanceModeRelease {
+  return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
+}
+
+/**
  * The command that removes the maintenance mode record a deploy left in place: `migration resolve
  * --maintenance` when the record names the current checkpoint, which also takes the tables out of
  * maintenance mode, and `deploy` when it names another checkpoint or the committed migration's
@@ -392,9 +403,7 @@ export function maintenanceModeReleaseAction(
   const migrationInProgress = state.inProgress !== null && !isStaleMigrationInProgress(state);
   if (migrationInProgress || state.maintenanceModeCheckpoint === null) return undefined;
   const checkpoint = state.number ?? 0;
-  if (state.cleanupCheckpoint === checkpoint) {
-    return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
-  }
+  if (state.cleanupCheckpoint === checkpoint) return deployMaintenanceModeRelease(context);
   if (state.maintenanceModeCheckpoint === checkpoint) {
     return {
       via: "resolve",
@@ -407,9 +416,7 @@ export function maintenanceModeReleaseAction(
     };
   }
   return {
-    via: "deploy",
-    command: "tailor",
-    args: ["deploy", ...migrationContextArgs(context)],
+    ...deployMaintenanceModeRelease(context),
     fallback: {
       command: "tailor",
       args: namespaceMigrationArgs({

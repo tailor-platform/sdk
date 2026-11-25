@@ -258,7 +258,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. A namespace still at the checkpoint and migration history ID that the local baseline replaced is reported with the reset to 0000 that the next deploy makes once the remote schema matches 0000, and its pending migrations are those after 0000. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, a migration in progress at a checkpoint the next deploy would reset, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
+Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. A namespace still at the checkpoint and migration history ID that the local baseline replaced is reported with the reset to 0000 that the next deploy asks to make once the remote schema matches 0000, and its pending migrations are those after 0000. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, an in-progress record (even one the checkpoint already passed) at a checkpoint the next deploy would reset, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
 
 #### tailordb migration sync
 

@@ -12,12 +12,9 @@ import { CLIError, errorSummary, formatCommandHint, isCLIError } from "#/cli/sha
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
+import { migrationCommandContext, type MigrationCommandContext } from "./hints";
 import {
-  migrationCommandContext,
-  migrationContextArgs,
-  type MigrationCommandContext,
-} from "./hints";
-import {
+  deployMaintenanceModeRelease,
   fetchRemoteMigrationState,
   formatInProgressMigrationAction,
   inProgressMigrationActions,
@@ -63,7 +60,7 @@ interface MigrationStatusInfo {
   namespace: string;
   currentMigration: number;
   currentMigrationLabel: string;
-  /** Reset of a checkpoint the local baseline replaced, which the next deploy makes once the remote schema matches `0000`; the pending migrations follow `0000`. */
+  /** Reset of a checkpoint the local baseline replaced, which the next deploy asks to make once the remote schema matches `0000`; the pending migrations follow `0000`. */
   checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace"> | undefined;
   pendingMigrations: PendingMigrationStatusInfo[];
   /** Migration an earlier deploy left in progress. */
@@ -118,7 +115,8 @@ function formatCheckpointRecovery(
 
 /**
  * The deploy that resets a checkpoint the local baseline replaced, as the release of a maintenance
- * mode record: commands that check the record against the local migration history refuse it.
+ * mode record: `migration resolve` and `migration sync` refuse a namespace that records another
+ * migration history.
  * @param state - Remote migration state of the namespace
  * @param context - Invocation context of the current run
  * @returns The deploy, or `undefined` without a record
@@ -128,7 +126,7 @@ function resettingDeployRelease(
   context: MigrationCommandContext,
 ): MaintenanceModeRelease | undefined {
   if (state.maintenanceModeCheckpoint === null) return undefined;
-  return { via: "deploy", command: "tailor", args: ["deploy", ...migrationContextArgs(context)] };
+  return deployMaintenanceModeRelease(context);
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
@@ -256,19 +254,19 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
-    if (checkpointRepair && (remoteState.inProgress || remoteState.inProgressInvalid)) {
-      rows.push({
-        status: "error",
-        namespace,
-        error: errorSummary(checkpointRepairInProgressError(namespace)),
-      });
-      continue;
-    }
     if (remoteState.inProgressInvalid) {
       rows.push({
         status: "error",
         namespace,
         error: "Remote in-progress migration record is invalid.",
+      });
+      continue;
+    }
+    if (checkpointRepair && remoteState.inProgress) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: errorSummary(checkpointRepairInProgressError(namespace)),
       });
       continue;
     }
@@ -361,7 +359,7 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     if (row.checkpointRepair) {
       const { from, to, fromHistoryId, toHistoryId } = row.checkpointRepair;
       logger.log(
-        `  Checkpoint reset: the next deploy checks that the remote schema matches ${formatMigrationNumber(to)}, then resets the checkpoint ${formatMigrationNumber(from)} → ${formatMigrationNumber(to)} and the migration history ID ${fromHistoryId ?? "<unset>"} → ${toHistoryId}`,
+        `  Checkpoint reset: the next deploy checks that the remote schema matches ${formatMigrationNumber(to)}, then asks to reset the checkpoint ${formatMigrationNumber(from)} → ${formatMigrationNumber(to)} and the migration history ID ${fromHistoryId ?? "<unset>"} → ${toHistoryId}`,
       );
     }
     if (row.inProgressMigrationLabel) {
@@ -436,7 +434,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. A namespace still at the checkpoint and migration history ID that the local baseline replaced is reported with the reset to 0000 that the next deploy makes once the remote schema matches 0000, and its pending migrations are those after 0000. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, a migration in progress at a checkpoint the next deploy would reset, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. A namespace still at the checkpoint and migration history ID that the local baseline replaced is reported with the reset to 0000 that the next deploy asks to make once the remote schema matches 0000, and its pending migrations are those after 0000. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, an in-progress record (even one the checkpoint already passed) at a checkpoint the next deploy would reset, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

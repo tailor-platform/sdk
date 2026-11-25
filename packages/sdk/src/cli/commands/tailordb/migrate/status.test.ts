@@ -658,30 +658,34 @@ describe("tailordb migration status --json", () => {
   test.each<{
     name: string;
     checkpoint: number;
+    label: string;
     replacedHistoryId: string | null;
     labels: Record<string, string>;
   }>([
     {
       name: "the checkpoint of the migration history the baseline replaced",
       checkpoint: 5,
+      label: "0005",
       replacedHistoryId: "hprevious",
       labels: { "sdk-migration": "m0005", "sdk-migration-history": "hprevious" },
     },
     {
       name: "a checkpoint 0000 of the migration history the baseline replaced",
       checkpoint: 0,
+      label: "0000",
       replacedHistoryId: "hprevious",
       labels: { "sdk-migration": "m0000", "sdk-migration-history": "hprevious" },
     },
     {
       name: "the checkpoint a first rebaseline replaced",
       checkpoint: 5,
+      label: "0005",
       replacedHistoryId: null,
       labels: { "sdk-migration": "m0005" },
     },
   ])(
     "reports the reset the next deploy makes to $name, with the migrations after 0000 as pending",
-    async ({ checkpoint, replacedHistoryId, labels }) => {
+    async ({ checkpoint, label, replacedHistoryId, labels }) => {
       writeRebaselineMarker(state.migrationsDir, "hlocal", {
         replacedHistoryId,
         replacedLatestMigration: checkpoint,
@@ -699,7 +703,7 @@ describe("tailordb migration status --json", () => {
           status: "ok",
           namespace: "tailordb",
           currentMigration: checkpoint,
-          currentMigrationLabel: `000${checkpoint}`,
+          currentMigrationLabel: label,
           checkpointRepair: {
             from: checkpoint,
             to: 0,
@@ -715,30 +719,45 @@ describe("tailordb migration status --json", () => {
     },
   );
 
-  test("tells that the next deploy checks the schema before resetting the checkpoint and the migration history ID", async () => {
-    writeRebaselineMarker(state.migrationsDir, "hlocal", {
+  test.each<{
+    replacedHistoryId: string | null;
+    labels: Record<string, string>;
+    historyChange: string;
+  }>([
+    {
       replacedHistoryId: "hprevious",
-      replacedLatestMigration: 5,
-    });
-    client.getMetadata.mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0005", "sdk-migration-history": "hprevious" } },
-    });
-    using stderr = captureStderr();
+      labels: { "sdk-migration": "m0005", "sdk-migration-history": "hprevious" },
+      historyChange: "hprevious → hlocal",
+    },
+    {
+      replacedHistoryId: null,
+      labels: { "sdk-migration": "m0005" },
+      historyChange: "<unset> → hlocal",
+    },
+  ])(
+    "tells that the next deploy checks the schema before resetting the checkpoint and the migration history ID $historyChange",
+    async ({ replacedHistoryId, labels, historyChange }) => {
+      writeRebaselineMarker(state.migrationsDir, "hlocal", {
+        replacedHistoryId,
+        replacedLatestMigration: 5,
+      });
+      client.getMetadata.mockResolvedValue({ metadata: { labels } });
+      using stderr = captureStderr();
 
-    const result = await runCommand(statusCommand, []);
+      const result = await runCommand(statusCommand, []);
 
-    expect(result.success).toBe(true);
-    expect(stderr.output).toContain("Current migration: 0005");
-    expect(stderr.output).toContain(
-      "Checkpoint reset: the next deploy checks that the remote schema matches 0000, then resets the checkpoint 0005 → 0000 and the migration history ID hprevious → hlocal",
-    );
-    expect(stderr.output).toContain("- 0001: Add users");
-  });
+      expect(result.success).toBe(true);
+      expect(stderr.output).toContain("Current migration: 0005");
+      expect(stderr.output).toContain(
+        `Checkpoint reset: the next deploy checks that the remote schema matches 0000, then asks to reset the checkpoint 0005 → 0000 and the migration history ID ${historyChange}`,
+      );
+      expect(stderr.output).toContain("- 0001: Add users");
+    },
+  );
 
   test.each([
     { record: "a migration in progress", inProgress: "m0006" },
     { record: "an in-progress record the checkpoint already passed", inProgress: "m0005" },
-    { record: "an in-progress record it cannot read", inProgress: "broken" },
   ])(
     "reports that the next deploy cannot reset the checkpoint with $record",
     async ({ inProgress }) => {
