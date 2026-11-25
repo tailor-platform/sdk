@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { aroundEach, describe, expect, test } from "vitest";
 import { loadWorkspaceContext, saveWorkspaceContext } from "./workspace-context";
 
@@ -147,15 +147,16 @@ describe("workspace context", () => {
   });
 
   test.each([
-    ["an absolute", (root: string) => join(root, "shared")],
-    ["a parent-relative", () => join("..", "shared")],
+    ["an absolute", "first", "second", (root: string) => join(root, "shared")],
+    ["a parent-relative", "first", "second", () => join("..", "shared")],
+    ["an absolute nested", ".", "nested", (root: string) => join(root, "nested", "shared")],
   ])(
-    "keeps contexts separate for configuration files in different directories sharing %s build output directory",
-    async (_kind, outputDirectory) => {
+    "stores separate contexts in %s build output directory shared by configuration files in different directories",
+    async (_kind, firstDirectory, secondDirectory, outputDirectory) => {
       const root = await temporaryDirectory();
       process.env.TAILOR_BUILD_OUTPUT_DIR = outputDirectory(root);
-      const firstConfigPath = join(root, "first", "tailor.config.ts");
-      const secondConfigPath = join(root, "second", "tailor.config.ts");
+      const firstConfigPath = join(root, firstDirectory, "tailor.config.ts");
+      const secondConfigPath = join(root, secondDirectory, "tailor.config.ts");
       const firstContext = {
         version: 1 as const,
         platformUrl: "https://api.tailor.tech",
@@ -175,8 +176,9 @@ describe("workspace context", () => {
       await expect(
         loadWorkspaceContext("https://api.tailor.tech", secondConfigPath),
       ).resolves.toEqual(secondContext);
-      await expect(readdir(root)).resolves.toEqual(["shared"]);
-      await expect(readdir(join(root, "shared"))).resolves.toHaveLength(2);
+      await expect(
+        readdir(resolve(root, firstDirectory, outputDirectory(root))),
+      ).resolves.toHaveLength(2);
     },
   );
 

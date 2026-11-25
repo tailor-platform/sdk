@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { readFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "pathe";
+import { basename, dirname, isAbsolute, join, normalize, resolve } from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { invalidDataError } from "#/cli/shared/validation-errors";
@@ -21,13 +21,14 @@ function defaultConfigPath(): string {
 }
 
 function contextPath(configPath: string): string {
-  const absoluteConfigPath = resolve(configPath);
-  const configDirectory = dirname(absoluteConfigPath);
-  const stateDirectory = resolve(configDirectory, getDistDir());
-  const name = stateDirectory.startsWith(`${configDirectory}/`)
-    ? basename(configPath)
-    : `${basename(configPath)}.${hashValue(absoluteConfigPath)}`;
-  return join(stateDirectory, `${name}.context.json`);
+  const distDirectory = getDistDir();
+  const configName = basename(configPath);
+  const sharedAcrossConfigDirectories =
+    isAbsolute(distDirectory) || normalize(distDirectory).split("/")[0] === "..";
+  const name = sharedAcrossConfigDirectories
+    ? `${configName}.${hashValue(configPath)}`
+    : configName;
+  return join(resolve(dirname(configPath), distDirectory), `${name}.context.json`);
 }
 
 /**
