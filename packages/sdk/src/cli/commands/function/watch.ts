@@ -62,6 +62,8 @@ export interface FunctionRunWatchOptions {
   initialArg: Jsonifiable | undefined;
   /** Receives each event instead of the run lines and the Ready line being printed */
   onEvent?: ((event: FunctionRunWatchEvent) => void) | undefined;
+  /** Run once as soon as the watch is set up; true when undefined, false waits for the first change */
+  runOnStart?: boolean | undefined;
   /** Stop on SIGINT, SIGTERM, and SIGHUP by removing the temporary argument file and exiting; true when undefined */
   handleSignals?: boolean | undefined;
 }
@@ -298,7 +300,7 @@ export async function startFunctionRunWatch(
       `${tty}Ready! Running ${styles.path(displayPath(target.filePath))} on every save. Edit ${styles.path(displayPath(options.argFile ?? argFile))} to change its argument (^C to quit)`,
     );
   }
-  void cycle();
+  if (options.runOnStart ?? true) void cycle();
 
   let resolveClosed: () => void = () => {};
   const closed = new Promise<void>((resolve) => {

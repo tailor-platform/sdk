@@ -12,6 +12,8 @@ export interface RunFunctionWatchOptions {
   argFile: string;
   /** Receives what happens in the watch instead of it printing run lines */
   onEvent: (event: FunctionRunWatchEvent) => void;
+  /** Run once as soon as the watch is set up; true when undefined, false waits for the first change */
+  runOnStart?: boolean | undefined;
   /** Profile that selects the workspace */
   profile?: string | undefined;
   /** Workspace to run in */
@@ -54,6 +56,7 @@ export async function runFunctionWatch(
     argFile: path.resolve(options.argFile),
     initialArg: undefined,
     onEvent: options.onEvent,
+    runOnStart: options.runOnStart,
     handleSignals: false,
   });
 }

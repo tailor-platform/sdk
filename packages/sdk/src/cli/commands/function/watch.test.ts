@@ -593,6 +593,22 @@ describe("startFunctionRunWatch", () => {
       ]);
     });
 
+    test("does not run on start when runOnStart is false, and runs on the first change", async () => {
+      const { events, onEvent } = collect();
+
+      await start({ onEvent, runOnStart: false });
+      await settle();
+      const beforeChange = [...types(events)];
+      watcher.emit("change", fnPath);
+      await vi.waitFor(() => expect(types(events)).toContain("finished"));
+
+      expect([beforeChange, types(events)]).toEqual([
+        ["ready"],
+        ["ready", "scheduled", "started", "finished"],
+      ]);
+      expect(executeScriptReportingStart).toHaveBeenCalledTimes(1);
+    });
+
     test("does not register signal handlers when handleSignals is false", async () => {
       const signalHandlers = STOP_SIGNALS.map((signal) => process.listeners(signal));
 
