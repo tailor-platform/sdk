@@ -1,5 +1,5 @@
 type TailordbGlobal = { tailordb?: unknown };
-type ClientConfig = { namespace: string };
+type TailordbClientConfig = { namespace: string };
 
 /**
  * Install a no-op `globalThis.tailordb` so that user modules evaluated outside
@@ -14,7 +14,7 @@ export function installTailordbClientStub(): () => void {
   const previous = Object.getOwnPropertyDescriptor(target, "tailordb");
   target.tailordb = {
     Client: class {
-      constructor(_config: ClientConfig) {}
+      constructor(_config: TailordbClientConfig) {}
       async connect(): Promise<void> {}
       async end(): Promise<void> {}
       async queryObject(): Promise<Record<string, never>> {

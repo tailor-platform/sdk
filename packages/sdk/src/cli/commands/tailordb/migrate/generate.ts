@@ -712,10 +712,7 @@ async function generateDataOnlyMigration(
   return generatedMigration(namespace, result);
 }
 
-type PgliteSchemaResult = {
-  pgliteSchemaFilePath?: string | undefined;
-  pgliteSchemaError?: string | undefined;
-};
+type PgliteSchemaResult = Pick<WrittenMigrationFiles, "pgliteSchemaFilePath" | "pgliteSchemaError">;
 
 /**
  * Report where db.pglite.ts landed, or why it was skipped.

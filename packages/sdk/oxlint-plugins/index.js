@@ -344,7 +344,7 @@ export default {
         },
         messages: {
           inline:
-            "Extract the type of parameter '{{name}}' into a named type or interface, or document each of its properties with `@param {{name}}.<property>`.",
+            "Extract the type of parameter '{{name}}' into a named type or interface, or, when every property has a name, document each with `@param {{name}}.<property>`.",
         },
         schema: [],
       },
@@ -363,7 +363,8 @@ export default {
           }
           let documented;
           for (const param of node.params) {
-            const target = param.type === "AssignmentPattern" ? param.left : param;
+            const declared = param.type === "TSParameterProperty" ? param.parameter : param;
+            const target = declared.type === "AssignmentPattern" ? declared.left : declared;
             if (target.type !== "Identifier") continue;
             const literal = objectLiteralType(target.typeAnnotation?.typeAnnotation);
             if (!literal) continue;

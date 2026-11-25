@@ -369,7 +369,7 @@ const idpServiceComparison = defineRequestComparison({
   },
 });
 
-type PlanServicesRecords = {
+type IdpRecordInputs = {
   dependentApps: DependentAppsByResource | undefined;
   runAppIds: ReadonlySet<string> | undefined;
 };
@@ -382,7 +382,7 @@ async function planServices(
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
-  records: PlanServicesRecords,
+  records: IdpRecordInputs,
 ) {
   const changeSet = createChangeSet<
     CreateService,

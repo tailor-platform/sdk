@@ -169,8 +169,8 @@ type JobFunctionVersions = { [key: string]: bigint };
 function filterJobFunctionVersions(
   allVersions: JobFunctionVersions,
   usedJobNames: string[],
-): { [key: string]: bigint } {
-  const filtered: { [key: string]: bigint } = {};
+): JobFunctionVersions {
+  const filtered: JobFunctionVersions = {};
   for (const jobName of usedJobNames) {
     if (allVersions[jobName] !== undefined) {
       filtered[jobName] = allVersions[jobName];
@@ -197,8 +197,8 @@ async function registerJobFunctions(
   owner: DeployOwner,
   unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
   jobFunctionPublishEvents: ReadonlyMap<string, boolean> = new Map(),
-): Promise<{ [key: string]: bigint }> {
-  const jobFunctionVersions: { [key: string]: bigint } = {};
+): Promise<JobFunctionVersions> {
+  const jobFunctionVersions: JobFunctionVersions = {};
 
   // Get workspaceId from the first workflow
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];

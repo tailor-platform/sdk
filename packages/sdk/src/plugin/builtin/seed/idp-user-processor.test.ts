@@ -146,14 +146,14 @@ describe("generateIdpUserSchemaFile", () => {
 });
 
 describe("generateIdpSeedScriptCode", () => {
+  type UpdateUserCall = { id: string; password?: string };
+
   type IdpCalls = {
     created: SeedUser[];
-    updated: Array<{ id: string; password?: string }>;
+    updated: UpdateUserCall[];
     lookups: string[];
     operations: string[];
   };
-
-  type UpdateUserInput = { id: string; password?: string };
 
   const stubIdp = (existingByName: Record<string, { id: string }>): IdpCalls => {
     const calls: IdpCalls = { created: [], updated: [], lookups: [], operations: [] };
@@ -175,7 +175,7 @@ describe("generateIdpSeedScriptCode", () => {
             if (!found) throw new Error(`not found: ${name}`);
             return found;
           }
-          async updateUser(input: UpdateUserInput) {
+          async updateUser(input: UpdateUserCall) {
             calls.operations.push(`update:${input.id}`);
             calls.updated.push(input);
             return { id: input.id };
@@ -322,7 +322,7 @@ describe("generateIdpSeedScriptCode", () => {
 
   test("reports a create-after-lookup race instead of overwriting the user", async () => {
     const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
-    const updated: Array<{ id: string; password?: string }> = [];
+    const updated: UpdateUserCall[] = [];
     let createAttempted = false;
     (globalThis as { tailor?: unknown }).tailor = {
       idp: {
@@ -335,7 +335,7 @@ describe("generateIdpSeedScriptCode", () => {
             if (!createAttempted) throw new Error("not found");
             return { id: "racing-user" };
           }
-          async updateUser(input: UpdateUserInput) {
+          async updateUser(input: UpdateUserCall) {
             updated.push(input);
           }
         },
@@ -388,11 +388,11 @@ describe("generateIdpSeedScriptCode", () => {
     });
 
     test("reports a missing name on every row instead of calling it a duplicate", async () => {
-      type CreateUserInput = { name?: string };
+      type CreateUserCall = { name?: string };
       (globalThis as { tailor?: unknown }).tailor = {
         idp: {
           Client: class {
-            async createUser(input: CreateUserInput) {
+            async createUser(input: CreateUserCall) {
               if (typeof input.name !== "string") throw new Error("name required");
               return { id: input.name };
             }
