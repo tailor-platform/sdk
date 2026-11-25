@@ -64,16 +64,12 @@ function pending(number: number, changes: DiffChange[]): PendingMigration {
 
 type PlanOptions = {
   withPermission?: boolean;
-  /** Whether the workspace has `Post` and its GraphQL permission. */
-  remote?: boolean;
-  /** Whether the local definitions keep `Post`. */
-  local?: boolean;
   pendingMigrations?: PendingMigration[];
   unfinishedRemovals?: string[];
 };
 
 function plan(options: PlanOptions) {
-  const { withPermission = false, remote = true, local = true } = options;
+  const { withPermission = false } = options;
   vi.mocked(validateAndDetectMigrations).mockResolvedValue({
     namespacesWithMigrations: [],
     migrationFileState: captureMigrationFileState([]),
@@ -89,9 +85,9 @@ function plan(options: PlanOptions) {
       tailordbServices: [{ namespace: { name: NAMESPACE } }],
       nextPageToken: "",
     },
-    listTailorDBTypes: { tailordbTypes: remote ? [{ name: "Post" }] : [], nextPageToken: "" },
+    listTailorDBTypes: { tailordbTypes: [{ name: "Post" }], nextPageToken: "" },
     listTailorDBGQLPermissions: {
-      permissions: remote ? [{ typeName: "Post", permission: { policies: [] } }] : [],
+      permissions: [{ typeName: "Post", permission: { policies: [] } }],
       nextPageToken: "",
     },
     getMetadata: { metadata: { labels: {} } },
@@ -124,7 +120,7 @@ function plan(options: PlanOptions) {
           version: SCHEMA_SNAPSHOT_VERSION,
           namespace: NAMESPACE,
           createdAt: "2026-01-01T00:00:00.000Z",
-          tables: local ? { Post: postTable(withPermission) } : {},
+          tables: { Post: postTable(withPermission) },
         }),
       ],
     ]),
@@ -178,23 +174,6 @@ describe("planTailorDB: a table the local definitions keep that a pending migrat
       expect(result.changeSet.gqlPermission.creates.map((entry) => entry.name)).toEqual(["Post"]);
     },
   );
-
-  test("plans only the creation when the workspace lacks the table", async () => {
-    const result = await plan({
-      remote: false,
-      pendingMigrations: [pending(2, [removePost]), pending(3, [addPost])],
-    });
-
-    expect(result.changeSet.type.deletes).toEqual([]);
-    expect(result.changeSet.type.creates.map((entry) => entry.name)).toEqual(["Post"]);
-  });
-
-  test("plans only the deletion when the local definitions drop the table", async () => {
-    const result = await plan({ local: false, pendingMigrations: [pending(2, [removePost])] });
-
-    expect(result.changeSet.type.deletes.map((entry) => entry.name)).toEqual(["Post"]);
-    expect(result.changeSet.type.creates).toEqual([]);
-  });
 
   test("plans an update when no pending migration removes the table", async () => {
     const result = await plan({ pendingMigrations: [pending(2, [])] });

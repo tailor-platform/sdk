@@ -66,7 +66,7 @@ export type NamespacedEntry = { name: string; request: { namespaceName?: string 
 /**
  * Whether the plan deletes a table and creates it again: the deletion runs before the
  * migrations or once the migration that removes the table commits, so the closing deletions
- * leave the table the migrations created.
+ * leave the table the deploy created again.
  * @param changeSet - TailorDB change set
  * @param del - A planned deletion
  * @returns Whether the plan also creates a table of that name in the namespace

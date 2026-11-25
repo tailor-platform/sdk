@@ -149,7 +149,8 @@ function entriesOfNamespace<T extends NamespacedEntry>(
  * workspace holds while the migration runs: a table a later migration removes, which this deploy
  * created from the baseline snapshot or which the plan deletes, and a table the plan leaves
  * unchanged because a later migration changes it back. Their schema follows the history like any
- * other table's, so the script sees the shape its migration defines.
+ * other table's, so the script sees the shape its migration defines. An unchanged table the
+ * migration adds is left out: rolling the migration back deletes the tables it adds.
  * @param changeSet - TailorDB change set
  * @param migration - The migration about to run
  * @returns Names of the tables
@@ -162,12 +163,17 @@ function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigr
       ...entriesOfNamespace(changeSet.type.updates, migration.namespace),
     ].map((entry) => entry.request.tailordbType?.name),
   );
-  const held = new Set(
-    [
-      ...entriesOfNamespace(changeSet.type.deletes, migration.namespace),
-      ...entriesOfNamespace(changeSet.type.unchanged, migration.namespace),
-    ].map((entry) => entry.name),
+  const added = new Set(
+    migration.diff.changes.flatMap((change) =>
+      change.kind === "table_added" || change.kind === "table_renamed" ? [change.tableName] : [],
+    ),
   );
+  const held = new Set([
+    ...entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+    ...entriesOfNamespace(changeSet.type.unchanged, migration.namespace)
+      .map((entry) => entry.name)
+      .filter((tableName) => !added.has(tableName)),
+  ]);
   return [...getAffectedTableNames(migration)].filter(
     (tableName) =>
       tableName in snapshotTables &&
@@ -730,7 +736,7 @@ export async function executeSingleMigrationPostPhase(
       );
     }
 
-    // Tables outside the plan that a later migration removes
+    // Tables the plan neither creates nor updates
     for (const tableName of planlessTableNames(changeSet, migration)) {
       if (!adjustedTypes.has(tableName)) continue;
       const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
