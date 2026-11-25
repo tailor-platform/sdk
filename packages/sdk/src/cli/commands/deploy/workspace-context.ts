@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { readFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "pathe";
+import { basename, dirname, isAbsolute, join, normalize, resolve } from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { invalidDataError } from "#/cli/shared/validation-errors";
+import { hashValue } from "./secrets-state";
 
 // strip unknown keys
 const workspaceContextSchema = z.object({
@@ -20,7 +21,14 @@ function defaultConfigPath(): string {
 }
 
 function contextPath(configPath: string): string {
-  return join(dirname(configPath), getDistDir(), `${basename(configPath)}.context.json`);
+  const distDirectory = getDistDir();
+  const configName = basename(configPath);
+  const sharedAcrossConfigDirectories =
+    isAbsolute(distDirectory) || normalize(distDirectory).split("/")[0] === "..";
+  const name = sharedAcrossConfigDirectories
+    ? `${configName}.${hashValue(configPath)}`
+    : configName;
+  return join(resolve(dirname(configPath), distDirectory), `${name}.context.json`);
 }
 
 /**
@@ -81,7 +89,6 @@ export async function saveWorkspaceContext(
     throw invalidDataError("workspace context", result.error);
   }
   const validated = result.data;
-  const stateDirectory = join(dirname(configPath), getDistDir());
   const targetPath = contextPath(configPath);
   const serialized = `${JSON.stringify(validated, null, 2)}\n`;
   try {
@@ -90,7 +97,7 @@ export async function saveWorkspaceContext(
     // Missing or unreadable state should still fall through to the atomic replacement attempt.
   }
   const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
-  await mkdir(stateDirectory, { recursive: true });
+  await mkdir(dirname(targetPath), { recursive: true });
   try {
     await writeFile(temporaryPath, serialized, { mode: 0o600 });
     await rename(temporaryPath, targetPath);
