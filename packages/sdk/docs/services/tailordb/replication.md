@@ -14,7 +14,7 @@ TailorDB replication copies the records of the tables you choose into a BigQuery
 
 ## Destinations
 
-Define a destination with `defineTailorDBReplicationDestination()` and list it in `tailordbReplicationDestinations`:
+Define a destination with `defineTailorDBReplicationDestination()` and list it in `dbReplicationDestinations`:
 
 ```typescript
 import { defineConfig, defineTailorDBReplicationDestination } from "@tailor-platform/sdk";
@@ -25,7 +25,7 @@ const warehouse = defineTailorDBReplicationDestination("warehouse", {
 
 export default defineConfig({
   name: "shop",
-  tailordbReplicationDestinations: [warehouse],
+  dbReplicationDestinations: [warehouse],
 });
 ```
 
@@ -45,7 +45,7 @@ If your Google Cloud organization restricts IAM policy members to its own domain
 
 ## Replications
 
-Define a replication with `defineTailorDBReplication()`, add each table with `.add()`, and list it in `tailordbReplications`:
+Define a replication with `defineTailorDBReplication()`, add each table with `.add()`, and list it in `dbReplications`:
 
 ```typescript
 import {
@@ -71,13 +71,13 @@ const analytics = defineTailorDBReplication("analytics", {
 export default defineConfig({
   name: "shop",
   db: { "main-db": { files: ["./tailordb/*.ts"] } },
-  tailordbReplicationDestinations: [warehouse],
-  tailordbReplications: [analytics],
+  dbReplicationDestinations: [warehouse],
+  dbReplications: [analytics],
 });
 ```
 
 - `source.namespace` must be a namespace this config defines in `db`; an external namespace is replicated from the config that defines it.
-- `destination` must be a destination listed in `tailordbReplicationDestinations` of the same config.
+- `destination` must be a destination listed in `dbReplicationDestinations` of the same config.
 - Each table passed to `.add()` must be loaded by the namespace's `files`, and can be added once.
 - `.add()` returns a new replication and leaves the one it was called on unchanged.
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.

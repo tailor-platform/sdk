@@ -86,8 +86,8 @@ describe("shouldForceApplyAll", () => {
       application: {
         staticWebsiteServices: [],
         aiGatewayServices: [],
-        tailordbReplicationDestinations: [],
-        tailordbReplications: [],
+        dbReplicationDestinations: [],
+        dbReplications: [],
         resolverServices: [],
         idpServices: [],
         authServices: [],
@@ -1929,8 +1929,8 @@ function fakeTarget(
         ),
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
-      tailordbReplicationDestinations: [],
-      tailordbReplications: [],
+      dbReplicationDestinations: [],
+      dbReplications: [],
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
       authServices: bundles.authNamespace
         ? [

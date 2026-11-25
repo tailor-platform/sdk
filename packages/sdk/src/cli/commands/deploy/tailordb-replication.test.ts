@@ -140,8 +140,8 @@ type ContextParams = {
 function contextOf(client: OperatorClient, params: ContextParams = {}): PlanContext {
   const application = {
     name: "shop",
-    tailordbReplicationDestinations: params.destinations ?? [warehouse],
-    tailordbReplications: params.replications ?? [],
+    dbReplicationDestinations: params.destinations ?? [warehouse],
+    dbReplications: params.replications ?? [],
   } as unknown as Application;
   return {
     client,

@@ -397,8 +397,8 @@ export async function planTailorDBReplication(
     }),
   ]);
 
-  const desiredDestinations = forRemoval ? [] : application.tailordbReplicationDestinations;
-  const desiredReplications = forRemoval ? [] : application.tailordbReplications;
+  const desiredDestinations = forRemoval ? [] : application.dbReplicationDestinations;
+  const desiredReplications = forRemoval ? [] : application.dbReplications;
   assertDestinationsUnmoved(desiredDestinations, existingDestinations);
 
   const destinationChecks = labeledResourceChecks(ownership, "tailordb.replication_destination");

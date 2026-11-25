@@ -140,8 +140,8 @@ export type ConfigServices = {
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly aiGatewayServices: ReadonlyArray<AIGateway>;
-  readonly tailordbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestination>;
-  readonly tailordbReplications: ReadonlyArray<TailorDBReplication>;
+  readonly dbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestination>;
+  readonly dbReplications: ReadonlyArray<TailorDBReplication>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
@@ -198,8 +198,8 @@ const SERVICE_LABELS = {
   auth: "Auth service",
   staticWebsites: "static website",
   aiGateways: "AI Gateway",
-  tailordbReplicationDestinations: "TailorDB replication destination",
-  tailordbReplications: "TailorDB replication",
+  dbReplicationDestinations: "TailorDB replication destination",
+  dbReplications: "TailorDB replication",
   secrets: "secret manager",
 } as const;
 
@@ -619,14 +619,14 @@ function defineAIGateways(
 
 type CheckTailorDBReplicationSourcesParams = {
   configPath: string;
-  tailordbReplications: ReadonlyArray<TailorDBReplication>;
+  dbReplications: ReadonlyArray<TailorDBReplication>;
   tailorDBServices: ReadonlyArray<TailorDBService>;
   externalTailorDBNamespaces: ReadonlyArray<string>;
 };
 
 type DefineTailorDBReplicationsResult = {
-  tailordbReplicationDestinations: TailorDBReplicationDestination[];
-  tailordbReplications: TailorDBReplication[];
+  dbReplicationDestinations: TailorDBReplicationDestination[];
+  dbReplications: TailorDBReplication[];
 };
 
 function datasetKey(destination: TailorDBReplicationDestination): string {
@@ -680,11 +680,11 @@ function checkReplicatedTypes(
 
 function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplicationsResult {
   const config = source.settings;
-  const destinationInputs = source.tailordbReplicationDestinations;
-  const replicationInputs = source.tailordbReplications;
+  const destinationInputs = source.dbReplicationDestinations;
+  const replicationInputs = source.dbReplications;
   for (const [kind, configKey, inputs] of [
-    ["tailordb-replication-destination", "tailordbReplicationDestinations", destinationInputs],
-    ["tailordb-replication", "tailordbReplications", replicationInputs],
+    ["tailordb-replication-destination", "dbReplicationDestinations", destinationInputs],
+    ["tailordb-replication", "dbReplications", replicationInputs],
   ] as const) {
     assertUniqueDefinitionNames({
       kind,
@@ -699,15 +699,15 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
     });
   }
 
-  const tailordbReplicationDestinations = destinationInputs.map((input, index) =>
+  const dbReplicationDestinations = destinationInputs.map((input, index) =>
     parseServiceConfig(TailorDBReplicationDestinationSchema, input, {
       file: config.path,
-      configKey: "tailordbReplicationDestinations",
+      configKey: "dbReplicationDestinations",
       key: index,
       name: input.name,
     }),
   );
-  const tailordbReplications = replicationInputs.map((input, index) =>
+  const dbReplications = replicationInputs.map((input, index) =>
     parseServiceConfig(
       TailorDBReplicationSchema,
       {
@@ -718,29 +718,29 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
         enabled: input.enabled,
         types: input.types,
       },
-      { file: config.path, configKey: "tailordbReplications", key: index, name: input.name },
+      { file: config.path, configKey: "dbReplications", key: index, name: input.name },
     ),
   );
 
   const issues: FlatIssue[] = [];
   const destinationByDataset = new Map<string, string>();
-  tailordbReplicationDestinations.forEach((destination, index) => {
+  dbReplicationDestinations.forEach((destination, index) => {
     const other = destinationByDataset.get(datasetKey(destination));
     if (other !== undefined) {
       issues.push({
-        path: ["tailordbReplicationDestinations", index, "bigquery"],
+        path: ["dbReplicationDestinations", index, "bigquery"],
         message: `Destination "${destination.name}" writes to the same dataset as destination "${other}"`,
       });
     }
     destinationByDataset.set(datasetKey(destination), destination.name);
   });
 
-  const destinationNames = new Set(tailordbReplicationDestinations.map(({ name }) => name));
-  tailordbReplications.forEach((replication, index) => {
+  const destinationNames = new Set(dbReplicationDestinations.map(({ name }) => name));
+  dbReplications.forEach((replication, index) => {
     if (!destinationNames.has(replication.destination)) {
       issues.push({
-        path: ["tailordbReplications", index, "destination"],
-        message: `Destination "${replication.destination}" is not in tailordbReplicationDestinations`,
+        path: ["dbReplications", index, "destination"],
+        message: `Destination "${replication.destination}" is not in dbReplicationDestinations`,
       });
     }
   });
@@ -752,7 +752,7 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
       issues,
     });
   }
-  return { tailordbReplicationDestinations, tailordbReplications };
+  return { dbReplicationDestinations, dbReplications };
 }
 
 /**
@@ -761,11 +761,11 @@ function defineTailorDBReplications(source: ServiceSource): DefineTailorDBReplic
  * @param params - Parsed replications and the loaded TailorDB services
  */
 function checkTailorDBReplicationSources(params: CheckTailorDBReplicationSourcesParams): void {
-  const { configPath, tailordbReplications, tailorDBServices, externalTailorDBNamespaces } = params;
+  const { configPath, dbReplications, tailorDBServices, externalTailorDBNamespaces } = params;
   const issues: FlatIssue[] = [];
   const services = new Map(tailorDBServices.map((service) => [service.namespace, service]));
-  tailordbReplications.forEach((replication, index) => {
-    const path = ["tailordbReplications", index];
+  dbReplications.forEach((replication, index) => {
+    const path = ["dbReplications", index];
     const { namespace } = replication.source;
     const service = services.get(namespace);
     if (service) {
@@ -858,8 +858,8 @@ interface ServiceSource {
   pluginResolverOutputKey: string;
   idps: ReadonlyArray<ServiceEntry<IdPConfig>>;
   auths: ReadonlyArray<ServiceEntry<AuthConfig, string>>;
-  tailordbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestinationConfig>;
-  tailordbReplications: ReadonlyArray<TailorDBReplicationConfig>;
+  dbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestinationConfig>;
+  dbReplications: ReadonlyArray<TailorDBReplicationConfig>;
 }
 
 function configServiceSource(config: LoadedConfig): ServiceSource {
@@ -871,8 +871,8 @@ function configServiceSource(config: LoadedConfig): ServiceSource {
       key: isIdpConfigList(config.idp) ? index : undefined,
     })),
     auths: config.auth ? [{ config: config.auth }] : [],
-    tailordbReplicationDestinations: config.tailordbReplicationDestinations ?? [],
-    tailordbReplications: config.tailordbReplications ?? [],
+    dbReplicationDestinations: config.dbReplicationDestinations ?? [],
+    dbReplications: config.dbReplications ?? [],
   };
 }
 
@@ -888,8 +888,8 @@ function workspaceServiceSource(workspace: LoadedWorkspaceConfig): ServiceSource
       config: auth,
       key: singleServiceKey(workspace.definedBy, name),
     })),
-    tailordbReplicationDestinations: [],
-    tailordbReplications: [],
+    dbReplicationDestinations: [],
+    dbReplications: [],
   };
 }
 
@@ -960,8 +960,8 @@ function buildConfigServices(params: BuildConfigServicesParams): ConfigServices 
     httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
     aiGatewayServices: params.aiGatewayServices,
-    tailordbReplicationDestinations: params.replicationResult.tailordbReplicationDestinations,
-    tailordbReplications: params.replicationResult.tailordbReplications,
+    dbReplicationDestinations: params.replicationResult.dbReplicationDestinations,
+    dbReplications: params.replicationResult.dbReplications,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
@@ -1396,7 +1396,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   });
   checkTailorDBReplicationSources({
     configPath: settings.path,
-    tailordbReplications: replicationResult.tailordbReplications,
+    dbReplications: replicationResult.dbReplications,
     tailorDBServices: tailordbResult.tailorDBServices,
     externalTailorDBNamespaces: tailordbResult.externalTailorDBNamespaces,
   });

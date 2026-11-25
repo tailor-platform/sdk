@@ -21,9 +21,7 @@ const user = db.table("User", {
 });
 
 function configOf(
-  overrides: Partial<
-    Pick<AppConfig, "db" | "tailordbReplicationDestinations" | "tailordbReplications">
-  >,
+  overrides: Partial<Pick<AppConfig, "db" | "dbReplicationDestinations" | "dbReplications">>,
   dir = "/project",
 ) {
   return {
@@ -42,15 +40,15 @@ describe("defineApplication TailorDB replications", () => {
 
     const application = defineApplication({
       config: configOf({
-        tailordbReplicationDestinations: [warehouse],
-        tailordbReplications: [replication],
+        dbReplicationDestinations: [warehouse],
+        dbReplications: [replication],
       }),
     });
 
-    expect(application.tailordbReplicationDestinations).toEqual([
+    expect(application.dbReplicationDestinations).toEqual([
       { name: "warehouse", bigquery: { project: "acme-analytics", dataset: "tailor" } },
     ]);
-    expect(application.tailordbReplications).toEqual([
+    expect(application.dbReplications).toEqual([
       {
         name: "analytics",
         source: { namespace: "main-db" },
@@ -69,12 +67,12 @@ describe("defineApplication TailorDB replications", () => {
     });
 
     expect(() =>
-      defineApplication({ config: configOf({ tailordbReplications: [replication] }) }),
+      defineApplication({ config: configOf({ dbReplications: [replication] }) }),
     ).toThrow(
       expect.objectContaining({
         code: "CONFIG_INVALID",
         message: expect.stringContaining(
-          'tailordbReplications.0.destination: Destination "lake" is not in tailordbReplicationDestinations',
+          'dbReplications.0.destination: Destination "lake" is not in dbReplicationDestinations',
         ),
       }),
     );
@@ -87,12 +85,12 @@ describe("defineApplication TailorDB replications", () => {
 
     expect(() =>
       defineApplication({
-        config: configOf({ tailordbReplicationDestinations: [warehouse, copy] }),
+        config: configOf({ dbReplicationDestinations: [warehouse, copy] }),
       }),
     ).toThrow(
       expect.objectContaining({
         message: expect.stringContaining(
-          'tailordbReplicationDestinations.1.bigquery: Destination "warehouse-copy" writes to the same dataset as destination "warehouse"',
+          'dbReplicationDestinations.1.bigquery: Destination "warehouse-copy" writes to the same dataset as destination "warehouse"',
         ),
       }),
     );
@@ -107,8 +105,8 @@ describe("defineApplication TailorDB replications", () => {
     expect(() =>
       defineApplication({
         config: configOf({
-          tailordbReplicationDestinations: [warehouse],
-          tailordbReplications: [replication, replication],
+          dbReplicationDestinations: [warehouse],
+          dbReplications: [replication, replication],
         }),
       }),
     ).toThrow(expect.objectContaining({ code: "DEFINITION_NAME_DUPLICATE" }));
@@ -123,8 +121,8 @@ describe("defineApplication TailorDB replications", () => {
     expect(() =>
       defineApplication({
         config: configOf({
-          tailordbReplicationDestinations: [warehouse],
-          tailordbReplications: [replication],
+          dbReplicationDestinations: [warehouse],
+          dbReplications: [replication],
         }),
       }),
     ).toThrow(
@@ -173,8 +171,8 @@ export const user = db
             "main-db": { files: [path.join(tmpDir, "user.ts")] },
             "shared-db": { external: true },
           },
-          tailordbReplicationDestinations: [warehouse],
-          tailordbReplications: [replication],
+          dbReplicationDestinations: [warehouse],
+          dbReplications: [replication],
         },
         tmpDir,
       ),
@@ -187,7 +185,7 @@ export const user = db
   test("accepts types the namespace loads, with their fields", async () => {
     const { application } = await load(base().add(user, { includeFields: ["name", "email"] }));
 
-    expect(application.tailordbReplications[0]?.types).toEqual([
+    expect(application.dbReplications[0]?.types).toEqual([
       { name: "User", includeFields: ["name", "email"] },
     ]);
   });
@@ -197,37 +195,37 @@ export const user = db
       title: "a namespace not in db",
       replication: base("other-db"),
       issue:
-        'tailordbReplications.0.source.namespace: TailorDB namespace "other-db" is not configured in db',
+        'dbReplications.0.source.namespace: TailorDB namespace "other-db" is not configured in db',
     },
     {
       title: "an external namespace",
       replication: base("shared-db"),
       issue:
-        'tailordbReplications.0.source.namespace: TailorDB namespace "shared-db" is external; replicate it from the config that defines it',
+        'dbReplications.0.source.namespace: TailorDB namespace "shared-db" is external; replicate it from the config that defines it',
     },
     {
       title: "a type the namespace does not load",
       replication: base().add(db.table("Order", { total: db.int() })),
       issue:
-        'tailordbReplications.0.types.0.name: Type "Order" is not loaded by the files of TailorDB namespace "main-db"',
+        'dbReplications.0.types.0.name: Type "Order" is not loaded by the files of TailorDB namespace "main-db"',
     },
     {
       title: "a type added twice",
       replication: base().add(user).add(user),
       issue:
-        'tailordbReplications.0.types.1.name: Type "User" is added to the replication more than once',
+        'dbReplications.0.types.1.name: Type "User" is added to the replication more than once',
     },
     {
       title: "a field the type does not have",
       replication: base().add(user, { excludeFields: ["phone"] } as never),
       issue:
-        'tailordbReplications.0.types.0.excludeFields.0: Type "User" has no field "phone" to replicate',
+        'dbReplications.0.types.0.excludeFields.0: Type "User" has no field "phone" to replicate',
     },
     {
       title: "a vector field in includeFields",
       replication: base().add(user, { includeFields: ["embedding"] } as never),
       issue:
-        'tailordbReplications.0.types.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
+        'dbReplications.0.types.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
     },
   ])("rejects $title", async ({ replication, issue }) => {
     await expect(load(replication)).rejects.toMatchObject({

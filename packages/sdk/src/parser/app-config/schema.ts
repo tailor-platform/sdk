@@ -120,8 +120,8 @@ const appConfigObjectSchema = z.strictObject({
   httpAdapter: z.unknown().optional(),
   staticWebsites: z.unknown().optional(),
   aiGateways: z.unknown().optional(),
-  tailordbReplicationDestinations: z.unknown().optional(),
-  tailordbReplications: z.unknown().optional(),
+  dbReplicationDestinations: z.unknown().optional(),
+  dbReplications: z.unknown().optional(),
   secrets: z.unknown().optional(),
 });
 

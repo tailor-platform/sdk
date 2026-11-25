@@ -25,7 +25,7 @@ export type TailorDBReplicationDestinationServiceInput = Omit<
   "name"
 >;
 
-/** Type accepted by `AppConfig.tailordbReplicationDestinations`. Only values returned by `defineTailorDBReplicationDestination()` satisfy this. */
+/** Type accepted by `AppConfig.dbReplicationDestinations`. Only values returned by `defineTailorDBReplicationDestination()` satisfy this. */
 export type TailorDBReplicationDestinationConfig = TailorDBReplicationDestinationInput &
   TailorDBReplicationDestinationDefinitionBrand;
 
@@ -64,6 +64,6 @@ export interface TailorDBReplicationDefinition extends TailorDBReplicationServic
   ): TailorDBReplicationDefinition & TailorDBReplicationDefinitionBrand;
 }
 
-/** Type accepted by `AppConfig.tailordbReplications`. Only values returned by `defineTailorDBReplication()` satisfy this. */
+/** Type accepted by `AppConfig.dbReplications`. Only values returned by `defineTailorDBReplication()` satisfy this. */
 export type TailorDBReplicationConfig = TailorDBReplicationDefinition &
   TailorDBReplicationDefinitionBrand;

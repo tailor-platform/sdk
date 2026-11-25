@@ -258,12 +258,12 @@ export async function shouldForceApplyAll(
   application.aiGatewayServices.forEach((gateway) => {
     candidateTrns.add(resourceTrn(workspaceId, "aigateway", gateway.name));
   });
-  application.tailordbReplicationDestinations.forEach((destination) => {
+  application.dbReplicationDestinations.forEach((destination) => {
     candidateTrns.add(
       resourceTrn(workspaceId, "tailordb_replication_destination", destination.name),
     );
   });
-  application.tailordbReplications.forEach((replication) => {
+  application.dbReplications.forEach((replication) => {
     candidateTrns.add(resourceTrn(workspaceId, "tailordb_replication", replication.name));
   });
   application.resolverServices.forEach((pipeline) => {

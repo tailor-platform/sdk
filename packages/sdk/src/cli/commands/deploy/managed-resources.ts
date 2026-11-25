@@ -465,11 +465,11 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   },
   {
     resourceType: "tailordb.replication",
-    namesOf: (target) => target.application.tailordbReplications.map(({ name }) => name),
+    namesOf: (target) => target.application.dbReplications.map(({ name }) => name),
   },
   {
     resourceType: "tailordb.replication_destination",
-    namesOf: (target) => target.application.tailordbReplicationDestinations.map(({ name }) => name),
+    namesOf: (target) => target.application.dbReplicationDestinations.map(({ name }) => name),
   },
   {
     resourceType: "tailordb.service",

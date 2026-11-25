@@ -153,8 +153,8 @@ beforeEach(() => {
     authServices: [],
     staticWebsiteServices: [{ name: "web" }],
     aiGatewayServices: [],
-    tailordbReplicationDestinations: [],
-    tailordbReplications: [],
+    dbReplicationDestinations: [],
+    dbReplications: [],
     secrets: [],
     env: {},
   };

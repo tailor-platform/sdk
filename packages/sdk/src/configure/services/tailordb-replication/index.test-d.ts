@@ -57,14 +57,14 @@ describe("TailorDB replication types", () => {
     assertType(
       defineConfig({
         name: "shop",
-        tailordbReplicationDestinations: [warehouse],
-        tailordbReplications: [replication.add(user)],
+        dbReplicationDestinations: [warehouse],
+        dbReplications: [replication.add(user)],
       }),
     );
     assertType(
       defineConfig({
         name: "shop",
-        tailordbReplicationDestinations: [
+        dbReplicationDestinations: [
           // @ts-expect-error only defineTailorDBReplicationDestination() results
           { name: "warehouse", bigquery: { project: "acme-analytics", dataset: "tailor" } },
         ],

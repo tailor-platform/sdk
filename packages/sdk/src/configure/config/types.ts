@@ -233,7 +233,7 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Single IdP config, e.g. `myIdp`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
- * - `tailordbReplicationDestinations` / `tailordbReplications`: Arrays of TailorDB replication configs
+ * - `dbReplicationDestinations` / `dbReplications`: Arrays of TailorDB replication configs
  * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
@@ -310,9 +310,9 @@ export interface AppConfig<
   /** AI Gateway configurations. Must be an array, e.g. `[gateway]`. */
   aiGateways?: AIGateways;
   /** BigQuery datasets that TailorDB replications write into. Must be an array, e.g. `[warehouse]`. */
-  tailordbReplicationDestinations?: TailorDBReplicationDestinationConfig[];
-  /** Replications of TailorDB types into `tailordbReplicationDestinations`. Must be an array, e.g. `[analytics]`. */
-  tailordbReplications?: TailorDBReplicationConfig[];
+  dbReplicationDestinations?: TailorDBReplicationDestinationConfig[];
+  /** Replications of TailorDB types into `dbReplicationDestinations`. Must be an array, e.g. `[analytics]`. */
+  dbReplications?: TailorDBReplicationConfig[];
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
   secrets?: SecretsConfig;
   /**

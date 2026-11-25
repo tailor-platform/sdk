@@ -55,8 +55,8 @@ function workspaceTarget(plugins: Plugin[], apps: readonly string[]): BuiltDeplo
   const application = {
     staticWebsiteServices: [{ name: "front" }, { name: "console" }],
     aiGatewayServices: [],
-    tailordbReplicationDestinations: [],
-    tailordbReplications: [],
+    dbReplicationDestinations: [],
+    dbReplications: [],
     authServices: [{ config: { name: "auth" } }],
   };
   return {
