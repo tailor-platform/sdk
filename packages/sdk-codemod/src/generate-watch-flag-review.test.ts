@@ -24,6 +24,16 @@ describe("generate --watch review", () => {
       JSON.stringify({ scripts: { gen: "tailor generate \\\n  --watch" } }),
     ],
     [
+      "a cmd caret line continuation before --watch in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { gen: "tailor generate ^\r\n  --watch" } }),
+    ],
+    [
+      "a PowerShell backtick line continuation before --watch in a package.json script",
+      "package.json",
+      JSON.stringify({ scripts: { gen: "tailor generate `\n  --watch" } }),
+    ],
+    [
       "the watch option of generate() in a node -e script of a package.json",
       "package.json",
       JSON.stringify({ scripts: { gen: 'node -e "generate({ watch: true })"' } }),

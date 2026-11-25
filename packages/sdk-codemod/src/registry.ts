@@ -58,7 +58,7 @@ const FUNCTION_RUN_NAME_DECODED_STRING_PATTERN = functionRunNamePattern(true);
 
 const GENERATE_WATCH_FLAG_PATTERN = /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/;
 const GENERATE_WATCH_FLAG_DECODED_STRING_PATTERN =
-  /\bgenerate\b(?:\\\r?\n|[^\n])*?(?:--watch\b|\s-W\b)/;
+  /\bgenerate\b(?:[\\^\x60]\r?\n|[^\n])*?(?:--watch\b|\s-W\b)/;
 const GENERATE_WATCH_OPTION_PATTERNS = [/\bgenerate\s*\(/, /\bwatch\s*:/];
 
 const FUNCTION_SCRIPT_COMMAND_PATTERN =
