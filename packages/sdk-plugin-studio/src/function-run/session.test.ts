@@ -37,13 +37,11 @@ function setup(
   const run = controllableRun();
   const startRun = vi.fn((_input: RunInput) => run.handle);
   let current = selection;
-  let clock = 0;
   const session = createRunSession({
     startRun,
     file: "/p/function.ts",
     runArgFile: "/tmp/arg.json",
     getSelection: () => current,
-    now: () => clock,
   });
   const events: SessionEvent[] = [];
   session.subscribe((event) => events.push(event));
@@ -52,9 +50,6 @@ function setup(
     run,
     startRun,
     events,
-    at: (time: number) => {
-      clock = time;
-    },
     select: (next: { profile?: string; workspaceId?: string }) => {
       current = next;
     },
@@ -81,7 +76,7 @@ describe("start", () => {
       expect.objectContaining({
         file: "/p/function.ts",
         argFile: "/tmp/arg.json",
-        workspaceArgs: ["--profile=test", "--workspace-id=ws-1"],
+        workspace: { profile: "test", workspaceId: "ws-1" },
       }),
     );
   });
@@ -128,7 +123,7 @@ describe("start", () => {
   test("clears what the previous watch showed", async () => {
     const { session, run } = setup();
     session.start();
-    run.push({ type: "stderr", line: "old" });
+    run.push({ type: "note", text: "old" });
     await settle();
     session.stop();
 
@@ -138,24 +133,37 @@ describe("start", () => {
   });
 });
 
-describe("what the run prints", () => {
-  test("turns each line into an entry with a sequence number and a time", async () => {
+describe("what the run reports", () => {
+  test("turns a run, a failure and a note into entries with a sequence number and a time", async () => {
     const { session, run, events } = setup();
     session.start();
 
-    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
-    run.push({ type: "stderr", line: '{"error":{"message":"boom"}}' });
-    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    run.push({ type: "started" });
+    run.push({ type: "finished", record: { success: true, result: "3" } });
+    run.push({ type: "failed", text: "boom" });
+    run.push({ type: "note", text: "a warning" });
     await settle();
 
     const entries = session.snapshot().entries;
     expect(entries.map((entry) => [entry.seq, entry.message])).toEqual([
       [1, { type: "run", record: { success: true, result: "3" } }],
       [2, { type: "failure", text: "boom" }],
-      [3, { type: "note", text: "Ready! Running f.ts" }],
+      [3, { type: "note", text: "a warning" }],
     ]);
     expect(entries.every((entry) => !Number.isNaN(Date.parse(entry.at)))).toBe(true);
     expect(events.filter((event) => event.type === "entry")).toHaveLength(3);
+  });
+
+  test("notes that the watch is ready", async () => {
+    const { session, run } = setup();
+    session.start();
+
+    run.push({ type: "ready" });
+    await settle();
+
+    expect(session.snapshot().entries.map((entry) => entry.message)).toEqual([
+      { type: "note", text: "Ready! Running function.ts on every save." },
+    ]);
   });
 
   test("keeps only the newest entries", async () => {
@@ -169,7 +177,7 @@ describe("what the run prints", () => {
     });
     session.start();
 
-    for (const line of ["one", "two", "three"]) run.push({ type: "stderr", line });
+    for (const text of ["one", "two", "three"]) run.push({ type: "note", text });
     await settle();
 
     expect(session.snapshot().entries.map((entry) => entry.seq)).toEqual([2, 3]);
@@ -177,162 +185,114 @@ describe("what the run prints", () => {
 });
 
 describe("running", () => {
-  const runOf = (n: number) => JSON.stringify({ success: true, result: String(n) });
+  const finished = { type: "finished", record: { success: true, result: "1" } } as const;
 
   test("is true from the start until the first run reports back", async () => {
     const { session, run } = setup();
 
     session.start();
     const before = session.snapshot().running;
-    run.push({ type: "stdout", line: runOf(1) });
+    run.push({ type: "ready" });
+    run.push({ type: "started" });
+    await settle();
+    const during = session.snapshot().running;
+    run.push(finished);
     await settle();
 
-    expect([before, session.snapshot().running]).toEqual([true, false]);
+    expect([before, during, session.snapshot().running]).toEqual([true, true, false]);
   });
 
-  test("turns true again when an input changes, until the run it triggers reports back", async () => {
+  test("turns true when a file change is scheduled, and false when the run it starts reports back", async () => {
     const { session, run } = setup();
     session.start();
-    run.push({ type: "stdout", line: runOf(1) });
+    run.push({ type: "started" });
+    run.push(finished);
     await settle();
 
-    session.markInputsChanged();
-    const afterEdit = session.snapshot().running;
-    run.push({ type: "stderr", line: JSON.stringify({ error: { message: "boom" } }) });
+    run.push({ type: "scheduled" });
+    await settle();
+    const scheduled = session.snapshot().running;
+    run.push({ type: "started" });
+    await settle();
+    const started = session.snapshot().running;
+    run.push(finished);
     await settle();
 
-    expect([afterEdit, session.snapshot().running]).toEqual([true, false]);
+    expect([scheduled, started, session.snapshot().running]).toEqual([true, true, false]);
   });
 
-  test("stays true through the run an edit queues behind a run in flight, until the run for that edit reports back", async () => {
-    const { session, run, at } = setup();
+  test("stays true through the run a change queues behind a run in flight, until that run reports back", async () => {
+    const { session, run } = setup();
     session.start();
-    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    run.push({ type: "started" });
+    run.push({ type: "scheduled" });
+    run.push({ type: "queued" });
+    run.push(finished);
+    await settle();
+    const betweenRuns = session.snapshot().running;
+    run.push({ type: "started" });
+    await settle();
+    run.push(finished);
     await settle();
 
-    at(1000);
-    session.markInputsChanged();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-    const afterRunInFlight = session.snapshot().running;
-    run.push({ type: "stdout", line: runOf(2) });
-    await settle();
-
-    expect([afterRunInFlight, session.snapshot().running]).toEqual([true, false]);
+    expect([betweenRuns, session.snapshot().running]).toEqual([true, false]);
   });
 
-  test("expects one run for the edits that land within the watch's debounce", async () => {
-    const { session, run, at } = setup();
+  test("counts any number of changes during a run as one more run", async () => {
+    const { session, run } = setup();
     session.start();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    at(5000);
-    session.markInputsChanged();
-    at(5050);
-    session.markInputsChanged();
-    run.push({ type: "stdout", line: runOf(2) });
+    run.push({ type: "started" });
+    run.push({ type: "scheduled" });
+    run.push({ type: "queued" });
+    run.push({ type: "scheduled" });
+    run.push(finished);
+    run.push({ type: "started" });
+    run.push(finished);
     await settle();
 
     expect(session.snapshot().running).toBe(false);
   });
 
-  test("counts saves 120 ms apart as two runs, since the watch waits 100 ms after a save", async () => {
+  test("is true again for a change that arrives while the queued run is the one in flight", async () => {
     const { session, run } = setup();
     session.start();
-    run.push({ type: "stdout", line: runOf(1) });
+    run.push({ type: "started" });
+    run.push(finished);
+    run.push({ type: "scheduled" });
+    run.push({ type: "started" });
+    run.push({ type: "scheduled" });
+    run.push({ type: "queued" });
+    run.push(finished);
     await settle();
-
-    session.markInputsChanged(5000);
-    session.markInputsChanged(5120);
-    run.push({ type: "stdout", line: runOf(2) });
-    await settle();
-    const afterFirst = session.snapshot().running;
-    run.push({ type: "stdout", line: runOf(3) });
-    await settle();
-
-    expect([afterFirst, session.snapshot().running]).toEqual([true, false]);
-  });
-
-  test("does not wait for a run that had already reported back by the time the edit was seen", async () => {
-    const { session, run, at } = setup();
-    session.start();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    at(5200);
-    run.push({ type: "stderr", line: JSON.stringify({ error: { message: "build failed" } }) });
-    await settle();
-    at(5300);
-    session.markInputsChanged(5000);
-
-    expect(session.snapshot().running).toBe(false);
-  });
-
-  test("waits for the run an argument edit triggers when an old run ended between the save and the copy the watch sees", async () => {
-    const { session, run, at } = setup();
-    session.start();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    at(1200);
-    run.push({ type: "stdout", line: runOf(2) });
-    await settle();
-    at(1300);
-    session.markInputsChanged(1300);
-    const whileRunning = session.snapshot().running;
-    run.push({ type: "stdout", line: runOf(3) });
-    await settle();
-
-    expect([whileRunning, session.snapshot().running]).toEqual([true, false]);
-  });
-
-  test("still waits when a run reported back right after the edit, since it started before it", async () => {
-    const { session, run, at } = setup();
-    session.start();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    at(5050);
-    run.push({ type: "stdout", line: runOf(2) });
-    await settle();
-    at(5300);
-    session.markInputsChanged(5000);
 
     expect(session.snapshot().running).toBe(true);
   });
 
-  test("expects only the first run for an edit made before the watch reports it is ready", async () => {
-    const { session, run, at } = setup();
-    session.start();
-
-    at(1000);
-    session.markInputsChanged();
-    run.push({ type: "stderr", line: "Ready! Running f.ts" });
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    expect(session.snapshot().running).toBe(false);
-  });
-
-  test("ignores a run nobody expects, such as one an imported file started", async () => {
+  test("is false after a run fails, since a failure ends the run like a result does", async () => {
     const { session, run } = setup();
     session.start();
-    run.push({ type: "stdout", line: runOf(1) });
-    await settle();
-
-    run.push({ type: "stdout", line: runOf(2) });
+    run.push({ type: "started" });
+    run.push({ type: "failed", text: "boom" });
     await settle();
 
     expect(session.snapshot().running).toBe(false);
   });
 
-  test("ignores an input change while nothing is watching", () => {
-    const { session, events } = setup();
+  test("announces each change of running once", async () => {
+    const { session, run, events } = setup();
+    session.start();
+    events.length = 0;
 
-    session.markInputsChanged();
+    run.push({ type: "started" });
+    run.push({ type: "scheduled" });
+    run.push(finished);
+    run.push({ type: "started" });
+    run.push(finished);
+    await settle();
 
-    expect([session.snapshot().running, events]).toEqual([false, []]);
+    expect(events.filter((event) => event.type === "status")).toEqual([
+      { type: "status", status: "watching", running: false },
+    ]);
   });
 
   test("is false once the watch is stopped", () => {
@@ -357,8 +317,8 @@ describe("latestRun", () => {
     });
     session.start();
 
-    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
-    for (const line of ["one", "two", "three"]) run.push({ type: "stderr", line });
+    run.push({ type: "finished", record: { success: true, result: "3" } });
+    for (const text of ["one", "two", "three"]) run.push({ type: "note", text });
     await settle();
 
     expect([
@@ -370,7 +330,7 @@ describe("latestRun", () => {
   test("is cleared when a new watch starts", async () => {
     const { session, run } = setup();
     session.start();
-    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    run.push({ type: "finished", record: { success: true, result: "3" } });
     await settle();
     session.stop();
 
@@ -386,7 +346,7 @@ describe("stop", () => {
     session.start();
 
     session.stop();
-    run.push({ type: "stderr", line: "late" });
+    run.push({ type: "note", text: "late" });
     await settle();
 
     expect([
@@ -443,14 +403,14 @@ describe("checkSelection", () => {
 
     expect([
       run.stop.mock.calls.length,
-      startRun.mock.calls.map(([input]) => input.workspaceArgs),
+      startRun.mock.calls.map(([input]) => input.workspace),
       session.snapshot().status,
       session.snapshot().entries.map((entry) => entry.message),
     ]).toEqual([
       1,
       [
-        ["--profile=test", "--workspace-id=ws-1"],
-        ["--profile=dev", "--workspace-id=ws-2"],
+        { profile: "test", workspaceId: "ws-1" },
+        { profile: "dev", workspaceId: "ws-2" },
       ],
       "watching",
       [

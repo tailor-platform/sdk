@@ -11,7 +11,7 @@ export interface TabSpec {
   packageName: string;
 }
 
-export function resolvePackageDir(packageName: string, projectDir: string): string | undefined {
+function resolvePackageDir(packageName: string, projectDir: string): string | undefined {
   let entry: string;
   try {
     entry = createRequire(path.join(projectDir, "noop.js")).resolve(packageName);

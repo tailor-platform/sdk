@@ -224,16 +224,16 @@ describe("GET /events", () => {
   test("replays what the run already printed, then goes on with what it prints next", async () => {
     const { handler, session, run } = await setup();
     session.start();
-    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    run.push({ type: "note", text: "a warning" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const response = await handler(events(), context);
     const pending = readFrames(response, (frames) => frames.length >= 3);
-    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    run.push({ type: "finished", record: { success: true, result: "3" } });
     const frames = await pending;
 
     expect(eventNames(frames)).toEqual(["event: state", "event: entry", "event: entry"]);
-    expect(dataOf(frames[1]!).message).toEqual({ type: "note", text: "Ready! Running f.ts" });
+    expect(dataOf(frames[1]!).message).toEqual({ type: "note", text: "a warning" });
     expect(dataOf(frames[2]!).message).toEqual({
       type: "run",
       record: { success: true, result: "3" },
@@ -347,9 +347,9 @@ describe("POST /start and /stop", () => {
 
     const response = await handler(send("POST", "/start"), context);
 
-    expect([response.status, startRun.mock.calls[0]![0].workspaceArgs]).toEqual([
+    expect([response.status, startRun.mock.calls[0]![0].workspace]).toEqual([
       204,
-      ["--profile=test", "--workspace-id=ws-1"],
+      { profile: "test", workspaceId: "ws-1" },
     ]);
   });
 

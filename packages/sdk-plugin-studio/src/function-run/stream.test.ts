@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { interpret, parseEventFrame, splitFrames } from "./stream";
+import { describeFailure, parseEventFrame, splitFrames } from "./stream";
 
 describe("splitFrames", () => {
   test("returns the complete frames and keeps the unfinished tail", () => {
@@ -33,61 +33,20 @@ describe("parseEventFrame", () => {
   });
 });
 
-describe("interpret", () => {
-  test("reads a stdout JSON line as a run record", () => {
-    const record = { success: true, functionName: "add", executionId: "e1", result: "3" };
-
-    expect(interpret("stdout", JSON.stringify(record))).toEqual({ type: "run", record });
-  });
-
-  test.each([
-    ["an error that is not a string", '{"error":123}'],
-    ["no success flag", '{"result":"3"}'],
-    ["a success that is not a boolean", '{"success":"yes"}'],
-    ["a result that is not a string", '{"success":true,"result":3}'],
-    ["a logs value that is not a string", '{"success":true,"logs":["a"]}'],
-    ["a JSON array", "[1,2]"],
-  ])(
-    "shows stdout JSON with %s as a note, since the project's own code can print it",
-    (_name, text) => {
-      expect(interpret("stdout", text)).toEqual({ type: "note", text });
-    },
-  );
-
-  test("shows a stdout line that is not JSON as a note", () => {
-    expect(interpret("stdout", "plain output")).toEqual({ type: "note", text: "plain output" });
-  });
-
-  test("reads a stderr JSON error as a failure with its suggestion", () => {
+describe("describeFailure", () => {
+  test("says what failed with its suggestion on the next line", () => {
     const error = {
       error: { message: "Workspace ID not found.", suggestion: "Pass --workspace-id." },
     };
 
-    expect(interpret("stderr", JSON.stringify(error))).toEqual({
-      type: "failure",
-      text: "Workspace ID not found.\nPass --workspace-id.",
-    });
+    expect(describeFailure(error)).toBe("Workspace ID not found.\nPass --workspace-id.");
   });
 
-  test("reads a stderr JSON error without a suggestion as just its message", () => {
-    expect(interpret("stderr", JSON.stringify({ error: { message: "boom" } }))).toEqual({
-      type: "failure",
-      text: "boom",
-    });
+  test("says just the message when there is no suggestion", () => {
+    expect(describeFailure({ error: { message: "boom" } })).toBe("boom");
   });
 
-  test.each([
-    ["text", "Ready! Running add.ts"],
-    ["JSON without an error", '{"info":"ready"}'],
-  ])("shows stderr %s as a note", (_name, data) => {
-    expect(interpret("stderr", data)).toEqual({ type: "note", text: data });
-  });
-
-  test("reads the exit event", () => {
-    expect(interpret("exit", '{"code":0}')).toEqual({ type: "exit" });
-  });
-
-  test("ignores an event it does not know", () => {
-    expect(interpret("other", "x")).toBeUndefined();
+  test("shows the envelope itself when it carries no message", () => {
+    expect(describeFailure({ error: { code: "X" } })).toBe('{"error":{"code":"X"}}');
   });
 });

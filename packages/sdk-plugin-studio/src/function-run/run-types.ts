@@ -1,5 +1,14 @@
+import type { WorkspaceSelection } from "../workspace-context";
+import type { RunRecord } from "./stream";
+
 export type RunEvent =
-  | { type: "stdout" | "stderr"; line: string }
+  | { type: "ready" }
+  | { type: "scheduled" }
+  | { type: "queued" }
+  | { type: "started" }
+  | { type: "finished"; record: RunRecord }
+  | { type: "failed"; text: string }
+  | { type: "note"; text: string }
   | { type: "exit"; code: number | null };
 
 export interface RunHandle {
@@ -10,6 +19,6 @@ export interface RunHandle {
 export interface RunInput {
   file: string;
   argFile: string;
-  workspaceArgs: string[];
+  workspace: WorkspaceSelection;
   env: NodeJS.ProcessEnv;
 }

@@ -23,8 +23,6 @@ export interface SyncedFilesOptions {
   formatCode: (code: string) => Promise<string | undefined>;
   /** How often to look for changes made from outside; 0 turns the polling off. */
   pollMs?: number;
-  /** Called with when the edit happened, which is earlier than now for one that is seen late. */
-  onInputsChanged?: (editedAt: number) => void;
 }
 
 const ARG_NOT_READABLE =
@@ -67,22 +65,9 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
     return result;
   };
 
-  const touch = (editedAt = Date.now()) => {
+  const touch = () => {
     changedAt = Date.now();
-    options.onInputsChanged?.(editedAt);
   };
-
-  function savedAt(file: string): number {
-    const observed = Date.now();
-    let saved = observed;
-    try {
-      saved = fs.statSync(file).mtimeMs;
-    } catch {
-      return observed;
-    }
-    const oldest = options.pollMs ? observed - options.pollMs - 100 : Number.NEGATIVE_INFINITY;
-    return Math.min(observed, Math.max(saved, oldest));
-  }
 
   const emit = (change: FileChange) => {
     for (const listener of listeners) listener(change);
@@ -166,7 +151,7 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
         if (onDisk !== undefined && onDisk !== code) {
           code = onDisk;
           formatted = await options.formatCode(onDisk);
-          touch(savedAt(options.file));
+          touch();
           emit({ code: onDisk });
         }
         const argOnDisk = readIfExists(options.argFile);

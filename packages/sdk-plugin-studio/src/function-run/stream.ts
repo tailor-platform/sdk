@@ -9,11 +9,10 @@ export interface RunRecord {
   error?: string;
 }
 
-export type StreamMessage =
+export type SessionMessage =
   | { type: "run"; record: RunRecord }
   | { type: "failure"; text: string }
-  | { type: "note"; text: string }
-  | { type: "exit" };
+  | { type: "note"; text: string };
 
 export function splitFrames(buffer: string): { frames: string[]; rest: string } {
   const parts = buffer.split("\n\n");
@@ -21,59 +20,18 @@ export function splitFrames(buffer: string): { frames: string[]; rest: string } 
   return { frames: parts, rest };
 }
 
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
-}
-
-const RUN_RECORD_TEXT_FIELDS = [
-  "scriptName",
-  "functionName",
-  "functionType",
-  "executionId",
-  "logs",
-  "result",
-  "error",
-] as const;
-
-function isRunRecord(value: unknown): value is RunRecord {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  if (typeof record.success !== "boolean") return false;
-  return RUN_RECORD_TEXT_FIELDS.every(
-    (field) => record[field] === undefined || typeof record[field] === "string",
-  );
-}
-
-function failureText(value: unknown): string | undefined {
-  const error = (value as { error?: { message?: unknown; suggestion?: unknown } } | undefined)
+/**
+ * Say what failed in an error envelope, with its suggestion on the next line.
+ * @param envelope - The error object `tailor --json` writes: `{ error: { message, suggestion? } }`
+ * @returns The text to show, or the envelope as JSON when it carries no message
+ */
+export function describeFailure(envelope: unknown): string {
+  const error = (envelope as { error?: { message?: unknown; suggestion?: unknown } } | undefined)
     ?.error;
-  if (typeof error?.message !== "string") return undefined;
+  if (typeof error?.message !== "string") return JSON.stringify(envelope);
   return [error.message, error.suggestion]
     .filter((part) => typeof part === "string" && part)
     .join("\n");
-}
-
-/**
- * Turn one output event of `tailor function run --json` into something to show.
- * @param event - `stdout`, `stderr` or `exit`
- * @param text - The line the event carries
- * @returns The message, or undefined for an event it does not know
- */
-export function interpret(event: string, text: string): StreamMessage | undefined {
-  if (event === "exit") return { type: "exit" };
-  const parsed = parseJson(text);
-  if (event === "stdout") {
-    return isRunRecord(parsed) ? { type: "run", record: parsed } : { type: "note", text };
-  }
-  if (event === "stderr") {
-    const failure = failureText(parsed);
-    return failure === undefined ? { type: "note", text } : { type: "failure", text: failure };
-  }
-  return undefined;
 }
 
 /**

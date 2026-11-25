@@ -1,12 +1,13 @@
+import * as path from "pathe";
 import { selectionArgs, selectionEnv } from "../workspace-context";
 import { HISTORY_LIMIT } from "./history";
-import { interpret, type StreamMessage } from "./stream";
 import type { WorkspaceSelection } from "../workspace-context";
-import type { RunHandle, RunInput } from "./run-types";
+import type { RunEvent, RunHandle, RunInput } from "./run-types";
+import type { SessionMessage } from "./stream";
 
 export type SessionStatus = "idle" | "watching" | "stopped";
 
-export type SessionMessage = Exclude<StreamMessage, { type: "exit" }>;
+export type { SessionMessage };
 
 interface SessionEntry {
   seq: number;
@@ -34,18 +35,30 @@ export interface SessionOptions {
   runArgFile: string;
   getSelection: () => WorkspaceSelection;
   maxEntries?: number;
-  now?: () => number;
 }
 
-const CLI_DEBOUNCE_MS = 100;
-const READY_NOTE = /^(?:> )?Ready!/;
 const NO_WORKSPACE = "Select a workspace in the bar at the top of the page.";
 
 interface ActiveRun {
   handle: RunHandle;
   workspaceArgs: string[];
   workspace: WorkspaceSelection;
+  phase: RunPhase;
 }
+
+/** What the watch has said that still leaves a run to report back */
+interface RunPhase {
+  /** The watch was started and has not begun its first run */
+  booting: boolean;
+  /** A file change is waiting for the watch's debounce to start a run */
+  armed: boolean;
+  /** A run began and has not reported back */
+  inRun: boolean;
+  /** A change arrived during a run, so one more run follows it */
+  queued: boolean;
+}
+
+const isBusy = (phase: RunPhase) => phase.booting || phase.armed || phase.inRun || phase.queued;
 
 function describeWorkspace(selection: WorkspaceSelection): string {
   return selection.profile ?? selection.workspaceId ?? "no workspace";
@@ -68,11 +81,6 @@ export function createRunSession(options: SessionOptions) {
   let workspace: WorkspaceSelection | undefined;
   let active: ActiveRun | undefined;
   let latestRun: SessionSnapshot["latestRun"];
-  let owedRuns = 0;
-  let lastEditAt = 0;
-  let lastSettledAt: number | undefined;
-  let awaitingReady = false;
-  const now = options.now ?? Date.now;
 
   const emit = (event: SessionEvent) => {
     for (const listener of listeners) listener(event);
@@ -80,7 +88,6 @@ export function createRunSession(options: SessionOptions) {
 
   function setStatus(next: SessionStatus, why?: string, nowRunning = next === "watching") {
     status = next;
-    if (next !== "watching") owedRuns = 0;
     running = nowRunning;
     reason = why;
     emit({ type: "status", status, running, ...(why === undefined ? {} : { reason: why }) });
@@ -99,29 +106,57 @@ export function createRunSession(options: SessionOptions) {
     return entry;
   }
 
-  function settleRun() {
-    lastSettledAt = now();
-    awaitingReady = false;
-    owedRuns = Math.max(0, owedRuns - 1);
-    if (owedRuns === 0) setRunning(false);
+  function applyEvent(run: ActiveRun, event: RunEvent) {
+    const { phase } = run;
+    switch (event.type) {
+      case "ready":
+        record({
+          type: "note",
+          text: `Ready! Running ${path.basename(options.file)} on every save.`,
+        });
+        return;
+      case "scheduled":
+        phase.armed = true;
+        break;
+      case "queued":
+        phase.armed = false;
+        phase.queued = true;
+        break;
+      case "started":
+        phase.booting = false;
+        phase.armed = false;
+        phase.queued = false;
+        phase.inRun = true;
+        break;
+      case "finished": {
+        const message = { type: "run" as const, record: event.record };
+        latestRun = { ...record(message), message };
+        phase.booting = false;
+        phase.inRun = false;
+        break;
+      }
+      case "failed":
+        record({ type: "failure", text: event.text });
+        phase.booting = false;
+        phase.inRun = false;
+        break;
+      case "note":
+        record({ type: "note", text: event.text });
+        return;
+      case "exit":
+        return;
+    }
+    setRunning(isBusy(phase));
   }
 
   async function consume(run: ActiveRun) {
     for await (const event of run.handle.events) {
       if (active !== run) return;
-      const message = interpret(event.type, event.type === "exit" ? "" : event.line);
-      if (message === undefined) continue;
-      if (message.type !== "exit") {
-        const entry = record(message);
-        if (message.type === "note" && READY_NOTE.test(message.text)) awaitingReady = false;
-        if (message.type === "run") {
-          latestRun = { ...entry, message };
-        }
-        if (message.type === "run" || message.type === "failure") settleRun();
+      if (event.type !== "exit") {
+        applyEvent(run, event);
         continue;
       }
-      const code = event.type === "exit" ? event.code : null;
-      const why = `The watch ended (exit code ${code ?? "none"}).`;
+      const why = `The watch ended (exit code ${event.code ?? "none"}).`;
       active = undefined;
       record({ type: "note", text: why });
       setStatus("stopped", why);
@@ -153,7 +188,7 @@ export function createRunSession(options: SessionOptions) {
         handle = options.startRun({
           file: options.file,
           argFile: options.runArgFile,
-          workspaceArgs,
+          workspace: { ...selection },
           env: selectionEnv(selection),
         });
       } catch (error) {
@@ -162,11 +197,13 @@ export function createRunSession(options: SessionOptions) {
         setStatus("stopped", text);
         return { ok: false, reason: text };
       }
-      const run: ActiveRun = { handle, workspaceArgs, workspace: { ...selection } };
+      const run: ActiveRun = {
+        handle,
+        workspaceArgs,
+        workspace: { ...selection },
+        phase: { booting: true, armed: false, inRun: false, queued: false },
+      };
       active = run;
-      owedRuns = 1;
-      awaitingReady = true;
-      lastEditAt = now();
       setStatus("watching");
       void consume(run);
       return { ok: true };
@@ -174,20 +211,6 @@ export function createRunSession(options: SessionOptions) {
 
     stop(): void {
       stopRun("Stopped.");
-    },
-
-    markInputsChanged(at: number = now()): void {
-      if (active === undefined) return;
-      const reportedSince = lastSettledAt !== undefined && lastSettledAt >= at + CLI_DEBOUNCE_MS;
-      if (owedRuns === 0 && reportedSince) {
-        lastEditAt = at;
-        return;
-      }
-      const sameRun = awaitingReady || (owedRuns > 0 && at - lastEditAt < CLI_DEBOUNCE_MS);
-      lastEditAt = at;
-      if (owedRuns === 0) owedRuns = 1;
-      else if (!sameRun) owedRuns = 2;
-      setRunning(true);
     },
 
     fail(text: string): void {

@@ -9,15 +9,16 @@ import {
   type FunctionRunHandler,
   type FunctionRunPaths,
 } from "./handler";
-import { createFunctionRunStarter } from "./process";
 import { createResultWriter } from "./result";
 import { createRunSession } from "./session";
 import { STARTER_ARG, STARTER_CODE } from "./starter";
+import { startWatchWorker } from "./watch-worker";
 import type { Tab } from "../shell-handler";
 import type { WorkspaceSelection } from "../workspace-context";
 import type { RunHandle, RunInput } from "./run-types";
 
 const FILE_POLL_MS = 300;
+const WORKER_FILE = new URL("./function-run/worker.js", import.meta.url);
 
 export interface FunctionRunTabOptions {
   projectDir: string;
@@ -57,7 +58,6 @@ export async function createFunctionRunTab(
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-run-"));
   const runArgFile = path.join(runDir, "arg.json");
 
-  let inputsChanged = (_editedAt: number) => {};
   const files = createSyncedFiles({
     file,
     argFile,
@@ -66,7 +66,6 @@ export async function createFunctionRunTab(
     starterArg: editsScratch ? STARTER_ARG : undefined,
     formatCode: formatTypeScript,
     pollMs: FILE_POLL_MS,
-    onInputsChanged: (editedAt) => inputsChanged(editedAt),
   });
   try {
     await files.init();
@@ -76,12 +75,11 @@ export async function createFunctionRunTab(
   }
 
   const session = createRunSession({
-    startRun: options.startRun ?? createFunctionRunStarter(options.projectDir),
+    startRun: options.startRun ?? ((input) => startWatchWorker(input, { workerFile: WORKER_FILE })),
     file,
     runArgFile,
     getSelection: options.getSelection,
   });
-  inputsChanged = (editedAt) => session.markInputsChanged(editedAt);
   const relative = (target: string) => path.relative(options.projectDir, target);
   const paths = {
     file: relative(file),

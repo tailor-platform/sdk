@@ -29,7 +29,7 @@ The header at the top of the page shows the profile (and the workspace it points
 
 ## Function run tab
 
-The Function run tab runs a function with `tailor function run --watch --json` and shows each run as a card: status, execution ID, logs, result and error. Pick the workspace in the bar at the top, then press Run and watch.
+The Function run tab runs a function the way `tailor function run --watch` does, inside the server in a worker thread, and shows each run as a card: status, execution ID, logs, result and error. Pick the workspace in the bar at the top, then press Run and watch.
 
 The function and its argument live in files, so the page, your own editor and an AI agent can all change them, and a change made from outside shows up in the page:
 
@@ -43,14 +43,14 @@ The function and its argument live in files, so the page, your own editor and an
 
 The function runs again each time the file changes, and the argument can be edited while watching. Code typed in the page that formats to the same as before (only spaces or line breaks differ) is not written, so it does not run again. An argument that does not parse is ignored until it does. When a run fails with a `TailorErrors` (an argument that does not match the input schema), the argument box turns red and the value each error points at is underlined, with the message on hover.
 
-The watch belongs to the server, not to the page: it goes on when the page is closed and ends with Stop or when the server stops. It runs against the workspace selected in the bar, and is restarted on the new workspace when that selection changes, or stopped when the selection is cleared, so it never keeps running against a workspace the bar no longer shows. `--function-watch` starts it as soon as the server is up, against the workspace of the profile given by `--profile` (or the one remembered from the last session); without it nothing runs until Run is pressed, because the function runs on that workspace.
+The watch runs in a worker thread, so project code that calls `process.exit()` while it loads ends the watch (the tab shows that it ended) and not the server. It belongs to the server, not to the page: it goes on when the page is closed and ends with Stop or when the server stops. It runs against the workspace selected in the bar, and is restarted on the new workspace when that selection changes, or stopped when the selection is cleared, so it never keeps running against a workspace the bar no longer shows. `--function-watch` starts it as soon as the server is up, against the workspace of the profile given by `--profile` (or the one remembered from the last session); without it nothing runs until Run is pressed, because the function runs on that workspace.
 
 ### Using it from an AI agent
 
 Start `tailor studio --profile <name> --function-watch`, then edit the function and argument files and read the result file; no browser is needed. In `function.result.json`:
 
-- `status` is `watching`, `stopped` or `idle`, and `reason` says why it stopped (no workspace selected, the selection was cleared, the process ended).
-- `running` is `true` from the moment the watch starts or you save a change until the run that follows has reported back, including the extra run the watch starts for a save made while a run was in flight; read the outcome only once it is `false`. The watch reports only when a run ends, so `running` is inferred from when you saved the function (the time of the file, not the time the server noticed it) or when the server wrote the argument for the watch and from the watch waiting 100 ms after a save; a change to a file the function imports is not seen by the server, so it does not set `running`.
+- `status` is `watching`, `stopped` or `idle`, and `reason` says why it stopped (no workspace selected, the selection was cleared, the watch ended).
+- `running` is `true` from the moment the watch starts or a file the watch follows changes until the run that follows has reported back, including the extra run the watch starts for a save made while a run was in flight; read the outcome only once it is `false`. The watch tells the server when it begins a run, when a run is queued behind one in flight, and when a run ends, so `running` follows the watch itself, including a change to a file the function imports.
 - `latestRun` is the newest run: `record` holds `success`, `logs`, `result` and `error`, `argErrors` lists the `TailorErrors` items with their `path`, and `at` is when it finished.
 - `entries` lists the latest twenty entries, newest first, including notes and failures such as an expired login.
 - `inputsChangedAt` is when the server last saw the function or the argument change. After an edit, the outcome is the `latestRun` whose `at` is later than your edit; if `inputsChangedAt` did not move, nothing ran again because the new argument reads the same as the old one.

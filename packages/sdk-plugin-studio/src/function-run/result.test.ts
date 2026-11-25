@@ -190,7 +190,7 @@ describe("createResultWriter", () => {
     writer.start();
 
     session.start();
-    push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    push({ type: "finished", record: { success: true, result: "3" } });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(read()).toMatchObject({ status: "watching", latestRun: { record: { result: "3" } } });
