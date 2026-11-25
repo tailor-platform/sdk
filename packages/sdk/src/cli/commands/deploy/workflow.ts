@@ -158,6 +158,8 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
   }
 }
 
+type JobFunctionVersions = { [key: string]: bigint };
+
 /**
  * Filter job function versions to only include those used by a workflow
  * @param allVersions - Map of job function names to versions
@@ -165,10 +167,10 @@ async function deleteAllSettled(operations: readonly DeleteOperation[]) {
  * @returns Filtered job function versions
  */
 function filterJobFunctionVersions(
-  allVersions: { [key: string]: bigint },
+  allVersions: JobFunctionVersions,
   usedJobNames: string[],
-): { [key: string]: bigint } {
-  const filtered: { [key: string]: bigint } = {};
+): JobFunctionVersions {
+  const filtered: JobFunctionVersions = {};
   for (const jobName of usedJobNames) {
     if (allVersions[jobName] !== undefined) {
       filtered[jobName] = allVersions[jobName];
@@ -195,8 +197,8 @@ async function registerJobFunctions(
   owner: DeployOwner,
   unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
   jobFunctionPublishEvents: ReadonlyMap<string, boolean> = new Map(),
-): Promise<{ [key: string]: bigint }> {
-  const jobFunctionVersions: { [key: string]: bigint } = {};
+): Promise<JobFunctionVersions> {
+  const jobFunctionVersions: JobFunctionVersions = {};
 
   // Get workspaceId from the first workflow
   const firstWorkflow = changeSet.creates[0] || changeSet.updates[0] || changeSet.deletes[0];
@@ -827,10 +829,12 @@ export function formatWorkflowChangeEntries(
   ];
 }
 
-function getExistingWorkflowJobNames(existing: {
+type ExistingWorkflowJobs = {
   mainJobFunctionName?: string | undefined;
   jobFunctions?: Record<string, string | bigint> | undefined;
-}) {
+};
+
+function getExistingWorkflowJobNames(existing: ExistingWorkflowJobs) {
   const jobNames = new Set(Object.keys(existing.jobFunctions ?? {}));
   if (existing.mainJobFunctionName) {
     jobNames.add(existing.mainJobFunctionName);

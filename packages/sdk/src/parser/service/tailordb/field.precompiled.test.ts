@@ -4,10 +4,13 @@ import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig } from "./field";
 import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type { UpdateHookFn } from "#/configure/services/tailordb/types";
+import type { FieldValidateInput } from "#/configure/types/field.types";
+
+type InputArgs = { input: string | null };
 
 describe("parseFieldConfig precompiled expressions", () => {
   test("uses precompiled hook expression when attached", () => {
-    const createHook = ({ input }: { input: string | null }) => input ?? "fallback";
+    const createHook = ({ input }: InputArgs) => input ?? "fallback";
     setPrecompiledScriptExpr(createHook, "hooks.create", "PRECOMPILED_HOOK_EXPR");
 
     const type = db.table("User", {
@@ -21,7 +24,7 @@ describe("parseFieldConfig precompiled expressions", () => {
   });
 
   test("uses precompiled validate expression when attached", () => {
-    const validator = ({ value }: { value: string }) =>
+    const validator: FieldValidateInput<string> = ({ value }) =>
       value.length <= 0 ? "Must not be empty" : undefined;
     setPrecompiledScriptExpr(validator, "validate", "PRECOMPILED_VALIDATE_EXPR");
 
@@ -36,7 +39,7 @@ describe("parseFieldConfig precompiled expressions", () => {
   });
 
   test("an expression compiled under one date default is not reused under another", () => {
-    const createHook = ({ input }: { input: string | null }) => input ?? "fallback";
+    const createHook = ({ input }: InputArgs) => input ?? "fallback";
     setPrecompiledScriptExpr(createHook, "hooks.create", "LEGACY_EXPR", "legacy");
     setPrecompiledScriptExpr(createHook, "hooks.create", "TEMPORAL_EXPR", "temporal");
 

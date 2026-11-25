@@ -5,7 +5,12 @@ import { parseDateFields } from "../../runtime/field-parse";
 import { Temporal } from "../../runtime/temporal";
 import { parsedAtImport } from "./fixtures/parsed-at-import";
 
-function valueOf<V>(result: { issues?: unknown; value?: V }): V {
+interface ValueOfResult<V> {
+  issues?: unknown;
+  value?: V;
+}
+
+function valueOf<V>(result: ValueOfResult<V>): V {
   if (result.issues) throw new Error(`Unexpected issues: ${JSON.stringify(result.issues)}`);
   return result.value as V;
 }

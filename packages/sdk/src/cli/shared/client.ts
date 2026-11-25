@@ -730,6 +730,11 @@ function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boo
   );
 }
 
+type UnaryMethod = {
+  service: UnaryResponse["service"];
+  method: UnaryResponse["method"];
+};
+
 /**
  * Build a default (empty) unary response for the request's output message.
  *
@@ -739,10 +744,7 @@ function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boo
  * @param req - Unary request whose output schema is used
  * @returns A synthesized unary response with an empty output message
  */
-function synthesizeEmptyUnaryResponse(req: {
-  service: UnaryResponse["service"];
-  method: UnaryResponse["method"];
-}): UnaryResponse {
+function synthesizeEmptyUnaryResponse(req: UnaryMethod): UnaryResponse {
   return {
     stream: false,
     service: req.service,

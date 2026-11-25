@@ -2318,10 +2318,12 @@ async function applyDeferredGqlPermissions(
   ]);
 }
 
-function isDeleted(
-  deleted: ReadonlySet<string>,
-  del: { name: string; request: { namespaceName?: string | undefined } },
-): boolean {
+interface NamespacedDeletion {
+  name: string;
+  request: { namespaceName?: string | undefined };
+}
+
+function isDeleted(deleted: ReadonlySet<string>, del: NamespacedDeletion): boolean {
   return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 

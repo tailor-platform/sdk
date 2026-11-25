@@ -449,10 +449,12 @@ async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise
 
 let warnedAboutNewerConfig = false;
 
-async function warnIfNewerConfigAvailable(config: {
+type WarnIfNewerConfigAvailableConfig = {
   latest_version?: number | undefined;
   latest_min_sdk_version?: string | undefined;
-}) {
+};
+
+async function warnIfNewerConfigAvailable(config: WarnIfNewerConfigAvailableConfig) {
   if (!config.latest_min_sdk_version || warnedAboutNewerConfig) return;
   const packageJson = await readPackageJson();
   const sdkVersion = packageJson.version ?? "0.0.0";
@@ -1139,6 +1141,11 @@ async function removeUserAlias(
   delete config.users[aliasKey];
 }
 
+type SaveUserTokensOptions = {
+  platformConfig?: PlatformClientConfig | undefined;
+  email?: string | undefined;
+};
+
 /**
  * Save tokens for a user, writing to keyring by default when available.
  * @param config - Platform config
@@ -1154,7 +1161,7 @@ export async function saveUserTokens(
   user: string,
   tokens: UserTokens,
   expiresAt: string,
-  opts: { platformConfig?: PlatformClientConfig | undefined; email?: string | undefined } = {},
+  opts: SaveUserTokensOptions = {},
 ): Promise<void> {
   registerTokenSecrets(tokens);
   const userKey = platformUserKey(user, opts.platformConfig);

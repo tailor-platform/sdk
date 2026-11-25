@@ -835,12 +835,14 @@ describe("planWorkflow", () => {
       const jobNames = ["validate-order", "check-inventory", "process-payment"];
       const mainJobDeps = { "validate-order": jobNames };
 
-      function planSampleWorkflow(options: {
+      type PlanSampleWorkflowOptions = {
         sdkVersion?: string;
         mainJobFunctionName?: string;
         unchangedJobFunctions?: ReadonlySet<string>;
         publishExecutionEvents?: boolean;
-      }) {
+      };
+
+      function planSampleWorkflow(options: PlanSampleWorkflowOptions) {
         const jobFunctionLabels = Object.fromEntries(
           jobNames.map((jobName) => [
             jobName,

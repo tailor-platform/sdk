@@ -556,12 +556,14 @@ describe("withMetadataWriteBatch", () => {
     });
   }
 
+  interface CreateStatefulClientHooks {
+    beforeGet?: (trn: string) => void;
+    afterBulkWrite?: (bulkCall: number) => void;
+  }
+
   function createStatefulClient(
     labelsByTrn: Map<string, Record<string, string>>,
-    hooks: {
-      beforeGet?: (trn: string) => void;
-      afterBulkWrite?: (bulkCall: number) => void;
-    },
+    hooks: CreateStatefulClientHooks,
   ) {
     const client = createClient();
     let bulkCall = 0;

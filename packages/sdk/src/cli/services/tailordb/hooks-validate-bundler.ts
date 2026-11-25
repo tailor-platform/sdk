@@ -308,7 +308,7 @@ export function buildMinimalEntryFromResolved(
   return lines.join("\n");
 }
 
-async function bundleScriptTarget(args: {
+type BundleScriptTargetArgs = {
   fn: ScriptFunction;
   kind: ScriptExprKind;
   sourceFilePath: string;
@@ -317,7 +317,9 @@ async function bundleScriptTarget(args: {
   targetIndex: number;
   tsconfig: string | undefined;
   dateDefault: EffectiveDateDefault;
-}): Promise<string> {
+};
+
+async function bundleScriptTarget(args: BundleScriptTargetArgs): Promise<string> {
   const {
     fn,
     kind,

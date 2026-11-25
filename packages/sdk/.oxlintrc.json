@@ -526,6 +526,18 @@
       }
     },
     {
+      "files": ["src/**/*.ts"],
+      "rules": {
+        "local/require-named-param-type": "error"
+      }
+    },
+    {
+      "files": ["src/**/__test_fixtures__/**"],
+      "rules": {
+        "local/require-named-param-type": "off"
+      }
+    },
+    {
       "files": ["**/*.test.ts"],
       "rules": {
         "no-restricted-imports": "off",

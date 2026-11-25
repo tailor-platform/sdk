@@ -103,12 +103,10 @@ describe("renderInspectJson", () => {
     // CreateTailorDBType has TailorDBType > schema > fields > … reaching depth 9.
     const m = getMethod("CreateTailorDBType");
     const json = renderInspectJson(m);
-    function deepestDepth(
-      field:
-        | { message?: { fields: { name: string; message?: unknown }[] } | undefined }
-        | undefined,
-      level: number,
-    ): number {
+    interface DeepestDepthField {
+      message?: { fields: { name: string; message?: unknown }[] } | undefined;
+    }
+    function deepestDepth(field: DeepestDepthField | undefined, level: number): number {
       if (!field?.message) return level;
       let max = level;
       for (const sub of field.message.fields) {

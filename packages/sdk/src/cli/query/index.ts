@@ -308,15 +308,17 @@ function queryInputRequiredError(): CLIError {
   });
 }
 
+type SqlQueryArgs = {
+  workspaceId: string;
+  namespace: string;
+  bundledCode: string;
+  query: string;
+};
+
 async function sqlQuery(
   client: Client,
   invoker: AuthInvoker,
-  args: {
-    workspaceId: string;
-    namespace: string;
-    bundledCode: string;
-    query: string;
-  },
+  args: SqlQueryArgs,
 ): Promise<SQLQueryDispatchResult> {
   const queries = splitSqlStatements(args.query);
   const executed = await executeScript({
@@ -343,16 +345,18 @@ async function sqlQuery(
   };
 }
 
+type GqlQueryArgs = {
+  workspaceId: string;
+  bundledCode: string;
+  query: string;
+};
+
 async function gqlQuery(
   client: Client,
   invoker: AuthInvoker,
   application: Application,
   machineUser: MachineUser,
-  args: {
-    workspaceId: string;
-    bundledCode: string;
-    query: string;
-  },
+  args: GqlQueryArgs,
 ): Promise<GQLQueryDispatchResult> {
   const { access_token: accessToken } = await fetchMachineUserToken(
     application.url,
@@ -989,9 +993,11 @@ function toSqlJsonResult(execResult: SQLExecutionResult) {
   return { results: rows, rowCount, affectedRows };
 }
 
+type PrintResultOptions = { json?: boolean | undefined };
+
 function printSingleSqlResult(
   execResult: SQLExecutionResult,
-  options: { json?: boolean | undefined } = {},
+  options: PrintResultOptions = {},
 ): void {
   if (options.json) {
     logger.out(toSqlJsonResult(execResult));
@@ -1041,10 +1047,7 @@ function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[
   return Array.isArray(value) && value.length > 0 && value.every(isSQLExecutionResult);
 }
 
-function printSqlResult(
-  result: SQLQueryDispatchResult,
-  options: { json?: boolean | undefined } = {},
-): void {
+function printSqlResult(result: SQLQueryDispatchResult, options: PrintResultOptions = {}): void {
   if (isSQLExecutionResultArray(result.result)) {
     if (options.json) {
       logger.out(result.result.map(toSqlJsonResult));
@@ -1074,10 +1077,7 @@ function printSqlResult(
   });
 }
 
-function printGqlResult(
-  result: GQLQueryDispatchResult,
-  options: { json?: boolean | undefined } = {},
-): void {
+function printGqlResult(result: GQLQueryDispatchResult, options: PrintResultOptions = {}): void {
   if (options.json) {
     logger.out({
       result: result.result,

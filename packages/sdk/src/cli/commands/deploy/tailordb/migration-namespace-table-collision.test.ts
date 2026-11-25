@@ -80,13 +80,15 @@ function deleteEntry(namespace: string, tableName: string) {
   };
 }
 
-function createMockPlanResult(options: {
+type CreateMockPlanResultOptions = {
   creates?: TypeEntry[];
   updates?: TypeEntry[];
   unchanged?: Omit<TypeEntry, "request">[];
   deletes?: DeleteEntry[];
   pendingMigrations: PlannedPendingMigrations;
-}) {
+};
+
+function createMockPlanResult(options: CreateMockPlanResultOptions) {
   const deletes = options.deletes ?? [];
   return createPlanResult({
     type: omitUndefined({
@@ -169,7 +171,9 @@ function mockPending(pending: PendingMigration[]) {
   }));
 }
 
-function typeWritesOf(mock: { calls: unknown[][] }, namespace: string, tableName: string) {
+type TypeWritesOfMock = { calls: unknown[][] };
+
+function typeWritesOf(mock: TypeWritesOfMock, namespace: string, tableName: string) {
   return mock.calls
     .map((call) => call[0] as TypeWrite)
     .filter(

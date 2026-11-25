@@ -1238,11 +1238,15 @@ describe("migration", () => {
       return { client, labels: () => labels };
     }
 
-    const failBeforeStart = async (options: { onBeforeStart?: () => Promise<void> }) => {
+    interface FailingRunOptions {
+      onBeforeStart?: () => Promise<void>;
+    }
+
+    const failBeforeStart = async (options: FailingRunOptions) => {
       await options.onBeforeStart?.();
       throw new Error("could not create the workflow");
     };
-    const failWithoutCommit = async (options: { onBeforeStart?: () => Promise<void> }) => {
+    const failWithoutCommit = async (options: FailingRunOptions) => {
       await options.onBeforeStart?.();
       return {
         success: false,
@@ -1438,8 +1442,10 @@ describe("migration", () => {
         }),
       ).rejects.toMatchObject({ code: "MIGRATION_PARTIALLY_APPLIED" });
 
-      const order = (mock: { mock: { invocationCallOrder: number[] } }) =>
-        mock.mock.invocationCallOrder[0] ?? Number.NaN;
+      interface OrderMock {
+        mock: { invocationCallOrder: number[] };
+      }
+      const order = (mock: OrderMock) => mock.mock.invocationCallOrder[0] ?? Number.NaN;
       expect(order(spinnerMock.stop)).toBeLessThan(order(vi.mocked(logger.warn)));
       expect(order(vi.mocked(logger.warn))).toBeLessThan(order(spinnerMock.start));
       expect(vi.mocked(logger.error)).toHaveBeenCalledWith("Logs:\n[backfill] boom");
@@ -1577,7 +1583,10 @@ describe("migration", () => {
 
     describe("a checkpoint that changed after the deploy read it", () => {
       const runStarted = vi.fn();
-      const startRun = async (options: { onBeforeStart: () => Promise<void> }) => {
+      interface StartRunOptions {
+        onBeforeStart: () => Promise<void>;
+      }
+      const startRun = async (options: StartRunOptions) => {
         await options.onBeforeStart();
         runStarted();
         return {

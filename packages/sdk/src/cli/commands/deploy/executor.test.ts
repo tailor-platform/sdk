@@ -63,6 +63,9 @@ type EventConfig = {
   case: string;
   value: Record<string, unknown> & { condition?: { expr: string } | undefined };
 };
+type SuccessArgs = { success: boolean };
+type NewRecordArgs = { newRecord: { active: boolean } };
+type TypeNameArgs = { typeName: string };
 
 describe("planExecutor", () => {
   const workspaceId = "test-workspace";
@@ -95,7 +98,7 @@ describe("planExecutor", () => {
       trigger: {
         kind: "resolverExecuted",
         resolverName: "testResolver",
-        condition: ({ success }: { success: boolean }) => success,
+        condition: ({ success }: SuccessArgs) => success,
       },
       operation: {
         kind: "function",
@@ -163,17 +166,19 @@ describe("planExecutor", () => {
     } as unknown as ExecutorService;
   }
 
+  type CreateMockApplicationOptions = {
+    tailorDBTypes?: Record<string, string>;
+    resolverNames?: Record<string, string>;
+    idpNames?: ReadonlyArray<string>;
+    authName?: string;
+    authMachineUsers?: ReadonlyArray<string>;
+    externalAuthName?: string;
+  };
+
   // Helper to create mock application
   function createMockApplication(
     executors: Executor[],
-    options?: {
-      tailorDBTypes?: Record<string, string>;
-      resolverNames?: Record<string, string>;
-      idpNames?: ReadonlyArray<string>;
-      authName?: string;
-      authMachineUsers?: ReadonlyArray<string>;
-      externalAuthName?: string;
-    },
+    options?: CreateMockApplicationOptions,
   ): Application {
     const tailorDBServices = Object.entries(
       Object.groupBy(Object.entries(options?.tailorDBTypes ?? {}), ([, ns]) => ns),
@@ -616,7 +621,9 @@ describe("planExecutor", () => {
   });
 
   describe("application env passthrough", () => {
-    function variablesExprOf(create: { request: { executor?: unknown } }): string {
+    type VariablesExprOfCreate = { request: { executor?: unknown } };
+
+    function variablesExprOf(create: VariablesExprOfCreate): string {
       return (
         (create.request.executor as { targetConfig?: { config?: unknown } }).targetConfig
           ?.config as {
@@ -1202,7 +1209,7 @@ describe("planExecutor", () => {
           kind: "tailordb",
           events: ["tailordb.type_record.created"],
           tableName: "User",
-          condition: ({ newRecord }: { newRecord: { active: boolean } }) => newRecord.active,
+          condition: ({ newRecord }: NewRecordArgs) => newRecord.active,
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1227,7 +1234,7 @@ describe("planExecutor", () => {
           kind: "workflowExecution",
           events: ["workflow.workflow_execution.completed"],
           workflowName: "orders",
-          condition: ({ success }: { success: boolean }) => success,
+          condition: ({ success }: SuccessArgs) => success,
         },
         operation: { kind: "function", body: () => {} },
       };
@@ -1804,7 +1811,7 @@ describe("planExecutor", () => {
             "tailordb.type_record.deleted",
           ],
           tableName: "User",
-          condition: ({ typeName }: { typeName: string }) => typeName === "User",
+          condition: ({ typeName }: TypeNameArgs) => typeName === "User",
         },
         operation: { kind: "function", body: () => {} },
       };

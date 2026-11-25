@@ -186,15 +186,14 @@ describe("planTailorDB (service level)", () => {
     } as unknown as Application;
   }
 
-  function createRemoteTypeClient(
-    namespace: string,
-    remoteType: {
-      name: string;
-      description: string;
-      pluralForm: string;
-      fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>;
-    },
-  ) {
+  type RemoteTypeFixture = {
+    name: string;
+    description: string;
+    pluralForm: string;
+    fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>>;
+  };
+
+  function createRemoteTypeClient(namespace: string, remoteType: RemoteTypeFixture) {
     return mockOperatorClient({
       listTailorDBServices: {
         tailordbServices: [{ namespace: { name: namespace } }],
@@ -682,11 +681,13 @@ describe("planTailorDB (service level)", () => {
         });
       }
 
-      async function planWith(params: {
+      type PlanWithParams = {
         publishEvents: boolean | undefined;
         subscribed: boolean;
         remote?: boolean;
-      }) {
+      };
+
+      async function planWith(params: PlanWithParams) {
         const { publishEvents, subscribed, remote } = params;
         const tailorDBService = createMockTailorDBService("shared-db");
         const userType = createTypeWith(publishEvents);
@@ -1135,12 +1136,14 @@ describe("planTailorDB (service level)", () => {
         description: "Can read invoices",
       } as const;
 
-      async function planInvoice(options: {
+      type PlanInvoiceOptions = {
         local: TailorDBType;
         remoteDescription?: string;
         remotePermission?: TailorDBType;
         forceApplyAll?: boolean;
-      }) {
+      };
+
+      async function planInvoice(options: PlanInvoiceOptions) {
         const service = (type: TailorDBType) => {
           const tailorDBService = createMockTailorDBService("test-tailordb");
           Object.defineProperty(tailorDBService, "types", { value: { [type.name]: type } });
@@ -1579,9 +1582,11 @@ describe("planTailorDB (service level)", () => {
         await runTest();
       });
 
+      type PlanWithScriptMigration = { machineUser?: string };
+
       function planWithScript(
         authService: unknown,
-        migration: { machineUser?: string } = {},
+        migration: PlanWithScriptMigration = {},
         migrationMachineUserOverride?: string,
       ): ReturnType<typeof planTailorDB> {
         return planTailorDB({
@@ -3233,13 +3238,15 @@ describe("applyTailorDB migration label reconciliation", () => {
     };
   }
 
+  type WriteUserSchemaSnapshotRebaseline = {
+    historyId: string;
+    replacedHistoryId: string | null;
+    replacedLatestMigration: number;
+  };
+
   function writeUserSchemaSnapshot(
     userType: TailorDBSnapshotType,
-    rebaseline?: {
-      historyId: string;
-      replacedHistoryId: string | null;
-      replacedLatestMigration: number;
-    },
+    rebaseline?: WriteUserSchemaSnapshotRebaseline,
   ): void {
     fs.writeFileSync(
       path.join(tmpDir, "0000", "schema.json"),

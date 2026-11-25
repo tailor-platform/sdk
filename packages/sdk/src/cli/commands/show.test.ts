@@ -487,7 +487,11 @@ describe("show", () => {
       backoffice: { db: ["customer-db"], auth: "admin-auth" },
     }`;
 
-    function serveApplications(options: { undeployed?: string[] } = {}) {
+    interface ServeApplicationsOptions {
+      undeployed?: string[];
+    }
+
+    function serveApplications(options: ServeApplicationsOptions = {}) {
       client.getApplication.mockImplementation((request) =>
         options.undeployed?.includes(request.applicationName ?? "")
           ? Promise.reject(new ConnectError("application not found", Code.NotFound))

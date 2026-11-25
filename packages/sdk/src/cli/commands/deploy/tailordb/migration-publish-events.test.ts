@@ -72,12 +72,12 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
   let checkpoint: RemoteCheckpoint;
 
-  function createMockClient(
-    options: {
-      existingSettings?: Record<string, WrittenSettings>;
-      existingTableNames?: string[];
-    } = {},
-  ) {
+  type CreateMockClientOptions = {
+    existingSettings?: Record<string, WrittenSettings>;
+    existingTableNames?: string[];
+  };
+
+  function createMockClient(options: CreateMockClientOptions = {}) {
     return checkpoint.createMockClient({
       listTailorDBTypes: async () => {
         const tables = snapshotState.tablesByVersion[0];
@@ -109,7 +109,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     });
   }
 
-  function createMockPlanResult(options: {
+  type CreateMockPlanResultOptions = {
     creates: string[];
     updates?: string[];
     gqlPermissionTypes?: string[];
@@ -119,7 +119,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     maintenanceMode?: LoadedConfig["maintenanceMode"];
     /** Local definitions; defaults to a `status` field on every planned table. */
     local?: TailorDBSnapshotType[];
-  }) {
+  };
+
+  function createMockPlanResult(options: CreateMockPlanResultOptions) {
     return createPlanResult({
       type: {
         creates: options.creates.map((name) => typeEntry(name)),

@@ -80,12 +80,14 @@ function collectFieldScriptSources(fields: Record<string, ScriptFieldConfig>): [
   return entries;
 }
 
+interface ComputeSourceScriptHashOptions {
+  typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
+  typeValidateExpr?: string | undefined;
+}
+
 export function computeSourceScriptHash(
   fields: Record<string, ScriptFieldConfig>,
-  options?: {
-    typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
-    typeValidateExpr?: string | undefined;
-  },
+  options?: ComputeSourceScriptHashOptions,
 ): string | undefined {
   const fieldSources = collectFieldScriptSources(fields);
   const hasTypeScripts =
