@@ -1,6 +1,7 @@
 export interface RunRecord {
   success?: boolean;
   scriptName?: string;
+  functionType?: string;
   functionName?: string;
   executionId?: string;
   logs?: string;
@@ -28,6 +29,25 @@ function parseJson(text: string): unknown {
   }
 }
 
+const RUN_RECORD_TEXT_FIELDS = [
+  "scriptName",
+  "functionName",
+  "functionType",
+  "executionId",
+  "logs",
+  "result",
+  "error",
+] as const;
+
+function isRunRecord(value: unknown): value is RunRecord {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (typeof record.success !== "boolean") return false;
+  return RUN_RECORD_TEXT_FIELDS.every(
+    (field) => record[field] === undefined || typeof record[field] === "string",
+  );
+}
+
 function failureText(value: unknown): string | undefined {
   const error = (value as { error?: { message?: unknown; suggestion?: unknown } } | undefined)
     ?.error;
@@ -47,10 +67,7 @@ export function interpret(event: string, text: string): StreamMessage | undefine
   if (event === "exit") return { type: "exit" };
   const parsed = parseJson(text);
   if (event === "stdout") {
-    if (typeof parsed === "object" && parsed !== null) {
-      return { type: "run", record: parsed as RunRecord };
-    }
-    return { type: "note", text };
+    return isRunRecord(parsed) ? { type: "run", record: parsed } : { type: "note", text };
   }
   if (event === "stderr") {
     const failure = failureText(parsed);

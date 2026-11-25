@@ -274,6 +274,30 @@ describe("GET /events", () => {
   });
 });
 
+describe("PUT /file announcements", () => {
+  test("tells every page what one page wrote, with the origin that sent it", async () => {
+    const { handler } = await setup();
+    const response = await handler(events(), context);
+    const pending = readFrames(response, (frames) => frames.length >= 2);
+
+    await handler(send("PUT", "/file", { code: "typed", origin: "page-1" }), context);
+    const frames = await pending;
+
+    expect([frames[1]!.split("\n")[0], dataOf(frames[1]!)]).toEqual([
+      "event: file",
+      { code: "typed", origin: "page-1" },
+    ]);
+  });
+
+  test("rejects an origin that is not a string", async () => {
+    const { handler, files } = await setup();
+
+    const response = await handler(send("PUT", "/file", { code: "typed", origin: 1 }), context);
+
+    expect([response.status, files.read().code]).toEqual([400, "export default 1;\n"]);
+  });
+});
+
 describe("PUT /file", () => {
   test("writes the code and the argument", async () => {
     const { handler, files } = await setup();

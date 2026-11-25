@@ -15,6 +15,7 @@ import { createRunSession } from "./session";
 import { STARTER_ARG, STARTER_CODE } from "./starter";
 import type { Tab } from "../shell-handler";
 import type { WorkspaceSelection } from "../workspace-context";
+import type { RunHandle, RunInput } from "./run-types";
 
 const FILE_POLL_MS = 300;
 
@@ -27,6 +28,7 @@ export interface FunctionRunTabOptions {
   getSelection: () => WorkspaceSelection;
   onSelectionChange: (listener: () => void) => () => void;
   pageFile: string;
+  startRun?: (input: RunInput) => RunHandle;
 }
 
 export interface FunctionRunTab {
@@ -74,7 +76,7 @@ export async function createFunctionRunTab(
   }
 
   const session = createRunSession({
-    startRun: createFunctionRunStarter(options.projectDir),
+    startRun: options.startRun ?? createFunctionRunStarter(options.projectDir),
     file,
     runArgFile,
     getSelection: options.getSelection,
@@ -108,8 +110,8 @@ export async function createFunctionRunTab(
     paths,
     close: () => {
       stopWatchingSelection();
-      result.close();
       handler.close();
+      result.close();
       fs.rmSync(runDir, { recursive: true, force: true });
     },
   };

@@ -5,6 +5,8 @@ import { normalizeArg } from "./arg";
 export interface FileChange {
   code?: string;
   arg?: string;
+  /** Which page wrote it; a page ignores the changes it sent itself. */
+  origin?: string;
 }
 
 export interface SyncedFilesOptions {
@@ -124,6 +126,10 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
             code = change.code;
             formatted = next;
             touch();
+            emit({
+              code: change.code,
+              ...(change.origin === undefined ? {} : { origin: change.origin }),
+            });
           }
         }
         if (change.arg === undefined) return {};
@@ -131,6 +137,10 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
         if (change.arg !== arg) {
           writeAtomic(options.argFile, change.arg);
           arg = change.arg;
+          emit({
+            arg: change.arg,
+            ...(change.origin === undefined ? {} : { origin: change.origin }),
+          });
         }
         argError = applyArg(arg);
         return {};

@@ -43,21 +43,19 @@ interface BuildOptions {
  */
 export function buildResult(options: BuildOptions): RunResult {
   const { snapshot, files, paths } = options;
-  const entries: ResultEntry[] = snapshot.entries
-    .toReversed()
-    .slice(0, MAX_ENTRIES)
-    .map(({ seq, at, message }) =>
-      message.type === "run"
-        ? {
-            seq,
-            at,
-            type: "run",
-            record: message.record,
-            argErrors: parseTailorErrors(message.record.error),
-          }
-        : { seq, at, type: message.type, text: message.text },
-    );
-  const latestRun = entries.find((entry) => entry.type === "run") ?? null;
+  const toResultEntry = ({ seq, at, message }: SessionSnapshot["entries"][number]): ResultEntry =>
+    message.type === "run"
+      ? {
+          seq,
+          at,
+          type: "run",
+          record: message.record,
+          argErrors: parseTailorErrors(message.record.error),
+        }
+      : { seq, at, type: message.type, text: message.text };
+  const entries = snapshot.entries.toReversed().slice(0, MAX_ENTRIES).map(toResultEntry);
+  const latest = snapshot.latestRun === undefined ? undefined : toResultEntry(snapshot.latestRun);
+  const latestRun = latest?.type === "run" ? latest : null;
   return {
     status: snapshot.status,
     running: snapshot.running,

@@ -37,11 +37,13 @@ function setup(
   const run = controllableRun();
   const startRun = vi.fn((_input: RunInput) => run.handle);
   let current = selection;
+  let clock = 0;
   const session = createRunSession({
     startRun,
     file: "/p/function.ts",
     runArgFile: "/tmp/arg.json",
     getSelection: () => current,
+    now: () => clock,
   });
   const events: SessionEvent[] = [];
   session.subscribe((event) => events.push(event));
@@ -50,6 +52,9 @@ function setup(
     run,
     startRun,
     events,
+    at: (time: number) => {
+      clock = time;
+    },
     select: (next: { profile?: string; workspaceId?: string }) => {
       current = next;
     },
@@ -199,6 +204,64 @@ describe("running", () => {
     expect([afterEdit, session.snapshot().running]).toEqual([true, false]);
   });
 
+  test("stays true through the run an edit queues behind a run in flight, until the run for that edit reports back", async () => {
+    const { session, run, at } = setup();
+    session.start();
+    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    await settle();
+
+    at(1000);
+    session.markInputsChanged();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+    const afterRunInFlight = session.snapshot().running;
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+
+    expect([afterRunInFlight, session.snapshot().running]).toEqual([true, false]);
+  });
+
+  test("expects one run for the edits that land within the watch's debounce", async () => {
+    const { session, run, at } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    at(5000);
+    session.markInputsChanged();
+    at(5050);
+    session.markInputsChanged();
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+
+    expect(session.snapshot().running).toBe(false);
+  });
+
+  test("expects only the first run for an edit made before the watch reports it is ready", async () => {
+    const { session, run, at } = setup();
+    session.start();
+
+    at(1000);
+    session.markInputsChanged();
+    run.push({ type: "stderr", line: "Ready! Running f.ts" });
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    expect(session.snapshot().running).toBe(false);
+  });
+
+  test("ignores a run nobody expects, such as one an imported file started", async () => {
+    const { session, run } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+
+    expect(session.snapshot().running).toBe(false);
+  });
+
   test("ignores an input change while nothing is watching", () => {
     const { session, events } = setup();
 
@@ -214,6 +277,41 @@ describe("running", () => {
     session.stop();
 
     expect(session.snapshot().running).toBe(false);
+  });
+});
+
+describe("latestRun", () => {
+  test("is the newest run, kept after the bounded entries have moved past it", async () => {
+    const run = controllableRun();
+    const session = createRunSession({
+      startRun: () => run.handle,
+      file: "f",
+      runArgFile: "a",
+      getSelection: () => ({ workspaceId: "ws" }),
+      maxEntries: 2,
+    });
+    session.start();
+
+    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    for (const line of ["one", "two", "three"]) run.push({ type: "stderr", line });
+    await settle();
+
+    expect([
+      session.snapshot().entries.map((entry) => entry.seq),
+      session.snapshot().latestRun?.message,
+    ]).toEqual([[3, 4], { type: "run", record: { success: true, result: "3" } }]);
+  });
+
+  test("is cleared when a new watch starts", async () => {
+    const { session, run } = setup();
+    session.start();
+    run.push({ type: "stdout", line: '{"success":true,"result":"3"}' });
+    await settle();
+    session.stop();
+
+    session.start();
+
+    expect(session.snapshot().latestRun).toBeUndefined();
   });
 });
 

@@ -158,6 +158,29 @@ describe("write", () => {
   });
 });
 
+describe("write announcements", () => {
+  test("tells the other pages what a page wrote, with the origin that sent it", async () => {
+    const { files, changes } = setup({ existingCode: "const a = 1;" });
+    await files.init();
+
+    await files.write({ code: "const a = 2;", arg: "{a: 1}", origin: "page-1" });
+
+    expect(changes).toEqual([
+      { code: "const a = 2;", origin: "page-1" },
+      { arg: "{a: 1}", origin: "page-1" },
+    ]);
+  });
+
+  test("announces nothing for text that formats the same as what is there", async () => {
+    const { files, changes } = setup({ existingCode: "const a = 1;" });
+    await files.init();
+
+    await files.write({ code: "const   a =\n 1;", origin: "page-1" });
+
+    expect(changes).toEqual([]);
+  });
+});
+
 describe("refresh", () => {
   test("announces a change made to the function file from outside", async () => {
     const { files, file, changes } = setup({ starter: "x" });
@@ -183,11 +206,12 @@ describe("refresh", () => {
     expect(changes).toEqual([{ code: "saved atomically" }]);
   });
 
-  test("does not announce what this side wrote itself", async () => {
+  test("does not announce a page's own write a second time when it looks for changes", async () => {
     const { files, changes } = setup({ starter: "x" });
     await files.init();
 
     await files.write({ code: "typed in the page", arg: "{a: 1}" });
+    changes.length = 0;
     await files.refresh();
 
     expect(changes).toEqual([]);

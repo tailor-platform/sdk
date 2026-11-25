@@ -21,6 +21,7 @@ export type SessionEvent =
 export interface SessionSnapshot {
   status: SessionStatus;
   running: boolean;
+  latestRun?: SessionEntry & { message: Extract<SessionMessage, { type: "run" }> };
   reason?: string;
   workspace?: WorkspaceSelection;
   entries: SessionEntry[];
@@ -32,8 +33,11 @@ export interface SessionOptions {
   runArgFile: string;
   getSelection: () => WorkspaceSelection;
   maxEntries?: number;
+  now?: () => number;
 }
 
+const CLI_DEBOUNCE_MS = 150;
+const READY_NOTE = /^(?:> )?Ready!/;
 const NO_WORKSPACE = "Select a workspace in the bar at the top of the page.";
 
 interface ActiveRun {
@@ -62,6 +66,11 @@ export function createRunSession(options: SessionOptions) {
   let reason: string | undefined;
   let workspace: WorkspaceSelection | undefined;
   let active: ActiveRun | undefined;
+  let latestRun: SessionSnapshot["latestRun"];
+  let owedRuns = 0;
+  let lastEditAt = 0;
+  let awaitingReady = false;
+  const now = options.now ?? Date.now;
 
   const emit = (event: SessionEvent) => {
     for (const listener of listeners) listener(event);
@@ -69,6 +78,7 @@ export function createRunSession(options: SessionOptions) {
 
   function setStatus(next: SessionStatus, why?: string, nowRunning = next === "watching") {
     status = next;
+    if (next !== "watching") owedRuns = 0;
     running = nowRunning;
     reason = why;
     emit({ type: "status", status, running, ...(why === undefined ? {} : { reason: why }) });
@@ -80,10 +90,16 @@ export function createRunSession(options: SessionOptions) {
     emit({ type: "status", status, running, ...(reason === undefined ? {} : { reason }) });
   }
 
-  function record(message: SessionMessage) {
+  function record(message: SessionMessage): SessionEntry {
     const entry: SessionEntry = { seq: ++seq, at: new Date().toISOString(), message };
     entries = [...entries, entry].slice(-maxEntries);
     emit({ type: "entry", entry });
+    return entry;
+  }
+
+  function settleRun() {
+    owedRuns = Math.max(0, owedRuns - 1);
+    if (owedRuns === 0) setRunning(false);
   }
 
   async function consume(run: ActiveRun) {
@@ -92,8 +108,12 @@ export function createRunSession(options: SessionOptions) {
       const message = interpret(event.type, event.type === "exit" ? "" : event.line);
       if (message === undefined) continue;
       if (message.type !== "exit") {
-        record(message);
-        if (message.type === "run" || message.type === "failure") setRunning(false);
+        const entry = record(message);
+        if (message.type === "note" && READY_NOTE.test(message.text)) awaitingReady = false;
+        if (message.type === "run") {
+          latestRun = { ...entry, message };
+        }
+        if (message.type === "run" || message.type === "failure") settleRun();
         continue;
       }
       const code = event.type === "exit" ? event.code : null;
@@ -121,6 +141,7 @@ export function createRunSession(options: SessionOptions) {
       if (workspaceArgs.length === 0) return { ok: false, reason: NO_WORKSPACE };
 
       entries = [];
+      latestRun = undefined;
       workspace = { ...selection };
       emit({ type: "reset" });
       let handle: RunHandle;
@@ -139,6 +160,9 @@ export function createRunSession(options: SessionOptions) {
       }
       const run: ActiveRun = { handle, workspaceArgs, workspace: { ...selection } };
       active = run;
+      owedRuns = 1;
+      awaitingReady = true;
+      lastEditAt = now();
       setStatus("watching");
       void consume(run);
       return { ok: true };
@@ -149,7 +173,13 @@ export function createRunSession(options: SessionOptions) {
     },
 
     markInputsChanged(): void {
-      if (active !== undefined) setRunning(true);
+      if (active === undefined) return;
+      const at = now();
+      const sameRun = awaitingReady || (owedRuns > 0 && at - lastEditAt < CLI_DEBOUNCE_MS);
+      lastEditAt = at;
+      if (owedRuns === 0) owedRuns = 1;
+      else if (!sameRun) owedRuns = 2;
+      setRunning(true);
     },
 
     fail(text: string): void {
@@ -185,6 +215,7 @@ export function createRunSession(options: SessionOptions) {
       return {
         status,
         running,
+        ...(latestRun === undefined ? {} : { latestRun }),
         ...(reason === undefined ? {} : { reason }),
         ...(workspace === undefined ? {} : { workspace }),
         entries,

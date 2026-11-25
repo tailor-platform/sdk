@@ -1,6 +1,6 @@
 import { normalizeArg } from "./arg";
 import type { UiHandler } from "../shell-handler";
-import type { createSyncedFiles } from "./files";
+import type { createSyncedFiles, FileChange } from "./files";
 import type { createRunSession } from "./session";
 
 export interface FunctionRunHandlerOptions {
@@ -35,9 +35,10 @@ function frame(event: string, data: unknown): Uint8Array {
   return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function parseFileBody(body: unknown): { code?: string; arg?: string } | string {
+function parseFileBody(body: unknown): FileChange | string {
   if (typeof body !== "object" || body === null) return "Expected a JSON object.";
-  const { code, arg } = body as { code?: unknown; arg?: unknown };
+  const { code, arg, origin } = body as { code?: unknown; arg?: unknown; origin?: unknown };
+  if (origin !== undefined && typeof origin !== "string") return "`origin` must be a string.";
   if (code !== undefined && typeof code !== "string") return "`code` must be a string.";
   if (arg !== undefined && typeof arg !== "string") return "`arg` must be a string.";
   if (arg !== undefined && normalizeArg(arg) === undefined) {
@@ -47,6 +48,7 @@ function parseFileBody(body: unknown): { code?: string; arg?: string } | string 
   return {
     ...(code === undefined ? {} : { code }),
     ...(arg === undefined ? {} : { arg }),
+    ...(origin === undefined ? {} : { origin }),
   };
 }
 

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vit
 import { buildResult, createResultWriter } from "./result";
 import { createRunSession, type SessionSnapshot } from "./session";
 import type { RunEvent, RunHandle } from "./run-types";
+import type { RunRecord } from "./stream";
 
 const paths = { file: ".tailor/studio/function.ts", argFile: ".tailor/studio/function.arg.json5" };
 
@@ -12,6 +13,11 @@ const entry = (seq: number, message: SessionSnapshot["entries"][number]["message
   seq,
   at: `2026-11-20T00:00:0${seq}.000Z`,
   message,
+});
+
+const runEntry = (seq: number, record: RunRecord) => ({
+  ...entry(seq, { type: "run", record }),
+  message: { type: "run" as const, record },
 });
 
 const snapshot = (overrides: Partial<SessionSnapshot> = {}): SessionSnapshot => ({
@@ -59,14 +65,35 @@ describe("buildResult", () => {
 
   test("puts the newest run at the top as latestRun, past the notes and failures that came after it", () => {
     const entries = [
-      entry(1, { type: "run", record: { success: true, result: "3" } }),
-      entry(2, { type: "run", record: { success: true, result: "9" } }),
+      runEntry(1, { success: true, result: "3" }),
+      runEntry(2, { success: true, result: "9" }),
       entry(3, { type: "note", text: "Ready!" }),
     ];
 
-    const result = buildResult({ snapshot: snapshot({ entries }), files, paths, now: 0 });
+    const result = buildResult({
+      snapshot: snapshot({ entries, latestRun: runEntry(2, { success: true, result: "9" }) }),
+      files,
+      paths,
+      now: 0,
+    });
 
     expect(result.latestRun).toMatchObject({ seq: 2, record: { result: "9" } });
+  });
+
+  test("serializes the snapshot's latestRun even when the bounded history no longer holds a run", () => {
+    const latestRun = runEntry(1, { success: true, result: "3" });
+    const entries = Array.from({ length: 25 }, (_, i) =>
+      entry(i + 2, { type: "note", text: `n${i + 2}` }),
+    );
+
+    const result = buildResult({
+      snapshot: snapshot({ entries, latestRun }),
+      files,
+      paths,
+      now: 0,
+    });
+
+    expect(result.latestRun).toMatchObject({ seq: 1, type: "run", record: { result: "3" } });
   });
 
   test("has no latestRun before anything ran", () => {
@@ -79,9 +106,15 @@ describe("buildResult", () => {
     const error = `rpc error: code = Aborted desc = TailorErrors: ${JSON.stringify({
       errors: [{ message: "Expected an integer: received x", path: ["a"] }],
     })}\n    at <eval>:1:1`;
-    const entries = [entry(1, { type: "run", record: { success: false, error } })];
+    const failed = runEntry(1, { success: false, error });
+    const entries = [failed];
 
-    const result = buildResult({ snapshot: snapshot({ entries }), files, paths, now: 0 });
+    const result = buildResult({
+      snapshot: snapshot({ entries, latestRun: failed }),
+      files,
+      paths,
+      now: 0,
+    });
 
     expect(result.latestRun?.argErrors).toEqual([
       { message: "Expected an integer: received x", path: ["a"] },

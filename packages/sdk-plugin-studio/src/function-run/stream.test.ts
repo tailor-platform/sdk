@@ -40,6 +40,20 @@ describe("interpret", () => {
     expect(interpret("stdout", JSON.stringify(record))).toEqual({ type: "run", record });
   });
 
+  test.each([
+    ["an error that is not a string", '{"error":123}'],
+    ["no success flag", '{"result":"3"}'],
+    ["a success that is not a boolean", '{"success":"yes"}'],
+    ["a result that is not a string", '{"success":true,"result":3}'],
+    ["a logs value that is not a string", '{"success":true,"logs":["a"]}'],
+    ["a JSON array", "[1,2]"],
+  ])(
+    "shows stdout JSON with %s as a note, since the project's own code can print it",
+    (_name, text) => {
+      expect(interpret("stdout", text)).toEqual({ type: "note", text });
+    },
+  );
+
   test("shows a stdout line that is not JSON as a note", () => {
     expect(interpret("stdout", "plain output")).toEqual({ type: "note", text: "plain output" });
   });

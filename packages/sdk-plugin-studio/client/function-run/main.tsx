@@ -287,11 +287,13 @@ function PathWithCopy({
   );
 }
 
+const PAGE_ID = crypto.randomUUID();
+
 function put(change: { code: string } | { arg: string }): void {
   void fetch("file", {
     method: "PUT",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(change),
+    body: JSON.stringify({ ...change, origin: PAGE_ID }),
   });
 }
 
@@ -345,7 +347,8 @@ function App() {
         setEntries((current) => [{ ...message, id: seq }, ...current]);
         if (message.type === "run") setArgErrors(parseTailorErrors(message.record.error));
       } else if (event === "file") {
-        const change = data as { code?: string; arg?: string };
+        const change = data as { code?: string; arg?: string; origin?: string };
+        if (change.origin === PAGE_ID) return;
         if (change.code !== undefined) {
           serverCode.current = change.code;
           setCode(change.code);
