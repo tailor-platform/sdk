@@ -81,6 +81,19 @@ export function emptyPlanResults(): PlanResults {
       ...emptyOwnership(),
       existingGateways: {},
     },
+    tailorDBReplication: {
+      workspaceId: "workspace-id",
+      changeSet: {
+        destination: createChangeSet("TailorDB replication destinations"),
+        replication: createChangeSet("TailorDB replications"),
+      },
+      detaches: [],
+      writeOrder: [],
+      earlyDestinationDeletes: new Set(),
+      ...emptyOwnership(),
+      existingDestinations: {},
+      existingReplications: {},
+    },
     idp: {
       changeSet: {
         service: createChangeSet("IdP services"),

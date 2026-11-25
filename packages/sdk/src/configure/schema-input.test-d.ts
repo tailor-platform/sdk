@@ -9,6 +9,10 @@ import type { IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { SecretsDefinition } from "#/configure/services/secrets/types";
 import type {
+  TailorDBReplicationDefinition,
+  TailorDBReplicationDestinationServiceInput,
+} from "#/configure/services/tailordb-replication/types";
+import type {
   DBFieldMetadata,
   RawRelationConfig,
   TailorDBTypeMetadata,
@@ -32,6 +36,10 @@ import type { IdPInput } from "#/types/idp.generated";
 import type { PluginConfigInput } from "#/types/plugin-config.generated";
 import type { ResolverInput } from "#/types/resolver.generated";
 import type { SecretsInput } from "#/types/secrets.generated";
+import type {
+  TailorDBReplicationDestinationInput,
+  TailorDBReplicationInput,
+} from "#/types/tailordb-replication.generated";
 import type {
   DBFieldMetadataInput,
   RawRelationConfigInput,
@@ -164,6 +172,20 @@ describe("configure input types are accepted by the schema that parses them", ()
   test("defineAIGateway", () => {
     expectTypeOf<AIGatewayServiceInput>().toExtend<AIGatewayInput>();
     expectTypeOf<ExtraKeyPaths<AIGatewayServiceInput, AIGatewayInput>>().toEqualTypeOf<never>();
+  });
+
+  test("defineTailorDBReplicationDestination", () => {
+    type Input = TailorDBReplicationDestinationServiceInput & { name: string };
+    expectTypeOf<Input>().toExtend<TailorDBReplicationDestinationInput>();
+    expectTypeOf<
+      ExtraKeyPaths<Input, TailorDBReplicationDestinationInput>
+    >().toEqualTypeOf<never>();
+  });
+
+  test("defineTailorDBReplication", () => {
+    type Input = Omit<TailorDBReplicationDefinition, "add">;
+    expectTypeOf<Input>().toExtend<TailorDBReplicationInput>();
+    expectTypeOf<ExtraKeyPaths<Input, TailorDBReplicationInput>>().toEqualTypeOf<never>();
   });
 
   test("defineSecretManager", () => {

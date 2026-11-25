@@ -258,6 +258,12 @@ export const MANAGED_RESOURCES = {
   "staticwebsite.custom_domain_transfer": managedResource({
     changeSetOf: (results) => results.staticWebsite.customDomainTransferChangeSet,
   }),
+  "tailordb.replication": managedResource({
+    changeSetOf: (results) => results.tailorDBReplication.changeSet.replication,
+  }),
+  "tailordb.replication_destination": managedResource({
+    changeSetOf: (results) => results.tailorDBReplication.changeSet.destination,
+  }),
   "tailordb.gql_permission": managedResource({
     changeSetOf: (results) => results.tailorDB.changeSet.gqlPermission,
     namespace: { owner: "tailordb.service", of: (item) => item.request.namespaceName },
@@ -340,6 +346,12 @@ export function collectImportantResourceDeletions(
     ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
       resourceType: "auth.oauth2_client" as const,
       resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
+      resourceName: replace.name,
+    })),
+    ...deletesNeedingConfirmation(results, "tailordb.replication"),
+    ...results.tailorDBReplication.changeSet.replication.replaces.map((replace) => ({
+      resourceType: "tailordb.replication" as const,
+      resourceLabel: `${MANAGED_RESOURCE_LABELS["tailordb.replication"]} (source namespace change rewrites all its tables)`,
       resourceName: replace.name,
     })),
     ...deletesNeedingConfirmation(results, "auth.connection"),
@@ -450,6 +462,14 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   {
     resourceType: "staticwebsite",
     namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
+  },
+  {
+    resourceType: "tailordb.replication",
+    namesOf: (target) => target.application.tailordbReplications.map(({ name }) => name),
+  },
+  {
+    resourceType: "tailordb.replication_destination",
+    namesOf: (target) => target.application.tailordbReplicationDestinations.map(({ name }) => name),
   },
   {
     resourceType: "tailordb.service",

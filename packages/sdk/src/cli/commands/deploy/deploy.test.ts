@@ -86,6 +86,8 @@ describe("shouldForceApplyAll", () => {
       application: {
         staticWebsiteServices: [],
         aiGatewayServices: [],
+        tailordbReplicationDestinations: [],
+        tailordbReplications: [],
         resolverServices: [],
         idpServices: [],
         authServices: [],
@@ -1530,6 +1532,7 @@ describe("printPlanResults", () => {
       secretManager: "secret.vault",
       staticWebsite: "staticwebsite",
       tailorDB: "tailordb.service",
+      tailorDBReplication: "tailordb.replication",
       workflow: "workflow",
       workflowExecutionPolicy: "workflow_job_function_execution_policy",
     };
@@ -1926,6 +1929,8 @@ function fakeTarget(
         ),
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
+      tailordbReplicationDestinations: [],
+      tailordbReplications: [],
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
       authServices: bundles.authNamespace
         ? [

@@ -27,6 +27,8 @@ export type ManagedResourceType =
   | "staticwebsite.custom_domain"
   | "staticwebsite.custom_domain_transfer"
   | "tailordb.gql_permission"
+  | "tailordb.replication"
+  | "tailordb.replication_destination"
   | "tailordb.service"
   | "tailordb.type"
   | "workflow"
@@ -59,6 +61,8 @@ export const MANAGED_RESOURCE_LABELS = {
   "staticwebsite.custom_domain": "StaticWebsite custom domain",
   "staticwebsite.custom_domain_transfer": "StaticWebsite custom domain transfer",
   "tailordb.gql_permission": "TailorDB GraphQL permission",
+  "tailordb.replication": "TailorDB replication",
+  "tailordb.replication_destination": "TailorDB replication destination",
   "tailordb.service": "TailorDB namespace",
   "tailordb.type": "TailorDB table",
   workflow: "Workflow",

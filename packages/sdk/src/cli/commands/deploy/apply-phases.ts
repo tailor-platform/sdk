@@ -29,6 +29,10 @@ import {
   type MaintenanceModeRelease,
   type planTailorDB,
 } from "./tailordb";
+import {
+  applyTailorDBReplication,
+  type TailorDBReplicationPlanResult,
+} from "./tailordb-replication";
 import { applyWorkflow, type planWorkflow } from "./workflow";
 import {
   applyWorkflowJobFunctionExecutionPolicy,
@@ -70,6 +74,7 @@ export type PlannedDeployment = {
   readonly tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
   readonly staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
   readonly aiGateway: Awaited<ReturnType<typeof planAIGateway>>;
+  readonly tailorDBReplication: TailorDBReplicationPlanResult;
   readonly idp: Awaited<ReturnType<typeof planIdP>>;
   readonly auth: Awaited<ReturnType<typeof planAuth>>;
   readonly pipeline: Awaited<ReturnType<typeof planPipeline>>;
@@ -98,6 +103,7 @@ export type ReusablePlanKind =
   | "tailorDB"
   | "secretManager"
   | "aiGateway"
+  | "tailorDBReplication"
   | "staticWebsite"
   | "workflowExecutionPolicy"
   | "idp"
@@ -332,12 +338,18 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
         await step("apply.functionRegistry.createUpdate", (d) =>
           applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
         );
+        await step("apply.tailorDBReplication.prepare", (d) =>
+          applyTailorDBReplication(applyClient, d.tailorDBReplication, "prepare"),
+        );
         await step("apply.tailorDB.createUpdate", async (d) => {
           const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
             holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
           });
           if (report) maintenance.push(maintenanceOf(d, report));
         });
+        await step("apply.tailorDBReplication.createUpdate", (d) =>
+          applyTailorDBReplication(applyClient, d.tailorDBReplication, "create-update"),
+        );
         await step("apply.auth.createUpdateDependents", (d) =>
           applyAuth(applyClient, d.auth, "create-update-dependents"),
         );
@@ -395,6 +407,9 @@ async function applyRemainingResourcesHoldingMaintenanceMode(
       applyStaticWebsite(client, d.staticWebsite, "delete"),
     );
     await forEachDeployment(deployments, (d) => applyAIGateway(client, d.aiGateway, "delete"));
+    await forEachDeployment(deployments, (d) =>
+      applyTailorDBReplication(client, d.tailorDBReplication, "delete"),
+    );
     await forEachDeployment(deployments, (d) =>
       applySecretManager(client, d.secretManager, "delete", d.application),
     );

@@ -103,6 +103,10 @@ vi.mock(import("./aigateway"), async (original) => ({
   ...(await original()),
   planAIGateway: async () => mocks.results.aiGateway,
 }));
+vi.mock(import("./tailordb-replication"), async (original) => ({
+  ...(await original()),
+  planTailorDBReplication: async () => mocks.results.tailorDBReplication,
+}));
 vi.mock(import("./idp"), async (original) => ({
   ...(await original()),
   planIdP: async () => mocks.results.idp,
@@ -149,6 +153,8 @@ beforeEach(() => {
     authServices: [],
     staticWebsiteServices: [{ name: "web" }],
     aiGatewayServices: [],
+    tailordbReplicationDestinations: [],
+    tailordbReplications: [],
     secrets: [],
     env: {},
   };

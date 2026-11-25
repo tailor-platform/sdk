@@ -15,6 +15,7 @@ TailorDB provides:
 - Relations between tables with automatic index and foreign key constraints
 - Permission system for access control
 - Field-level hooks and validations
+- [Replication](./replication.md) of tables into a BigQuery dataset you own
 
 For the official Tailor Platform documentation, see [TailorDB Guide](https://docs.tailor.tech/guides/tailordb/overview).
 

@@ -24,6 +24,8 @@ function application(overrides: Partial<Application>): Application {
     httpAdapterService: undefined,
     staticWebsiteServices: [],
     aiGatewayServices: [],
+    tailordbReplicationDestinations: [],
+    tailordbReplications: [],
     secrets: [],
     ignoreNullishValues: false,
     env: {},
