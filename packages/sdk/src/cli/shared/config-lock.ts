@@ -38,7 +38,7 @@ type ObservedLock = {
 
 export type ConfigLockOptions = {
   /** How long to wait for another process to release the lock, in milliseconds. */
-  timeoutMs?: number;
+  timeoutMs?: number | undefined;
 };
 
 const heldLocks = new AsyncLocalStorage<ReadonlySet<string>>();

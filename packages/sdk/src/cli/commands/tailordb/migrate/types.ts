@@ -102,7 +102,7 @@ export type MigrationRunKind = "main" | "steps";
 export interface MigrationInProgress {
   number: number;
   /** The run to resume or settle; absent when the deploy stopped before recording it. */
-  executionId?: string;
+  executionId?: string | undefined;
   /**
    * A deploy resumes a `steps` run; it does not resume a `main` run, which `migration resolve`
    * settles.
@@ -301,11 +301,11 @@ type SchemaDriftKind =
 export interface SchemaDrift {
   tableName: string;
   kind: SchemaDriftKind;
-  fieldName?: string;
-  indexName?: string;
-  fileName?: string;
-  relationshipName?: string;
-  relationshipType?: "forward" | "backward";
+  fieldName?: string | undefined;
+  indexName?: string | undefined;
+  fileName?: string | undefined;
+  relationshipName?: string | undefined;
+  relationshipType?: "forward" | "backward" | undefined;
   details: string;
 }
 
@@ -341,36 +341,36 @@ export interface RemoteSchemaVerificationResult {
   drifts: SchemaDrift[];
   hasDrift: boolean;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
-  checkpointMissingLocal?: boolean;
+  checkpointMissingLocal?: boolean | undefined;
   /**
    * Set alongside `checkpointMissingLocal` when the cause is an environment that fell behind
    * before `migration rebaseline` ran, rather than a generic history mismatch.
    */
-  rebaselinePending?: RebaselinePendingInfo;
+  rebaselinePending?: RebaselinePendingInfo | undefined;
   /** Set alongside `checkpointMissingLocal`: the latest local migration, or `null` when the local history has none */
-  localLatestMigration?: number | null;
+  localLatestMigration?: number | null | undefined;
   /** Set alongside `checkpointMissingLocal`: whether the namespace records another migration history ID, or one that cannot be read */
-  historyIdMismatch?: boolean;
+  historyIdMismatch?: boolean | undefined;
   /** Safe checkpoint reset offered after the remote schema matched the local baseline */
-  checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+  checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace"> | undefined;
   /** Set when the namespace has tables but no migration checkpoint, so it was verified as checkpoint 0 */
-  checkpointUnset?: true;
+  checkpointUnset?: true | undefined;
   /** Migration the namespace records as left in progress */
-  migrationInProgress?: MigrationInProgress;
+  migrationInProgress?: MigrationInProgress | undefined;
   /** Set when the namespace records a migration left in progress that cannot be read */
-  migrationInProgressInvalid?: true;
+  migrationInProgressInvalid?: true | undefined;
   /**
    * Set when the caller accepts them and the namespace records that the deletions of its checkpoint's
    * migration did not finish: the tables that migration removed that remain, left out of `drifts`
    */
-  unfinishedRemovals?: string[];
+  unfinishedRemovals?: string[] | undefined;
   /**
    * Migration whose Pre-phase schema or maintenance mode a deploy left in place without
    * recording it as in progress; set only when the verification was asked to accept that
    */
-  interruptedMigration?: number;
+  interruptedMigration?: number | undefined;
   /** Set when the namespace records its maintenance mode at the checkpoint, so tables in maintenance mode were compared without the settings it overrides */
-  leftInMaintenanceMode?: true;
+  leftInMaintenanceMode?: true | undefined;
   /** Set when verification could not run (namespace not deployed, or no snapshot at the remote migration number) */
-  skipped?: RemoteSchemaVerificationSkipReason;
+  skipped?: RemoteSchemaVerificationSkipReason | undefined;
 }

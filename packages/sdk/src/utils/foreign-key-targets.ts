@@ -1,14 +1,14 @@
 /** A field that may point at a table, and may hold fields of its own that do. */
 export interface ForeignKeyTargetField {
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  fields?: Readonly<Record<string, ForeignKeyTargetField>>;
+  foreignKeyType?: string | undefined;
+  foreignKeyField?: string | undefined;
+  fields?: Readonly<Record<string, ForeignKeyTargetField>> | undefined;
 }
 
 /** A table, and the field of it, that a field points at. */
 export interface ForeignKeyReference {
   table: string;
-  field?: string;
+  field?: string | undefined;
   /** Dotted path of the referencing field from the fields passed in, e.g. `links.parentID`. */
   path: string;
 }

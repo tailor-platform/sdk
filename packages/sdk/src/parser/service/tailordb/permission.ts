@@ -27,8 +27,8 @@ const { normalizeConditions, normalizeActionPermission: normalizeRawActionPermis
 type GqlPermissionPolicy = {
   conditions: readonly PermissionCondition[];
   actions: "all" | readonly GqlPermissionAction[];
-  permit?: boolean;
-  description?: string;
+  permit?: boolean | undefined;
+  description?: string | undefined;
 };
 
 type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate" | "bulkUpsert";

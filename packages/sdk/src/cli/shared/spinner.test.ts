@@ -5,12 +5,12 @@ import { stripAnsi } from "./test-helpers/strip-ansi";
 
 type FakeStream = {
   isTTY: boolean;
-  columns?: number;
+  columns?: number | undefined;
   write: (chunk: string) => boolean;
   output: string;
 };
 
-function createFakeStream(opts: { isTTY: boolean; columns?: number }): FakeStream {
+function createFakeStream(opts: { isTTY: boolean; columns?: number | undefined }): FakeStream {
   const stream = {
     isTTY: opts.isTTY,
     columns: opts.columns,

@@ -4,8 +4,8 @@ import { prompt } from "#/cli/shared/prompt";
 import { checkVaultManaged } from "./check-vault-managed";
 
 interface SecretWriteArgs {
-  profile?: string;
-  "workspace-id"?: string;
+  profile?: string | undefined;
+  "workspace-id"?: string | undefined;
   "vault-name": string;
   yes: boolean;
 }

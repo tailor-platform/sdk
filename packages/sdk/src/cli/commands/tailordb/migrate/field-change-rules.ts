@@ -19,13 +19,13 @@ import type { SnapshotFieldConfig } from "./snapshot-types";
 
 /** The properties the Pre-phase relaxes, shared by the proto and snapshot field shapes. */
 export interface PreMigrationField {
-  required?: boolean;
-  unique?: boolean;
-  foreignKey?: boolean;
-  foreignKeyType?: string;
-  foreignKeyField?: string;
-  allowedValues?: { value?: string; description?: string }[];
-  fields?: Record<string, PreMigrationField>;
+  required?: boolean | undefined;
+  unique?: boolean | undefined;
+  foreignKey?: boolean | undefined;
+  foreignKeyType?: string | undefined;
+  foreignKeyField?: string | undefined;
+  allowedValues?: { value?: string | undefined; description?: string | undefined }[] | undefined;
+  fields?: Record<string, PreMigrationField> | undefined;
 }
 
 /** A field or nested member the migration changes; `before` is undefined when it adds one. */
@@ -44,12 +44,12 @@ type ScaffoldedChange = FieldAddedChange | FieldModifiedChange | FieldTypeModifi
 interface Breakage {
   reason: string;
   /** `migration generate` rejects the change and shows the three-step hint. */
-  unsupported?: true;
+  unsupported?: true | undefined;
 }
 
 interface Relaxation<I> {
   /** When to relax, if not exactly when the rule breaks. */
-  when?: (input: I) => boolean;
+  when?: ((input: I) => boolean) | undefined;
   apply: (field: PreMigrationField, input: I) => void;
 }
 

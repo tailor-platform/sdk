@@ -856,7 +856,7 @@ describe("awaitWorkflowRun deadline", () => {
 
 interface Remote {
   /** What the resource is (default: a workflow) */
-  kind?: "workflow" | "jobFunction" | "function";
+  kind?: "workflow" | "jobFunction" | "function" | undefined;
   name: string;
   labels: Record<string, string>;
   executions?: WorkflowExecution_Status[];

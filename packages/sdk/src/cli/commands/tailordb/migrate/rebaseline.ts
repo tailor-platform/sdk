@@ -57,11 +57,11 @@ import { generateSchemaFile } from "./template-generator";
 import { createMigrationHistoryId } from "./types";
 
 interface RebaselineOptions {
-  configPath?: string;
-  namespace?: string;
-  yes?: boolean;
-  workspaceId?: string;
-  profile?: string;
+  configPath?: string | undefined;
+  namespace?: string | undefined;
+  yes?: boolean | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 }
 
 const MIGRATION_ARTIFACT_NAMES = new Set(Object.values(MIGRATION_FILE_NAMES));

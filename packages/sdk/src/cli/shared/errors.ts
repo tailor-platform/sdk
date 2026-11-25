@@ -15,11 +15,11 @@ interface CLIErrorOptions {
   /** Stable machine-readable failure code, such as `WORKSPACE_NOT_FOUND`. */
   code: string;
   message: string;
-  details?: string;
-  suggestion?: string;
-  command?: string;
-  next?: CLIErrorNextAction;
-  context?: Readonly<Record<string, Jsonifiable | undefined>>;
+  details?: string | undefined;
+  suggestion?: string | undefined;
+  command?: string | undefined;
+  next?: CLIErrorNextAction | undefined;
+  context?: Readonly<Record<string, Jsonifiable | undefined>> | undefined;
   cause?: unknown;
 }
 
@@ -35,21 +35,21 @@ export type CLIErrorNextAction = {
  */
 export interface CLIError extends Error {
   readonly code: string;
-  readonly details?: string;
-  readonly suggestion?: string;
-  readonly command?: string;
-  readonly next?: CLIErrorNextAction;
-  readonly context?: Readonly<Record<string, Jsonifiable | undefined>>;
+  readonly details?: string | undefined;
+  readonly suggestion?: string | undefined;
+  readonly command?: string | undefined;
+  readonly next?: CLIErrorNextAction | undefined;
+  readonly context?: Readonly<Record<string, Jsonifiable | undefined>> | undefined;
   format(): string;
 }
 
 type CLIErrorInternal = Error & {
   code: string;
-  details?: string;
-  suggestion?: string;
-  command?: string;
-  next?: CLIErrorNextAction;
-  context?: Readonly<Record<string, Jsonifiable | undefined>>;
+  details?: string | undefined;
+  suggestion?: string | undefined;
+  command?: string | undefined;
+  next?: CLIErrorNextAction | undefined;
+  context?: Readonly<Record<string, Jsonifiable | undefined>> | undefined;
   format(): string;
 };
 

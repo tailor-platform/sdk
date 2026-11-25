@@ -2,9 +2,9 @@ import { initOperatorClient, type OperatorClientOptions } from "./client";
 import { loadAccessToken, loadWorkspaceId } from "./context";
 
 type LoadOperatorWorkspaceContextOptions = {
-  profile?: string;
-  workspaceId?: string;
-  clientOptions?: OperatorClientOptions;
+  profile?: string | undefined;
+  workspaceId?: string | undefined;
+  clientOptions?: OperatorClientOptions | undefined;
 };
 
 export async function loadOperatorWorkspaceContext(options: LoadOperatorWorkspaceContextOptions) {

@@ -13,9 +13,9 @@ import { type WorkflowWaitResult } from "./waiter";
 
 export interface ResumeWorkflowOptions {
   executionId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  interval?: number | undefined;
 }
 
 export interface ResumeWorkflowResultWithWait {

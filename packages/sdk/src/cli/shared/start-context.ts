@@ -28,15 +28,15 @@ export interface StartContext {
    * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
    * config has no Auth service, and a string-literal invoker stops the build.
    */
-  authNamespace?: string;
+  authNamespace?: string | undefined;
   /** Name of the job function a job is started under (default: the job's own name) */
-  jobFunctionName?: (jobName: string) => string;
+  jobFunctionName?: ((jobName: string) => string) | undefined;
   /**
    * Auth namespaces that define each machine user, for a config with several Auth services, whose
    * string-literal invokers are resolved by name.
    */
-  machineUserAuthNamespaces?: ReadonlyMap<string, readonly string[]>;
-  tsconfigCache?: TsconfigLookupCache;
+  machineUserAuthNamespaces?: ReadonlyMap<string, readonly string[]> | undefined;
+  tsconfigCache?: TsconfigLookupCache | undefined;
 }
 
 /**

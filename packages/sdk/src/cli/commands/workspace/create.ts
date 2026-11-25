@@ -33,6 +33,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { parseAge, ttlArg, ttlLimit } from "./age";
 import { recordedExpiresAt, writeWorkspaceExpiry } from "./expiry";
 import { KNOWN_WORKSPACE_REGIONS } from "./regions";
@@ -87,7 +88,7 @@ export async function resolveWorkspaceCreationLocation(options: WorkspaceCreatio
 }
 
 /** A created workspace, plus how recording its prune expiry went when one was requested. */
-export type CreatedWorkspaceInfo = WorkspaceInfo & { ttl?: TtlWriteResult };
+export type CreatedWorkspaceInfo = WorkspaceInfo & { ttl?: TtlWriteResult | undefined };
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -133,7 +134,7 @@ export async function createWorkspace(
 type PreparedWorkspaceCreation = {
   client: OperatorClient;
   validated: ValidatedCreateWorkspaceOptions;
-  defaults?: UserWorkspaceDefaults;
+  defaults?: UserWorkspaceDefaults | undefined;
 };
 
 async function prepareWorkspaceCreation(
@@ -160,13 +161,15 @@ export async function createValidatedWorkspaceWithClient(
   options: ValidatedCreateWorkspaceOptions,
 ): Promise<CreatedWorkspaceInfo> {
   // Create workspace
-  const resp = await client.createWorkspace({
-    workspaceName: options.name,
-    workspaceRegion: options.region,
-    deleteProtection: options.deleteProtection ?? false,
-    organizationId: options.organizationId,
-    folderId: options.folderId,
-  });
+  const resp = await client.createWorkspace(
+    omitUndefined({
+      workspaceName: options.name,
+      workspaceRegion: options.region,
+      deleteProtection: options.deleteProtection ?? false,
+      organizationId: options.organizationId,
+      folderId: options.folderId,
+    }),
+  );
 
   const workspace = assertDefined(resp.workspace, "createWorkspace response missing workspace");
   const ttl =

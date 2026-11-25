@@ -29,9 +29,9 @@ export interface BundleResolversOptions extends FunctionBundleSettings {
   /** Directory the application's tsconfig is resolved from */
   baseDir: string;
   /** The namespace's `defaultPermission`, applied to resolvers declaring none */
-  defaultPermission?: Resolver["permission"];
+  defaultPermission?: Resolver["permission"] | undefined;
   /** Globals each installed package may reference */
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals | undefined;
 }
 
 /**

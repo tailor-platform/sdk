@@ -8,6 +8,7 @@ import { fetchWithinLimit, reportTruncation, type LimitedItems } from "#/cli/sha
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { fetchReportedExpiries, type ReportedExpiry } from "./expiry";
 import {
   workspaceInfosWithFolderNames,
@@ -16,9 +17,9 @@ import {
 } from "./transform";
 
 export interface ListWorkspacesOptions {
-  order?: Order;
-  limit?: number;
-  profile?: string;
+  order?: Order | undefined;
+  limit?: number | undefined;
+  profile?: string | undefined;
 }
 
 /** A listed workspace, plus the prune expiry it records. */
@@ -90,11 +91,13 @@ async function fetchWorkspaces(
   const pageDirection = toPageDirection(options?.order);
   return fetchPaged(
     async (pageToken, pageSize) => {
-      const { workspaces, nextPageToken } = await client.listWorkspaces({
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { workspaces, nextPageToken } = await client.listWorkspaces(
+        omitUndefined({
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [workspaces, nextPageToken];
     },
     { limit: options?.limit },

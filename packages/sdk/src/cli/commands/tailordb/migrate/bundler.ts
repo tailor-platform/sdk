@@ -155,11 +155,11 @@ export interface BundleSingleStepMigrationOptions {
   /** The only step of the script. */
   step: string;
   /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
-  baseDir?: string;
+  baseDir?: string | undefined;
   /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`, as recorded in `diff.json`. Defaults to `"legacy"`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 /**
@@ -230,13 +230,13 @@ export interface BundleMigrationStepsOptions {
   /** Job function the orchestrator starts once per step. */
   runnerJobFunctionName: string;
   /** Steps the runner reports as skipped instead of running; they still occupy their place in `order`. */
-  skipSteps?: readonly string[];
+  skipSteps?: readonly string[] | undefined;
   /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
-  baseDir?: string;
+  baseDir?: string | undefined;
   /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`, as recorded in the migration's `diff.json`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 /**

@@ -104,7 +104,9 @@ describe("renderInspectJson", () => {
     const m = getMethod("CreateTailorDBType");
     const json = renderInspectJson(m);
     function deepestDepth(
-      field: { message?: { fields: { name: string; message?: unknown }[] } } | undefined,
+      field:
+        | { message?: { fields: { name: string; message?: unknown }[] } | undefined }
+        | undefined,
       level: number,
     ): number {
       if (!field?.message) return level;

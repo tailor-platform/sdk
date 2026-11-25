@@ -109,7 +109,7 @@ describe("planExecutor", () => {
     existingExecutors: Array<{
       name: string;
       label?: string;
-      resource?: MessageInitShape<typeof ExecutorExecutorSchema>;
+      resource?: MessageInitShape<typeof ExecutorExecutorSchema> | undefined;
       sdkVersion?: string;
     }>,
     workspaceMachineUsers: string[] = [],

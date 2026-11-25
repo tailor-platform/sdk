@@ -8,7 +8,7 @@ type LogSeverity = "debug" | "info" | "warn" | "error";
 interface LogCall {
   severity: LogSeverity;
   message: string;
-  attributes?: LogAttributes;
+  attributes?: LogAttributes | undefined;
 }
 
 /**

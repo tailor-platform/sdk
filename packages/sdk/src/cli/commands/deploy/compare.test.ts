@@ -1,4 +1,4 @@
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageShape } from "@bufbuild/protobuf";
 import { UpdateAIGatewayRequestSchema } from "@tailor-platform/tailor-proto/aigateway_pb";
 import { AIGatewaySchema } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
 import {
@@ -10,11 +10,11 @@ import { describe, expect, test } from "vitest";
 import {
   areNormalizedEqual,
   defineRequestComparison,
-  emptyMessageAsUnset,
   isRequestUnchanged,
   normalizeProtoConfig,
   stableStringify,
   toComparableProtoJson,
+  unsetEmptyMessage,
 } from "./compare";
 
 describe("compare policy", () => {
@@ -99,17 +99,33 @@ describe("isRequestUnchanged", () => {
   });
 });
 
-describe("emptyMessageAsUnset", () => {
-  test("treats a submessage with no field set as unset", () => {
-    expect(emptyMessageAsUnset(IdPPermissionSchema, create(IdPPermissionSchema))).toBeUndefined();
-    expect(emptyMessageAsUnset(IdPPermissionSchema, undefined)).toBeUndefined();
+describe("unsetEmptyMessage", () => {
+  type Owner = { permission?: MessageShape<typeof IdPPermissionSchema> };
+
+  test("removes a submessage with no field set", () => {
+    const owner: Owner = { permission: create(IdPPermissionSchema) };
+
+    unsetEmptyMessage({ schema: IdPPermissionSchema, owner, key: "permission" });
+
+    expect("permission" in owner).toBe(false);
+  });
+
+  test("leaves a missing submessage missing", () => {
+    const owner: Owner = {};
+
+    unsetEmptyMessage({ schema: IdPPermissionSchema, owner, key: "permission" });
+
+    expect("permission" in owner).toBe(false);
   });
 
   test("keeps a submessage with a field set", () => {
     const permission = create(IdPPermissionSchema, {
       read: [{ permit: IdPPermissionPermit.ALLOW }],
     });
+    const owner: Owner = { permission };
 
-    expect(emptyMessageAsUnset(IdPPermissionSchema, permission)).toBe(permission);
+    unsetEmptyMessage({ schema: IdPPermissionSchema, owner, key: "permission" });
+
+    expect(owner.permission).toBe(permission);
   });
 });

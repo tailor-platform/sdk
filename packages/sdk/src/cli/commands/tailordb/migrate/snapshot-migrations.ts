@@ -316,8 +316,8 @@ export interface MigrationValidationError {
     | "invalid_schema_number"
     | "invalid_diff_number";
   message: string;
-  suggestion?: string;
-  migrationNumber?: number;
+  suggestion?: string | undefined;
+  migrationNumber?: number | undefined;
 }
 
 /**

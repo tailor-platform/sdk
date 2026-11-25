@@ -40,6 +40,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { spinner } from "#/cli/shared/spinner";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { getWorkflowExecution } from "../workflow/executions";
 import { waitForExecution } from "../workflow/start";
 import {
@@ -68,34 +69,34 @@ type ExecutorLike = {
 
 export type ListExecutorJobsTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
-  status?: string;
-  order?: Order;
-  limit?: number;
-  workspaceId?: string;
-  profile?: string;
+  status?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 export type GetExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
   jobId: string;
-  attempts?: boolean;
-  workspaceId?: string;
-  profile?: string;
+  attempts?: boolean | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> = {
   executor: E;
   jobId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-  timeout?: number;
-  logs?: boolean;
-  showProgress?: boolean;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  interval?: number | undefined;
+  timeout?: number | undefined;
+  logs?: boolean | undefined;
+  showProgress?: boolean | undefined;
 };
 
 export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
-  attempts?: ExecutorJobAttemptInfo[];
+  attempts?: ExecutorJobAttemptInfo[] | undefined;
 }
 
 interface WorkflowJobLog {
@@ -103,11 +104,11 @@ interface WorkflowJobLog {
   /**
    * @deprecated since 2.43.0 — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `jobExecutionId` to identify the job instead. codemod: none (no automatic migration exists)
    */
-  jobName?: string;
+  jobName?: string | undefined;
   kind: WorkflowJobExecutionKindInfo;
-  logs?: string;
-  logEntries?: FunctionLogEntryInfo[];
-  result?: string;
+  logs?: string | undefined;
+  logEntries?: FunctionLogEntryInfo[] | undefined;
+  result?: string | undefined;
 }
 
 export interface WatchExecutorJobResult {
@@ -117,13 +118,13 @@ export interface WatchExecutorJobResult {
   attempts: number;
   timedOut: boolean;
   lastError: string | null;
-  workflowExecutionId?: string;
-  workflowStatus?: string;
-  workflowJobLogs?: WorkflowJobLog[];
-  functionExecutionId?: string;
-  functionStatus?: string;
-  functionLogs?: string;
-  functionLogEntries?: FunctionLogEntryInfo[];
+  workflowExecutionId?: string | undefined;
+  workflowStatus?: string | undefined;
+  workflowJobLogs?: WorkflowJobLog[] | undefined;
+  functionExecutionId?: string | undefined;
+  functionStatus?: string | undefined;
+  functionLogs?: string | undefined;
+  functionLogEntries?: FunctionLogEntryInfo[] | undefined;
 }
 
 function formatTime(date: Date): string {
@@ -182,14 +183,16 @@ export async function listExecutorJobs<E extends ExecutorLike>(
   try {
     const jobs = await fetchPaged(
       async (pageToken, pageSize) => {
-        const { jobs, nextPageToken } = await client.listExecutorJobs({
-          workspaceId,
-          executorName,
-          pageToken,
-          pageSize,
-          pageDirection,
-          filter,
-        });
+        const { jobs, nextPageToken } = await client.listExecutorJobs(
+          omitUndefined({
+            workspaceId,
+            executorName,
+            pageToken,
+            pageSize,
+            pageDirection,
+            filter,
+          }),
+        );
         return [jobs, nextPageToken];
       },
       { limit: options.limit },

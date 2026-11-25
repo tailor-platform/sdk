@@ -82,7 +82,9 @@ function extractStaticStringValue(node: unknown): string | undefined {
     return value.value;
   }
   if (value.type === "TemplateLiteral") {
-    const quasis = value.quasis as Array<{ value?: { cooked?: string } }> | undefined;
+    const quasis = value.quasis as
+      | Array<{ value?: { cooked?: string | undefined } | undefined }>
+      | undefined;
     const expressions = value.expressions as unknown[] | undefined;
     if (quasis?.length === 1 && (expressions?.length ?? 0) === 0) {
       return quasis[0]?.value?.cooked;
@@ -185,7 +187,7 @@ function directExecJobFunctionError(sourceFile: string, call: DirectExecJobFunct
 
 interface JobUndetectableDescription {
   message: string;
-  details?: string;
+  details?: string | undefined;
   suggestion: string;
   context: Record<string, string | undefined>;
 }
@@ -292,7 +294,7 @@ export interface BundleWorkflowJobsOptions extends FunctionBundleSettings {
   /** Names of main jobs */
   mainJobNames: string[];
   /** Environment variables to inject */
-  env?: Record<string, string | number | boolean>;
+  env?: Record<string, string | number | boolean> | undefined;
   /** Start context for transformations */
   startContext: StartContext;
   /** Directory the owning config's tsconfig is resolved against */
@@ -304,12 +306,11 @@ export interface BundleWorkflowJobsOptions extends FunctionBundleSettings {
    * cannot change unless the sources do, but the sources can change between calls, e.g. during
    * an interactive confirmation pause before a rebuild)
    */
-  previousUsedJobs?: Pick<
-    BundleWorkflowJobsResult,
-    "usedJobNames" | "mainJobDeps" | "sourceFileState"
-  >;
+  previousUsedJobs?:
+    | Pick<BundleWorkflowJobsResult, "usedJobNames" | "mainJobDeps" | "sourceFileState">
+    | undefined;
   /** Globals each installed package may reference */
-  allowedRuntimeGlobals?: AllowedRuntimeGlobals;
+  allowedRuntimeGlobals?: AllowedRuntimeGlobals | undefined;
 }
 
 /**

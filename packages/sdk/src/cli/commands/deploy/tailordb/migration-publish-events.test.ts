@@ -60,12 +60,14 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   type WrittenSettings = {
     bulkUpsert?: boolean;
     publishRecordEvents?: boolean;
-    disableGqlOperations?: {
-      create?: boolean;
-      update?: boolean;
-      delete?: boolean;
-      read?: boolean;
-    };
+    disableGqlOperations?:
+      | {
+          create?: boolean | undefined;
+          update?: boolean;
+          delete?: boolean;
+          read?: boolean;
+        }
+      | undefined;
   };
 
   let checkpoint: RemoteCheckpoint;
@@ -345,8 +347,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     );
 
     expect(lastOrderSettings(client)).toEqual(
-      expect.objectContaining({ publishRecordEvents: false, disableGqlOperations: undefined }),
+      expect.objectContaining({ publishRecordEvents: false }),
     );
+    expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
   });
 
   test("does not create a later migration's permission table before that migration", async () => {
@@ -1369,7 +1372,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       publishRecordEvents: false,
       disableGqlOperations: { create: true, update: true, delete: true, read: false },
     };
-    const released = { publishRecordEvents: true, disableGqlOperations: undefined };
+    const released = { publishRecordEvents: true };
 
     test("leaves every write unrestricted when it is false", async () => {
       using stderr = captureStderr();
@@ -1462,6 +1465,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect.objectContaining(restricted),
       );
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
       expect(checkpoint.state.maintenanceModeChanges).toEqual(["m0001", null]);
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
     });
@@ -1528,6 +1532,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         expect(releasedReport?.phases.remainingDeploy).toBe(10_000);
         expect(stderr.output).toContain("were in maintenance mode");
         expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+        expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
       } finally {
         clock.mockRestore();
       }
@@ -1698,6 +1703,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       );
 
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
     });
 
     test("does not record a checkpoint for a migration that failed", async () => {
@@ -1758,6 +1764,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       expect(checkpoint.state.number).toBe(1);
       expect(checkpoint.state.maintenanceMode).toBeNull();
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
     });
 
     test("clears a checkpoint an earlier deploy recorded after restoring tables", async () => {
@@ -1808,6 +1815,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
     });
 
     test('"deploy" releases the namespace at once when a migration fails', async () => {
@@ -1835,6 +1843,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
 
       expect(holdMaintenanceMode).not.toHaveBeenCalled();
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
+      expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
     });
   });
 });

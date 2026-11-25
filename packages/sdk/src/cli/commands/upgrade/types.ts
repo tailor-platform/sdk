@@ -13,6 +13,6 @@ export interface RunOutput {
     prompt: string;
     /** Files relative to the upgraded project; empty when the whole project needs a review. */
     files: string[];
-    findings?: Array<{ file: string; line: number; message: string; excerpt: string }>;
+    findings?: Array<{ file: string; line: number; message: string; excerpt: string }> | undefined;
   }>;
 }

@@ -9,7 +9,7 @@ import { logger } from "#/cli/shared/logger";
 import { userOrganizationInfo, type UserOrganizationInfo } from "./transform";
 
 export interface ListOrganizationsOptions {
-  limit?: number;
+  limit?: number | undefined;
 }
 
 /**

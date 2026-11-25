@@ -14,7 +14,7 @@ import type {
 } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type WithLabel<T> = Partial<
-  Record<string, { resource: T; allLabels?: Record<string, string> }>
+  Record<string, { resource: T; allLabels?: Record<string, string> | undefined }>
 >;
 
 /**
@@ -154,7 +154,7 @@ export function hasMatchingSdkVersion(
  * application, IdP service, and workflow applies write every unchanged item's labels anyway, so
  * for them it is only counted.
  */
-export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite };
+export type UnchangedAnnotation = { labelRefresh?: MetadataLabelWrite | undefined };
 
 /**
  * Plan a label refresh for an unchanged resource whose labels differ from the ones a write sets
@@ -382,7 +382,7 @@ export type DependencyLabelParams = {
    */
   pinned: boolean;
   /** Which of the resource's values these records concern. */
-  scope?: DependencyScope;
+  scope?: DependencyScope | undefined;
 };
 
 /**
@@ -636,7 +636,7 @@ export type ResourceDependencyParams = {
   /** Whether the resource declares `publishEvents`. */
   pinned: boolean;
   /** Which of the resource's values these records concern. */
-  scope?: DependencyScope;
+  scope?: DependencyScope | undefined;
 };
 
 /**
@@ -668,7 +668,9 @@ export function addDependencyRecords(
  * operator client so tests can pass a stub and the module stays decoupled.
  */
 export interface MetadataLabelClient {
-  getMetadata(request: { trn: string }): Promise<{ metadata?: { labels: Record<string, string> } }>;
+  getMetadata(request: {
+    trn: string;
+  }): Promise<{ metadata?: { labels: Record<string, string> } | undefined }>;
   setMetadata(request: MessageInitShape<typeof SetMetadataRequestSchema>): Promise<unknown>;
 }
 
@@ -681,11 +683,11 @@ export interface MetadataLabelWrite {
   /** Target TRN. */
   trn: string;
   /** Labels to set. Keys absent here keep whatever the resource already has. */
-  labels?: Record<string, string>;
+  labels?: Record<string, string> | undefined;
   /** Label keys to delete. Absent keys are ignored. */
-  remove?: ReadonlyArray<string>;
+  remove?: ReadonlyArray<string> | undefined;
   /** Prefixes of label keys to delete, except keys this same write sets. */
-  removePrefixes?: ReadonlyArray<string>;
+  removePrefixes?: ReadonlyArray<string> | undefined;
   /**
    * Dependency records to reconcile against the labels found at write time.
    *
@@ -693,7 +695,7 @@ export interface MetadataLabelWrite {
    * {@link writeMetadataLabels} reads that anyway — resolving it here rather than
    * while planning saves every planner a second read of the same resource.
    */
-  dependencies?: ReadonlyArray<PendingDependencyRecords>;
+  dependencies?: ReadonlyArray<PendingDependencyRecords> | undefined;
 }
 
 /** A dependency-record reconciliation waiting on the resource's current labels. */
@@ -704,7 +706,7 @@ const metadataWriteBatchSize = 100;
 const metadataReadWaveSize = 100;
 
 interface MetadataWriteBatchClient extends MetadataLabelClient {
-  [metadataWriteBatch]?: MetadataWriteBatch;
+  [metadataWriteBatch]?: MetadataWriteBatch | undefined;
 }
 
 type LabelRequest = { trn: string; labels: Record<string, string> };

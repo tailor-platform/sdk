@@ -21,6 +21,7 @@ import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { stripAnsi } from "#/cli/shared/test-helpers/strip-ansi";
+import { omitUndefined } from "#/utils/omit-undefined";
 import {
   executionsCommand,
   getWorkflowExecution,
@@ -362,17 +363,20 @@ function mockWorkflowClient(
       const end = offset + (request.pageSize || ordered.length);
       return {
         executions: ordered.slice(offset, end).map(({ id, startedAt, finishedAt }) =>
-          create(WorkflowExecutionSchema, {
-            id,
-            workflowName,
-            status: startedAt
-              ? WorkflowExecution_Status.SUCCESS
-              : finishedAt
-                ? WorkflowExecution_Status.CANCELED
-                : WorkflowExecution_Status.PENDING,
-            startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
-            finishedAt: finishedAt ? timestampFromDate(new Date(finishedAt)) : undefined,
-          }),
+          create(
+            WorkflowExecutionSchema,
+            omitUndefined({
+              id,
+              workflowName,
+              status: startedAt
+                ? WorkflowExecution_Status.SUCCESS
+                : finishedAt
+                  ? WorkflowExecution_Status.CANCELED
+                  : WorkflowExecution_Status.PENDING,
+              startedAt: startedAt ? timestampFromDate(new Date(startedAt)) : undefined,
+              finishedAt: finishedAt ? timestampFromDate(new Date(finishedAt)) : undefined,
+            }),
+          ),
         ),
         nextPageToken: end < ordered.length ? String(end) : "",
       };

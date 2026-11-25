@@ -6,6 +6,7 @@ import { humanizeRelativeTime } from "#/cli/shared/format";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { transformPersonalAccessToken, type PersonalAccessTokenInfo } from "./transform";
 import { createPatOperatorClient } from "./user";
 
@@ -21,11 +22,13 @@ export const listCommand = defineAppCommand({
     const listed = await fetchWithinLimit(args.limit, (limit) =>
       fetchPaged(
         async (pageToken, pageSize) => {
-          const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens({
-            pageToken,
-            pageSize,
-            pageDirection,
-          });
+          const { personalAccessTokens, nextPageToken } = await client.listPersonalAccessTokens(
+            omitUndefined({
+              pageToken,
+              pageSize,
+              pageDirection,
+            }),
+          );
           return [personalAccessTokens, nextPageToken];
         },
         { limit },

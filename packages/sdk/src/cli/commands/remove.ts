@@ -54,9 +54,9 @@ import type { ManagedResourceType } from "#/cli/commands/deploy/managed-resource
 import type { PlanContext } from "#/cli/commands/deploy/types";
 
 export interface RemoveOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
 }
 
 // remove never writes: a config whose id is not recorded yet is removed by

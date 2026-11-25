@@ -27,6 +27,7 @@ vi.mock("../staticwebsite/deploy", () => ({
   deployStaticWebsite: vi.fn().mockResolvedValue({ url: "https://published", skippedFiles: [] }),
   staticWebsiteDeployTimeoutError: vi.fn(),
 }));
+import { omitUndefined } from "#/utils/omit-undefined";
 import { deployStaticWebsite } from "../staticwebsite/deploy";
 
 function target(plugins: Plugin[], name = "app"): BuiltDeploymentTarget {
@@ -509,7 +510,7 @@ describe("deployed hooks", () => {
   });
   test("fails when a configured AI Gateway is missing after deploy", async () => {
     const client = clientMock();
-    client.getAIGateway.mockResolvedValue({ aigateway: undefined });
+    client.getAIGateway.mockResolvedValue(omitUndefined({ aigateway: undefined }));
     const hook = vi.fn();
     await expect(
       runDeployedHooks({ client, workspaceId: "ws", targets: [target([plugin(hook)])] }),

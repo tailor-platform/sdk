@@ -41,7 +41,7 @@ export interface FileMetadata {
 
 /** Upload options. */
 export interface FileUploadOptions {
-  contentType?: string;
+  contentType?: string | undefined;
   /** How to interpret string data. Ignored for byte arrays and buffers. */
   encoding?: "utf8" | "base64";
 }
@@ -231,7 +231,7 @@ const api = (): TailorDBFileAPI =>
 
 const DATA_URL_PREFIX = /^data:([^,]*);base64,/i;
 
-function stripBase64DataUrl(data: string): { contentType?: string; payload: string } {
+function stripBase64DataUrl(data: string): { contentType?: string | undefined; payload: string } {
   const match = DATA_URL_PREFIX.exec(data);
   if (!match) return { payload: data };
   return { contentType: match[1] || undefined, payload: data.slice(match[0].length) };

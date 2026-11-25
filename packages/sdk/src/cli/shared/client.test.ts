@@ -633,7 +633,7 @@ describe("requests through the operator client", () => {
   type CallOptions = {
     stream?: boolean;
     method?: (typeof OperatorService.method)[keyof typeof OperatorService.method];
-    clientOptions?: OperatorClientOptions;
+    clientOptions?: OperatorClientOptions | undefined;
   };
 
   aroundEach(async (runTest) => {

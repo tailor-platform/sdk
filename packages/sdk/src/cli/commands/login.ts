@@ -31,11 +31,11 @@ import { assertDefined } from "#/utils/assert";
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
 type ProfileLoginOptions = {
-  profile?: string;
-  profileUser?: string;
-  platformConfig?: PlatformClientConfig;
-  updateCurrentUser?: boolean;
-  loginMode?: "user" | "machine-user";
+  profile?: string | undefined;
+  profileUser?: string | undefined;
+  platformConfig?: PlatformClientConfig | undefined;
+  updateCurrentUser?: boolean | undefined;
+  loginMode?: "user" | "machine-user" | undefined;
 };
 type LoggedInUser = {
   user: string;
@@ -237,7 +237,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
 const MACHINE_USER_CLIENT_SECRET_ENV = "TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET";
 
 async function loginAsMachineUser(
-  args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
+  args: { clientId: string; clientSecret?: string | undefined } & ProfileLoginOptions,
 ): Promise<LoggedInUser> {
   const clientSecret =
     args.clientSecret ??

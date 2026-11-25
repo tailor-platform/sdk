@@ -31,6 +31,7 @@ import {
   mockOperatorClient,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { withMetadataWriteBatch } from "../label";
 import { labelCountRejection } from "../test-helpers/label-count-rejection";
 import {
@@ -178,7 +179,7 @@ function writeSchemaFile(baseDir: string, migrationNumber: number): void {
 
 function createMetadataClient(metadata: MessageInitShape<typeof MetadataSchema> | undefined) {
   return mockOperatorClient({
-    getMetadata: { metadata },
+    getMetadata: omitUndefined({ metadata }),
     setMetadata: {},
   });
 }

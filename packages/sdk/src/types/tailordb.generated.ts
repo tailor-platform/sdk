@@ -15,13 +15,13 @@ export type GqlOperationsInput =
 
 export type GqlOperations = {
   /** Enable create mutation (default: true) */
-  create?: boolean;
+  create?: boolean | undefined;
   /** Enable update mutation (default: true) */
-  update?: boolean;
+  update?: boolean | undefined;
   /** Enable delete mutation (default: true) */
-  delete?: boolean;
+  delete?: boolean | undefined;
   /** Enable read queries - get, list, aggregation (default: true) */
-  read?: boolean;
+  read?: boolean | undefined;
 };
 
 export type DBFieldMetadata = {
@@ -1031,7 +1031,7 @@ export type TailorDBTypeRawInput = {
         | "nested";
       fields?: Record<string, any>;
       metadata: DBFieldMetadata;
-      rawRelation?: RawRelationConfig;
+      rawRelation?: RawRelationConfig | undefined;
     };
   };
   metadata: {
@@ -1078,7 +1078,7 @@ export type TailorDBTypeRaw = {
         | "nested";
       fields?: Record<string, any>;
       metadata: DBFieldMetadata;
-      rawRelation?: RawRelationConfig;
+      rawRelation?: RawRelationConfig | undefined;
     };
   };
   metadata: {

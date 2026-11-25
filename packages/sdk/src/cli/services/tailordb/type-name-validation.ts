@@ -15,7 +15,7 @@ export type TailorDBTypeNameSource = {
   readonly namespace: string;
   readonly tableName: string;
   readonly kind: TailorDBTypeNameSourceKind;
-  readonly definition?: TailorDBTypeDefinitionSource;
+  readonly definition?: TailorDBTypeDefinitionSource | undefined;
 };
 
 type ListTailorDBTypesArgs = {
@@ -27,7 +27,7 @@ type ListTailorDBTypesArgs = {
 
 type ListTailorDBTypesResult = {
   tailordbTypes: Array<{ name: string }>;
-  nextPageToken?: string;
+  nextPageToken?: string | undefined;
 };
 
 type ListTailorDBTypesClient = {
@@ -52,27 +52,27 @@ interface AssertUniqueTailorDBTypeNamesArgs {
   /** Table-name sources to validate. */
   sources: ReadonlyArray<TailorDBTypeNameSource>;
   /** Where the names must be unique, as the suggestion names it. */
-  uniqueAcross?: string;
+  uniqueAcross?: string | undefined;
 }
 
 export interface AssertUniqueLocalTailorDBTypeNamesArgs extends CollectLocalTailorDBTypeNameSourcesArgs {
   /** Whether the services are an application's or a whole workspace's. Defaults to `"application"`. */
-  scope?: "application" | "workspace";
+  scope?: "application" | "workspace" | undefined;
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
   extends CollectLocalTailorDBTypeNameSourcesArgs, FetchExternalTailorDBTypeNameSourcesArgs {
   /** External TailorDB services planned in the same deploy run. */
-  plannedExternalTailorDBServices?: ReadonlyArray<LocalTailorDBService>;
+  plannedExternalTailorDBServices?: ReadonlyArray<LocalTailorDBService> | undefined;
 }
 
 export interface TailorDBTypeDefinitionSource {
   /** File that defines the table, or the table a plugin generated it from. */
-  file?: string;
+  file?: string | undefined;
   /** Export of `file` that defines the table, or the table a plugin generated it from. */
-  exportName?: string;
+  exportName?: string | undefined;
   /** The plugin that generated the table, when one did. */
-  source?: string;
+  source?: string | undefined;
 }
 
 /**

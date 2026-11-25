@@ -16,7 +16,7 @@ import { logger } from "#/cli/shared/logger";
 import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { defineRequestComparison, emptyMessageAsUnset, isRequestUnchanged } from "./compare";
+import { defineRequestComparison, unsetEmptyMessage, isRequestUnchanged } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -356,7 +356,7 @@ export type WorkflowEventSubscribers = {
  */
 type UnchangedWorkflow = {
   name: string;
-  metaRequest?: MetadataLabelWrite;
+  metaRequest?: MetadataLabelWrite | undefined;
 };
 
 type DesiredWorkflow = {
@@ -376,34 +376,33 @@ const workflowComparison = defineRequestComparison({
       request.jobFunctions[jobName] = 0n;
     }
     if (request.retryPolicy) {
-      request.retryPolicy.initialBackoff = emptyMessageAsUnset(
-        DurationSchema,
-        request.retryPolicy.initialBackoff,
-      );
-      request.retryPolicy.maxBackoff = emptyMessageAsUnset(
-        DurationSchema,
-        request.retryPolicy.maxBackoff,
-      );
+      unsetEmptyMessage({
+        schema: DurationSchema,
+        owner: request.retryPolicy,
+        key: "initialBackoff",
+      });
+      unsetEmptyMessage({ schema: DurationSchema, owner: request.retryPolicy, key: "maxBackoff" });
     }
-    request.concurrencyPolicy = emptyMessageAsUnset(
-      ConcurrencyPolicySchema,
-      request.concurrencyPolicy,
-    );
+    unsetEmptyMessage({
+      schema: ConcurrencyPolicySchema,
+      owner: request,
+      key: "concurrencyPolicy",
+    });
   },
 });
 
 /** Inputs deciding which workflows and job functions publish execution events. */
 export type WorkflowEventPublishing = {
   /** Subscribers of `workflow.workflow_execution.*` events. */
-  execution?: WorkflowEventSubscribers;
+  execution?: WorkflowEventSubscribers | undefined;
   /** Subscribers of `workflow.workflow_execution.job_execution.*` events. */
-  jobExecution?: WorkflowEventSubscribers;
+  jobExecution?: WorkflowEventSubscribers | undefined;
   /** `publishEvents` declared on jobs, keyed by job name. */
-  jobPublishEvents?: ReadonlyMap<string, boolean>;
+  jobPublishEvents?: ReadonlyMap<string, boolean> | undefined;
   /** Dependents the run resolved, keyed by resource. */
-  dependentApps?: DependentAppsByResource;
+  dependentApps?: DependentAppsByResource | undefined;
   /** Stable ids of every application taking part in the run. */
-  runAppIds?: ReadonlySet<string>;
+  runAppIds?: ReadonlySet<string> | undefined;
 };
 
 const NO_EVENT_SUBSCRIBERS: WorkflowEventSubscribers = {
@@ -829,8 +828,8 @@ export function formatWorkflowChangeEntries(
 }
 
 function getExistingWorkflowJobNames(existing: {
-  mainJobFunctionName?: string;
-  jobFunctions?: Record<string, string | bigint>;
+  mainJobFunctionName?: string | undefined;
+  jobFunctions?: Record<string, string | bigint> | undefined;
 }) {
   const jobNames = new Set(Object.keys(existing.jobFunctions ?? {}));
   if (existing.mainJobFunctionName) {

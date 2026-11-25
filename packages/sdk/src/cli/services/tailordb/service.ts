@@ -56,13 +56,13 @@ export interface CreateTailorDBServiceParams {
   /** The TailorDB service configuration */
   config: TailorDBServiceConfig;
   /** Plugin manager for processing plugins */
-  pluginManager?: PluginManager;
+  pluginManager?: PluginManager | undefined;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
   /** Representation applied to `t` date fields that omit `as` in hook and validator scripts */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
   /** Bundle each table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
-  precompileScripts?: boolean;
+  precompileScripts?: boolean | undefined;
 }
 
 /**
@@ -327,7 +327,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
         // Process plugins if any
         const rawType = exportedValue as TailorDBTypeSchemaOutput & {
-          plugins?: PluginAttachment[];
+          plugins?: PluginAttachment[] | undefined;
         };
         if (rawType.plugins && Array.isArray(rawType.plugins) && rawType.plugins.length > 0) {
           pluginAttachments.set(rawType.name, [...rawType.plugins]);

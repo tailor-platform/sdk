@@ -67,9 +67,9 @@ const matchingSubgraphs = [
 function createMockApplication(
   overrides: {
     name?: string;
-    id?: string;
+    id?: string | undefined;
     cors?: string[];
-    metadata?: Record<string, string>;
+    metadata?: Record<string, string> | undefined;
     subgraphs?: Array<{ Type: string; Name: string }>;
     staticWebsiteServices?: Array<{ name: string }>;
   } = {},
@@ -105,7 +105,7 @@ type RemoteApplication = MessageInitShape<typeof ApplicationSchema> & {
   name: string;
   sdkVersion?: string;
   label?: string;
-  sdkAppId?: string;
+  sdkAppId?: string | undefined;
   extraLabels?: Record<string, string>;
 };
 
@@ -564,7 +564,6 @@ describe("planApplication", () => {
           subgraphs: [
             { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
           ],
-          disableIntrospection: undefined,
         }),
       },
     ]);
@@ -573,9 +572,6 @@ describe("planApplication", () => {
         name: "backoffice",
         request: expect.objectContaining({
           applicationName: "backoffice",
-          authNamespace: undefined,
-          authIdpConfigName: undefined,
-          cors: undefined,
           subgraphs: [
             { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
           ],
@@ -583,6 +579,12 @@ describe("planApplication", () => {
         }),
       },
     ]);
+    const [shopUpdate] = result.updates;
+    expect(shopUpdate?.request).not.toHaveProperty("disableIntrospection");
+    const [backofficeCreate] = result.creates;
+    for (const key of ["authNamespace", "authIdpConfigName", "cors"]) {
+      expect(backofficeCreate?.request).not.toHaveProperty(key);
+    }
     expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
   });
 

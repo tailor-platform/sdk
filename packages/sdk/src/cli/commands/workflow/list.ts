@@ -5,13 +5,14 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { type WorkflowListInfo, toWorkflowListInfo } from "./transform";
 
 export interface ListWorkflowsOptions {
-  workspaceId?: string;
-  profile?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 /**
@@ -28,12 +29,14 @@ export async function listWorkflows(options?: ListWorkflowsOptions): Promise<Wor
   const pageDirection = toPageDirection(options?.order);
   const workflows = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { workflows, nextPageToken } = await client.listWorkflows({
-        workspaceId,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { workflows, nextPageToken } = await client.listWorkflows(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [workflows, nextPageToken];
     },
     { limit: options?.limit },

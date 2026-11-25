@@ -1871,7 +1871,7 @@ describe("printDeploymentPlans", () => {
 
 type FakeBundledScripts = {
   configDir?: string;
-  appName?: string;
+  appName?: string | undefined;
   resolvers?: Record<string, string>;
   executors?: Record<string, string>;
   workflowJobs?: Record<string, string>;

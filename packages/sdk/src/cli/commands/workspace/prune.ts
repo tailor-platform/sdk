@@ -43,7 +43,7 @@ export interface PruneCriteria {
    * Minimum age since creation, in milliseconds. `0` selects any age.
    * `undefined` in `--expired` mode, where the recorded expiry decides.
    */
-  olderThanMs?: number;
+  olderThanMs?: number | undefined;
   /**
    * Organizations whose workspaces outside any folder are in scope.
    * Together with `folderIds`, each is a location; a workspace

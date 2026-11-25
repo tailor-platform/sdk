@@ -18,6 +18,7 @@ import { CLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { resolveMachineUser } from "#/cli/shared/machine-user";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { nameArgs, waitArgs } from "./args";
 import { resolveWorkflow } from "./get";
 import { type WorkflowWaitUntil } from "./status";
@@ -48,9 +49,9 @@ type WorkflowInput<W extends WorkflowLike> = W extends WorkflowLike
   : never;
 
 type StartWorkflowArgOptionForSingleWorkflow<W extends WorkflowLike> = WorkflowLike extends W
-  ? { arg?: Jsonifiable }
+  ? { arg?: Jsonifiable | undefined }
   : undefined extends WorkflowInput<W>
-    ? { arg?: WorkflowInput<W> }
+    ? { arg?: WorkflowInput<W> | undefined }
     : { arg: WorkflowInput<W> };
 
 type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
@@ -59,23 +60,23 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
 
 type StartWorkflowByNameOptions = {
   name: string;
-  machineUser?: string;
-  arg?: Jsonifiable;
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  interval?: number;
-  machineUserSource?: MachineUserInputSource;
+  machineUser?: string | undefined;
+  arg?: Jsonifiable | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  interval?: number | undefined;
+  machineUserSource?: MachineUserInputSource | undefined;
 };
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
   /** Machine user to start the workflow as, by name or with its Auth service. */
   invoker: MachineUserInvoker;
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
-  interval?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
+  interval?: number | undefined;
 };
 
 export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> =
@@ -84,9 +85,9 @@ export type StartWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> =
 export { waitForWorkflowExecution as waitForExecution };
 
 export interface WaitOptions {
-  showProgress?: boolean;
-  timeout?: number;
-  until?: WorkflowWaitUntil;
+  showProgress?: boolean | undefined;
+  timeout?: number | undefined;
+  until?: WorkflowWaitUntil | undefined;
 }
 
 export interface StartWorkflowResultWithWait {
@@ -100,7 +101,7 @@ interface StartWorkflowCoreOptions {
   workflowName: string;
   invoker: WorkflowInvoker<string>;
   arg?: unknown;
-  interval?: number;
+  interval?: number | undefined;
 }
 
 async function startWorkflowCore(
@@ -118,12 +119,14 @@ async function startWorkflowCore(
           ? options.arg
           : JSON.stringify(options.arg);
 
-    const { executionId } = await client.startWorkflow({
-      workspaceId,
-      workflowId: workflow.id,
-      authInvoker: invoker,
-      arg,
-    });
+    const { executionId } = await client.startWorkflow(
+      omitUndefined({
+        workspaceId,
+        workflowId: workflow.id,
+        authInvoker: invoker,
+        arg,
+      }),
+    );
 
     return {
       executionId,
@@ -154,7 +157,7 @@ async function startWorkflowCore(
 type ResolveStartInvokerOptions = {
   client: Awaited<ReturnType<typeof initOperatorClient>>;
   workspaceId: string;
-  configPath?: string;
+  configPath?: string | undefined;
   invoker: MachineUserInvoker | string;
 };
 

@@ -20,6 +20,7 @@ import {
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join, normalize } from "pathe";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { firstErrorLocation } from "./record-lines";
 import type {
   ForeignKeyDefinition as LinesDbForeignKeyDefinition,
@@ -79,7 +80,7 @@ type ValidateSeedResult =
       output: string;
       error: string;
       /** Where the first reported error sits, for tooling that links to source. */
-      location?: { file: string; line?: number };
+      location?: { file: string; line?: number | undefined } | undefined;
     };
 
 /**
@@ -150,7 +151,7 @@ async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarg
 type ValidationConfig = {
   dataDir: string | string[];
   schemaDir?: string;
-  tableName?: string;
+  tableName?: string | undefined;
   /** Warnings about how the path was resolved */
   warnings: string[];
 };
@@ -284,7 +285,7 @@ export async function validateSeedData(
   const db = LinesDB.create(config);
   let initialized;
   try {
-    initialized = await db.initialize({ tableName, detailedValidate: true });
+    initialized = await db.initialize(omitUndefined({ tableName, detailedValidate: true }));
   } finally {
     unwrap(await db.close());
   }
@@ -371,7 +372,7 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
     await fillFields({
       path: resolvedPath,
       fields,
-      schemaDir: options.schemaDir,
+      ...(options.schemaDir !== undefined && { schemaDir: options.schemaDir }),
       loadFiller: (schemaModule, { schemaPath }) => {
         const hook = schemaModule.hook;
         if (typeof hook !== "function") {

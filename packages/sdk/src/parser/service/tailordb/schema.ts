@@ -11,7 +11,14 @@ import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
  * @returns The normalized GqlOperations object
  */
 function normalizeGqlOperations(
-  config: "query" | { create?: boolean; update?: boolean; delete?: boolean; read?: boolean },
+  config:
+    | "query"
+    | {
+        create?: boolean | undefined;
+        update?: boolean | undefined;
+        delete?: boolean | undefined;
+        read?: boolean | undefined;
+      },
 ) {
   if (config === "query") {
     return { create: false, update: false, delete: false, read: true };

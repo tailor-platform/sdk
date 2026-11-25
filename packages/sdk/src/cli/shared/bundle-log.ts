@@ -12,7 +12,7 @@ const ESCALATED_LOG_CODE = "UNRESOLVED_IMPORT";
 
 export interface BundleLogOptions {
   /** Absolute path of the tsconfig handed to rolldown, when one was resolved. */
-  tsconfig?: string;
+  tsconfig?: string | undefined;
 }
 
 interface BundleLogRolldownOptions {
