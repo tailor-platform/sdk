@@ -47,12 +47,15 @@ jobs:
             changes:
               - *metrics
               - .github/actions/**
+              - .github/scripts/neutralize-mentions.mjs
               - .github/workflows/changeset-check.yml
               - .github/workflows/pkg-pr-new.yml
               - .github/workflows/securefix.yml
+              - docs/telemetry.md
               - llm-challenge/**
               - scripts/**
               - pnpm-workspace.yaml
+              - renovate.json
 
   test:
     needs: changes

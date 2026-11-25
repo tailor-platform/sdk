@@ -98,7 +98,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install aqua
-        if: needs.plan.outputs.aqua == 'true' || needs.plan.outputs.renovate == 'true'
+        if: needs.plan.outputs.aqua == 'true'
         uses: $/.github/actions/install-aqua
 
       - name: Install deps
