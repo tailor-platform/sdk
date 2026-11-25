@@ -18,7 +18,6 @@ workflows:
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/ci.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'aquaproj/aqua-installer@b8be739961814ee66b9e0d505f4d5de0d2eff047'
         - 'pnpm/setup@731dfb6463bbd11c11fd0ee11fe00ed0e36d48a1'
     '.github/workflows/cleanup-e2e-workspaces.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
