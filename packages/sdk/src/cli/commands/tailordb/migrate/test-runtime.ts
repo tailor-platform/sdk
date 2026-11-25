@@ -810,6 +810,22 @@ function prepareSeedData(
   return seeds;
 }
 
+interface SourceApplication {
+  workspaceId: string;
+  applicationName: string;
+}
+
+async function assertSourceApplication(
+  client: OperatorClient,
+  source: SourceApplication,
+): Promise<void> {
+  const { application } = await client.getApplication(source);
+  assertDefined(
+    application,
+    `application "${source.applicationName}" not found in source workspace`,
+  );
+}
+
 async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   state: RuntimeState;
   prepared: PreparedMigrationTest;
@@ -851,28 +867,22 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   assertTargetWorkspaceDiffers(sourceWorkspaceId, options.targetWorkspaceId);
 
   const configApplicationName = loaded.file.kind === "config" ? loaded.file.config.name : undefined;
-  const [workspaceResponse, applicationResponse, targetWorkspaceResponse] = await Promise.all([
+  const [workspaceResponse, targetWorkspaceResponse] = await Promise.all([
     client.getWorkspace({ workspaceId: sourceWorkspaceId }),
-    configApplicationName === undefined
-      ? Promise.resolve(undefined)
-      : client.getApplication({
-          workspaceId: sourceWorkspaceId,
-          applicationName: configApplicationName,
-        }),
     options.targetWorkspaceId
       ? client.getWorkspace({ workspaceId: options.targetWorkspaceId })
       : Promise.resolve(undefined),
+    configApplicationName === undefined
+      ? Promise.resolve()
+      : assertSourceApplication(client, {
+          workspaceId: sourceWorkspaceId,
+          applicationName: configApplicationName,
+        }),
   ]);
   const sourceWorkspace = assertDefined(
     workspaceResponse.workspace,
     `source workspace "${sourceWorkspaceId}" not found`,
   );
-  if (applicationResponse) {
-    assertDefined(
-      applicationResponse.application,
-      `application "${configApplicationName}" not found in source workspace`,
-    );
-  }
   const designatedTarget = targetWorkspaceResponse
     ? assertDefined(
         targetWorkspaceResponse.workspace,
@@ -962,6 +972,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     options.data === "clone"
       ? migrationTestCloneApplication(loaded.file, pendingNamespaces)
       : configApplicationName;
+  if (configApplicationName === undefined && sourceApplicationName !== undefined) {
+    await assertSourceApplication(client, {
+      workspaceId: sourceWorkspaceId,
+      applicationName: sourceApplicationName,
+    });
+  }
 
   const machineUserSource = {
     application: loaded.application,
