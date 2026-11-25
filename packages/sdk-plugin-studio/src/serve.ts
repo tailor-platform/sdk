@@ -37,7 +37,11 @@ export const uiCommand = defineAppCommand({
       description: "Open the UI in the default browser",
     }),
   }),
+  gracefulShutdown: true,
   run: async (args) => {
+    const stopRequested = new Promise<void>((resolve) => {
+      args.$signal?.addEventListener("abort", () => resolve(), { once: true });
+    });
     logger.warn(
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
@@ -73,10 +77,7 @@ export const uiCommand = defineAppCommand({
     logger.success(`Tailor Studio is running at ${server.url}`);
     if (args.open) await openBrowser(server.url);
 
-    await new Promise<void>((resolve) => {
-      process.once("SIGINT", resolve);
-      process.once("SIGTERM", resolve);
-    });
+    await stopRequested;
     await server.close();
   },
 });

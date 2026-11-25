@@ -10,7 +10,7 @@ import type { SelectionStore } from "./workspace-context";
  * @returns The project directory
  */
 export function projectDirectory(env: NodeJS.ProcessEnv, cwd: string): string {
-  return env.TAILOR_CONFIG_PATH ? path.dirname(env.TAILOR_CONFIG_PATH) : cwd;
+  return env.TAILOR_CONFIG_PATH ? path.resolve(cwd, path.dirname(env.TAILOR_CONFIG_PATH)) : cwd;
 }
 
 /**

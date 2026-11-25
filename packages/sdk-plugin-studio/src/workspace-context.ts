@@ -90,12 +90,11 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
     describe: async () => {
       const profiles = await options.listProfiles();
       const current = profiles.find((p) => p.name === selected.profile);
-      return {
-        profiles,
-        selected: current
-          ? { profile: current.name, workspaceId: current.workspaceId }
-          : { ...selected },
-      };
+      if (current && current.workspaceId !== selected.workspaceId) {
+        selected = { profile: current.name, workspaceId: current.workspaceId };
+        notify();
+      }
+      return { profiles, selected: { ...selected } };
     },
     subscribe: (listener) => {
       listeners.add(listener);

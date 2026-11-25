@@ -92,6 +92,24 @@ describe("createWorkspaceContext", () => {
     });
   });
 
+  test("describe also moves the shared selection to the workspace the profile points to now, and tells the listeners once", async () => {
+    let profiles = PROFILES;
+    const ctx = createWorkspaceContext({
+      initialProfile: "test",
+      listProfiles: async () => profiles,
+    });
+    await ctx.restore();
+    let notified = 0;
+    ctx.subscribe(() => notified++);
+    profiles = [{ name: "test", workspaceId: "moved-workspace" }, PROFILES[1]!];
+
+    await ctx.describe();
+    await ctx.describe();
+
+    expect(ctx.selection().workspaceId).toBe("moved-workspace");
+    expect(notified).toBe(1);
+  });
+
   test("describe lists the profiles with the current selection", async () => {
     expect(await (await context("test")).describe()).toEqual({
       profiles: PROFILES,

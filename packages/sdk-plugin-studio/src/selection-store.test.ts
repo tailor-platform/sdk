@@ -53,6 +53,15 @@ describe("projectDirectory", () => {
     ).toBe("/work/app");
   });
 
+  test("resolves a relative config path against the working directory, so the project directory is absolute", () => {
+    expect(projectDirectory({ TAILOR_CONFIG_PATH: "./tailor.config.ts" }, "/work/app")).toBe(
+      "/work/app",
+    );
+    expect(projectDirectory({ TAILOR_CONFIG_PATH: "../app/tailor.config.ts" }, "/work/other")).toBe(
+      "/work/app",
+    );
+  });
+
   test("falls back to the working directory when the CLI passed no config file", () => {
     expect(projectDirectory({}, "/work/app")).toBe("/work/app");
   });
