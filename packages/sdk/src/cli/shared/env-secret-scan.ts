@@ -48,7 +48,7 @@ interface ProviderFinding {
   /** `env` key holding the value. */
   readonly key: string;
   /** Path of the service whose `env` override holds the value; absent for the root `env`. */
-  readonly servicePath?: readonly string[];
+  readonly servicePath?: readonly string[] | undefined;
   /** Short name of what matched, e.g. `slack`, `aws`. */
   readonly detector: string;
   /**
@@ -59,7 +59,7 @@ interface ProviderFinding {
    */
   readonly rule: string;
   /** Where the matched pattern is documented. */
-  readonly docsUrl?: string;
+  readonly docsUrl?: string | undefined;
   /** A provider-specific match fails the command. */
   readonly severity: "error";
 }
@@ -68,7 +68,7 @@ interface EntropyFinding {
   /** `env` key holding the value. */
   readonly key: string;
   /** Path of the service whose `env` override holds the value; absent for the root `env`. */
-  readonly servicePath?: readonly string[];
+  readonly servicePath?: readonly string[] | undefined;
   /** The heuristic matches no named pattern, so it has neither a rule nor documentation. */
   readonly detector: typeof HIGH_ENTROPY_DETECTOR;
   /** A value that only looks randomly generated is reported without failing the command. */
@@ -87,9 +87,9 @@ interface EnvOverrideScanInput {
 
 interface EnvSecretScanInput {
   /** `env` entries as written in the config, before `{ value, allowSecretReason }` wrappers are resolved. */
-  readonly env?: Readonly<Record<string, EnvEntry>>;
+  readonly env?: Readonly<Record<string, EnvEntry>> | undefined;
   /** `env` overrides of services, scanned together with `env`. */
-  readonly overrides?: readonly EnvOverrideScanInput[];
+  readonly overrides?: readonly EnvOverrideScanInput[] | undefined;
 }
 
 interface EnvSecretAssertInput extends EnvSecretScanInput {
@@ -99,7 +99,7 @@ interface EnvSecretAssertInput extends EnvSecretScanInput {
 
 type ScannedEntry = {
   readonly key: string;
-  readonly servicePath?: readonly string[];
+  readonly servicePath?: readonly string[] | undefined;
   readonly value: EnvValue;
 };
 
@@ -127,10 +127,10 @@ export function resolveEnvValue(entry: EnvEntry): EnvValue {
  * @returns Provider matches first, then entropy warnings; empty when nothing matched
  */
 export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvSecretFinding[]> {
-  const sources: { servicePath?: readonly string[]; env: Readonly<Record<string, EnvEntry>> }[] = [
-    { env: input.env ?? {} },
-    ...(input.overrides ?? []),
-  ];
+  const sources: {
+    servicePath?: readonly string[] | undefined;
+    env: Readonly<Record<string, EnvEntry>>;
+  }[] = [{ env: input.env ?? {} }, ...(input.overrides ?? [])];
   const entries: ScannedEntry[] = sources.flatMap(({ servicePath, env }) =>
     Object.entries(env)
       .filter(([, entry]) => !isAllowedSecret(entry))

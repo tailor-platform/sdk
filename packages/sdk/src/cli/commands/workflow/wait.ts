@@ -13,7 +13,9 @@ import {
 } from "./waiter";
 
 export interface WorkflowWaitOutput extends WorkflowWaitResult {
-  jobDetails?: Awaited<ReturnType<typeof getWorkflowExecution>>["execution"]["jobDetails"];
+  jobDetails?:
+    | Awaited<ReturnType<typeof getWorkflowExecution>>["execution"]["jobDetails"]
+    | undefined;
 }
 
 /**

@@ -123,7 +123,7 @@ type SQLResultRow = Record<string, unknown>;
 type SQLExecutionResult = {
   rows: SQLResultRow[];
   rowCount: number;
-  affectedRows?: number;
+  affectedRows?: number | undefined;
 };
 
 type QueryCommandInput =
@@ -308,15 +308,17 @@ function queryInputRequiredError(): CLIError {
   });
 }
 
+type SqlQueryArgs = {
+  workspaceId: string;
+  namespace: string;
+  bundledCode: string;
+  query: string;
+};
+
 async function sqlQuery(
   client: Client,
   invoker: AuthInvoker,
-  args: {
-    workspaceId: string;
-    namespace: string;
-    bundledCode: string;
-    query: string;
-  },
+  args: SqlQueryArgs,
 ): Promise<SQLQueryDispatchResult> {
   const queries = splitSqlStatements(args.query);
   const executed = await executeScript({
@@ -343,16 +345,18 @@ async function sqlQuery(
   };
 }
 
+type GqlQueryArgs = {
+  workspaceId: string;
+  bundledCode: string;
+  query: string;
+};
+
 async function gqlQuery(
   client: Client,
   invoker: AuthInvoker,
   application: Application,
   machineUser: MachineUser,
-  args: {
-    workspaceId: string;
-    bundledCode: string;
-    query: string;
-  },
+  args: GqlQueryArgs,
 ): Promise<GQLQueryDispatchResult> {
   const { access_token: accessToken } = await fetchMachineUserToken(
     application.url,
@@ -406,9 +410,9 @@ function parseExecutionResult(result: string): unknown {
  * @returns Normalized input mode
  */
 export async function resolveQueryCommandInput(args: {
-  query?: string;
-  file?: string;
-  edit?: boolean;
+  query?: string | undefined;
+  file?: string | undefined;
+  edit?: boolean | undefined;
   engine: QueryEngine;
 }): Promise<QueryCommandInput> {
   if (args.query != null) {
@@ -614,7 +618,7 @@ function createReplValidator(engine: QueryEngine): (value: string) => string | u
 
 async function runRepl(
   options: QueryBaseOptions & {
-    json?: boolean;
+    json?: boolean | undefined;
     newlineOnEnter: boolean;
   },
 ): Promise<void> {
@@ -989,9 +993,11 @@ function toSqlJsonResult(execResult: SQLExecutionResult) {
   return { results: rows, rowCount, affectedRows };
 }
 
+type PrintResultOptions = { json?: boolean | undefined };
+
 function printSingleSqlResult(
   execResult: SQLExecutionResult,
-  options: { json?: boolean } = {},
+  options: PrintResultOptions = {},
 ): void {
   if (options.json) {
     logger.out(toSqlJsonResult(execResult));
@@ -1041,7 +1047,7 @@ function isSQLExecutionResultArray(value: unknown): value is SQLExecutionResult[
   return Array.isArray(value) && value.length > 0 && value.every(isSQLExecutionResult);
 }
 
-function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+function printSqlResult(result: SQLQueryDispatchResult, options: PrintResultOptions = {}): void {
   if (isSQLExecutionResultArray(result.result)) {
     if (options.json) {
       logger.out(result.result.map(toSqlJsonResult));
@@ -1071,7 +1077,7 @@ function printSqlResult(result: SQLQueryDispatchResult, options: { json?: boolea
   });
 }
 
-function printGqlResult(result: GQLQueryDispatchResult, options: { json?: boolean } = {}): void {
+function printGqlResult(result: GQLQueryDispatchResult, options: PrintResultOptions = {}): void {
   if (options.json) {
     logger.out({
       result: result.result,

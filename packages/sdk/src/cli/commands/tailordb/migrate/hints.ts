@@ -10,9 +10,9 @@ export interface MigrationScriptCommandOptions {
   migrationNumber: number;
   namespace: string;
   /** Config path the current run used; omitted from the command when it resolves to the default */
-  configPath?: string;
+  configPath?: string | undefined;
   /** Append `--no-script --reason` with a placeholder reason */
-  noScript?: boolean;
+  noScript?: boolean | undefined;
 }
 
 /**
@@ -37,7 +37,7 @@ export function formatMigrationScriptHint(options: MigrationScriptCommandOptions
 export interface RebaselineCommandOptions {
   namespace: string;
   /** Config path the current run used; omitted from the command when it resolves to the default */
-  configPath?: string;
+  configPath?: string | undefined;
 }
 
 /**
@@ -53,16 +53,16 @@ export function formatRebaselineHint(options: RebaselineCommandOptions): string 
 /** How the current run selected its config and workspace, kept in the migration commands it suggests. */
 export interface MigrationCommandContext {
   /** Config path the current run used; omitted from the command when it resolves to the default */
-  configPath?: string;
+  configPath?: string | undefined;
   /** Workspace, profile, and env-file selection to keep */
-  contextArgs?: readonly string[];
+  contextArgs?: readonly string[] | undefined;
 }
 
 /** Config, workspace, and profile the current run used. */
 export interface MigrationRunContext extends RecoveryContext {
-  configPath?: string;
+  configPath?: string | undefined;
   /** Further arguments of the run to keep, such as a deploy's env files and profile */
-  extraArgs?: readonly string[];
+  extraArgs?: readonly string[] | undefined;
 }
 
 /**

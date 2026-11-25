@@ -706,8 +706,8 @@ export async function resolveRunMachineUser(
   let attributeList: unknown[] = [];
   if (machineUserConfig && typeof machineUserConfig === "object") {
     const cfg = machineUserConfig as {
-      attributes?: Record<string, unknown>;
-      attributeList?: unknown[];
+      attributes?: Record<string, unknown> | undefined;
+      attributeList?: unknown[] | undefined;
     };
     attributes = cfg.attributes ?? null;
     attributeList = cfg.attributeList ?? [];

@@ -1372,11 +1372,13 @@ describe("loadAccessToken", () => {
     const lockPath = path.join(xdgTempDir, "tailor-platform", "config.yaml.lock");
     const inOneMinute = () => new Date(Date.now() + 60 * 1000).toISOString();
 
-    function writeFileUser(entry: {
+    type WriteFileUserEntry = {
       access_token: string;
       refresh_token?: string;
       token_expires_at: string;
-    }) {
+    };
+
+    function writeFileUser(entry: WriteFileUserEntry) {
       writePlatformConfig({
         version: 3,
         min_sdk_version: "2.0.0",

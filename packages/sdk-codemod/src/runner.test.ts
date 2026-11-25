@@ -13,6 +13,7 @@ type TestCodemodExtra = Pick<
   | "sourceTextLegacyPatterns"
   | "suspiciousPatterns"
   | "sourceStringSuspiciousPatterns"
+  | "jsonStringSuspiciousPatterns"
   | "prompt"
   | "reviewSupersededBy"
 >;
@@ -1280,6 +1281,25 @@ describe("runCodemods", () => {
       expect(result.warnings[0]).toContain("rule: test/rename-bin");
     });
 
+    test.each([
+      [
+        "a runner and a subcommand substitution before static arguments",
+        "`${runner} tailor-sdk ${subcommand} --json`",
+      ],
+      ["a subcommand substitution before static arguments", "`tailor-sdk ${subcommand} --json`"],
+    ])("warns for rename-bin residuals with %s", async (_name, template) => {
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: `const command = ${template};`,
+        codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+        }),
+      });
+
+      expect(result.warnings).toHaveLength(1);
+      expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
     test("warns for dynamic package flag rename-bin residuals", async () => {
       const { result } = await runWarningCase({
         fileName: "commands.ts",
@@ -2013,6 +2033,179 @@ describe("runCodemods", () => {
           files: ["a.ts"],
         },
       ]);
+    });
+
+    test.each([
+      ["an escape sequence", 'run("tailor deploy C:\\\\proj\\\\a.ts --flag x");\n'],
+      ["a tab escape", 'run("tailor deploy\\ta.ts --flag x");\n'],
+      ["a template substitution", "run(`tailor deploy ${file} --flag x`);\n"],
+      ["a nested template substitution", "run(`tailor deploy ${`${dir}/a.ts`} --flag x`);\n"],
+    ])("keeps a string command whole across %s", async (_name, source) => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), source);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              sourceStringSuspiciousPatterns: [/\btailor deploy[^\0]*? --flag\b/],
+              prompt: "Review by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
+    });
+
+    describe("jsonStringSuspiciousPatterns", () => {
+      async function reviewedFiles(
+        json: string,
+        extra: Pick<TestCodemodExtra, "suspiciousPatterns" | "jsonStringSuspiciousPatterns">,
+      ): Promise<string[]> {
+        const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-json-test-"));
+        tmpDir = dir;
+        await fs.promises.writeFile(path.join(dir, "a.json"), json);
+
+        const result = await runCodemods(
+          [
+            {
+              codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.json"], undefined, {
+                ...extra,
+                prompt: "Review by hand.",
+              }),
+              scriptPath: partialTransformPath,
+            },
+          ],
+          dir,
+          true,
+        );
+        return result.llmReviews.flatMap((review) => review.files);
+      }
+
+      test("matches inside one string value", async () => {
+        const files = await reviewedFiles('{"x":"one two"}', {
+          jsonStringSuspiciousPatterns: [/\bone\b[^\0]*\btwo\b/],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
+
+      test("does not match across two string values even when the pattern allows any character", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          jsonStringSuspiciousPatterns: [/one[\s\S]*two/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("requires every pattern of a group to match inside the same string value", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          jsonStringSuspiciousPatterns: [["one", "two"]],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test.each([
+        ["with jsonStringSuspiciousPatterns", { jsonStringSuspiciousPatterns: [/\bnever\b/] }],
+        ["without jsonStringSuspiciousPatterns", { suspiciousPatterns: [/\bnever\b/] }],
+      ])("reads a deeply nested JSON file %s", async (_name, extra) => {
+        const depth = 20000;
+        const files = await reviewedFiles(`{"a":${"[".repeat(depth)}${"]".repeat(depth)}}`, extra);
+
+        expect(files).toEqual([]);
+      });
+
+      test("keeps a string value that holds a NUL character as one value", async () => {
+        const files = await reviewedFiles('{"x":"one\\u0000two"}', {
+          jsonStringSuspiciousPatterns: [["one", "two"]],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
+
+      test("does not match an anchored pattern against part of a value that holds a NUL character", async () => {
+        const files = await reviewedFiles('{"x":"one\\u0000two"}', {
+          jsonStringSuspiciousPatterns: [/^one$/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("does not match an empty pattern in a JSON file without string values", async () => {
+        const files = await reviewedFiles('{"a":1}', {
+          jsonStringSuspiciousPatterns: [/^$/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("does not match a key", async () => {
+        const files = await reviewedFiles('{"one":"x"}', {
+          jsonStringSuspiciousPatterns: [/\bone\b/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("replaces suspiciousPatterns for a JSON file that parses", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two"}', {
+          suspiciousPatterns: [/one[^\0]*two/],
+          jsonStringSuspiciousPatterns: [/\bnever\b/],
+        });
+
+        expect(files).toEqual([]);
+      });
+
+      test("falls back to suspiciousPatterns for a JSON file that does not parse", async () => {
+        const files = await reviewedFiles('{"x":"one","y":"two",}', {
+          suspiciousPatterns: [/one[^\0]*two/],
+          jsonStringSuspiciousPatterns: [/\bnever\b/],
+        });
+
+        expect(files).toEqual(["a.json"]);
+      });
+    });
+
+    test.each([
+      [
+        "a word boundary after a substitution",
+        "run(`x ${dir}tailor deploy`);\n",
+        /\btailor deploy/,
+      ],
+      [
+        "a word boundary before a substitution",
+        "run(`tailor deploy${dir} x`);\n",
+        /tailor deploy\b/,
+      ],
+      ["a leading substitution", "run(`${dir} tailor deploy ${file}`);\n", /^ tailor deploy $/],
+      ["a hex escape", 'run("tailor dep\\x6coy");\n', /tailor dep[^\0 ]oy/],
+      ["an escaped dollar sign", 'run("curl \\$PLATFORM_URL");\n', "PLATFORM_URL"],
+    ])("keeps a string command readable with %s", async (_name, source, pattern) => {
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-source-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(path.join(dir, "a.ts"), source);
+
+      const result = await runCodemods(
+        [
+          {
+            codemod: makeCodemod("test/llm", partialTransformPath, ["**/*.ts"], undefined, {
+              sourceStringSuspiciousPatterns: [pattern],
+              prompt: "Review by hand.",
+            }),
+            scriptPath: partialTransformPath,
+          },
+        ],
+        dir,
+        true,
+      );
+
+      expect(result.llmReviews.flatMap((review) => review.files)).toEqual(["a.ts"]);
     });
 
     test("keeps LLM review patterns after regex literals with escaped slashes", async () => {

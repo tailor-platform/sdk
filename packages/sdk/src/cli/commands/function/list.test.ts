@@ -64,9 +64,12 @@ describe("listFunctionRegistries", () => {
         expect.objectContaining({
           workspaceId: "workspace-1",
           sortBy: "updated_at",
-          pageDirection,
+          ...(pageDirection !== undefined && { pageDirection }),
         }),
       );
+      expect(
+        Object.hasOwn(client.listFunctionRegistries.mock.lastCall?.[0] ?? {}, "pageDirection"),
+      ).toBe(pageDirection !== undefined);
     },
   );
 

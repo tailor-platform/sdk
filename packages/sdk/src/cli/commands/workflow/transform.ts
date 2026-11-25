@@ -52,7 +52,7 @@ export interface WorkflowJobExecutionInfo {
   /**
    * @deprecated since 2.43.0 — the Platform is retiring this value, so this is never set; use `kind` for the job function name or wait key and `position` for the place among the other jobs instead. codemod: none (no automatic migration exists)
    */
-  stackedJobName?: string;
+  stackedJobName?: string | undefined;
   kind: WorkflowJobExecutionKindInfo;
   /** `null` when the Platform reported no position for the job. */
   position: WorkflowJobExecutionPositionInfo | null;

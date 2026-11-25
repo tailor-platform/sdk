@@ -45,6 +45,8 @@ interface FreshErdExportOptions {
   configPath?: string;
   namespace?: string;
   outputDir: string;
+  /** Stops the export child when it aborts. */
+  signal?: AbortSignal;
 }
 
 interface ErdExportJsonResult {
@@ -310,6 +312,7 @@ export async function runFreshErdExport(options: FreshErdExportOptions): Promise
       cwd: process.cwd(),
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     let stdout = "";
     let stderr = "";

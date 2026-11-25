@@ -103,12 +103,14 @@ type PlannedItem<C extends ManagedResourceChangeSet<HasName>> =
 
 type ManagedResource<Item = ManagedResourceItem> = {
   changeSetOf: (results: PlanResults) => ManagedResourceChangeSet<Item>;
-  nameOf?: (item: ManagedResourceItem) => string;
+  nameOf?: ((item: ManagedResourceItem) => string) | undefined;
   /** The namespace a planned item belongs to, owned by a resource of type `owner`. */
-  namespace?: {
-    owner: ManagedResourceType;
-    of(item: Item): string | undefined;
-  };
+  namespace?:
+    | {
+        owner: ManagedResourceType;
+        of(item: Item): string | undefined;
+      }
+    | undefined;
 };
 
 /** A `ManagedResource` whose namespace accessor reads the items of change set `C`. */
@@ -117,7 +119,9 @@ type ManagedResourceSpec<C extends ManagedResourceChangeSet<HasName>> = Omit<
   "changeSetOf" | "namespace"
 > & {
   changeSetOf: (results: PlanResults) => C;
-  namespace?: { owner: ManagedResourceType; of: (item: PlannedItem<C>) => string | undefined };
+  namespace?:
+    | { owner: ManagedResourceType; of: (item: PlannedItem<C>) => string | undefined }
+    | undefined;
 };
 
 function managedResource<C extends ManagedResourceChangeSet<HasName>>(

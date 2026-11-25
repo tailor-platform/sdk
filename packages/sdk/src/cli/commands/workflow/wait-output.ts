@@ -5,8 +5,8 @@ import type { WorkflowWaitUntil } from "./status";
 
 interface WorkflowWaitOutputOptions {
   executionId: string;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
   logs: boolean;
   jsonOutput: boolean;
   until: WorkflowWaitUntil;

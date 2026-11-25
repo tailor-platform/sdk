@@ -36,7 +36,7 @@ export type ChunkSeedDataOptions = {
   /** Byte size of script code sent in the same message as the data (0 when it is sent apart) */
   codeByteSize: number;
   /** Maximum message size in bytes (default: 3.5MB) */
-  maxMessageSize?: number;
+  maxMessageSize?: number | undefined;
 };
 
 /** Default maximum message size: 3.5MB (conservative margin under the 4MB limit of a workflow start argument) */

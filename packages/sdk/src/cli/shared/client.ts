@@ -29,9 +29,9 @@ const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/
 const OAUTH2_REQUEST_TIMEOUT_MS = 30_000;
 
 export type PlatformClientConfig = {
-  platformUrl?: string;
-  oauth2ClientId?: string;
-  consoleUrl?: string;
+  platformUrl?: string | undefined;
+  oauth2ClientId?: string | undefined;
+  consoleUrl?: string | undefined;
 };
 
 const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
@@ -67,6 +67,24 @@ export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
     ...(consoleUrl ? { consoleUrl } : {}),
   };
   return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+/**
+ * The platform the environment names, as a profile would store it: a URL or an OAuth2 client ID
+ * equal to the default one is left out. A plugin the CLI starts always receives both in its
+ * environment, defaults included.
+ * @returns The settings that differ from the default platform, or undefined when none does
+ */
+export function platformConfigFromEnv(): PlatformClientConfig | undefined {
+  const { platformUrl, oauth2ClientId, consoleUrl } = getEffectivePlatformConfig() ?? {};
+  const custom: PlatformClientConfig = {
+    ...(platformUrl && normalizeBaseUrl(platformUrl) !== normalizeBaseUrl(defaultPlatformBaseUrl)
+      ? { platformUrl }
+      : {}),
+    ...(oauth2ClientId && oauth2ClientId !== defaultOAuth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
+  };
+  return Object.keys(custom).length > 0 ? custom : undefined;
 }
 
 export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {
@@ -177,7 +195,7 @@ export interface OperatorClientOptions {
    * Renew a browser-login token while the client runs (default true). Pass false for a
    * best-effort call that may be abandoned mid-flight, which must never rotate the stored login.
    */
-  renewToken?: boolean;
+  renewToken?: boolean | undefined;
   /**
    * Set only when the client creates resources that a plan found missing and does not read what
    * those creates return (default false). It changes how some creates, such as those of TailorDB
@@ -187,7 +205,7 @@ export interface OperatorClientOptions {
    * created the resource, the create saves a crash report and prints where it was saved before it
    * fails, unless crash reports are turned off.
    */
-  createsPlannedResources?: boolean;
+  createsPlannedResources?: boolean | undefined;
 }
 
 /**
@@ -736,6 +754,11 @@ function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boo
   );
 }
 
+type UnaryMethod = {
+  service: UnaryResponse["service"];
+  method: UnaryResponse["method"];
+};
+
 /**
  * Build a default (empty) unary response for the request's output message.
  *
@@ -745,10 +768,7 @@ function isRetrySafeCreateAlreadyExists(error: unknown, methodName: string): boo
  * @param req - Unary request whose output schema is used
  * @returns A synthesized unary response with an empty output message
  */
-function synthesizeEmptyUnaryResponse(req: {
-  service: UnaryResponse["service"];
-  method: UnaryResponse["method"];
-}): UnaryResponse {
+function synthesizeEmptyUnaryResponse(req: UnaryMethod): UnaryResponse {
   return {
     stream: false,
     service: req.service,
@@ -891,6 +911,15 @@ function isTransportDisconnectError(error: unknown): error is Error & { code: st
     typeof error.code === "string" &&
     TRANSPORT_DISCONNECT_ERROR_CODES.has(error.code)
   );
+}
+
+/**
+ * Whether a request failed at the Platform or on the way to it, rather than in the SDK.
+ * @param error - Error thrown by the request
+ * @returns True for a `ConnectError` or a raw transport disconnect
+ */
+export function isRequestFailure(error: unknown): error is Error {
+  return error instanceof ConnectError || isTransportDisconnectError(error);
 }
 
 // Node error codes connect-node maps to `Unavailable` that occur before a connection
@@ -1286,7 +1315,7 @@ export async function getOrNull<T>(fn: () => Promise<T>): Promise<T | undefined>
 
 interface FetchPagedOptions {
   /** Maximum number of items to return. 0 or undefined means unlimited. */
-  limit?: number;
+  limit?: number | undefined;
 }
 
 /**
@@ -1385,7 +1414,7 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * a warning, and separately, `failOnUnexpectedError` decides whether they
    * abort instead.
    */
-  expectedLocalNames?: ReadonlySet<string>;
+  expectedLocalNames?: ReadonlySet<string> | undefined;
   /**
    * When true, an entry that cannot be resolved keeps its original
    * `name:url[/path]` pattern instead of being dropped, and the warning says
@@ -1393,7 +1422,7 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * rather than a list use this, because silently dropping the value would
    * change the shape of what user code receives.
    */
-  keepUnresolved?: boolean;
+  keepUnresolved?: boolean | undefined;
   /**
    * When true, a lookup failure other than `NotFound` (a permission error, a
    * transient RPC failure, ...) is re-thrown instead of being downgraded to a
@@ -1404,14 +1433,14 @@ export type ResolveStaticWebsiteUrlsOptions = {
    * code use this, since shipping it silently is worse than failing the
    * deploy. A `NotFound` for a name in `expectedLocalNames` is unaffected.
    */
-  failOnUnexpectedError?: boolean;
+  failOnUnexpectedError?: boolean | undefined;
   /**
    * Shared `getStaticWebsite` lookups, keyed by site name. Pass the same map
    * across multiple calls that may reference the same site (for example, one
    * call per `env` key) so only the first caller for a given name issues the
    * platform lookup; the rest reuse its result.
    */
-  siteLookupCache?: Map<string, ReturnType<OperatorClient["getStaticWebsite"]>>;
+  siteLookupCache?: Map<string, ReturnType<OperatorClient["getStaticWebsite"]>> | undefined;
 };
 
 /** `name:url[/path]` static website placeholder, anchored at the end. */
@@ -1529,7 +1558,7 @@ export type ResolveEnvStaticWebsiteUrlsOptions = Omit<
   "keepUnresolved" | "failOnUnexpectedError"
 > & {
   /** The service whose env this is, as messages name it before `env "<key>"`, e.g. `resolver namespace "shop-api"`. */
-  service?: string;
+  service?: string | undefined;
 };
 
 /**
@@ -1752,7 +1781,10 @@ export async function fetchPlatformMachineUserToken(
  * wrapper around that same pool — closing both would destroy it twice.
  */
 export async function closeConnectionPool() {
-  const globals = globalThis as Record<symbol, { close?: () => Promise<void> } | undefined>;
+  const globals = globalThis as Record<
+    symbol,
+    { close?: (() => Promise<void>) | undefined } | undefined
+  >;
   const dispatcher =
     globals[Symbol.for("undici.globalDispatcher.2")] ??
     globals[Symbol.for("undici.globalDispatcher.1")];

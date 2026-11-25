@@ -13,10 +13,12 @@ const ownership: KeyedDiffOwnership<Existing> = {
   ownsRemaining: (_key, existing) => existing.owner === "app",
 };
 
+type PlanOptions = { owned?: boolean };
+
 async function plan(
   desired: Desired[],
   existing: Partial<Record<string, Existing>>,
-  options: { owned?: boolean } = {},
+  options: PlanOptions = {},
 ) {
   const changeSet = createChangeSet<
     { name: string },
@@ -114,7 +116,7 @@ describe("diffKeyed", () => {
 
 describe("labeledResourceChecks", () => {
   type LabeledDesired = { name: string; metaRequest: MetadataLabelWrite };
-  type LabeledExisting = { allLabels?: Record<string, string> };
+  type LabeledExisting = { allLabels?: Record<string, string> | undefined };
 
   const desired: LabeledDesired = {
     name: "a",

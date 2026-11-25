@@ -15,8 +15,8 @@ type WorkflowLike = {
 
 export type GetWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
   workflow: W;
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 
 /**

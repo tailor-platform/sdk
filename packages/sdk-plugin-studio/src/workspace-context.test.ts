@@ -46,10 +46,68 @@ describe("createWorkspaceContext", () => {
     expect(ctx.selection()).toEqual({});
   });
 
+  test("keeps the later selection when an earlier profile lookup finishes last", async () => {
+    let release!: () => void;
+    const slowLookup = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const ctx = createWorkspaceContext({
+      listProfiles: async () => {
+        if (first) {
+          first = false;
+          await slowLookup;
+        }
+        return PROFILES;
+      },
+    });
+    let notified = 0;
+    ctx.subscribe(() => notified++);
+
+    const earlier = ctx.select("test");
+    await ctx.select(null);
+    release();
+    await earlier;
+
+    expect(ctx.selection()).toEqual({});
+    expect(notified).toBe(1);
+  });
+
   test("rejects a profile that is not in the profile list and keeps the current selection", async () => {
     const ctx = await context("test");
     await expect(ctx.select("nope")).rejects.toThrow('Profile "nope" not found');
     expect(ctx.selection().profile).toBe("test");
+  });
+
+  test("describe reports the workspace a profile points to now, not the one it pointed to when selected", async () => {
+    let profiles = PROFILES;
+    const ctx = createWorkspaceContext({
+      initialProfile: "test",
+      listProfiles: async () => profiles,
+    });
+    await ctx.restore();
+    profiles = [{ name: "test", workspaceId: "moved-workspace" }, PROFILES[1]!];
+
+    expect((await ctx.describe()).selected).toEqual({
+      profile: "test",
+      workspaceId: "moved-workspace",
+    });
+  });
+
+  test("describe also moves the shared selection to the workspace the profile points to now, and tells the listeners once", async () => {
+    let profiles = PROFILES;
+    const ctx = createWorkspaceContext({
+      initialProfile: "test",
+      listProfiles: async () => profiles,
+    });
+    await ctx.restore();
+    let notified = 0;
+    ctx.subscribe(() => notified++);
+    profiles = [{ name: "test", workspaceId: "moved-workspace" }, PROFILES[1]!];
+
+    await ctx.describe();
+    await ctx.describe();
+
+    expect(ctx.selection().workspaceId).toBe("moved-workspace");
+    expect(notified).toBe(1);
   });
 
   test("describe lists the profiles with the current selection", async () => {
@@ -77,6 +135,25 @@ describe("subscribe", () => {
     unsubscribe();
     await ctx.select("test");
     expect(calls).toBe(0);
+  });
+
+  test("keeps the selection and calls the other listeners when one listener throws", async () => {
+    const errors: unknown[] = [];
+    const ctx = createWorkspaceContext({
+      listProfiles: async () => PROFILES,
+      onListenerError: (error) => errors.push(error),
+    });
+    let calls = 0;
+    ctx.subscribe(() => {
+      throw new Error("tab crashed");
+    });
+    ctx.subscribe(() => calls++);
+
+    await ctx.select("test");
+
+    expect(ctx.selection().profile).toBe("test");
+    expect(calls).toBe(1);
+    expect(errors).toEqual([new Error("tab crashed")]);
   });
 
   test("does not call the listener when selecting an unknown profile fails", async () => {
@@ -135,11 +212,8 @@ describe("remembering the selection", () => {
 });
 
 describe("selectionArgs", () => {
-  test("passes the profile and its workspace ID, so an environment workspace ID cannot override the profile", () => {
-    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual([
-      "--profile=test",
-      "--workspace-id=w",
-    ]);
+  test("passes only the profile, so the workspace is read from the profile each time it runs", () => {
+    expect(selectionArgs({ profile: "test", workspaceId: "w" })).toEqual(["--profile=test"]);
   });
 
   test("passes only the workspace ID when no profile is selected", () => {
@@ -168,6 +242,11 @@ describe("selectionEnv", () => {
       TAILOR_PLATFORM_OAUTH2_CLIENT_ID: "custom-client",
       PATH: "/bin",
     };
+    expect(selectionEnv({ profile: "test" }, injected)).toEqual({ PATH: "/bin" });
+  });
+
+  test("leaves out the startup workspace ID, which beats the workspace the selected profile points to", () => {
+    const injected = { TAILOR_PLATFORM_WORKSPACE_ID: "startup-workspace", PATH: "/bin" };
     expect(selectionEnv({ profile: "test" }, injected)).toEqual({ PATH: "/bin" });
   });
 

@@ -20,7 +20,7 @@ export type GroupedDisplayEntry = UpdateAnnotation & {
   symbol: string;
   name: string;
   labels: string[];
-  namespace?: string;
+  namespace?: string | undefined;
 };
 
 export type RelatedFunctionRegistryChanges = {
@@ -101,7 +101,10 @@ function formatGroupedDisplayLine(entry: GroupedDisplayEntry) {
   return `${line}${forcedBySdkVersionSuffix(entry)}`;
 }
 
-function parseFunctionRegistryName(name: string): { displayName: string; namespace?: string } {
+function parseFunctionRegistryName(name: string): {
+  displayName: string;
+  namespace?: string | undefined;
+} {
   if (name.startsWith(RESOLVER_PREFIX)) {
     const [, namespace, resolverName] = name.split("--");
     if (namespace && resolverName) {
@@ -197,8 +200,8 @@ export function formatChangeEntriesWithFunctionRegistry<
   functionRegistryChanges: RelatedFunctionRegistryChanges | undefined,
   getFunctionRegistryNames: (item: C | U | D, action: DisplayAction) => string[],
   options?: {
-    getNamespace?: (item: C | U | D) => string | undefined;
-    getDisplayName?: (item: C | U | D) => string;
+    getNamespace?: ((item: C | U | D) => string | undefined) | undefined;
+    getDisplayName?: ((item: C | U | D) => string) | undefined;
   },
 ): GroupedDisplayEntry[] {
   const { getNamespace, getDisplayName } = options ?? {};

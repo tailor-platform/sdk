@@ -2,5 +2,5 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "extends": ["../../oxlint.sdk-plugin.json"],
   "plugins": ["typescript", "unicorn"],
-  "ignorePatterns": ["dist/", "src/viewer-assets/"]
+  "ignorePatterns": ["dist/"]
 }

@@ -23,6 +23,7 @@ import {
 } from "@tailor-platform/tailor-proto/telemetryrouter_resource_pb";
 import { describe, expect, test } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { deployApplicationOf } from "./deploy-application";
 import { applicationOwner } from "./label";
 import { dropCrossDeploymentManagedDeletes } from "./managed-resources";
@@ -568,7 +569,7 @@ const ADMIN = 'Machine user "admin" of Auth service "core-auth"';
 const ADMIN_USE = { resourceType: "auth.machine_user", namespace: "core-auth", name: "admin" };
 
 function eventTrigger(typedConfig: EventConfig): ExecutorInit["triggerConfig"] {
-  return { config: { case: "event", value: { typedConfig } } };
+  return { config: { case: "event", value: omitUndefined({ typedConfig }) } };
 }
 
 function withWorkspaceExecutor(results: PlanResults, executor: ExecutorInit, application?: string) {
@@ -690,9 +691,9 @@ const EXECUTOR_USES: Array<{
   {
     label: "workflow that an execution trigger names",
     deletes: deletingOrderFlow,
-    executor: {
+    executor: omitUndefined({
       triggerConfig: eventTrigger({ case: "workflow", value: { workflowName: "order-flow" } }),
-    },
+    }),
     resource: 'Workflow "order-flow"',
     use: { resourceType: "workflow", name: "order-flow" },
   },
@@ -708,12 +709,12 @@ const EXECUTOR_USES: Array<{
   {
     label: "TailorDB table that a record trigger names",
     deletes: deletingOrderTable,
-    executor: {
+    executor: omitUndefined({
       triggerConfig: eventTrigger({
         case: "tailordb",
         value: { namespaceName: "main", typeName: "Order" },
       }),
-    },
+    }),
     resource: 'TailorDB table "Order" in namespace "main"',
     use: { resourceType: "tailordb.type", namespace: "main", name: "Order" },
   },
@@ -724,12 +725,12 @@ const EXECUTOR_USES: Array<{
         name: "createOrder",
         request: { workspaceId: "ws", namespaceName: "main", resolverName: "createOrder" },
       }),
-    executor: {
+    executor: omitUndefined({
       triggerConfig: eventTrigger({
         case: "pipeline",
         value: { namespaceName: "main", resolverName: "createOrder" },
       }),
-    },
+    }),
     resource: 'Resolver "createOrder" in namespace "main"',
     use: { resourceType: "pipeline.resolver", namespace: "main", name: "createOrder" },
   },
@@ -737,18 +738,18 @@ const EXECUTOR_USES: Array<{
     label: "IdP that an IdP user trigger names",
     deletes: (results) =>
       results.idp.changeSet.service.deletes.push({ name: "main-idp", request: {} }),
-    executor: {
+    executor: omitUndefined({
       triggerConfig: eventTrigger({ case: "idp", value: { namespaceName: "main-idp" } }),
-    },
+    }),
     resource: 'IdP service "main-idp"',
     use: { resourceType: "idp.service", name: "main-idp" },
   },
   {
     label: "Auth service that an access token trigger names",
     deletes: (results) => ownerDeleting("core-auth", results),
-    executor: {
+    executor: omitUndefined({
       triggerConfig: eventTrigger({ case: "auth", value: { namespaceName: "core-auth" } }),
-    },
+    }),
     resource: 'Auth service "core-auth"',
     use: { resourceType: "auth.service", name: "core-auth" },
   },
@@ -914,7 +915,10 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
       deletingCoreApplication(core);
       core.executor.changeSet.creates.push({
         name: "self-query",
-        request: { workspaceId: "ws", executor: { name: "self-query", targetConfig: CORE_QUERY } },
+        request: {
+          workspaceId: "ws",
+          executor: omitUndefined({ name: "self-query", targetConfig: CORE_QUERY }),
+        },
         metaRequest: { trn: "trn" },
       });
       return core;
@@ -994,13 +998,13 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
   test("accepts a record trigger on a table the plan deletes and creates again", async () => {
     const owner = withWorkspaceExecutor(
       emptyPlanResults(),
-      {
+      omitUndefined({
         name: "notify",
         triggerConfig: eventTrigger({
           case: "tailordb",
           value: { namespaceName: "main", typeName: "Order" },
         }),
-      },
+      }),
       "portal",
     );
     deletingOrderTable(owner);
@@ -1046,13 +1050,13 @@ describe("assertResourcesNotInUse for executors, resolvers, and AI gateways", ()
     );
     withWorkspaceExecutor(
       owner,
-      {
+      omitUndefined({
         name: "audit",
         triggerConfig: eventTrigger({
           case: "tailordb",
           value: { namespaceName: "other", typeName: "Order" },
         }),
-      },
+      }),
       "portal",
     );
     owner.executor.changeSet.deletes.push({ name: "notify", request: {} });

@@ -93,23 +93,23 @@ import type { EffectiveDateDefault } from "#/runtime/types";
 
 /** **Beta:** This API may change in future releases. */
 export interface GenerateOptions {
-  configPath?: string;
-  name?: string;
-  yes?: boolean;
-  init?: boolean;
+  configPath?: string | undefined;
+  name?: string | undefined;
+  yes?: boolean | undefined;
+  init?: boolean | undefined;
   /** Create a migration with no schema changes that exists to run a migration script. */
-  dataOnly?: boolean;
+  dataOnly?: boolean | undefined;
   /** Namespace targeted by `--data-only`, or the only namespace `--init` resets. */
-  namespace?: string;
+  namespace?: string | undefined;
   /**
    * `--rename Table.oldField:newField` / `--rename OldTable:NewTable` /
    * `--rename Table.field.oldMember:newMember` values confirming renames non-interactively.
    */
-  renames?: string[];
+  renames?: string[] | undefined;
   /** `--drop Table.field` / `--drop Table` / `--drop Table.field.member` values confirming removals non-interactively. */
-  drops?: string[];
+  drops?: string[] | undefined;
   /** `--expand-contract Table.field` values approving a field type conversion. */
-  expandContracts?: string[];
+  expandContracts?: string[] | undefined;
 }
 
 /**
@@ -238,10 +238,10 @@ export type GenerateResult = {
 type WrittenMigrationFiles = {
   migrationNumber: number;
   diffFilePath: string;
-  migrateFilePath?: string;
-  dbTypesFilePath?: string;
-  pgliteSchemaFilePath?: string;
-  pgliteSchemaError?: string;
+  migrateFilePath?: string | undefined;
+  dbTypesFilePath?: string | undefined;
+  pgliteSchemaFilePath?: string | undefined;
+  pgliteSchemaError?: string | undefined;
 };
 
 function generatedMigration(namespace: string, files: WrittenMigrationFiles): GeneratedMigration {
@@ -712,14 +712,13 @@ async function generateDataOnlyMigration(
   return generatedMigration(namespace, result);
 }
 
+type PgliteSchemaResult = Pick<WrittenMigrationFiles, "pgliteSchemaFilePath" | "pgliteSchemaError">;
+
 /**
  * Report where db.pglite.ts landed, or why it was skipped.
  * @param result - Files written for the migration
  */
-function logPgliteSchemaResult(result: {
-  pgliteSchemaFilePath?: string;
-  pgliteSchemaError?: string;
-}): void {
+function logPgliteSchemaResult(result: PgliteSchemaResult): void {
   if (result.pgliteSchemaFilePath) {
     logger.info(`  PGlite schema: ${result.pgliteSchemaFilePath}`);
   }
@@ -982,9 +981,9 @@ interface NamespaceGeneration {
   currentSnapshot: NormalizedSchemaSnapshot;
   previousSnapshot: NormalizedSchemaSnapshot | null;
   /** Diff with confirmed renames, set during preflight when a previous snapshot exists. */
-  diff?: MigrationDiff;
+  diff?: MigrationDiff | undefined;
   /** Field type changes confirmed for a migration pair during preflight. */
-  expandPlans?: ExpandContractPlan[];
+  expandPlans?: ExpandContractPlan[] | undefined;
 }
 
 /** A rename candidate that a non-interactive run could not resolve. */
@@ -1376,15 +1375,15 @@ interface GenerateExpandContractOptions {
   resolvedDiff: MigrationDiff;
   plans: readonly ExpandContractPlan[];
   migrationsDir: string;
-  description?: string;
+  description?: string | undefined;
   /**
    * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
    * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
    * was configured with. Defaults to `false`.
    */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 /**
@@ -1493,8 +1492,8 @@ interface AcknowledgeWarningsOptions {
   namespace: string;
   migrationsDir: string;
   migrationNumber: number;
-  skipPrompt?: boolean;
-  configPath?: string;
+  skipPrompt?: boolean | undefined;
+  configPath?: string | undefined;
 }
 
 /**

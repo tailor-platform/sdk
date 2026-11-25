@@ -15,7 +15,7 @@ type FieldScriptContext = {
   tableName: string;
   fieldPath: readonly string[];
   /** Representation of `t` date fields the precompiled expressions were compiled under. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 };
 
 type ScriptFunction = (...args: never[]) => unknown;
@@ -34,7 +34,7 @@ interface PrincipalFieldExprs {
    * `fallback` (defaulting to `raw`) supplies the type for non-matching values,
    * which lets sources whose primary field is empty fall back to a secondary.
    */
-  type: { raw: string; fallback?: string };
+  type: { raw: string; fallback?: string | undefined };
   /** Raw id accessor. */
   id: string;
   workspaceId: string;
@@ -46,7 +46,7 @@ interface MakePrincipalExprOptions {
   source: string;
   fields: PrincipalFieldExprs;
   normalize: boolean;
-  requireId?: boolean;
+  requireId?: boolean | undefined;
 }
 
 /**
@@ -278,7 +278,8 @@ export function parseFieldConfig(
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
   // Access rawRelation via getter (if available)
-  const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
+  const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig | undefined })
+    .rawRelation;
 
   if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
     throw new Error(

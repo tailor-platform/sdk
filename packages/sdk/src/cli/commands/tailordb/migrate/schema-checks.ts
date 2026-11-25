@@ -341,7 +341,7 @@ function reconstructPreMigrationSnapshot(
  */
 interface ExpectedRemoteSchema {
   snapshot: SchemaSnapshot;
-  postPhase?: SchemaSnapshot;
+  postPhase?: SchemaSnapshot | undefined;
 }
 
 function reconstructExpectedRemoteSchema(
@@ -414,12 +414,12 @@ export type RemoteCheckpointLocation =
       localLatestMigration: number | null;
       /** Whether the namespace records another migration history ID, or one that cannot be read */
       historyIdMismatch: boolean;
-      rebaselinePending?: RebaselinePendingInfo;
+      rebaselinePending?: RebaselinePendingInfo | undefined;
     }
   | {
       kind: "inside";
       number: number;
-      checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
+      checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace"> | undefined;
     };
 
 /**
@@ -615,14 +615,14 @@ export interface RemoteSchemaVerificationOptions {
    * Report the tables the checkpoint's migration removed in `unfinishedRemovals` instead of as
    * drift while the namespace records that their deletion did not finish, since a deploy deletes them.
    */
-  acceptUnfinishedRemovals?: boolean;
+  acceptUnfinishedRemovals?: boolean | undefined;
   /**
    * Accept a namespace with no migration recorded as in progress whose tables each have the
    * checkpoint's shape or the Pre-phase shape of the next migration, and report that migration
    */
-  acceptInterruptedMigration?: boolean;
+  acceptInterruptedMigration?: boolean | undefined;
   /** Collects the remote migration state of each namespace, as the verification read it. */
-  remoteStates?: Map<string, RemoteMigrationState>;
+  remoteStates?: Map<string, RemoteMigrationState> | undefined;
 }
 
 /**
@@ -784,7 +784,7 @@ export async function verifyRemoteSchema(
 interface DriftGuidanceInput {
   hasDrift: boolean;
   drifts: readonly SchemaDrift[];
-  checkpointUnset?: true;
+  checkpointUnset?: true | undefined;
 }
 
 function isMissingRemoteScriptHashDrift(drift: SchemaDrift): boolean {
@@ -861,7 +861,7 @@ export function logRemoteDriftGuidance(
 interface UnsetCheckpointDriftInput {
   namespace: string;
   hasDrift: boolean;
-  checkpointUnset?: true;
+  checkpointUnset?: true | undefined;
 }
 
 /**
@@ -898,7 +898,7 @@ export function unsetCheckpointDriftHints(
 interface CheckpointMissingGuidanceInput {
   namespace: string;
   remoteMigrationNumber: number;
-  rebaselinePending?: RebaselinePendingInfo;
+  rebaselinePending?: RebaselinePendingInfo | undefined;
 }
 
 type RebaselinePendingGuidanceInput = CheckpointMissingGuidanceInput & {
@@ -1026,7 +1026,7 @@ export interface MigrationCheckResult {
   namespace: string;
   migrationsDir: string;
   hasDiff: boolean;
-  diff?: MigrationDiff;
+  diff?: MigrationDiff | undefined;
 }
 
 /**

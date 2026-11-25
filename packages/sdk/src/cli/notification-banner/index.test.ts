@@ -129,7 +129,11 @@ describe("notification banner", () => {
     vi.unstubAllEnvs();
   });
 
-  async function run(argv: string[], context: { error?: unknown } = {}) {
+  interface RunContext {
+    error?: unknown;
+  }
+
+  async function run(argv: string[], context: RunContext = {}) {
     startNotificationLookup(argv, { configDir: tmp.dir });
     await lookupSettledForTests();
     await printNotificationBanner(context);

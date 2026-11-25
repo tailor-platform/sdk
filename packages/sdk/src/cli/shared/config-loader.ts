@@ -34,7 +34,7 @@ import type { Plugin } from "#/plugin/types";
  * object or the reason string alongside the value.
  */
 export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
-  env?: Record<string, EnvValue>;
+  env?: Record<string, EnvValue> | undefined;
 };
 
 /** Loaded configuration with resolved path. */
@@ -84,7 +84,7 @@ const CONFIG_NOT_FOUND_SUGGESTION =
 
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
-  importNonce?: string;
+  importNonce?: string | undefined;
 }
 
 /** What a command that does not accept a workspace config says about it. */

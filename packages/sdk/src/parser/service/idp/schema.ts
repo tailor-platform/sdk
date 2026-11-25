@@ -20,13 +20,13 @@ function normalizeIdPGqlOperations(
   config:
     | "query"
     | {
-        create?: boolean;
-        update?: boolean;
-        delete?: boolean;
-        read?: boolean;
-        sendPasswordResetEmail?: boolean;
-        requestMfaSettingsUrl?: boolean;
-        unenrollMfa?: boolean;
+        create?: boolean | undefined;
+        update?: boolean | undefined;
+        delete?: boolean | undefined;
+        read?: boolean | undefined;
+        sendPasswordResetEmail?: boolean | undefined;
+        requestMfaSettingsUrl?: boolean | undefined;
+        unenrollMfa?: boolean | undefined;
       },
 ) {
   if (config === "query") {

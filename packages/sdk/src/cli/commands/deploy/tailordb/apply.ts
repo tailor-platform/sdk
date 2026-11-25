@@ -50,6 +50,7 @@ import { CLIError, formatCommandHint, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { isRequestUnchanged } from "../compare";
 import { resourceTrn, writeLabelRefreshes, writeMetadataLabels } from "../label";
 import { tailordbTypeComparison } from "./compare";
@@ -666,7 +667,7 @@ export type ApplyTailorDBOptions = {
    * restricted until the rest of the deploy is applied. The caller must run
    * it even when the apply throws afterwards.
    */
-  holdMaintenanceMode?: (release: MaintenanceModeRelease) => void;
+  holdMaintenanceMode?: ((release: MaintenanceModeRelease) => void) | undefined;
 };
 
 /**
@@ -1189,11 +1190,13 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       // Recorded so the pre-phase GQL-permission fallback does not create
       // the type a second time.
       processedTables.created.add(namespacedTableKey(namespaceName, tableName));
-      await client.createTailorDBType({
-        workspaceId: create.request.workspaceId,
-        namespaceName,
-        tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
-      });
+      await client.createTailorDBType(
+        omitUndefined({
+          workspaceId: create.request.workspaceId,
+          namespaceName,
+          tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
+        }),
+      );
     }
     for (const [namespaceName, removedTables] of pending.deletedTables) {
       await createRemovedBaselineTables(flow, namespaceName, removedTables);
@@ -2315,10 +2318,12 @@ async function applyDeferredGqlPermissions(
   ]);
 }
 
-function isDeleted(
-  deleted: ReadonlySet<string>,
-  del: { name: string; request: { namespaceName?: string } },
-): boolean {
+interface NamespacedDeletion {
+  name: string;
+  request: { namespaceName?: string | undefined };
+}
+
+function isDeleted(deleted: ReadonlySet<string>, del: NamespacedDeletion): boolean {
   return deleted.has(`${del.request.namespaceName}/${del.name}`);
 }
 

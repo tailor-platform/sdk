@@ -29,6 +29,7 @@ import { styles, logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { parseProtoEnumName, protoEnumNames } from "#/cli/shared/proto-enum";
 import { resourceNameSchema } from "#/parser/service/common";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -51,30 +52,32 @@ type WorkflowLike = {
 };
 
 export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = WorkflowLike> = {
-  workflow?: W;
-  status?: string;
-  workspaceId?: string;
-  profile?: string;
-  order?: Order;
-  limit?: number;
+  workflow?: W | undefined;
+  status?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 };
 
 export interface GetWorkflowExecutionOptions {
   executionId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-  timeout?: number;
-  until?: WorkflowWaitUntil;
-  logs?: boolean;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  interval?: number | undefined;
+  timeout?: number | undefined;
+  until?: WorkflowWaitUntil | undefined;
+  logs?: boolean | undefined;
 }
 
 export interface WorkflowExecutionDetailInfo extends WorkflowExecutionInfo {
-  jobDetails?: (WorkflowJobExecutionInfo & {
-    logs?: string;
-    logEntries?: FunctionLogEntryInfo[];
-    result?: string;
-  })[];
+  jobDetails?:
+    | (WorkflowJobExecutionInfo & {
+        logs?: string | undefined;
+        logEntries?: FunctionLogEntryInfo[] | undefined;
+        result?: string | undefined;
+      })[]
+    | undefined;
 }
 
 export interface WorkflowExecutionWaitInfo extends WorkflowExecutionDetailInfo {
@@ -188,14 +191,16 @@ export async function listWorkflowExecutions<W extends WorkflowLike>(
   const listExecutionsOf = async (name: string) => {
     const executions = await fetchPaged(
       async (pageToken, pageSize) => {
-        const { executions, nextPageToken } = await client.listWorkflowExecutions({
-          workspaceId,
-          workflowName: name,
-          pageToken,
-          pageSize,
-          pageDirection,
-          filter,
-        });
+        const { executions, nextPageToken } = await client.listWorkflowExecutions(
+          omitUndefined({
+            workspaceId,
+            workflowName: name,
+            pageToken,
+            pageSize,
+            pageDirection,
+            filter,
+          }),
+        );
         return [executions, nextPageToken];
       },
       { limit: options?.limit },

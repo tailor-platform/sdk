@@ -30,6 +30,7 @@ import {
   getOAuth2ClientId,
   getOrNull,
   getPlatformBaseUrl,
+  platformConfigFromEnv,
   initOAuth2Client,
   initOperatorClient,
   MAX_PAGE_SIZE,
@@ -633,7 +634,7 @@ describe("requests through the operator client", () => {
   type CallOptions = {
     stream?: boolean;
     method?: (typeof OperatorService.method)[keyof typeof OperatorService.method];
-    clientOptions?: OperatorClientOptions;
+    clientOptions?: OperatorClientOptions | undefined;
   };
 
   aroundEach(async (runTest) => {
@@ -873,6 +874,43 @@ describe("platform environment variables", () => {
       platformUrl: "https://api.dev.tailor.tech",
       oauth2ClientId: "dev-client",
     });
+  });
+});
+
+describe("platformConfigFromEnv", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllEnvs();
+  });
+
+  test("is undefined when the environment names the default platform, as `tailor profile create` stores nothing for it", () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.tailor.tech/");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", getOAuth2ClientId());
+
+    expect(platformConfigFromEnv()).toBeUndefined();
+  });
+
+  test("keeps the values that differ from the default platform", () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+
+    expect(platformConfigFromEnv()).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
+  });
+
+  test("keeps only the client ID that differs when the URL is the default one", () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "custom-client");
+
+    expect(platformConfigFromEnv()).toEqual({ oauth2ClientId: "custom-client" });
+  });
+
+  test("keeps a console URL, which names no default", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
+
+    expect(platformConfigFromEnv()).toEqual({ consoleUrl: "https://console.dev.tailor.tech" });
   });
 });
 

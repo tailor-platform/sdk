@@ -159,6 +159,7 @@ interface LoadedTransform {
   sourceTextLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   sourceStringSuspiciousPatterns: CodemodPatternGroup[];
+  jsonStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -168,31 +169,68 @@ function contentForResidualMatching(relative: string, content: string): string {
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
 
+type ResidualEntry = {
+  residual: string;
+  sourceString: string | null;
+  jsonStrings: string[] | null;
+};
+
+const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
+
+function sourceStringEscapeForResidualMatching(escape: string): string {
+  if (/^\\[nr]$/.test(escape)) return "\n";
+  if (/^\\(?:[tvf]|\r\n|\r|\n)$/.test(escape)) return " ";
+  if (/^\\[\\"'`/]$/.test(escape)) return escape.slice(1);
+  return SOURCE_STRING_OPAQUE_VALUE;
+}
+
 function sourceStringFragmentGapForResidualMatching(gap: string): string {
-  if (/^\\["']$/.test(gap)) return gap.slice(1);
-  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+  return /^\s+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function isRawTemplate(node: SgNode): boolean {
+  const parent = node.parent();
+  return parent?.kind() === "call_expression" && parent.field("function")?.text() === "String.raw";
 }
 
 function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const raw = isRawTemplate(node);
   const parts: string[] = [];
-  let previousFragmentEnd: number | null = null;
+  let previousEnd: number | null = null;
+  let pending = "";
+  let hasFragment = false;
 
   for (const child of node.children()) {
-    if (child.kind() !== "string_fragment") continue;
+    const kind = child.kind();
+    if (
+      kind !== "string_fragment" &&
+      kind !== "escape_sequence" &&
+      kind !== "template_substitution"
+    ) {
+      continue;
+    }
 
     const range = child.range();
-    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
-      parts.push(
-        sourceStringFragmentGapForResidualMatching(
-          content.slice(previousFragmentEnd, range.start.index),
-        ),
+    if (previousEnd != null && range.start.index > previousEnd) {
+      pending += sourceStringFragmentGapForResidualMatching(
+        content.slice(previousEnd, range.start.index),
       );
     }
-    parts.push(child.text());
-    previousFragmentEnd = range.end.index;
+    previousEnd = range.end.index;
+
+    if (kind === "string_fragment" || (raw && kind === "escape_sequence")) {
+      if (hasFragment) parts.push(pending);
+      pending = "";
+      hasFragment = true;
+      parts.push(child.text());
+    } else if (kind === "escape_sequence") {
+      pending += sourceStringEscapeForResidualMatching(child.text());
+    } else {
+      pending += SOURCE_STRING_OPAQUE_VALUE;
+    }
   }
 
-  return parts.length === 0 ? null : parts.join("");
+  return hasFragment ? parts.join("") : null;
 }
 
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
@@ -229,6 +267,30 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function jsonStringValuesForResidualMatching(relative: string, content: string): string[] | null {
+  if (path.extname(relative).toLowerCase() !== ".json") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content.replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+
+  const strings: string[] = [];
+  const pending: unknown[] = [parsed];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === "string") {
+      strings.push(value);
+    } else if (value !== null && typeof value === "object") {
+      const children = Object.values(value);
+      for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
+    }
+  }
+  return strings;
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -520,10 +582,13 @@ export async function runCodemods(
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
+      jsonStringSuspiciousPatterns: codemod.jsonStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
   }
+
+  const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
 
   const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
@@ -571,13 +636,16 @@ export async function runCodemods(
       }
     }
 
-    const residualBySnapshot = new Map<string, { residual: string; sourceString: string | null }>();
-    const residualFor = (content: string): { residual: string; sourceString: string | null } => {
+    const residualBySnapshot = new Map<string, ResidualEntry>();
+    const residualFor = (content: string): ResidualEntry => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
+          jsonStrings: needsJsonStrings
+            ? jsonStringValuesForResidualMatching(relative, content)
+            : null,
         };
         residualBySnapshot.set(content, entry);
       }
@@ -629,15 +697,25 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
-      if (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0) {
+      if (
+        lt.suspiciousPatterns.length === 0 &&
+        lt.sourceStringSuspiciousPatterns.length === 0 &&
+        lt.jsonStringSuspiciousPatterns.length === 0
+      ) {
         continue;
       }
-      const { residual, sourceString } = residualFor(snapshot);
+      const { residual, sourceString, jsonStrings } = residualFor(snapshot);
+      const readsJsonStrings = jsonStrings != null && lt.jsonStringSuspiciousPatterns.length > 0;
       const matchesSource =
-        lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
+        (!readsJsonStrings &&
+          lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null)) ||
         (sourceString != null &&
           lt.sourceStringSuspiciousPatterns.some(
             (p) => matchResidualPattern(sourceString, p) !== null,
+          )) ||
+        (jsonStrings != null &&
+          jsonStrings.some((value) =>
+            lt.jsonStringSuspiciousPatterns.some((p) => matchResidualPattern(value, p) !== null),
           ));
       if (matchesSource) {
         filesForReview().add(relative);
@@ -653,6 +731,7 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.jsonStringSuspiciousPatterns.length > 0 ||
       lt.reviewFindings ||
       lt.reviewFindingsBeforeTransform
     ) {

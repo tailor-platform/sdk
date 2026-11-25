@@ -13,11 +13,11 @@ import { parseBoolean } from "./parse-boolean";
 /** Properties attached to a GitHub Actions annotation. */
 export interface AnnotationProperties {
   /** Short heading shown above the annotation body. */
-  title?: string;
+  title?: string | undefined;
   /** Path of the file the annotation points at, relative to the workspace. */
-  file?: string;
+  file?: string | undefined;
   /** 1-based line number within `file`. */
-  line?: number;
+  line?: number | undefined;
 }
 
 /** Annotation severities supported by the GitHub Actions runner. */
@@ -143,7 +143,7 @@ export function formatAnnotation(
 export function describeTerminalError(
   error: unknown,
   fallbackSuggestion?: string,
-): { message: string; title?: string } {
+): { message: string; title?: string | undefined } {
   if (isCLIError(error)) {
     return { message: error.format(), title: error.code || "CLI_ERROR" };
   }
@@ -184,7 +184,7 @@ export function withSourceLocation<T extends Error>(error: T, location: ErrorSou
  */
 export function annotateTerminalError(
   error: unknown,
-  options: { jsonMode: boolean; suggestion?: string },
+  options: { jsonMode: boolean; suggestion?: string | undefined },
 ): void {
   if (!annotationsEnabled(options.jsonMode)) return;
   const { message, title } = describeTerminalError(error, options.suggestion);
@@ -199,7 +199,7 @@ export function annotateTerminalError(
  * @param error - Failure that ended the command
  * @returns `file`/`line` properties, or an empty object when unavailable
  */
-function sourceLocation(error: unknown): { file?: string; line?: number } {
+function sourceLocation(error: unknown): { file?: string | undefined; line?: number | undefined } {
   if (!(error instanceof Error)) return {};
   const location = getErrorDiagnostics(error).location;
   if (!location) return {};

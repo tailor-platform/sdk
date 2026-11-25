@@ -50,9 +50,14 @@ function parsed(
   return parseTypes(toSchemaOutputs(tables), namespace, {});
 }
 
+interface CtxPluginConfig {
+  distPath: string;
+  pgliteSchemaPath?: string;
+}
+
 function ctx(
   namespaces: { namespace: string; tables: Record<string, TailorDBType> }[],
-  pluginConfig: { distPath: string; pgliteSchemaPath?: string },
+  pluginConfig: CtxPluginConfig,
 ): TailorDBReadyContext<typeof pluginConfig> {
   return {
     tailordb: namespaces.map((ns) => ({

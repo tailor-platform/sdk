@@ -18,19 +18,19 @@ export type IdPGqlOperationsInput =
 
 export type IdPGqlOperations = {
   /** Enable _createUser mutation (default: true) */
-  create?: boolean;
+  create?: boolean | undefined;
   /** Enable _updateUser mutation (default: true) */
-  update?: boolean;
+  update?: boolean | undefined;
   /** Enable _deleteUser mutation (default: true) */
-  delete?: boolean;
+  delete?: boolean | undefined;
   /** Enable _users and _user queries (default: true) */
-  read?: boolean;
+  read?: boolean | undefined;
   /** Enable _sendPasswordResetEmail mutation (default: true) */
-  sendPasswordResetEmail?: boolean;
+  sendPasswordResetEmail?: boolean | undefined;
   /** Enable _requestMfaSettingsUrl query (default: true) */
-  requestMfaSettingsUrl?: boolean;
+  requestMfaSettingsUrl?: boolean | undefined;
   /** Enable _unenrollMfa mutation (default: true) */
-  unenrollMfa?: boolean;
+  unenrollMfa?: boolean | undefined;
 };
 
 /**

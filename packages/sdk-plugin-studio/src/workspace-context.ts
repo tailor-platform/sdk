@@ -28,6 +28,8 @@ export interface WorkspaceContextOptions {
   initialProfile?: string;
   listProfiles: () => Promise<ProfileInfo[]>;
   store?: SelectionStore;
+  /** Called with what a listener threw; the other listeners still run. */
+  onListenerError?: (error: unknown) => void;
 }
 
 /**
@@ -46,9 +48,16 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
  */
 export function createWorkspaceContext(options: WorkspaceContextOptions): WorkspaceContext {
   let selected: WorkspaceSelection = {};
+  let revision = 0;
   const listeners = new Set<() => void>();
   const notify = () => {
-    for (const listener of listeners) listener();
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (error) {
+        options.onListenerError?.(error);
+      }
+    }
   };
   return {
     restore: async () => {
@@ -64,6 +73,7 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
     },
     selection: () => ({ ...selected }),
     select: async (profile) => {
+      const ticket = ++revision;
       if (profile === null) {
         selected = {};
         options.store?.save(null);
@@ -72,11 +82,20 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
       }
       const found = (await options.listProfiles()).find((p) => p.name === profile);
       if (!found) throw new Error(`Profile "${profile}" not found`);
+      if (ticket !== revision) return;
       selected = { profile: found.name, workspaceId: found.workspaceId };
       options.store?.save(found.name);
       notify();
     },
-    describe: async () => ({ profiles: await options.listProfiles(), selected: { ...selected } }),
+    describe: async () => {
+      const profiles = await options.listProfiles();
+      const current = profiles.find((p) => p.name === selected.profile);
+      if (current && current.workspaceId !== selected.workspaceId) {
+        selected = { profile: current.name, workspaceId: current.workspaceId };
+        notify();
+      }
+      return { profiles, selected: { ...selected } };
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -85,25 +104,25 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
 }
 
 /**
- * CLI options that point a `tailor` command at the selected workspace. The workspace ID is passed
- * as well as the profile because `TAILOR_PLATFORM_WORKSPACE_ID` in the environment beats `-p`.
+ * CLI options that point a `tailor` command at the selected profile. Only the profile is passed,
+ * so the workspace is the one the profile points to when the command runs; a workspace ID read
+ * when the profile was picked would go stale after `tailor profile update --workspace-id`.
  * @param selection - The shell's current selection
- * @returns `--profile=<name>` and/or `--workspace-id=<id>`, or nothing when no workspace is selected
+ * @returns `--profile=<name>`, or `--workspace-id=<id>` alone for a workspace without a profile, or nothing when nothing is selected
  */
 export function selectionArgs(selection: WorkspaceSelection): string[] {
-  return [
-    ...(selection.profile ? [`--profile=${selection.profile}`] : []),
-    ...(selection.workspaceId ? [`--workspace-id=${selection.workspaceId}`] : []),
-  ];
+  if (selection.profile) return [`--profile=${selection.profile}`];
+  return selection.workspaceId ? [`--workspace-id=${selection.workspaceId}`] : [];
 }
 
 /**
  * The environment for a `tailor` command that works against the selected profile. The shell
- * starts with the token of the startup user and the platform of the startup profile in
- * `TAILOR_PLATFORM_TOKEN`, `TAILOR_PLATFORM_URL` and `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`. The CLI
- * prefers that token to `--profile`, and uses the platform for what the profile does not store,
- * so a command for another profile would run with the wrong user's credentials or platform; the
- * three are left out while a profile is selected.
+ * starts with the token of the startup user, the platform of the startup profile and its
+ * workspace in `TAILOR_PLATFORM_TOKEN`, `TAILOR_PLATFORM_URL`,
+ * `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` and `TAILOR_PLATFORM_WORKSPACE_ID`. The CLI prefers that
+ * token and workspace to `--profile`, and uses the platform for what the profile does not store,
+ * so a command for another profile would run with the wrong user's credentials, platform or
+ * workspace; the four are left out while a profile is selected.
  * @param selection - The shell's current selection
  * @param env - Environment to start from
  * @returns A copy of `env` to pass to the command, leaving the process environment untouched
@@ -117,6 +136,7 @@ export function selectionEnv(
     TAILOR_PLATFORM_TOKEN: _token,
     TAILOR_PLATFORM_URL: _url,
     TAILOR_PLATFORM_OAUTH2_CLIENT_ID: _clientId,
+    TAILOR_PLATFORM_WORKSPACE_ID: _workspaceId,
     ...rest
   } = env;
   return rest;

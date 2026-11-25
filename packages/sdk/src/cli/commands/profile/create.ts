@@ -1,6 +1,6 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
-import { fetchAll, initOperatorClient } from "#/cli/shared/client";
+import { fetchAll, initOperatorClient, platformConfigFromEnv } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   fetchLatestToken,
@@ -55,11 +55,26 @@ function assertOptionsValid(options: CreateProfileOptions) {
 }
 
 /**
- * Create a profile after checking that the user can sign in and sees the workspace.
- * @param options - Profile to create
+ * Create a profile after checking that the user can sign in and sees the workspace. A platform
+ * setting the options leave out is taken from `TAILOR_PLATFORM_URL` and its siblings unless it is
+ * the default platform's, so the profile keeps the platform it was checked against.
+ * @param input - Profile to create
  * @returns The created profile
  */
-export async function createProfile(options: CreateProfileOptions): Promise<ProfileInfo> {
+export async function createProfile(input: CreateProfileOptions): Promise<ProfileInfo> {
+  const fromEnv = platformConfigFromEnv();
+  const options: CreateProfileOptions = {
+    ...input,
+    ...(input.platformUrl === undefined && fromEnv?.platformUrl
+      ? { platformUrl: fromEnv.platformUrl }
+      : {}),
+    ...(input.oauth2ClientId === undefined && fromEnv?.oauth2ClientId
+      ? { oauth2ClientId: fromEnv.oauth2ClientId }
+      : {}),
+    ...(input.consoleUrl === undefined && fromEnv?.consoleUrl
+      ? { consoleUrl: fromEnv.consoleUrl }
+      : {}),
+  };
   assertOptionsValid(options);
   const permission = options.permission ?? "write";
   if (options.machineUserOverride === "deny" && !options.machineUser) {

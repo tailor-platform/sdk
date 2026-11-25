@@ -154,9 +154,12 @@ describe("createMetadataLookupClient", () => {
         nextPageToken: "",
       },
     });
+    interface GetNameResource {
+      name: string;
+    }
     const params = {
       fetchPage: async () => [resources, ""] as [typeof resources, string],
-      getName: (resource: { name: string }) => resource.name,
+      getName: (resource: GetNameResource) => resource.name,
       getTrn: (name: string) => `trn:${name}`,
     };
 

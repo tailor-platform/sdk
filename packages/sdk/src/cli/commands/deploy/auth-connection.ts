@@ -47,7 +47,7 @@ type CreateConnection = {
 type UpdateConnection = {
   name: string;
   /** Absent when only the connection's metadata labels are written. */
-  request?: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
+  request?: MessageInitShape<typeof UpdateAuthConnectionRequestSchema> | undefined;
   metaRequest: MetadataLabelWrite;
 };
 

@@ -136,7 +136,7 @@ export async function mapEnvOverridesAsync<From, To>(
 
 function withoutEnv<Entry extends object>(entry: Entry): [Omit<Entry, "env">, EnvOverride?] {
   if (!("env" in entry)) return [entry];
-  const { env, ...rest } = entry as Entry & { env?: EnvOverride };
+  const { env, ...rest } = entry as Entry & { env?: EnvOverride | undefined };
   return [rest, env];
 }
 

@@ -51,12 +51,14 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 const snapshotState = { tablesByVersion: {} as SnapshotTablesByVersion };
 
 describe("migration flow: creates of types predating the pending migrations", () => {
-  function createMockPlanResult(options: {
+  interface CreateMockPlanResultOptions {
     creates: string[];
     updates?: string[];
     gqlPermissionTypes?: string[];
     local?: TailorDBSnapshotType[];
-  }) {
+  }
+
+  function createMockPlanResult(options: CreateMockPlanResultOptions) {
     return createPlanResult({
       type: {
         creates: options.creates.map((name) => typeEntry(name)),

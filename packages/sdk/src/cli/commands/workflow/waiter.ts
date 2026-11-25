@@ -34,22 +34,22 @@ export interface WorkflowWaitOptions {
   client: Awaited<ReturnType<typeof initOperatorClient>>;
   workspaceId: string;
   executionId: string;
-  interval?: number;
-  timeout?: number;
-  until?: WorkflowWaitUntil;
-  showProgress?: boolean;
-  trackJobs?: boolean;
+  interval?: number | undefined;
+  timeout?: number | undefined;
+  until?: WorkflowWaitUntil | undefined;
+  showProgress?: boolean | undefined;
+  trackJobs?: boolean | undefined;
 }
 
 export interface WaitWorkflowExecutionOptions {
   executionId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-  timeout?: number;
-  until?: WorkflowWaitUntil;
-  showProgress?: boolean;
-  trackJobs?: boolean;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  interval?: number | undefined;
+  timeout?: number | undefined;
+  until?: WorkflowWaitUntil | undefined;
+  showProgress?: boolean | undefined;
+  trackJobs?: boolean | undefined;
 }
 
 export interface WorkflowWaitResult extends WorkflowExecutionInfo {

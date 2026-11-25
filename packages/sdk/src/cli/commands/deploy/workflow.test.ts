@@ -63,9 +63,9 @@ describe("planWorkflow", () => {
   }
 
   type MockJobFunction = {
-    label?: string;
-    sdkVersion?: string;
-    publishExecutionEvents?: boolean;
+    label?: string | undefined;
+    sdkVersion?: string | undefined;
+    publishExecutionEvents?: boolean | undefined;
   };
 
   function createMockClient(
@@ -74,7 +74,7 @@ describe("planWorkflow", () => {
       name: string;
       label?: string;
       resource?: MessageInitShape<typeof WorkflowSchema>;
-      sdkVersion?: string;
+      sdkVersion?: string | undefined;
       /** Extra labels the workflow's own TRN answers with. */
       extraLabels?: Record<string, string>;
     }>,
@@ -835,12 +835,14 @@ describe("planWorkflow", () => {
       const jobNames = ["validate-order", "check-inventory", "process-payment"];
       const mainJobDeps = { "validate-order": jobNames };
 
-      function planSampleWorkflow(options: {
+      type PlanSampleWorkflowOptions = {
         sdkVersion?: string;
         mainJobFunctionName?: string;
         unchangedJobFunctions?: ReadonlySet<string>;
         publishExecutionEvents?: boolean;
-      }) {
+      };
+
+      function planSampleWorkflow(options: PlanSampleWorkflowOptions) {
         const jobFunctionLabels = Object.fromEntries(
           jobNames.map((jobName) => [
             jobName,

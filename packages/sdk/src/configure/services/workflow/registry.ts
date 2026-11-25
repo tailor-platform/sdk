@@ -93,6 +93,8 @@ export function dispatchStartJob(
     : workflow.execJobFunction(name, args);
 }
 
+type DispatchStartWorkflowOptions = { invoker?: unknown };
+
 // Accepts `unknown` because the SDK-side `.start()` accepts a wider options
 // shape than the platform surface (e.g. `authInvoker` may be a machine-user
 // name string that the bundler normalizes at build time). Local execution
@@ -101,7 +103,7 @@ export function dispatchStartJob(
 export function dispatchStartWorkflow(
   name: string,
   args?: unknown,
-  options?: { invoker?: unknown },
+  options?: DispatchStartWorkflowOptions,
 ): Promise<string> {
   const workflow = requirePlatformWorkflow();
   // oxlint-disable-next-line prefer-rest-params

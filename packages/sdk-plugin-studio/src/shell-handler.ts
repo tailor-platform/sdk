@@ -1,6 +1,7 @@
 import { guardRequest } from "./request-guard";
 import { serveStatic } from "./static-files";
 import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
+import type { PlatformClientConfig } from "@tailor-platform/sdk/cli";
 
 export interface UiHandlerContext {
   basePath: string;
@@ -33,19 +34,13 @@ export interface Accounts {
   createProfile(profile: NewProfile): Promise<void>;
 }
 
-export interface PlatformInfo {
-  platformUrl?: string;
-  oauth2ClientId?: string;
-  consoleUrl?: string;
-}
-
 export interface ShellHandlerOptions {
   tabs: readonly Tab[];
   port: number;
   workspace: WorkspaceContext;
   accounts: Accounts;
   /** Platform settings taken from the environment; absent for the default platform. */
-  platform?: PlatformInfo;
+  platform?: PlatformClientConfig;
   clientDir?: string;
   onError?: (error: unknown, pluginId: string) => void;
 }
@@ -73,6 +68,14 @@ function describeTab(tab: Tab) {
     : { id, title, state };
 }
 
+/** A tab as `/api/tabs` lists it. */
+export type TabInfo = ReturnType<typeof describeTab>;
+
+/** What `/api/context` answers: the selection and its profiles, with the platform when it is not the default. */
+export type ContextInfo = Awaited<ReturnType<WorkspaceContext["describe"]>> & {
+  platform?: PlatformClientConfig;
+};
+
 /**
  * Build the request handler of the shell: it guards every request, serves the
  * tab list, and forwards `/plugins/<id>/*` to the plugin's handler.
@@ -82,10 +85,16 @@ function describeTab(tab: Tab) {
 export function createShellHandler(options: ShellHandlerOptions) {
   const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
 
-  const contextBody = async () => ({
+  const contextBody = async (): Promise<ContextInfo> => ({
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(await options.workspace.describe()),
   });
+
+  const failure = (error: unknown) =>
+    Response.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 400 },
+    );
 
   const handleContext = async (request: Request): Promise<Response> => {
     try {
@@ -100,10 +109,7 @@ export function createShellHandler(options: ShellHandlerOptions) {
       }
       return Response.json(await contextBody());
     } catch (error) {
-      return Response.json(
-        { error: error instanceof Error ? error.message : String(error) },
-        { status: 400 },
-      );
+      return failure(error);
     }
   };
 
@@ -140,11 +146,13 @@ export function createShellHandler(options: ShellHandlerOptions) {
     });
   };
 
-  const failure = (error: unknown) =>
-    Response.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 400 },
-    );
+  const handleUsers = async (): Promise<Response> => {
+    try {
+      return Response.json({ users: await options.accounts.listUsers() });
+    } catch (error) {
+      return failure(error);
+    }
+  };
 
   const handleWorkspaces = async (url: URL): Promise<Response> => {
     const user = url.searchParams.get("user");
@@ -199,9 +207,7 @@ export function createShellHandler(options: ShellHandlerOptions) {
     if (url.pathname === "/api/context/events") return handleContextEvents(request);
     if (url.pathname === "/api/context") return handleContext(request);
 
-    if (url.pathname === "/api/accounts") {
-      return Response.json({ users: await options.accounts.listUsers() });
-    }
+    if (url.pathname === "/api/accounts") return handleUsers();
     if (url.pathname === "/api/accounts/workspaces") return handleWorkspaces(url);
     if (url.pathname === "/api/profiles") return handleCreateProfile(request);
 

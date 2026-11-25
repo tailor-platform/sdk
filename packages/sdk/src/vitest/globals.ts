@@ -60,7 +60,7 @@ class TailorErrorsMock extends Error {
 }
 
 class TailorDBFileErrorMock extends Error {
-  code?: TailorDBFileErrorCode;
+  code?: TailorDBFileErrorCode | undefined;
   override cause: unknown;
 
   constructor(message: string, code?: TailorDBFileErrorCode, cause?: unknown) {

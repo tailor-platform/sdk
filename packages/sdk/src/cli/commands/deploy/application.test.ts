@@ -64,16 +64,16 @@ const matchingSubgraphs = [
   { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
 ] satisfies Array<MessageInitShape<typeof SubgraphSchema>>;
 
-function createMockApplication(
-  overrides: {
-    name?: string;
-    id?: string;
-    cors?: string[];
-    metadata?: Record<string, string>;
-    subgraphs?: Array<{ Type: string; Name: string }>;
-    staticWebsiteServices?: Array<{ name: string }>;
-  } = {},
-): Application {
+type CreateMockApplicationOverrides = {
+  name?: string;
+  id?: string | undefined;
+  cors?: string[];
+  metadata?: Record<string, string> | undefined;
+  subgraphs?: Array<{ Type: string; Name: string }>;
+  staticWebsiteServices?: Array<{ name: string }>;
+};
+
+function createMockApplication(overrides: CreateMockApplicationOverrides = {}): Application {
   return {
     name: overrides.name ?? appName,
     id: overrides.id,
@@ -105,7 +105,7 @@ type RemoteApplication = MessageInitShape<typeof ApplicationSchema> & {
   name: string;
   sdkVersion?: string;
   label?: string;
-  sdkAppId?: string;
+  sdkAppId?: string | undefined;
   extraLabels?: Record<string, string>;
 };
 
@@ -564,7 +564,6 @@ describe("planApplication", () => {
           subgraphs: [
             { serviceType: Subgraph_ServiceType.TAILORDB, serviceNamespace: "tailordb-a" },
           ],
-          disableIntrospection: undefined,
         }),
       },
     ]);
@@ -573,9 +572,6 @@ describe("planApplication", () => {
         name: "backoffice",
         request: expect.objectContaining({
           applicationName: "backoffice",
-          authNamespace: undefined,
-          authIdpConfigName: undefined,
-          cors: undefined,
           subgraphs: [
             { serviceType: Subgraph_ServiceType.PIPELINE, serviceNamespace: "pipeline-a" },
           ],
@@ -583,6 +579,12 @@ describe("planApplication", () => {
         }),
       },
     ]);
+    const [shopUpdate] = result.updates;
+    expect(shopUpdate?.request).not.toHaveProperty("disableIntrospection");
+    const [backofficeCreate] = result.creates;
+    for (const key of ["authNamespace", "authIdpConfigName", "cors"]) {
+      expect(backofficeCreate?.request).not.toHaveProperty(key);
+    }
     expect(result.deletes.map(({ name }) => name)).toEqual(["landing", "unrelated"]);
   });
 
@@ -934,7 +936,9 @@ describe("planApplication", () => {
 });
 
 describe("diffHttpAdapterDisplay", () => {
-  function adapter(name: string, overrides: { pathPattern?: string; priority?: number } = {}) {
+  type AdapterOverrides = { pathPattern?: string; priority?: number };
+
+  function adapter(name: string, overrides: AdapterOverrides = {}) {
     return {
       name,
       pathPattern: overrides.pathPattern ?? `/${name}`,

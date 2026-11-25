@@ -50,7 +50,7 @@ import type { SchemaDrift } from "./types";
 
 export interface RemoteGqlPermission {
   typeName: string;
-  permission?: TailorDBGQLPermission;
+  permission?: TailorDBGQLPermission | undefined;
 }
 
 type RemoteFieldConfig = NonNullable<ProtoTailorDBType["schema"]>["fields"][string];
@@ -823,9 +823,11 @@ export const MIGRATION_RESTRICTION_SETTINGS = [
 ] as const satisfies readonly (keyof SnapshotSettings)[];
 
 type RestrictableTableSettings = {
-  bulkUpsert?: boolean;
-  publishRecordEvents?: boolean;
-  disableGqlOperations?: { create?: boolean; update?: boolean; delete?: boolean };
+  bulkUpsert?: boolean | undefined;
+  publishRecordEvents?: boolean | undefined;
+  disableGqlOperations?:
+    | { create?: boolean | undefined; update?: boolean | undefined; delete?: boolean | undefined }
+    | undefined;
 };
 
 /**

@@ -55,6 +55,7 @@ import {
   workflowRunLabels,
   workflowRunResourceName,
 } from "#/cli/shared/workflow-run-labels";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptInvoker } from "#/cli/shared/script-executor";
 import type { FunctionExecutionSummary } from "@tailor-platform/tailor-proto/function_resource_pb";
@@ -208,12 +209,14 @@ export async function startWorkflowRun(
       created,
     );
     startSent = true;
-    const { executionId } = await client.startWorkflow({
-      workspaceId,
-      workflowId,
-      authInvoker: params.invoker,
-      arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
-    });
+    const { executionId } = await client.startWorkflow(
+      omitUndefined({
+        workspaceId,
+        workflowId,
+        authInvoker: params.invoker,
+        arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
+      }),
+    );
     const jobNames = Object.fromEntries(
       params.jobs.map(({ jobName }) => [workflowRunJobFunctionName(runId, jobName), jobName]),
     );
@@ -249,9 +252,9 @@ export interface AwaitWorkflowRunParams {
   /** Longest wait in milliseconds; `Number.POSITIVE_INFINITY` waits until the run ends */
   timeoutMs: number;
   /** Called with each poll that finds the run still going */
-  onActive?: () => void;
+  onActive?: (() => void) | undefined;
   /** Longest time in milliseconds to spend reading the result of a finished run */
-  outcomeTimeoutMs?: number;
+  outcomeTimeoutMs?: number | undefined;
 }
 
 export type WorkflowRunOutcome =
@@ -426,11 +429,11 @@ export interface ReclaimWorkflowRunsParams {
   workspaceId: string;
   now: Date;
   /** Also remove a run that finished moments ago (an explicit `workflow prune`) */
-  ignoreFinishedGrace?: boolean;
+  ignoreFinishedGrace?: boolean | undefined;
   /** Also remove resources named like a run's that carry no run label */
-  includeUnlabeled?: boolean;
+  includeUnlabeled?: boolean | undefined;
   /** Send the warning for a failed removal to the debug output only */
-  quiet?: boolean;
+  quiet?: boolean | undefined;
 }
 
 /** Kind of a resource a run registers. */
@@ -455,13 +458,13 @@ interface RunResource {
   kind: RunResourceKind;
   name: string;
   /** Workflow id; only a workflow has one */
-  id?: string;
+  id?: string | undefined;
   createdMs: number | undefined;
   labels: Record<string, string>;
 }
 
 interface RunResources {
-  workflow?: RunResource;
+  workflow?: RunResource | undefined;
   jobFunctions: RunResource[];
   functions: RunResource[];
 }
@@ -858,7 +861,7 @@ interface PruneHintParams {
   workspaceId: string;
   profile: string | undefined;
   /** Remove the resources that carry no run label as well */
-  includeUnlabeled?: boolean;
+  includeUnlabeled?: boolean | undefined;
 }
 
 /**

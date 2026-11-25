@@ -27,8 +27,8 @@ interface LoadDeployedApplicationsParams {
   targets: readonly BuiltDeploymentTarget[];
 }
 interface RunDeployedHooksParams extends LoadDeployedApplicationsParams {
-  deployed?: readonly DeployedTarget[];
-  profile?: string;
+  deployed?: readonly DeployedTarget[] | undefined;
+  profile?: string | undefined;
 }
 
 /** Deployed information of one target: its static websites and the applications it deploys. */

@@ -33,6 +33,22 @@ describe("createErdUiHandler", () => {
     expect(await response.text()).toBe("<html>viewer</html>");
   });
 
+  test("hands the request's abort signal to the export, so a load the browser abandoned can stop it", async () => {
+    const received: (AbortSignal | undefined)[] = [];
+    const handler = createErdUiHandler({
+      exportViewer: async (outputDir, signal) => {
+        received.push(signal);
+        return exportViewer(() => "<html></html>").run(outputDir);
+      },
+    });
+    const abandoned = new AbortController();
+
+    await handler(new Request(root, { signal: abandoned.signal }), context);
+    abandoned.abort();
+
+    expect(received[0]?.aborted).toBe(true);
+  });
+
   test("exports into a directory of its own per request, so overlapping loads cannot delete each other's output", async () => {
     const exporter = exportViewer((outputDir) => outputDir);
     const handler = createErdUiHandler({ exportViewer: exporter.run });

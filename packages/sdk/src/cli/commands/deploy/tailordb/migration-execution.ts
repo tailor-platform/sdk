@@ -24,6 +24,7 @@ import { fetchAllTolerant, isNotFoundError, type OperatorClient } from "#/cli/sh
 import { getErrorDiagnostics, withErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { isRecreated, type NamespacedEntry, type TailorDBChangeSet } from "./plan";
 import type {
   FieldDiffChange,
@@ -36,13 +37,15 @@ import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_
 type MigrationTableSettings = {
   bulkUpsert: boolean;
   publishRecordEvents: boolean;
-  disableGqlOperations?: {
-    create: boolean;
-    update: boolean;
-    delete: boolean;
-    read: boolean;
-  };
-  tailordbType?: MessageInitShape<typeof TailorDBTypeSchema>;
+  disableGqlOperations?:
+    | {
+        create: boolean;
+        update: boolean;
+        delete: boolean;
+        read: boolean;
+      }
+    | undefined;
+  tailordbType?: MessageInitShape<typeof TailorDBTypeSchema> | undefined;
 };
 
 export type MigrationRestrictionState = Map<string, Map<string, MigrationTableSettings>>;
@@ -178,9 +181,9 @@ function planlessTableNames(changeSet: TailorDBChangeSet, migration: PendingMigr
 export type GqlPermissionUndo = Map<string, GqlPermissionUndoEntry>;
 
 type GqlPermissionUndoEntry = {
-  previous?: NonNullable<
-    TailorDBChangeSet["gqlPermission"]["updates"][number]["previousPermission"]
-  >;
+  previous?:
+    | NonNullable<TailorDBChangeSet["gqlPermission"]["updates"][number]["previousPermission"]>
+    | undefined;
 };
 
 /**
@@ -409,11 +412,13 @@ export async function executeSingleMigrationPrePhase(
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
-    await client.updateTailorDBType({
-      workspaceId: create.request.workspaceId,
-      namespaceName: create.request.namespaceName,
-      tailordbType: clonedTypeRequest,
-    });
+    await client.updateTailorDBType(
+      omitUndefined({
+        workspaceId: create.request.workspaceId,
+        namespaceName: create.request.namespaceName,
+        tailordbType: clonedTypeRequest,
+      }),
+    );
   }
 
   for (const update of typeUpdates) {
@@ -694,11 +699,13 @@ export async function executeSingleMigrationPostPhase(
       const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
-      await client.updateTailorDBType({
-        workspaceId: create.request.workspaceId,
-        namespaceName: create.request.namespaceName,
-        tailordbType: snapshotType,
-      });
+      await client.updateTailorDBType(
+        omitUndefined({
+          workspaceId: create.request.workspaceId,
+          namespaceName: create.request.namespaceName,
+          tailordbType: snapshotType,
+        }),
+      );
     }
 
     // For updated tables affected by this migration, send update with snapshot[N] values
@@ -710,11 +717,13 @@ export async function executeSingleMigrationPostPhase(
       const snapshotType = buildSnapshotTypeManifest(migration, tableName, phaseSettings);
       if (!snapshotType) continue;
       attemptedTables.add(tableName);
-      await client.updateTailorDBType({
-        workspaceId: update.request.workspaceId,
-        namespaceName: update.request.namespaceName,
-        tailordbType: snapshotType,
-      });
+      await client.updateTailorDBType(
+        omitUndefined({
+          workspaceId: update.request.workspaceId,
+          namespaceName: update.request.namespaceName,
+          tailordbType: snapshotType,
+        }),
+      );
     }
 
     // Tables outside the plan that a later migration removes
@@ -754,9 +763,9 @@ type RewriteRestrictedTablesParams = {
   snapshot: SchemaSnapshot;
   input: TailorDBDeployInput;
   executorUsedTables: ReadonlySet<string>;
-  settingsState?: ReadonlyMap<string, MigrationTableSettings>;
+  settingsState?: ReadonlyMap<string, MigrationTableSettings> | undefined;
   restricted: boolean;
-  continueOnError?: boolean;
+  continueOnError?: boolean | undefined;
 };
 
 export function acceptsMigrationWrites(settings: MigrationTableSettings): boolean {
@@ -770,7 +779,7 @@ export function acceptsMigrationWrites(settings: MigrationTableSettings): boolea
   );
 }
 
-type RestrictedTablesRewrite = { failedTables: string[]; firstError?: Error };
+type RestrictedTablesRewrite = { failedTables: string[]; firstError?: Error | undefined };
 
 /** Tables of one namespace that kept their migration restrictions. */
 export type RestrictedTables = { namespace: string; tables: string[] };
@@ -786,9 +795,9 @@ export const ROLLBACK_LEFTOVER_RECOVERY =
 
 interface LeftRestrictedOptions {
   /** How the tables are released. */
-  recovery?: string;
+  recovery?: string | undefined;
   /** Whether tables stay restricted although none of them can be named. */
-  namesUnknown?: boolean;
+  namesUnknown?: boolean | undefined;
   /** Failure that left them restricted, whose message is printed last. */
   cause?: unknown;
 }
@@ -870,9 +879,11 @@ async function rewriteRestrictedTables(
       if (!restricted && activeSettings) {
         settings.bulkUpsert = activeSettings.bulkUpsert;
         settings.publishRecordEvents = activeSettings.publishRecordEvents;
-        settings.disableGqlOperations = activeSettings.disableGqlOperations
-          ? { ...activeSettings.disableGqlOperations }
-          : undefined;
+        if (activeSettings.disableGqlOperations) {
+          settings.disableGqlOperations = { ...activeSettings.disableGqlOperations };
+        } else {
+          delete settings.disableGqlOperations;
+        }
       }
       await client.updateTailorDBType({ workspaceId, namespaceName, tailordbType });
     } catch (error) {

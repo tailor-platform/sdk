@@ -47,7 +47,9 @@ function postTable(withPermission: boolean) {
   };
 }
 
-function plan({ withPermission }: { withPermission: boolean }) {
+type PlanOptions = { withPermission: boolean };
+
+function plan(options: PlanOptions) {
   vi.mocked(validateAndDetectMigrations).mockResolvedValue({
     namespacesWithMigrations: [],
     migrationFileState: captureMigrationFileState([]),
@@ -96,7 +98,7 @@ function plan({ withPermission }: { withPermission: boolean }) {
           version: SCHEMA_SNAPSHOT_VERSION,
           namespace: NAMESPACE,
           createdAt: "2026-01-01T00:00:00.000Z",
-          tables: { Post: postTable(withPermission) },
+          tables: { Post: postTable(options.withPermission) },
         }),
       ],
     ]),

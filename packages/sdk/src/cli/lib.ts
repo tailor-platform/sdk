@@ -322,7 +322,7 @@ export {
   type ScriptWorkflowOptions,
 } from "./shared/script-workflow";
 export {
-  getEffectivePlatformConfig as platformConfigFromEnv,
+  platformConfigFromEnv,
   initOperatorClient,
   type OperatorClient,
   type OperatorClientOptions,

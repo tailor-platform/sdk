@@ -12,7 +12,7 @@ import { createAccounts } from "./accounts";
 import { discoverTab, type TabSpec } from "./discover-tab";
 import { createFunctionRunTab } from "./function-run/tab";
 import { openBrowser } from "./open-browser";
-import { createSelectionStore } from "./selection-store";
+import { createSelectionStore, projectDirectory } from "./selection-store";
 import { startServer } from "./server";
 import { createShellHandler } from "./shell-handler";
 import { createWorkspaceContext, listProfiles } from "./workspace-context";
@@ -46,16 +46,24 @@ export const uiCommand = defineAppCommand({
         "Start the Function run tab's watch as soon as the server is up, against the selected workspace",
     }),
   }),
+  gracefulShutdown: true,
   run: async (args) => {
+    const stopRequested = new Promise<void>((resolve) => {
+      args.$signal?.addEventListener("abort", () => resolve(), { once: true });
+    });
     logger.warn(
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
-    const projectDir = process.cwd();
+    const projectDir = projectDirectory(process.env, process.cwd());
     const platform = platformConfigFromEnv();
     const workspace = createWorkspaceContext({
       ...(args.profile ? { initialProfile: args.profile } : {}),
       listProfiles: listProfiles,
-      store: createSelectionStore(process.cwd()),
+      store: createSelectionStore(projectDir),
+      onListenerError: (error) =>
+        logger.error(
+          `A selection listener failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
     });
     await workspace.restore();
     const functionRun = await createFunctionRunTab({
@@ -92,10 +100,7 @@ export const uiCommand = defineAppCommand({
     );
     if (args.open) await openBrowser(server.url);
 
-    await new Promise<void>((resolve) => {
-      process.once("SIGINT", resolve);
-      process.once("SIGTERM", resolve);
-    });
+    await stopRequested;
     functionRun.close();
     await server.close();
   },

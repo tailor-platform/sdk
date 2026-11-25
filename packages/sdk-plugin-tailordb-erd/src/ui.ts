@@ -14,11 +14,14 @@ interface UiHandlerContext {
 type UiHandler = (request: Request, context: UiHandlerContext) => Promise<Response>;
 
 interface ErdUiHandlerOptions {
-  exportViewer: (outputDir: string) => Promise<ErdBuildResult[]>;
+  exportViewer: (outputDir: string, signal?: AbortSignal) => Promise<ErdBuildResult[]>;
 }
 
-function exportViewerFromProject(outputDir: string): Promise<ErdBuildResult[]> {
-  return runFreshErdExport({ cliEntry: CLI_ENTRY, outputDir });
+function exportViewerFromProject(
+  outputDir: string,
+  signal?: AbortSignal,
+): Promise<ErdBuildResult[]> {
+  return runFreshErdExport({ cliEntry: CLI_ENTRY, outputDir, ...(signal ? { signal } : {}) });
 }
 
 /**
@@ -42,7 +45,7 @@ export function createErdUiHandler(options: ErdUiHandlerOptions): UiHandler {
 
     const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-"));
     try {
-      const [primary] = await options.exportViewer(outputDir);
+      const [primary] = await options.exportViewer(outputDir, request.signal);
       if (!primary) {
         throw new Error("No TailorDB namespaces found in config.");
       }

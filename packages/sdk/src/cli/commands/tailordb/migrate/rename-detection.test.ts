@@ -569,13 +569,11 @@ describe("isTypeRenameCompatible", () => {
   });
 
   test("rejects a nested self-reference inside a field covered by a unique constraint", () => {
-    const withNestedSelfRef = (
-      name: string,
-      options: {
-        unique?: boolean;
-        indexes?: Record<string, { fields: string[]; unique?: boolean }>;
-      },
-    ) =>
+    interface WithNestedSelfRefOptions {
+      unique?: boolean;
+      indexes?: Record<string, { fields: string[]; unique?: boolean }>;
+    }
+    const withNestedSelfRef = (name: string, options: WithNestedSelfRefOptions) =>
       snapshotType(name, {
         fields: {
           id: { type: "uuid", required: true },

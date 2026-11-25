@@ -2,8 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
-import { createShellHandler, type Accounts, type PlatformInfo, type Tab } from "./shell-handler";
+import { createShellHandler, type Accounts, type Tab } from "./shell-handler";
 import { createWorkspaceContext } from "./workspace-context";
+import type { PlatformClientConfig } from "@tailor-platform/sdk/cli";
 
 const PORT = 7777;
 const SAME_ORIGIN = { "sec-fetch-site": "same-origin", origin: `http://127.0.0.1:${PORT}` };
@@ -51,7 +52,7 @@ function accounts(overrides: Partial<Accounts> = {}): Accounts {
   };
 }
 
-function shell(tabs: Tab[], ws = workspace(), acc = accounts(), platform?: PlatformInfo) {
+function shell(tabs: Tab[], ws = workspace(), acc = accounts(), platform?: PlatformClientConfig) {
   return createShellHandler({
     tabs,
     port: PORT,
@@ -179,6 +180,19 @@ describe("createShellHandler", () => {
     test("lists the logged-in users", async () => {
       const res = await get(shell([]), "/api/accounts");
       expect(await res.json()).toEqual({ users: ["me@example.com"] });
+    });
+
+    test("answers 400 with the cause when the logged-in users cannot be listed", async () => {
+      const failing = accounts({
+        listUsers: async () => {
+          throw new Error("Config file is unreadable.");
+        },
+      });
+      const res = await get(shell([], workspace(), failing), "/api/accounts");
+      expect([res.status, await res.json()]).toEqual([
+        400,
+        { error: "Config file is unreadable." },
+      ]);
     });
 
     test("lists the workspaces of a user", async () => {

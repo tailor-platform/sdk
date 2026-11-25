@@ -12,13 +12,14 @@ import { formatCommandHint } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { type ExecutorListInfo, toExecutorListInfo } from "./transform";
 
 export interface ListExecutorsOptions {
-  workspaceId?: string;
-  profile?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 /**
@@ -35,12 +36,14 @@ export async function listExecutors(options?: ListExecutorsOptions): Promise<Exe
   const pageDirection = toPageDirection(options?.order);
   const executors = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { executors, nextPageToken } = await client.listExecutorExecutors({
-        workspaceId,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { executors, nextPageToken } = await client.listExecutorExecutors(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [executors, nextPageToken];
     },
     { limit: options?.limit },

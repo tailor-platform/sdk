@@ -4,7 +4,7 @@ import { CLIError, formatCommandHint } from "./errors";
 
 interface AssertWritableOptions {
   /** Explicit profile name from command args. Falls back to TAILOR_PLATFORM_PROFILE. */
-  profile?: string;
+  profile?: string | undefined;
 }
 
 /**

@@ -68,12 +68,14 @@ describe("planWorkflowJobFunctionExecutionPolicy SDK-version-forced updates", ()
   const workspaceId = "ws-id";
   const appName = "app";
 
-  async function planPremium(options: {
+  interface PlanPremiumOptions {
     remoteMaxConcurrentExecutions: number;
     owner?: string;
     staleSdkVersion?: boolean;
     appId?: string;
-  }) {
+  }
+
+  async function planPremium(options: PlanPremiumOptions) {
     const { labels } = await buildMetaRequest({
       trn: resourceTrn(workspaceId, "workflow_job_function_execution_policy", "premium"),
       owner: { kind: "application", name: appName, id: options.appId },

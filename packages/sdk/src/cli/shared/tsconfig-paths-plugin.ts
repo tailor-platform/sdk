@@ -47,7 +47,7 @@ export interface TsconfigPathsPluginOptions {
    * directory of its own to resolve against, so an entry that inlines the user's
    * own import statements must name the file they came from.
    */
-  virtualEntrySourceFile?: string;
+  virtualEntrySourceFile?: string | undefined;
   /**
    * Called with each file path the tsconfig lookup depends on, including config
    * candidates that do not exist yet and package metadata used to resolve an
@@ -55,12 +55,12 @@ export interface TsconfigPathsPluginOptions {
    * never loaded as modules, so nothing else notices when an ancestor's `paths`
    * table changes or a nearer tsconfig.json appears.
    */
-  onTsconfigRead?: (tsconfigPath: string) => void;
+  onTsconfigRead?: ((tsconfigPath: string) => void) | undefined;
   /**
    * Lookup cache to share across multiple bundles in one CLI run. Defaults to
    * a fresh cache scoped to this plugin instance when omitted.
    */
-  cache?: TsconfigLookupCache;
+  cache?: TsconfigLookupCache | undefined;
 }
 
 /**

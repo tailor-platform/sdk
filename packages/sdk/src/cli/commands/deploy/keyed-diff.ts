@@ -27,7 +27,7 @@ export interface LabeledResourceChecks<Desired, Existing> {
 type LabeledDesired = { metaRequest: MetadataLabelWrite };
 
 /** An existing resource listed with the labels stored on it. */
-type LabeledExisting = { allLabels?: Record<string, string> };
+type LabeledExisting = { allLabels?: Record<string, string> | undefined };
 
 /**
  * Check ownership, SDK version, and SDK labels through the labels listed with each existing resource.
@@ -69,7 +69,7 @@ export interface KeyedDiff<Desired, Existing, Create, Update, Unchanged, Delete,
   existing: Iterable<readonly [string, Existing | undefined]>;
   keyOf(desired: Desired): string;
   /** Omitted for resources without SDK labels: every match and leftover is then owned. */
-  ownership?: KeyedDiffOwnership<NoInfer<Existing>>;
+  ownership?: KeyedDiffOwnership<NoInfer<Existing>> | undefined;
   /** Whether the existing resource was applied by this SDK version (or nothing forces a reapply). */
   versionMatches(desired: NoInfer<Desired>, existing: NoInfer<Existing>): boolean;
   /** The labels to rewrite on an unchanged resource; omitted where the plan does not read its labels. */

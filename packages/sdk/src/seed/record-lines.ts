@@ -33,7 +33,7 @@ export function physicalLineOfRecord(content: string, recordIndex: number): numb
  */
 export async function firstErrorLocation(
   errors: readonly ValidationErrorDetail[],
-): Promise<{ file: string; line?: number } | undefined> {
+): Promise<{ file: string; line?: number | undefined } | undefined> {
   const first = errors[0];
   if (!first) return undefined;
   try {

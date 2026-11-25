@@ -13,6 +13,7 @@ import { formatCommandHint } from "#/cli/shared/errors";
 import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger, styles } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
+import { omitUndefined } from "#/utils/omit-undefined";
 
 export interface WebhookExecutorInfo {
   name: string;
@@ -21,10 +22,10 @@ export interface WebhookExecutorInfo {
 }
 
 export interface ListWebhookExecutorsOptions {
-  workspaceId?: string;
-  profile?: string;
-  order?: Order;
-  limit?: number;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  order?: Order | undefined;
+  limit?: number | undefined;
 }
 
 /**
@@ -43,12 +44,14 @@ export async function listWebhookExecutors(
   const pageDirection = toPageDirection(options?.order);
   const webhooks = await fetchPaged(
     async (pageToken, pageSize) => {
-      const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks({
-        workspaceId,
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { webhooks, nextPageToken } = await client.listExecutorIncomingWebhooks(
+        omitUndefined({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [webhooks, nextPageToken];
     },
     { limit: options?.limit },

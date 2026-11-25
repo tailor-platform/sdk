@@ -84,7 +84,12 @@ function mockLocalNamespace(snapshot: SchemaSnapshot = makeSnapshot()): void {
   } as never);
 }
 
-function mockConfig(dir: string, options: { plugins?: unknown[]; db?: unknown } = {}): void {
+interface MockConfigOptions {
+  plugins?: unknown[];
+  db?: unknown;
+}
+
+function mockConfig(dir: string, options: MockConfigOptions = {}): void {
   vi.mocked(loadConfigFile).mockResolvedValue({
     kind: "config",
     config: {
