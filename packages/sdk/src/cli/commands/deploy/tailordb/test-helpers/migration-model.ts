@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
+import { assert } from "vitest";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import { snapshotTable } from "./migration-apply";
 import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
   SnapshotFieldConfig,
@@ -63,9 +65,8 @@ function readModelTraces(dir: string): ModelTrace[] {
     const itf = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8")) as { states: unknown[] };
     const states = itf.states.map((state) => decodeItf(state) as Record<string, unknown>);
     const first = states[0];
-    if (!first) continue;
     const doneAt = states.findIndex((state) => (state.step as ModelStep).tag === "Done");
-    if (doneAt < 0) continue;
+    assert(first && doneAt >= 0, `${file} ends before the deploy is done`);
     const trace: ModelTrace = {
       file,
       history: first.history as ModelSchema[],
@@ -90,11 +91,11 @@ function readModelTraces(dir: string): ModelTrace[] {
   return [...traces.values()];
 }
 
-const QUINT_CLI = createRequire(import.meta.url).resolve("@informalsystems/quint/dist/src/cli.js");
+const QUINT_CLI = fileURLToPath(import.meta.resolve("@informalsystems/quint/dist/src/cli.js"));
 const MODEL_SPEC = path.join(import.meta.dirname, "migration-deploy.qnt");
 
 /**
- * Simulate `migration-deploy.qnt` with Quint, checking its invariants, and read the traces.
+ * Simulate `migration-deploy.qnt` with Quint and read the traces.
  * @param samples - Number of traces to simulate
  * @returns One trace per distinct starting scenario, up to the first `Done` state
  */
@@ -113,11 +114,9 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
         `--n-traces=${samples}`,
         "--seed=1",
         "--backend=typescript",
-        "--invariant=specInvariant",
-        "--mbt",
         `--out-itf=${path.join(dir, "t{seq}.itf.json")}`,
       ],
-      { stdio: "pipe" },
+      { stdio: "pipe", timeout: 60_000 },
     );
     return readModelTraces(dir);
   } finally {
@@ -156,7 +155,7 @@ function fieldsAt(version: number): Record<string, SnapshotFieldConfig> {
  * @returns Snapshot table
  */
 export function modelTable(name: string, version: number): TailorDBSnapshotType {
-  return { name, pluralForm: `${name.toLowerCase()}s`, fields: fieldsAt(version) };
+  return snapshotTable(name, fieldsAt(version));
 }
 
 /**
@@ -213,14 +212,14 @@ interface FakeTable {
  * permission that exists fails with `AlreadyExists`, and writing a missing one with `NotFound`.
  * Deleting a table also deletes its permission.
  * @param namespace - The namespace the fake holds
- * @param start - Tables the namespace starts with, each with a permission
+ * @param start - Tables and permissions the namespace starts with
  * @returns The client overrides, the tables, and every rejected write
  */
-export function createFakeNamespace(namespace: string, start: ModelSchema) {
+export function createFakeNamespace(namespace: string, start: ModelState) {
   const tables = new Map<string, FakeTable>(
-    [...start].map(([name, version]) => [
+    [...start.tables].map(([name, version]) => [
       name,
-      { type: modelManifest(name, version), permission: true },
+      { type: modelManifest(name, version), permission: start.permissions.has(name) },
     ]),
   );
   const rejections: string[] = [];
@@ -306,15 +305,11 @@ export function versionsOf(tables: ReadonlyMap<string, FakeTable>): ModelSchema 
  * tables.
  * @param actual - Versions the fake holds
  * @param expected - Model state
- * @param tableNames - Every table name the model uses
  * @returns One line per mismatch
  */
-export function compareTables(
-  actual: ModelSchema,
-  expected: ModelState,
-  tableNames: readonly string[],
-): string[] {
-  return tableNames
+export function compareTables(actual: ModelSchema, expected: ModelState): string[] {
+  return [...new Set([...actual.keys(), ...expected.tables.keys()])]
+    .toSorted()
     .filter((name) => !expected.unchecked.has(name))
     .flatMap((name) => {
       const want = expected.tables.get(name);

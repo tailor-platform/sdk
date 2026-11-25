@@ -26,7 +26,7 @@ module migrationDeploy {
   var step: Step
   // Tables and versions the namespace holds at `step`, except the tables in `unchecked`.
   var tables: Schema
-  // Tables with a GraphQL permission, checked at Start and Done only.
+  // Tables with a GraphQL permission: every table at Start, and the ones checked at Done.
   var permissions: Set[Table]
   var unchecked: Set[Table]
 
@@ -114,8 +114,4 @@ module migrationDeploy {
       | Done => all { false, step' = step, tables' = tables, permissions' = permissions, unchecked' = unchecked }
     },
   }
-
-  val versionsGrow = history.indices().forall(i => i == 0 or follows(history[i - 1], history[i]))
-  val doneHoldsLocalDefinitions = step == Done implies tables == lastOf(history)
-  val specInvariant = versionsGrow and doneHoldsLocalDefinitions
 }

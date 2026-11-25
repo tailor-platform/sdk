@@ -4,6 +4,8 @@ import {
   reconstructSnapshotFromMigrations,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { logger } from "#/cli/shared/logger";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { assertDefined } from "#/utils/assert";
 import * as migrationModule from "./migration";
 import {
   createPlanResult,
@@ -51,38 +53,36 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 
 const NAMESPACE = "test-ns";
 const WORKSPACE_ID = "test-workspace";
-const TABLE_NAMES = ["A", "B", "C"];
+const stepLabel = (step: ModelState["step"]) =>
+  step.tag === "Script" || step.tag === "Commit" ? `${step.tag} ${step.value}` : step.tag;
 
 async function replay(trace: ModelTrace): Promise<string[]> {
   const failures: string[] = [];
   const { history, checkpoint, fresh } = trace;
-  const last = history.at(-1) ?? new Map<string, number>();
-  const start = trace.states[0]?.tables ?? new Map<string, number>();
-  const expectedAt = (tag: "Script" | "Commit" | "Done", migration?: number) =>
-    trace.states.find(
-      (state) =>
-        state.step.tag === tag &&
-        (state.step.tag === "Done" || ("value" in state.step && state.step.value === migration)),
-    );
+  const last = assertDefined(history.at(-1), "every history has a last schema");
+  const start = assertDefined(trace.states[0], "every trace has a Start state");
+  const done = assertDefined(trace.states.at(-1), "every trace ends with Done");
   const fake = createFakeNamespace(NAMESPACE, start);
-  const observe = (label: string, expected: ModelState | undefined) => {
+  const visited: string[] = [];
+  const observe = (step: ModelState["step"]) => {
+    const label = stepLabel(step);
+    visited.push(label);
+    const expected = trace.states.find((state) => stepLabel(state.step) === label);
     if (!expected) {
       failures.push(`${label}: the model has no such step`);
       return;
     }
-    for (const line of compareTables(versionsOf(fake.tables), expected, TABLE_NAMES)) {
+    for (const line of compareTables(versionsOf(fake.tables), expected)) {
       failures.push(`${label}: ${line}`);
     }
   };
 
   const remoteCheckpoint = createRemoteCheckpoint(fresh ? null : checkpoint);
   vi.mocked(migrationModule.executeMigrations).mockImplementation(async (_context, migrations) => {
-    for (const migration of migrations) {
-      observe(`script ${migration.number}`, expectedAt("Script", migration.number));
-    }
+    for (const migration of migrations) observe({ tag: "Script", value: migration.number });
   });
   vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async (...args) => {
-    observe(`commit ${args[3]}`, expectedAt("Commit", args[3]));
+    observe({ tag: "Commit", value: args[3] });
     return remoteCheckpoint.record(...args);
   });
   const tablesByVersion = Object.fromEntries(
@@ -105,41 +105,52 @@ async function replay(trace: ModelTrace): Promise<string[]> {
     },
     metaRequest: typeMetaRequest(name),
   });
-  const creates = [...last].filter(([name]) => !start.has(name)).map(entryOf);
+  const creates = [...last].filter(([name]) => !start.tables.has(name)).map(entryOf);
   const updates = [...last]
-    .filter(([name, version]) => start.has(name) && start.get(name) !== version)
+    .filter(([name, version]) => start.tables.has(name) && start.tables.get(name) !== version)
     .map(entryOf);
-  const deleted = [...start.keys()].filter((name) => !last.has(name));
+  const deletes = [...start.tables.keys()].filter((name) => !last.has(name));
   const planResult = createPlanResult({
-    type: { creates, updates, deletes: deleted.map((name) => typeDeletion(name)) },
+    type: { creates, updates, deletes: deletes.map((name) => typeDeletion(name)) },
     gqlPermission: {
-      creates: creates.map((create) => gqlPermissionEntry(create.name)),
-      deletes: deleted.map((name) => gqlPermissionDeletion(name)),
+      creates: [...last.keys()]
+        .filter((name) => !start.permissions.has(name))
+        .map((name) => gqlPermissionEntry(name)),
+      deletes: [...start.permissions]
+        .filter((name) => !last.has(name))
+        .map((name) => gqlPermissionDeletion(name)),
     },
     local: [...last].map(([name, version]) => modelTable(name, version)),
   });
   const pending = history.slice(checkpoint + 1).map((schema, offset) => {
     const number = checkpoint + 1 + offset;
-    return mkPendingMigration(modelDiff(history[number - 1] ?? new Map(), schema), {
+    const before = assertDefined(history[number - 1], "every pending migration has a predecessor");
+    return mkPendingMigration(modelDiff(before, schema), {
       number,
       hasScript: trace.scripted.has(number),
     });
   });
   planResult.context.pendingMigrations = remoteCheckpoint.mockPending(pending);
   const client = remoteCheckpoint.createMockClient(fake.overrides);
-  const info = vi.spyOn(logger, "info");
+  using _logger = silenceLogger("success", "warn", "log", "newline");
+  const info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
   try {
     await applyTailorDB(client, planResult, "create-update");
-    observe("done", expectedAt("Done"));
+    observe(done.step);
     const permissions = [...fake.tables]
       .filter(([, table]) => table.permission)
-      .map(([name]) => name);
-    const expectedPermissions = [...(expectedAt("Done")?.permissions ?? [])];
-    if (permissions.toSorted().join() !== expectedPermissions.toSorted().join()) {
+      .map(([name]) => name)
+      .toSorted();
+    const expectedPermissions = [...done.permissions].toSorted();
+    if (permissions.join() !== expectedPermissions.join()) {
       failures.push(
-        `done: permissions ${permissions.toSorted().join()}, expected ${expectedPermissions.toSorted().join()}`,
+        `Done: permissions ${permissions.join()}, expected ${expectedPermissions.join()}`,
       );
+    }
+    const expectedSteps = trace.states.slice(1).map((state) => stepLabel(state.step));
+    if (visited.join() !== expectedSteps.join()) {
+      failures.push(`steps ${visited.join(", ")}, expected ${expectedSteps.join(", ")}`);
     }
   } catch (error) {
     failures.push(`deploy failed: ${error instanceof Error ? error.message : String(error)}`);

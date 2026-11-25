@@ -23,8 +23,6 @@ export default {
     // zinfer emits an input and an output type for every schema, used or not.
     "src/types/*.generated.ts": ["types"],
   },
-  // migration-model.test.ts runs Quint's CLI by its resolved path, which knip does not trace.
-  ignoreDependencies: ["@informalsystems/quint"],
   ignoreBinaries: ["knip", "publint"],
   treatConfigHintsAsErrors: true,
 } satisfies KnipConfig;

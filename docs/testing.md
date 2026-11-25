@@ -35,7 +35,7 @@ Before raising the minimum supported migration format, identify a released bridg
 
 ## Migration Deploy Model Test
 
-`packages/sdk/src/cli/commands/deploy/tailordb/migration-model.test.ts` checks the migration deploy flow against a [Quint](https://quint-lang.org/) specification, `test-helpers/migration-deploy.qnt`. Quint simulates thousands of migration histories with a fixed seed; the test deploys each one with `applyTailorDB` against an in-memory namespace that rejects what the Platform rejects, and compares the tables and their shapes at every script, every checkpoint commit, and the end with what the specification expects.
+`packages/sdk/src/cli/commands/deploy/tailordb/migration-model.test.ts` checks the migration deploy flow against a [Quint](https://quint-lang.org/) specification, `test-helpers/migration-deploy.qnt`. Quint simulates thousands of migration histories with a fixed seed; the test deploys each one with `applyTailorDB` against an in-memory namespace that, like the Platform, rejects creating a table or GraphQL permission that exists and writing one that is missing, and compares the tables and their shapes at every script, every checkpoint commit, and the end with what the specification expects.
 
 The specification states the intended behavior. A known gap is listed as a definition whose tables `uncheckedAt` leaves out; a fix for the gap removes the definition, so the test pins the fix. Check a specification change with `pnpm exec quint typecheck <file>` in `packages/sdk`.
 
