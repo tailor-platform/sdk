@@ -117,6 +117,26 @@ describe("function run --name review", () => {
       "execSync(String.raw`tailor function run C:\\new\\test.ts --name x`);\n",
     ],
     [
+      "a newline escape inside a double-quoted argument in a string of a TypeScript file",
+      "run.ts",
+      'execSync("tailor function run a.ts --arg \\"a\\nb\\" --name x");\n',
+    ],
+    [
+      "a newline escape inside a single-quoted JSON argument in a string of a TypeScript file",
+      "run.ts",
+      "execSync(\"tailor function run a.ts --arg '{\\n}' --name job\");\n",
+    ],
+    [
+      "a line break inside a double-quoted argument",
+      "run.sh",
+      'tailor function run a.ts --arg "a\nb" --name x\n',
+    ],
+    [
+      "a line break inside a single-quoted JSON argument",
+      "run.sh",
+      "tailor function run a.ts --arg '{\n\"a\":1\n}' --name x\n",
+    ],
+    [
       "a template substitution right after --name in a string of a TypeScript file",
       "run.ts",
       "execSync(`tailor function run a.ts --name${suffix} x`);\n",
@@ -157,6 +177,11 @@ describe("function run --name review", () => {
       "--name text inside a double-quoted argument",
       "run.sh",
       'tailor function run a.ts --arg "text --name example"\n',
+    ],
+    [
+      "many lines opening a quote without closing it, without taking quadratic time",
+      "run.sh",
+      `tailor function run a.ts "\n`.repeat(3000),
     ],
     [
       "a line of many escaped quotes without --name, without taking exponential time",
