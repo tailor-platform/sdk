@@ -358,6 +358,25 @@ export async function executeSingleMigrationPrePhase(
   const typeCreates = entriesOfNamespace(changeSet.type.creates, migration.namespace);
   const typeUpdates = entriesOfNamespace(changeSet.type.updates, migration.namespace);
   const createdBeforeMigration = new Set(processedTables.created);
+  const prePhaseManifest = (tableName: string) => {
+    const typeChanges = preMigrationChanges.get(tableName);
+    const snapshotType = buildSnapshotTypeManifest(
+      migration,
+      tableName,
+      phaseSettings,
+      typeChanges,
+    );
+    if (!snapshotType) return undefined;
+    const manifest = structuredClone(snapshotType);
+    if (typeChanges && typeChanges.size > 0 && manifest.schema?.fields) {
+      applyPreMigrationFieldAdjustments(manifest.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(tableName);
+    if (indexChanges && indexChanges.size > 0 && manifest.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(manifest.schema.indexes, indexChanges);
+    }
+    return manifest;
+  };
 
   for (const create of typeCreates) {
     const tableName = create.request.tailordbType?.name;
@@ -368,28 +387,13 @@ export async function executeSingleMigrationPrePhase(
     ) {
       continue;
     }
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedRequest = structuredClone(create.request);
-    clonedRequest.tailordbType = snapshotType;
-
-    if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.created.add(tableKey(tableName));
     attemptedTables.add(tableName);
+    const clonedRequest = structuredClone(create.request);
+    clonedRequest.tailordbType = tailordbType;
     await client.createTailorDBType(clonedRequest);
   }
 
@@ -402,23 +406,8 @@ export async function executeSingleMigrationPrePhase(
     ) {
       continue;
     }
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedTypeRequest = structuredClone(snapshotType);
-    if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedTypeRequest.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedTypeRequest.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
@@ -426,7 +415,7 @@ export async function executeSingleMigrationPrePhase(
       omitUndefined({
         workspaceId: create.request.workspaceId,
         namespaceName: create.request.namespaceName,
-        tailordbType: clonedTypeRequest,
+        tailordbType,
       }),
     );
   }
@@ -434,56 +423,26 @@ export async function executeSingleMigrationPrePhase(
   for (const update of typeUpdates) {
     const tableName = update.request.tailordbType?.name;
     if (!tableName || !affectedTables.has(tableName)) continue;
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedRequest = structuredClone(update.request);
-    clonedRequest.tailordbType = snapshotType;
-
-    if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
+    const clonedRequest = structuredClone(update.request);
+    clonedRequest.tailordbType = tailordbType;
     await client.updateTailorDBType(clonedRequest);
   }
 
   for (const tableName of planlessTableNames(changeSet, migration)) {
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedType = structuredClone(snapshotType);
-    if (typeChanges && typeChanges.size > 0 && clonedType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedType.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType({
       workspaceId,
       namespaceName: migration.namespace,
-      tailordbType: clonedType,
+      tailordbType,
     });
   }
 
