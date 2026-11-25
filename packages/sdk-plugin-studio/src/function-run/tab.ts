@@ -57,7 +57,7 @@ export async function createFunctionRunTab(
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-studio-run-"));
   const runArgFile = path.join(runDir, "arg.json");
 
-  let inputsChanged = () => {};
+  let inputsChanged = (_editedAt: number) => {};
   const files = createSyncedFiles({
     file,
     argFile,
@@ -66,7 +66,7 @@ export async function createFunctionRunTab(
     starterArg: editsScratch ? STARTER_ARG : undefined,
     formatCode: formatTypeScript,
     pollMs: FILE_POLL_MS,
-    onInputsChanged: () => inputsChanged(),
+    onInputsChanged: (editedAt) => inputsChanged(editedAt),
   });
   try {
     await files.init();
@@ -81,7 +81,7 @@ export async function createFunctionRunTab(
     runArgFile,
     getSelection: options.getSelection,
   });
-  inputsChanged = () => session.markInputsChanged();
+  inputsChanged = (editedAt) => session.markInputsChanged(editedAt);
   const relative = (target: string) => path.relative(options.projectDir, target);
   const paths = {
     file: relative(file),

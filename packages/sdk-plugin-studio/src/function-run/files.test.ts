@@ -158,6 +158,62 @@ describe("write", () => {
   });
 });
 
+describe("when an edit happened", () => {
+  function setupWithClock() {
+    const edits: number[] = [];
+    const file = path.join(dir, "studio", "function.ts");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "const a = 1;");
+    const files = createSyncedFiles({
+      file,
+      argFile: path.join(dir, "studio", "function.arg.json5"),
+      runArgFile: path.join(dir, "run", "arg.json"),
+      formatCode: collapseSpaces,
+      pollMs: 300,
+      onInputsChanged: (at) => edits.push(at),
+    });
+    return { files, file, edits };
+  }
+
+  test("is the time the file was saved for an edit that is only seen later", async () => {
+    const { files, file, edits } = setupWithClock();
+    await files.init();
+    edits.length = 0;
+    fs.writeFileSync(file, "const a = 2;");
+    const saved = Date.now() - 200;
+    fs.utimesSync(file, saved / 1000, saved / 1000);
+
+    await files.refresh();
+
+    expect(Math.abs(edits[0]! - saved)).toBeLessThan(5);
+  });
+
+  test("is not taken from a file time older than a poll, which would hide a run that is on its way", async () => {
+    const { files, file, edits } = setupWithClock();
+    await files.init();
+    edits.length = 0;
+    fs.writeFileSync(file, "const a = 2;");
+    const old = Date.now() - 60_000;
+    fs.utimesSync(file, old / 1000, old / 1000);
+    const before = Date.now();
+
+    await files.refresh();
+
+    expect(edits[0]).toBeGreaterThanOrEqual(before - 400);
+  });
+
+  test("is the time of the write for what a page wrote", async () => {
+    const { files, edits } = setupWithClock();
+    await files.init();
+    edits.length = 0;
+    const before = Date.now();
+
+    await files.write({ code: "const a = 3;" });
+
+    expect(edits[0]).toBeGreaterThanOrEqual(before);
+  });
+});
+
 describe("write announcements", () => {
   test("tells the other pages what a page wrote, with the origin that sent it", async () => {
     const { files, changes } = setup({ existingCode: "const a = 1;" });

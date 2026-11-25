@@ -237,6 +237,53 @@ describe("running", () => {
     expect(session.snapshot().running).toBe(false);
   });
 
+  test("counts saves 120 ms apart as two runs, since the watch waits 100 ms after a save", async () => {
+    const { session, run } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    session.markInputsChanged(5000);
+    session.markInputsChanged(5120);
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+    const afterFirst = session.snapshot().running;
+    run.push({ type: "stdout", line: runOf(3) });
+    await settle();
+
+    expect([afterFirst, session.snapshot().running]).toEqual([true, false]);
+  });
+
+  test("does not wait for a run that had already reported back by the time the edit was seen", async () => {
+    const { session, run, at } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    at(5200);
+    run.push({ type: "stderr", line: JSON.stringify({ error: { message: "build failed" } }) });
+    await settle();
+    at(5300);
+    session.markInputsChanged(5000);
+
+    expect(session.snapshot().running).toBe(false);
+  });
+
+  test("still waits when a run reported back right after the edit, since it started before it", async () => {
+    const { session, run, at } = setup();
+    session.start();
+    run.push({ type: "stdout", line: runOf(1) });
+    await settle();
+
+    at(5050);
+    run.push({ type: "stdout", line: runOf(2) });
+    await settle();
+    at(5300);
+    session.markInputsChanged(5000);
+
+    expect(session.snapshot().running).toBe(true);
+  });
+
   test("expects only the first run for an edit made before the watch reports it is ready", async () => {
     const { session, run, at } = setup();
     session.start();

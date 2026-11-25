@@ -1,4 +1,5 @@
 import { selectionArgs, selectionEnv } from "../workspace-context";
+import { HISTORY_LIMIT } from "./history";
 import { interpret, type StreamMessage } from "./stream";
 import type { WorkspaceSelection } from "../workspace-context";
 import type { RunHandle, RunInput } from "./run-types";
@@ -36,7 +37,7 @@ export interface SessionOptions {
   now?: () => number;
 }
 
-const CLI_DEBOUNCE_MS = 150;
+const CLI_DEBOUNCE_MS = 100;
 const READY_NOTE = /^(?:> )?Ready!/;
 const NO_WORKSPACE = "Select a workspace in the bar at the top of the page.";
 
@@ -57,7 +58,7 @@ function describeWorkspace(selection: WorkspaceSelection): string {
  * @returns The session
  */
 export function createRunSession(options: SessionOptions) {
-  const maxEntries = options.maxEntries ?? 100;
+  const maxEntries = options.maxEntries ?? HISTORY_LIMIT;
   const listeners = new Set<(event: SessionEvent) => void>();
   let entries: SessionEntry[] = [];
   let seq = 0;
@@ -69,6 +70,7 @@ export function createRunSession(options: SessionOptions) {
   let latestRun: SessionSnapshot["latestRun"];
   let owedRuns = 0;
   let lastEditAt = 0;
+  let lastSettledAt: number | undefined;
   let awaitingReady = false;
   const now = options.now ?? Date.now;
 
@@ -98,6 +100,8 @@ export function createRunSession(options: SessionOptions) {
   }
 
   function settleRun() {
+    lastSettledAt = now();
+    awaitingReady = false;
     owedRuns = Math.max(0, owedRuns - 1);
     if (owedRuns === 0) setRunning(false);
   }
@@ -172,9 +176,13 @@ export function createRunSession(options: SessionOptions) {
       stopRun("Stopped.");
     },
 
-    markInputsChanged(): void {
+    markInputsChanged(at: number = now()): void {
       if (active === undefined) return;
-      const at = now();
+      const reportedSince = lastSettledAt !== undefined && lastSettledAt >= at + CLI_DEBOUNCE_MS;
+      if (owedRuns === 0 && reportedSince) {
+        lastEditAt = at;
+        return;
+      }
       const sameRun = awaitingReady || (owedRuns > 0 && at - lastEditAt < CLI_DEBOUNCE_MS);
       lastEditAt = at;
       if (owedRuns === 0) owedRuns = 1;

@@ -23,7 +23,8 @@ export interface SyncedFilesOptions {
   formatCode: (code: string) => Promise<string | undefined>;
   /** How often to look for changes made from outside; 0 turns the polling off. */
   pollMs?: number;
-  onInputsChanged?: () => void;
+  /** Called with when the edit happened, which is earlier than now for one that is seen late. */
+  onInputsChanged?: (editedAt: number) => void;
 }
 
 const ARG_NOT_READABLE =
@@ -66,22 +67,34 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
     return result;
   };
 
-  const touch = () => {
+  const touch = (editedAt = Date.now()) => {
     changedAt = Date.now();
-    options.onInputsChanged?.();
+    options.onInputsChanged?.(editedAt);
   };
+
+  function savedAt(file: string): number {
+    const observed = Date.now();
+    let saved = observed;
+    try {
+      saved = fs.statSync(file).mtimeMs;
+    } catch {
+      return observed;
+    }
+    const oldest = options.pollMs ? observed - options.pollMs - 100 : Number.NEGATIVE_INFINITY;
+    return Math.min(observed, Math.max(saved, oldest));
+  }
 
   const emit = (change: FileChange) => {
     for (const listener of listeners) listener(change);
   };
 
-  function applyArg(text: string): string | undefined {
+  function applyArg(text: string, editedAt?: number): string | undefined {
     const normalized = normalizeArg(text);
     if (normalized === undefined) return ARG_NOT_READABLE;
     if (normalized !== runArg) {
       writeAtomic(options.runArgFile, normalized);
       runArg = normalized;
-      touch();
+      touch(editedAt);
     }
     return undefined;
   }
@@ -153,13 +166,13 @@ export function createSyncedFiles(options: SyncedFilesOptions) {
         if (onDisk !== undefined && onDisk !== code) {
           code = onDisk;
           formatted = await options.formatCode(onDisk);
-          touch();
+          touch(savedAt(options.file));
           emit({ code: onDisk });
         }
         const argOnDisk = readIfExists(options.argFile);
         if (argOnDisk !== undefined && argOnDisk !== arg) {
           arg = argOnDisk;
-          argError = applyArg(arg);
+          argError = applyArg(arg, savedAt(options.argFile));
           emit({ arg: argOnDisk });
         }
       });

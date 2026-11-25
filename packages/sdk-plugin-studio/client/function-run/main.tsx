@@ -15,6 +15,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
+import { HISTORY_LIMIT, prependEntry } from "../../src/function-run/history";
 import { createSaver } from "../../src/function-run/saver";
 import { parseEventFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
 import { parseTailorErrors, type TailorErrorItem } from "../../src/function-run/tailor-errors";
@@ -348,7 +349,7 @@ function App() {
         setRunning(next.running === true);
       } else if (event === "entry") {
         const { seq, message } = data as { seq: number; message: EntryBody };
-        setEntries((current) => [{ ...message, id: seq }, ...current]);
+        setEntries((current) => prependEntry(current, { ...message, id: seq }, HISTORY_LIMIT));
         if (message.type === "run") setArgErrors(parseTailorErrors(message.record.error));
       } else if (event === "file") {
         const change = data as { code?: string; arg?: string; origin?: string };
@@ -401,13 +402,17 @@ function App() {
     const notSaved = await saver.flush();
     if (notSaved !== undefined) {
       const text = `Not started: the latest edit was not saved (${notSaved}).`;
-      setEntries((current) => [{ type: "failure", text, id: --localId.current }, ...current]);
+      setEntries((current) =>
+        prependEntry(current, { type: "failure", text, id: --localId.current }, HISTORY_LIMIT),
+      );
       return;
     }
     const response = await fetch("start", { method: "POST" });
     if (!response.ok) {
       const text = (await response.text()).trim() || "Request failed";
-      setEntries((current) => [{ type: "failure", text, id: --localId.current }, ...current]);
+      setEntries((current) =>
+        prependEntry(current, { type: "failure", text, id: --localId.current }, HISTORY_LIMIT),
+      );
     }
   }
 

@@ -5,6 +5,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, placeholder as placeholderExtension } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
+import { changedByEditor, fromProps } from "../../src/function-run/editor-sync";
 
 const typescriptSupport = javascript({ typescript: true });
 
@@ -75,7 +76,7 @@ export function Editor({
             },
           }),
           EditorView.updateListener.of((update) => {
-            if (update.docChanged) latest.current.onChange(update.state.doc.toString());
+            if (changedByEditor(update)) latest.current.onChange(update.state.doc.toString());
           }),
         ],
       }),
@@ -92,7 +93,10 @@ export function Editor({
   useEffect(() => {
     const editor = view.current;
     if (editor === null || editor.state.doc.toString() === value) return;
-    editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });
+    editor.dispatch({
+      changes: { from: 0, to: editor.state.doc.length, insert: value },
+      annotations: fromProps.of(true),
+    });
   }, [value]);
 
   useEffect(() => {
