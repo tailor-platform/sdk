@@ -240,18 +240,26 @@ function StudioHeader() {
   const [info, setInfo] = useState<ContextInfo>();
   const [error, setError] = useState<string>();
 
+  const latest = useRef(0);
+  const apply = (ticket: number, body: ContextInfo | { error: string }) => {
+    if (ticket !== latest.current) return;
+    if ("error" in body) setError(body.error);
+    else {
+      setError(undefined);
+      setInfo(body);
+    }
+  };
+
   useEffect(() => {
-    const load = () =>
+    const load = () => {
+      const ticket = ++latest.current;
       void fetch("/api/context")
         .then((response) => response.json() as Promise<ContextInfo | { error: string }>)
-        .then((body) => {
-          if ("error" in body) setError(body.error);
-          else {
-            setError(undefined);
-            setInfo(body);
-          }
-        })
-        .catch((e: unknown) => setError(String(e)));
+        .then((body) => apply(ticket, body))
+        .catch((e: unknown) => {
+          if (ticket === latest.current) setError(String(e));
+        });
+    };
     load();
     const events = new EventSource("/api/context/events");
     events.addEventListener("open", load);
@@ -261,17 +269,13 @@ function StudioHeader() {
 
   const select = async (profile: string) => {
     if (!info) return;
+    const ticket = ++latest.current;
     const response = await fetch("/api/context", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ profile: profile === "" ? null : profile }),
     });
-    const body = (await response.json()) as ContextInfo | { error: string };
-    if ("error" in body) setError(body.error);
-    else {
-      setError(undefined);
-      setInfo(body);
-    }
+    apply(ticket, (await response.json()) as ContextInfo | { error: string });
   };
 
   const selected = info?.selected;
@@ -326,7 +330,12 @@ function StudioHeader() {
           </option>
         ))}
       </select>
-      {info ? <NewProfileDialog platform={info.platform} onCreated={setInfo} /> : null}
+      {info ? (
+        <NewProfileDialog
+          platform={info.platform}
+          onCreated={(created) => apply(++latest.current, created)}
+        />
+      ) : null}
       {selected?.workspaceId ? (
         <span style={{ opacity: 0.85 }}>
           workspace: <code>{selected.workspaceId}</code>

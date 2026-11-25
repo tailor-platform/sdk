@@ -51,3 +51,25 @@ test("stays quiet when the launcher exits with 0", async () => {
 
   expect(warn).not.toHaveBeenCalled();
 });
+
+test("warns when the launcher had already exited nonzero by the time open() resolved, as on Windows and WSL", async () => {
+  const launcher = Object.assign(new EventEmitter(), { exitCode: 1 });
+  vi.mocked(open).mockResolvedValueOnce(launcher as never);
+  const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+
+  await openBrowser("http://127.0.0.1:7777/");
+
+  expect(warn).toHaveBeenCalledWith(
+    "Failed to open browser automatically. Please open the URL above manually.",
+  );
+});
+
+test("stays quiet when the launcher had already exited with 0", async () => {
+  const launcher = Object.assign(new EventEmitter(), { exitCode: 0 });
+  vi.mocked(open).mockResolvedValueOnce(launcher as never);
+  const warn = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+
+  await openBrowser("http://127.0.0.1:7777/");
+
+  expect(warn).not.toHaveBeenCalled();
+});

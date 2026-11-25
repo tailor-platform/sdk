@@ -36,7 +36,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@politty/zod": "0.7.3",
+    "@politty/zod": "0.7.8",
     "open": "11.0.4",
     "pathe": "2.0.3",
     "pkg-types": "2.4.0",
