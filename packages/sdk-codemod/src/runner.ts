@@ -6,6 +6,7 @@ import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { takesSeparateGlobalValue } from "./command-line-pattern";
+import { lineOfIndex, movedIndex } from "./moved-text";
 import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
@@ -523,6 +524,22 @@ function legacyPatternWarnings(
   });
 }
 
+function movedLine(prior: string | null, finding: LlmReviewFinding, content: string): number {
+  const source = prior ?? "";
+  const lines = source.split("\n");
+  const column = lines[finding.line - 1]?.indexOf(finding.excerpt) ?? -1;
+  const at =
+    column === -1
+      ? content.indexOf(finding.excerpt)
+      : movedIndex(
+          source,
+          lines.slice(0, finding.line - 1).reduce((sum, line) => sum + line.length + 1, column),
+          finding.excerpt.length,
+          content,
+        );
+  return at === -1 ? 1 : lineOfIndex(content, at);
+}
+
 function lineRemapper(before: string, after: string): (line: number) => number {
   const hunks = structuredPatch("", "", before, after, "", "", { context: 0 }).hunks;
   const lastLine = Math.max(1, after.split("\n").length - (after.endsWith("\n") ? 1 : 0));
@@ -860,17 +877,13 @@ export async function runCodemods(
     const relocate = (finding: LlmReviewFinding, fromPerFile: boolean): LlmReviewFinding[] => {
       const absolute = path.resolve(absoluteTargetPath, finding.file);
       const final = overlay.current(absolute);
+      const prior = afterPerFile.get(absolute) ?? overlay.original(absolute);
       if (final === null) {
         const target = mergedInto.get(finding.file);
         const content = target && overlay.current(path.resolve(absoluteTargetPath, target));
         if (!target || !content) return [];
-        const index =
-          finding.excerpt === ""
-            ? -1
-            : content.split("\n").findIndex((line) => line.includes(finding.excerpt));
-        return [{ ...finding, file: target, line: index === -1 ? 1 : index + 1 }];
+        return [{ ...finding, file: target, line: movedLine(prior, finding, content) }];
       }
-      const prior = afterPerFile.get(absolute) ?? overlay.original(absolute);
       if (!fromPerFile || prior === null || prior === final) return [finding];
       return [{ ...finding, line: lineRemapper(prior, final)(finding.line) }];
     };

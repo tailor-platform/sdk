@@ -2529,7 +2529,7 @@ describe("runCodemods", () => {
       expect(result.warnings).toEqual(["merged a.ts and c.ts"]);
     });
 
-    test("reports the findings on a merged file at the file its code moved to", async () => {
+    test("reports the findings on a merged file at the line its code moved to", async () => {
       const detectorPath = path.join(os.tmpdir(), "transform-project-detector.ts");
       const movePath = path.join(os.tmpdir(), "transform-project-move.ts");
       await fs.promises.writeFile(
@@ -2547,10 +2547,14 @@ describe("runCodemods", () => {
           const c = project.read("c.ts");
           if (c === undefined) return {};
           return {
-            writes: { "merged.ts": "// header\\n" + c },
+            writes: { "merged.ts": "// second(); flagMe();\\n" + c },
             deletes: ["c.ts"],
             mergedInto: { "c.ts": "merged.ts" },
-            findings: [{ file: "c.ts", line: 2, message: "moved", excerpt: "second();" }],
+            findings: [
+              { file: "c.ts", line: 2, message: "moved", excerpt: "second();" },
+              { file: "c.ts", line: 1, message: "gone", excerpt: "gone();" },
+              { file: "c.ts", line: 3, message: "elsewhere", excerpt: "first();" },
+            ],
           };
         }`,
         "utf-8",
@@ -2587,7 +2591,11 @@ describe("runCodemods", () => {
           codemodId: "test/move",
           prompt: "Merge.",
           files: ["merged.ts"],
-          findings: [{ file: "merged.ts", line: 3, message: "moved", excerpt: "second();" }],
+          findings: [
+            { file: "merged.ts", line: 1, message: "gone", excerpt: "gone();" },
+            { file: "merged.ts", line: 2, message: "elsewhere", excerpt: "first();" },
+            { file: "merged.ts", line: 3, message: "moved", excerpt: "second();" },
+          ],
         },
       ]);
     });

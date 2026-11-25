@@ -176,7 +176,7 @@ export interface ProjectChanges {
   deletes?: string[];
   /**
    * Deleted files whose code now lives in a written file, by deleted path: findings on a deleted
-   * file are reported at the line of that file that holds their excerpt.
+   * file are reported at the line of that file their excerpt moved to.
    */
   mergedInto?: Record<string, string>;
   /** Follow-up steps for the user. */

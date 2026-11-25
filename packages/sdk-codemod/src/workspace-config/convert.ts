@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { lineOfIndex, movedIndex } from "../moved-text";
 import { composeMembers, renderImports } from "./compose";
 import { scanConfigs, type ConfigModule } from "./config-module";
 import { reportDuplicateNames, rewriteFunctionFiles } from "./function-files";
@@ -44,6 +45,25 @@ function groupFacts(members: readonly ConfigModule[]): GroupFacts {
     ).length,
     appCount: members.length,
   };
+}
+
+/**
+ * A report on a merged config's code, at the line of the workspace config that code moved to.
+ * @param report - The report, on a member of the merge
+ * @param outputPath - Project-relative path of the workspace config
+ * @param output - The workspace config's content
+ * @returns The report on the workspace config
+ */
+function movedReport(report: Report, outputPath: string, output: string): Report {
+  if (!("node" in report)) return report;
+  const { node } = report;
+  const at = movedIndex(
+    node.getRoot().root().text(),
+    node.range().start.index,
+    node.text().split("\n", 1)[0]!.length,
+    output,
+  );
+  return { ...toFinding(report), file: outputPath, line: at === -1 ? 1 : lineOfIndex(output, at) };
 }
 
 class Conversion {
@@ -197,7 +217,8 @@ class Conversion {
       `export default defineWorkspace(${renderWorkspaceObject(sections)});`,
       ...(pluginsText === null ? [] : [pluginsText]),
     ].join("\n\n");
-    this.changes.writes[outputPath] = `${text}\n`;
+    const output = `${text}\n`;
+    this.changes.writes[outputPath] = output;
     for (const member of members) this.converted.add(member.path);
     Object.assign(this.changes.writes, rewrites.writes, references.writes);
     this.changes.deletes.push(...merged, ...references.deletes);
@@ -236,8 +257,9 @@ class Conversion {
     }
 
     this.changes.findings.push(
-      ...composed.findings,
-      ...sections.findings,
+      ...[...composed.findings, ...sections.findings].map((report) =>
+        movedReport(report, outputPath, output),
+      ),
       ...rewrites.findings,
       ...references.findings,
       ...reportDuplicateNames(this.cache, composed.members),

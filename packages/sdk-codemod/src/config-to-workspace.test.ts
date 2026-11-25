@@ -580,13 +580,9 @@ describe("v3/config-to-workspace", () => {
         "  ),",
       ),
     );
-    const findings = findingsOf(result).filter(({ file }) => file === "tailor.config.ts");
-    expect(findings.filter(({ excerpt }) => excerpt === "admin")).toEqual([
-      expect.objectContaining({ message: frontendMessage }),
-    ]);
     expect(
-      findings
-        .filter(({ excerpt }) => excerpt !== "admin")
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
         .map(({ line, message }) => ({ line, message })),
     ).toEqual([
       {
@@ -595,6 +591,86 @@ describe("v3/config-to-workspace", () => {
           "This `distPath` is not a literal, so it was not rewritten; check it against the workspace config's directory.",
       },
       { line: lineOf("{ ...admin },"), message: frontendMessage },
+      { line: lineOf("    admin,"), message: frontendMessage },
+    ]);
+  });
+
+  test("reports a plugin option at the line of the merged plugins that holds it", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        'import { defineConfig } from "@tailor-platform/sdk";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        'import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";',
+        'const distPath = "./seed";',
+        'const dist = "./generated";',
+        'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+        "export const plugins = [kyselyTypePlugin({ distPath: dist }), seedPlugin({ distPath })];",
+      ),
+      "b/tailor.config.ts": lines(
+        'import { defineConfig } from "@tailor-platform/sdk";',
+        'import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";',
+        'export default defineConfig({ name: "b", db: { b: { files: [] } } });',
+        'export const plugins = [enumConstantsPlugin({ distPath: "./enums" })];',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    const lineOf = (text: string) =>
+      output.split("\n").findIndex((line) => line.includes(text)) + 1;
+    const message =
+      "This `distPath` is not a literal, so it was not rewritten; check it against the workspace config's directory.";
+    expect(output).toContain(
+      lines(
+        "export const plugins = definePlugins(",
+        "  kyselyTypePlugin({ distPath: dist }),",
+        "  seedPlugin({ distPath }),",
+        '  enumConstantsPlugin({ distPath: "./b/enums" }),',
+        ");",
+      ),
+    );
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ line, message }) => ({ line, message })),
+    ).toEqual([
+      { line: lineOf("kyselyTypePlugin({"), message },
+      { line: lineOf("seedPlugin({"), message },
+    ]);
+  });
+
+  test("reports a merged config's code at its line when the merge rewrote part of that line", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+        'const auth = defineAuth("a-auth", {});',
+        'export default defineConfig({ name: "a", auth, db: { a: { files: [], migration: { directory: "./migrations" } } } });',
+      ),
+      "b/tailor.config.ts": lines(
+        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+        'const bAuth = defineAuth("b-auth", { machineUsers: { admin: {} } });',
+        'export default defineConfig({ name: "b", auth: bAuth });',
+      ),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    const migration = 'migration: { directory: "./a/migrations" }';
+    expect(output).toContain(migration);
+    expect(
+      findingsOf(result)
+        .filter(({ file }) => file === "tailor.config.ts")
+        .map(({ line, message }) => ({ line, message })),
+    ).toEqual([
+      {
+        line: output.split("\n").findIndex((line) => line.includes(migration)) + 1,
+        message:
+          "Migrations ran as the first machine user of this config's Auth service; the merged workspace has several Auth services, so set `migration.machineUser`.",
+      },
     ]);
   });
 
@@ -1095,12 +1171,19 @@ describe("v3/config-to-workspace", () => {
 
       const result = await runOnProject(CODEMODS, project);
 
-      expect(project.read("tailor.config.ts")).toContain(`migration: ${migration} }`);
+      const output = project.read("tailor.config.ts")!;
+      expect(output).toContain(`migration: ${migration} }`);
       expect(
         findingsOf(result)
           .filter(({ file }) => file === "tailor.config.ts")
-          .map((finding) => finding.message),
-      ).toEqual([message]);
+          .map(({ line, message }) => ({ line, message })),
+      ).toEqual([
+        {
+          line:
+            output.split("\n").findIndex((line) => line.includes(`migration: ${migration}`)) + 1,
+          message,
+        },
+      ]);
     },
   );
 
@@ -1593,10 +1676,10 @@ describe("v3/config-to-workspace", () => {
     expect(
       findingsOf(result)
         .filter(({ file }) => file === "tailor.config.ts")
-        .map(({ file, message }) => ({ file, message })),
+        .map(({ line, message }) => ({ line, message })),
     ).toEqual([
       {
-        file: "tailor.config.ts",
+        line: 1,
         message:
           "a/tsconfig.json could not be read (File './missing.json' not found.), so the imports of a/tailor.config.ts that do not start with ./ or ../ were kept as written; check that they resolve from the workspace config.",
       },
