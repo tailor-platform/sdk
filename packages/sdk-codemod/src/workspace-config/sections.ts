@@ -93,6 +93,24 @@ export type GroupFacts = {
   appCount: number;
 };
 
+/**
+ * Whether several Auth services of the merged workspace may define a machine user name.
+ * @param facts - What the merge knows about the group
+ * @param name - The name, or null when it cannot be read
+ * @returns `shared` when several define it, `unknown` when the conversion cannot tell, or null
+ */
+export function machineUserAmbiguity(
+  facts: GroupFacts,
+  name: string | null,
+): "shared" | "unknown" | null {
+  if (facts.authCount < 2) return null;
+  if (facts.machineUsers === null) return "unknown";
+  const userLists = [...facts.machineUsers.values()];
+  const shared = (user: string) => userLists.filter((users) => users.includes(user)).length > 1;
+  if (name !== null) return shared(name) ? "shared" : null;
+  return userLists.flat().some(shared) ? "unknown" : null;
+}
+
 function pieceOf(member: ConfigModule, node: SgNode, edits: readonly TextEdit[] = []): Piece {
   return { text: editedText(node, edits), indent: lineIndent(member.module.source, node), node };
 }
@@ -618,21 +636,17 @@ class SectionsBuilder {
       );
       return null;
     }
-    const definers = (name: string) =>
-      [...(this.facts.machineUsers?.values() ?? [])].filter((users) => users.includes(name)).length;
     const machineUser = machineUserAt === -1 ? undefined : entries[machineUserAt];
     if (machineUser) {
       const name = resolveString(this.cache, member.module, entryValue(machineUser));
-      if (name !== null && definers(name) > 1) {
+      const ambiguity = machineUserAmbiguity(this.facts, name);
+      if (ambiguity === "shared") {
         this.stop(
           member,
           machineUser,
           `Migrations run as machine user "${name}", which several Auth services of the merged workspace define, and \`migration.machineUser\` cannot name the Auth service.`,
         );
-      } else if (
-        this.facts.machineUsers === null ||
-        (name === null && [...this.facts.machineUsers.values()].flat().some((n) => definers(n) > 1))
-      ) {
+      } else if (ambiguity === "unknown") {
         this.report(
           member,
           machineUser,
@@ -642,7 +656,8 @@ class SectionsBuilder {
       return null;
     }
     const first = auth?.auth?.machineUsers?.[0];
-    if (first === undefined || this.facts.machineUsers === null) {
+    const ambiguity = first === undefined ? null : machineUserAmbiguity(this.facts, first);
+    if (first === undefined || ambiguity === "unknown") {
       this.report(
         member,
         migration,
@@ -650,7 +665,7 @@ class SectionsBuilder {
       );
       return null;
     }
-    if (definers(first) > 1) {
+    if (ambiguity === "shared") {
       this.stop(
         member,
         migration,

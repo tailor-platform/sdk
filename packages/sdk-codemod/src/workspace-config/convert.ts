@@ -8,7 +8,12 @@ import { toDefineApp, toDefineWorkspaceInPlace } from "./in-place";
 import { Lock } from "./lock";
 import { ModuleCache, toFinding, type Report } from "./project";
 import { redirectReferences } from "./references";
-import { collectSections, renderWorkspaceObject, type GroupFacts } from "./sections";
+import {
+  collectSections,
+  machineUserAmbiguity,
+  renderWorkspaceObject,
+  type GroupFacts,
+} from "./sections";
 import type { ProjectChanges, ProjectFiles } from "../types";
 
 const WORKSPACE_CONFIG = "tailor.config.ts";
@@ -19,8 +24,6 @@ export type ConversionKind = "app" | "workspace";
 function takeoverWarning(configPath: string): string {
   return `${configPath}: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.`;
 }
-
-const SEED_MACHINE_USER = /\bseedPlugin\s*\([^)]*?\bmachineUserName\s*:\s*(["'`])([^"'`]+)\1/u;
 
 /**
  * Facts about a group's services that the merge depends on.
@@ -226,22 +229,14 @@ class Conversion {
 
     const pluginNames = plugins.map((plugin) => /^([A-Za-z_$][\w$]*)\s*\(/u.exec(plugin)?.[1]);
     const lines = text.split("\n");
-    const seedMachineUser = plugins
-      .map((plugin) => SEED_MACHINE_USER.exec(plugin)?.[2])
-      .find((name) => name !== undefined);
-    if (
-      seedMachineUser !== undefined &&
-      facts.authCount > 1 &&
-      [...(facts.machineUsers?.values() ?? [])].filter((users) => users.includes(seedMachineUser))
-        .length !== 1
-    ) {
-      const line = lines.findIndex((candidate) => candidate.includes("seedPlugin(")) + 1;
-      this.changes.findings.push({
-        file: outputPath,
-        line: Math.max(line, 1),
-        excerpt: "seedPlugin",
-        message: `seedPlugin seeds as machine user "${seedMachineUser}", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.`,
-      });
+    for (const { file, node, name } of composed.seedMachineUsers) {
+      const ambiguity = machineUserAmbiguity(facts, name);
+      if (ambiguity === null) continue;
+      const message =
+        ambiguity === "shared"
+          ? `seedPlugin seeds as machine user "${name}", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.`
+          : "The conversion cannot tell whether several Auth services of the merged workspace define the machine user seedPlugin seeds as; write it as { namespace, machineUserName } with the Auth service it belongs to.";
+      this.changes.findings.push(movedReport({ file, node, message }, outputPath, output));
     }
     for (const name of new Set(pluginNames)) {
       const count = pluginNames.filter((candidate) => candidate === name).length;

@@ -10,8 +10,8 @@ import {
   type ConfigModule,
 } from "./config-module";
 import { literalText, type ModuleCache, type Report } from "./project";
+import { machineUserAmbiguity, type GroupFacts } from "./sections";
 import { addProperty, applyEdits, replaceNode, type TextEdit } from "./text";
-import type { GroupFacts } from "./sections";
 import type { SgNode } from "@ast-grep/napi";
 
 const IDP_TRIGGERS: ReadonlySet<string> = new Set([
@@ -199,17 +199,14 @@ export function rewriteFunctionFiles(
         const value = entryValue(pair);
         const name = resolveString(cache, module, value);
         if (name === null || !value) continue;
-        if (facts.machineUsers === null) {
+        const ambiguity = machineUserAmbiguity(facts, name);
+        if (ambiguity === "unknown") {
           report(
             pair,
             `The conversion cannot read every Auth service's machine users, so check whether invoker "${name}" names one that several Auth services define.`,
           );
-          continue;
         }
-        const definers = [...facts.machineUsers]
-          .filter(([, users]) => users.includes(name))
-          .map(([auth]) => auth);
-        if (definers.length < 2) continue;
+        if (ambiguity !== "shared") continue;
         needs(pair, "Auth service", owner?.authName, (auth) =>
           replaceNode(
             value,

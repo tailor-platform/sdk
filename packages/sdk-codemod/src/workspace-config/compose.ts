@@ -7,11 +7,20 @@ import {
   importSource,
   importSpecNames,
   isInsideImportStatement,
+  objectEntries,
   pairValue,
   parseRoot,
   staticEntries,
 } from "../ast-grep-helpers";
-import { callArguments, parseConfigModule, SDK_MODULE, type ConfigModule } from "./config-module";
+import {
+  callArguments,
+  calleeName,
+  entryValue,
+  parseConfigModule,
+  resolveString,
+  SDK_MODULE,
+  type ConfigModule,
+} from "./config-module";
 import {
   declaresDependency,
   literalText,
@@ -53,6 +62,8 @@ export type ComposedModule = {
   plugins: string[] | null;
   /** The text of the single member's plugins export, kept as written when only one member has one. */
   pluginsStatement: string | null;
+  /** The `machineUserName` options of seedPlugin calls written as a name, which is null when it cannot be read. */
+  seedMachineUsers: Array<{ file: string; node: SgNode; name: string | null }>;
   findings: Report[];
   stops: Report[];
 };
@@ -353,6 +364,7 @@ export function composeMembers(
     statements: [],
     plugins: null,
     pluginsStatement: null,
+    seedMachineUsers: [],
     findings: [],
     stops: [],
   };
@@ -528,6 +540,20 @@ export function composeMembers(
       const plugins = isPluginsExport(statement);
       if (plugins) {
         const edits = pluginPathEdits(renamed, plugins, outputDir, composed.findings);
+        for (const call of plugins.findAll({ rule: { kind: "call_expression" } })) {
+          const options = callArguments(call)[0];
+          if (calleeName(call) !== "seedPlugin" || options?.kind() !== "object") continue;
+          const entry = objectEntries(options).find(
+            (candidate) => entryKey(candidate) === "machineUserName",
+          );
+          const value = entry && entryValue(entry);
+          if (!entry || value?.kind() === "object") continue;
+          composed.seedMachineUsers.push({
+            file: member.path,
+            node: entry,
+            name: resolveString(cache, renamed.module, value ?? null),
+          });
+        }
         const expressions = pluginExpressions(plugins);
         if (expressions === null) {
           composed.stops.push({
