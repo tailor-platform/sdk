@@ -83,7 +83,13 @@ export async function createFunctionRunTab(
   }
 
   const session = createRunSession({
-    startRun: options.startRun ?? ((input) => startWatchWorker(input, { workerFile: WORKER_FILE })),
+    startRun:
+      options.startRun ??
+      ((input) =>
+        startWatchWorker(input, {
+          workerFile: WORKER_FILE,
+          buildRoot: path.join(studioDir, "build"),
+        })),
     file,
     runArgFile,
     getSelection: options.getSelection,

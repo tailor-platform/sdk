@@ -1,5 +1,7 @@
+import * as fs from "node:fs";
 import { createInterface } from "node:readline";
 import { Worker } from "node:worker_threads";
+import * as path from "pathe";
 import { describeFailure } from "./stream";
 import type { RunEvent, RunHandle, RunInput } from "./run-types";
 import type { FunctionRunWatchEvent } from "@tailor-platform/sdk/cli";
@@ -65,6 +67,8 @@ function toRunEvent(message: WatchWorkerMessage): RunEvent {
 /**
  * Run the function watch in a worker thread. Anything the project's code does while it is
  * loaded, such as calling `process.exit()`, ends the thread and not the process that hosts it.
+ * Each thread bundles into a build output directory of its own, so two threads that overlap,
+ * while one replaces another or one is still closing, never write the same file.
  * Every run loads the project's modules again and the thread keeps them, so once the watch is
  * idle after a number of runs it moves to a fresh thread, which frees them. The fresh thread
  * does not run the function on start, so moving never executes it; the move is given up when a
@@ -72,13 +76,19 @@ function toRunEvent(message: WatchWorkerMessage): RunEvent {
  * @param input - The function, its argument file, the workspace and the worker's environment
  * @param options - Where the worker's code is, how long a stop may take and when to replace it
  * @param options.workerFile - Module the worker runs
+ * @param options.buildRoot - Directory inside the project that holds each thread's build output, since the bundled entry resolves the SDK from where it is written
  * @param options.stopTimeoutMs - How long to wait for a worker to stop before ending it
  * @param options.recycleAfterRuns - Runs after which an idle watch moves to a fresh thread
  * @returns The watch's events, a function that stops it, and a promise for every thread being gone
  */
 export function startWatchWorker(
   input: RunInput,
-  options: { workerFile: string | URL; stopTimeoutMs?: number; recycleAfterRuns?: number },
+  options: {
+    workerFile: string | URL;
+    buildRoot: string;
+    stopTimeoutMs?: number;
+    recycleAfterRuns?: number;
+  },
 ): RunHandle {
   const { push, events } = createEventQueue();
   const stopTimeoutMs = options.stopTimeoutMs ?? STOP_TIMEOUT_MS;
@@ -184,9 +194,13 @@ export function startWatchWorker(
   }
 
   function launch(runOnStart: boolean, role: WatchThread["role"]): WatchThread {
+    fs.mkdirSync(options.buildRoot, { recursive: true });
+    const buildDir = fs.mkdtempSync(path.join(options.buildRoot, "thread-"));
+    const removeBuildDir = () => fs.rmSync(buildDir, { recursive: true, force: true });
+    process.once("exit", removeBuildDir);
     const worker = new Worker(options.workerFile, {
       workerData: { ...workerData, runOnStart },
-      env: input.env,
+      env: { ...input.env, TAILOR_BUILD_OUTPUT_DIR: buildDir },
       stdout: true,
       stderr: true,
     });
@@ -212,6 +226,8 @@ export function startWatchWorker(
     worker.on("error", (error: Error) => push({ type: "note", text: error.message }));
     worker.on("exit", (code) => {
       clearTimeout(thread.stopTimer);
+      process.off("exit", removeBuildDir);
+      removeBuildDir();
       void Promise.all(drained).then(() => {
         live.delete(worker);
         if (thread === successor) successor = undefined;

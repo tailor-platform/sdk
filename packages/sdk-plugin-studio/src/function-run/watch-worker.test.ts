@@ -6,9 +6,11 @@ import { startWatchWorker } from "./watch-worker";
 import type { RunEvent, RunInput } from "./run-types";
 
 let dir: string;
+let buildRoot: string;
 
 beforeAll(() => {
   dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "studio-worker-")));
+  buildRoot = path.join(dir, "build");
 });
 
 afterAll(() => {
@@ -50,7 +52,7 @@ for (const message of [
 ]) parentPort.postMessage(message);`,
     );
 
-    const events = await collect(startWatchWorker(input, { workerFile: file }).events);
+    const events = await collect(startWatchWorker(input, { workerFile: file, buildRoot }).events);
 
     expect(events).toEqual([
       { type: "ready" },
@@ -71,7 +73,7 @@ for (const message of [
 console.log(JSON.stringify({ workerData, kept: process.env.KEPT, home: process.env.HOME ?? null }));`,
     );
 
-    const events = await collect(startWatchWorker(input, { workerFile: file }).events);
+    const events = await collect(startWatchWorker(input, { workerFile: file, buildRoot }).events);
 
     const note = events.find((event) => event.type === "note");
     expect(JSON.parse(note && "text" in note ? note.text : "null")).toEqual({
@@ -94,7 +96,7 @@ console.log(JSON.stringify({ workerData, kept: process.env.KEPT, home: process.e
 console.error("warn");`,
     );
 
-    const events = await collect(startWatchWorker(input, { workerFile: file }).events);
+    const events = await collect(startWatchWorker(input, { workerFile: file, buildRoot }).events);
 
     expect(events).toEqual(
       expect.arrayContaining([
@@ -108,7 +110,7 @@ console.error("warn");`,
   test("ends only the watch when the code the worker loads calls process.exit", async () => {
     const file = workerFile("exits", "process.exit(3);");
 
-    const events = await collect(startWatchWorker(input, { workerFile: file }).events);
+    const events = await collect(startWatchWorker(input, { workerFile: file, buildRoot }).events);
 
     expect(events.at(-1)).toEqual({ type: "exit", code: 3 });
   });
@@ -116,7 +118,7 @@ console.error("warn");`,
   test("reports an uncaught error as a note, then the exit", async () => {
     const file = workerFile("throws", `throw new Error("cannot load config");`);
 
-    const events = await collect(startWatchWorker(input, { workerFile: file }).events);
+    const events = await collect(startWatchWorker(input, { workerFile: file, buildRoot }).events);
 
     expect(events).toEqual([
       { type: "note", text: "cannot load config" },
@@ -131,7 +133,7 @@ console.error("warn");`,
 parentPort.on("message", (message) => { if (message.type === "stop") process.exit(0); });
 parentPort.postMessage({ type: "ready", argFile: "a" });`,
     );
-    const run = startWatchWorker(input, { workerFile: file });
+    const run = startWatchWorker(input, { workerFile: file, buildRoot });
     const seen: RunEvent[] = [];
     const done = (async () => {
       for await (const event of run.events) {
@@ -152,7 +154,7 @@ parentPort.postMessage({ type: "ready", argFile: "a" });`,
 parentPort.on("message", () => {});
 parentPort.postMessage({ type: "ready", argFile: "a" });`,
     );
-    const run = startWatchWorker(input, { workerFile: file, stopTimeoutMs: 50 });
+    const run = startWatchWorker(input, { workerFile: file, buildRoot, stopTimeoutMs: 50 });
     const seen: RunEvent[] = [];
 
     for await (const event of run.events) {
@@ -176,7 +178,7 @@ if (workerData.runOnStart === false) {
   parentPort.postMessage({ type: "finished", record: { success: true } });
 }`,
     );
-    const run = startWatchWorker(input, { workerFile: file, recycleAfterRuns: 1 });
+    const run = startWatchWorker(input, { workerFile: file, buildRoot, recycleAfterRuns: 1 });
     const seen: RunEvent[] = [];
 
     for await (const event of run.events) {
@@ -210,7 +212,7 @@ if (workerData.runOnStart === false) {
   setTimeout(() => parentPort.postMessage({ type: "scheduled" }), 30);
 }`,
     );
-    const run = startWatchWorker(input, { workerFile: file, recycleAfterRuns: 1 });
+    const run = startWatchWorker(input, { workerFile: file, buildRoot, recycleAfterRuns: 1 });
     const seen: RunEvent[] = [];
 
     for await (const event of run.events) {
@@ -235,7 +237,7 @@ if (workerData.runOnStart === false) {
 parentPort.on("message", (message) => { if (message.type === "stop") setTimeout(() => process.exit(0), 80); });
 parentPort.postMessage({ type: "ready", argFile: "a" });`,
     );
-    const run = startWatchWorker(input, { workerFile: file });
+    const run = startWatchWorker(input, { workerFile: file, buildRoot });
     let settled = false;
     void run.exited.then(() => {
       settled = true;
@@ -253,5 +255,52 @@ parentPort.postMessage({ type: "ready", argFile: "a" });`,
     await run.exited;
 
     expect([seen.at(-1), settledAtStop, settled]).toEqual([{ type: "exit", code: 0 }, false, true]);
+  });
+
+  test("gives the worker its own build output directory and removes it when the worker is gone", async () => {
+    const file = workerFile(
+      "build-dir",
+      `import * as fs from "node:fs";
+fs.writeFileSync(process.env.TAILOR_BUILD_OUTPUT_DIR + "/marker", "x");
+console.log(process.env.TAILOR_BUILD_OUTPUT_DIR);`,
+    );
+    const run = startWatchWorker(
+      { ...input, env: { ...input.env, TAILOR_BUILD_OUTPUT_DIR: "/shared/build" } },
+      { workerFile: file, buildRoot },
+    );
+
+    const events = await collect(run.events);
+    await run.exited;
+
+    const note = events.find((event) => event.type === "note");
+    const dir = note && "text" in note ? note.text : "";
+    expect([dir.startsWith(buildRoot), dir === "/shared/build", fs.existsSync(dir)]).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  test("gives the replacement thread a build output directory of its own", async () => {
+    const file = workerFile(
+      "build-dir-recycle",
+      `import { parentPort, workerData } from "node:worker_threads";
+parentPort.on("message", (message) => { if (message.type === "stop") process.exit(0); });
+console.log(process.env.TAILOR_BUILD_OUTPUT_DIR);
+parentPort.postMessage({ type: "ready", argFile: "a" });
+if (workerData.runOnStart !== false) {
+  parentPort.postMessage({ type: "started" });
+  parentPort.postMessage({ type: "finished", record: { success: true } });
+}`,
+    );
+    const run = startWatchWorker(input, { workerFile: file, buildRoot, recycleAfterRuns: 1 });
+    const dirs: string[] = [];
+
+    for await (const event of run.events) {
+      if (event.type === "note") dirs.push(event.text);
+      if (dirs.length === 2) run.stop();
+    }
+
+    expect([dirs.length, new Set(dirs).size]).toEqual([2, 2]);
   });
 });
