@@ -46,6 +46,31 @@ describe("createWorkspaceContext", () => {
     expect(ctx.selection()).toEqual({});
   });
 
+  test("keeps the later selection when an earlier profile lookup finishes last", async () => {
+    let release!: () => void;
+    const slowLookup = new Promise<void>((resolve) => (release = resolve));
+    let first = true;
+    const ctx = createWorkspaceContext({
+      listProfiles: async () => {
+        if (first) {
+          first = false;
+          await slowLookup;
+        }
+        return PROFILES;
+      },
+    });
+    let notified = 0;
+    ctx.subscribe(() => notified++);
+
+    const earlier = ctx.select("test");
+    await ctx.select(null);
+    release();
+    await earlier;
+
+    expect(ctx.selection()).toEqual({});
+    expect(notified).toBe(1);
+  });
+
   test("rejects a profile that is not in the profile list and keeps the current selection", async () => {
     const ctx = await context("test");
     await expect(ctx.select("nope")).rejects.toThrow('Profile "nope" not found');

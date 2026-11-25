@@ -48,6 +48,7 @@ export async function listProfiles(): Promise<ProfileInfo[]> {
  */
 export function createWorkspaceContext(options: WorkspaceContextOptions): WorkspaceContext {
   let selected: WorkspaceSelection = {};
+  let revision = 0;
   const listeners = new Set<() => void>();
   const notify = () => {
     for (const listener of listeners) {
@@ -72,6 +73,7 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
     },
     selection: () => ({ ...selected }),
     select: async (profile) => {
+      const ticket = ++revision;
       if (profile === null) {
         selected = {};
         options.store?.save(null);
@@ -80,6 +82,7 @@ export function createWorkspaceContext(options: WorkspaceContextOptions): Worksp
       }
       const found = (await options.listProfiles()).find((p) => p.name === profile);
       if (!found) throw new Error(`Profile "${profile}" not found`);
+      if (ticket !== revision) return;
       selected = { profile: found.name, workspaceId: found.workspaceId };
       options.store?.save(found.name);
       notify();
