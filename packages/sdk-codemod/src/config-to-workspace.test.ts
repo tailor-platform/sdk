@@ -1023,9 +1023,26 @@ describe("v3/config-to-workspace", () => {
     "          pnpm tailor deploy \\",
     "            --config a/tailor.config.ts,b/tailor.config.ts",
   ];
+  const foldedStep = [
+    "      - run: >-",
+    "          tailor deploy",
+    "          --config a/tailor.config.ts,b/tailor.config.ts",
+  ];
   test.each([
     ["continues a line", continuedStep, "\n"],
     ["continues a CRLF line", continuedStep, "\r\n"],
+    ["is a folded value", foldedStep, "\n"],
+    ["is a CRLF folded value", foldedStep, "\r\n"],
+    [
+      "is a folded value that starts with a blank line",
+      ["      - run: >-", "", ...foldedStep.slice(1)],
+      "\n",
+    ],
+    [
+      "continues a plain value",
+      ["      - run: tailor deploy", "          --config a/tailor.config.ts,b/tailor.config.ts"],
+      "\n",
+    ],
     [
       "is single-quoted",
       ["      - run: 'tailor deploy -c a/tailor.config.ts,b/tailor.config.ts'"],
@@ -1068,6 +1085,39 @@ describe("v3/config-to-workspace", () => {
             "This workflow names a/tailor.config.ts, b/tailor.config.ts, which the conversion merged into tailor.config.ts. Point it at tailor.config.ts, or generate a workflow for the workspace config with `tailor setup ci`.",
         },
       ]);
+    },
+  );
+
+  const generateCommand = "tailor generate --config a/tailor.config.ts,b/tailor.config.ts";
+  test.each([
+    [
+      "a literal value breaks the line",
+      ["      - run: |", "          tailor deploy", `          ${generateCommand}`],
+    ],
+    [
+      "a blank line breaks a plain value",
+      ["      - run: tailor deploy", "", `          ${generateCommand}`],
+    ],
+    [
+      "a more-indented line breaks a folded value",
+      ["      - run: >-", "          tailor deploy", `            ${generateCommand}`],
+    ],
+    [
+      "a comment follows a plain value",
+      ["      - run: tailor deploy", `          # ${generateCommand}`],
+    ],
+  ])(
+    "leaves configs a workflow step names outside its `tailor deploy` command when %s",
+    async (_, step) => {
+      const project = createProject({
+        ".github/workflows/deploy.yml": lines("jobs:", "  deploy:", "    steps:", ...step),
+        "a/tailor.config.ts": dbConfig("a"),
+        "b/tailor.config.ts": dbConfig("b"),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      expect(result.filesDeleted).toEqual([]);
     },
   );
 

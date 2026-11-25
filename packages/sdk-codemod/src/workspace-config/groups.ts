@@ -16,6 +16,7 @@ const CONFIG_OPTION = /(?:^|\s)(?:-c|--config)(?:=|\s+)(["']?)([^\s"']+)\1/gu;
 const CONFIG_PATH_ENV = /\bTAILOR_CONFIG_PATH\s*[:=]\s*(["']?)([^\s"'#]+)\1/gu;
 /** A line, joined with the lines a trailing `\` continues it onto. */
 const SHELL_LINE = /^(?:.*\\\r?\n)*.*$/gmu;
+const RUN_KEY = /^(\s*(?:-\s+)?)run:[ \t]*(.*)/u;
 
 /** A use of config paths in a script or workflow, with where it is. */
 export type ConfigPathUse = {
@@ -39,6 +40,39 @@ function lineAt(source: string, index: number): { line: number; excerpt: string 
   };
 }
 
+/**
+ * Replace with spaces the line breaks YAML folds in the `run:` values of a workflow, so each folded
+ * value reads as one line at the same indices.
+ * @param source - The workflow's contents
+ * @returns The contents with those line breaks replaced
+ */
+function foldRunValues(source: string): string {
+  const lines = source.split("\n");
+  const indent = (line: string) => line.search(/\S/u);
+  const folded = new Set<number>();
+  for (let index = 0; index < lines.length; index += 1) {
+    const key = RUN_KEY.exec(lines[index]!);
+    if (!key || key[2]!.startsWith("|")) continue;
+    const inValue = (line: string) => indent(line) === -1 || indent(line) > key[1]!.length;
+    let end = index + 1;
+    while (end < lines.length && inValue(lines[end]!)) end += 1;
+    const block = key[2]!.startsWith(">");
+    const start = block ? index + 1 : index;
+    const contentIndent = indent(lines.slice(start, end).find((line) => indent(line) !== -1) ?? "");
+    // YAML keeps the line breaks around blank lines and, in a `>` block, around more-indented
+    // ones; a comment ends a plain value.
+    const folds = (line: string) =>
+      block ? indent(line) === contentIndent : /^\s*[^\s#]/u.test(line);
+    for (let line = start; line + 1 < end; line += 1)
+      if (folds(lines[line]!) && folds(lines[line + 1]!)) folded.add(line);
+    index = end - 1;
+  }
+  return lines
+    .map((line, index) => (folded.has(index) ? `${line.replace(/\r$/u, " ")} ` : `${line}\n`))
+    .join("")
+    .slice(0, -1);
+}
+
 function splitPaths(value: string, baseDir: string): string[] {
   return value
     .split(",")
@@ -50,23 +84,22 @@ function splitPaths(value: string, baseDir: string): string[] {
  * The `-c`/`--config` options of the `tailor` commands in a command line.
  * @param file - Project-relative path of the file that holds the command line
  * @param source - The file's contents
- * @param range - Where the command line is in `source`
- * @param range.start - Its start index
- * @param range.end - Its end index
+ * @param command - The command line
+ * @param command.text - Its text
+ * @param command.start - Where it starts in `source`
  * @param baseDir - Project-relative directory the command runs in
  * @returns Each option, located at its own line
  */
 function configOptionUses(
   file: string,
   source: string,
-  range: { start: number; end: number },
+  command: { text: string; start: number },
   baseDir: string,
 ): ConfigPathUse[] {
-  const text = source.slice(range.start, range.end);
-  const deploys = [...text.matchAll(DEPLOY_COMMAND)];
-  return [...text.matchAll(CONFIG_OPTION)].map((option) => ({
+  const deploys = [...command.text.matchAll(DEPLOY_COMMAND)];
+  return [...command.text.matchAll(CONFIG_OPTION)].map((option) => ({
     file,
-    ...lineAt(source, range.start + option.index + option[0].search(/\S/u)),
+    ...lineAt(source, command.start + option.index + option[0].search(/\S/u)),
     paths: splitPaths(option[2]!, baseDir),
     deploysTogether: deploys.some((match) => match[1]!.includes(option[0].trim())),
   }));
@@ -87,8 +120,9 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
       for (const command of source.matchAll(/"(?:[^"\\]|\\.)*"/gu)) {
         const text = command[0];
         if (!/\btailor\b/u.test(text)) continue;
-        const range = { start: command.index, end: command.index + text.length };
-        uses.push(...configOptionUses(file, source, range, path.dirname(file)));
+        uses.push(
+          ...configOptionUses(file, source, { text, start: command.index }, path.dirname(file)),
+        );
         const deploys = text.search(DEPLOY_COMMAND) !== -1;
         for (const match of text.matchAll(CONFIG_PATH_ENV)) {
           uses.push({
@@ -105,16 +139,15 @@ export function findConfigPathUses(cache: ModuleCache): ConfigPathUse[] {
     if (!isWorkflow && !/^\.env(?:\.|$)/u.test(name)) continue;
     const source = cache.project.read(file) ?? "";
     const baseDir = isWorkflow ? path.join(path.dirname(file), "../..") : path.dirname(file);
-    for (const line of source.matchAll(SHELL_LINE)) {
+    for (const line of (isWorkflow ? foldRunValues(source) : source).matchAll(SHELL_LINE)) {
       if (/^\s*#/u.test(line[0])) continue;
-      const range = { start: line.index, end: line.index + line[0].length };
       if (isWorkflow && /\btailor\b/u.test(line[0])) {
-        uses.push(...configOptionUses(file, source, range, baseDir));
+        uses.push(...configOptionUses(file, source, { text: line[0], start: line.index }, baseDir));
       }
       for (const match of line[0].matchAll(CONFIG_PATH_ENV)) {
         uses.push({
           file,
-          ...lineAt(source, range.start + match.index),
+          ...lineAt(source, line.index + match.index),
           paths: splitPaths(match[2]!, baseDir),
           deploysTogether: true,
         });
