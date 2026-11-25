@@ -9,6 +9,7 @@ import {
   isInsideImportStatement,
   pairValue,
   parseRoot,
+  staticEntries,
 } from "../ast-grep-helpers";
 import { callArguments, parseConfigModule, SDK_MODULE, type ConfigModule } from "./config-module";
 import {
@@ -18,7 +19,7 @@ import {
   type ModuleCache,
   type Report,
 } from "./project";
-import { applyEdits, rebasePattern, replaceNode, type TextEdit } from "./text";
+import { addProperty, applyEdits, rebasePattern, replaceNode, type TextEdit } from "./text";
 import type { SgNode } from "@ast-grep/napi";
 
 /** A top-level name of a member, and what it refers to. */
@@ -199,8 +200,9 @@ function pluginExpressions(value: SgNode): string[] | null {
 }
 
 /**
- * Edits that rewrite the relative `distPath` of plugins so that it names the same directory from
- * `toDir`, and reports for other relative paths passed to plugins.
+ * Edits that rewrite the `distPath` of plugins and the `workingDir` of frontendPlugin, which
+ * are relative to the config, so that they name the same path from `toDir`, and reports for
+ * the other paths passed to plugins.
  */
 function pluginPathEdits(
   member: ConfigModule,
@@ -210,27 +212,64 @@ function pluginPathEdits(
 ): TextEdit[] {
   if (member.dir === toDir) return [];
   const edits: TextEdit[] = [];
+  const reports: Array<{ node: SgNode; message: string }> = [];
+  const handled: SgNode[] = [];
+  const rewrite = (entry: SgNode) => {
+    handled.push(entry);
+    const node = pairValue(entry);
+    const text = literalText(node);
+    if (!node || text === null) {
+      reports.push({
+        node: entry,
+        message: `This \`${entryKey(entry)}\` is not a literal, so it was not rewritten; check it against the workspace config's directory.`,
+      });
+      return;
+    }
+    const quote = node.text()[0]!;
+    edits.push(replaceNode(node, `${quote}${rebasePattern(text, member.dir, toDir)}${quote}`));
+  };
+  for (const call of value.findAll({ rule: { kind: "call_expression" } })) {
+    if (call.children()[0]?.text() !== "frontendPlugin") continue;
+    handled.push(call);
+    for (const definition of callArguments(call)) {
+      const entries = staticEntries(definition);
+      if (!entries) {
+        reports.push({
+          node: definition,
+          message: `frontendPlugin resolves \`workingDir\` relative to the registering config's directory, and defaults to that directory, which moves from ${member.dir} to the workspace config's; set \`workingDir\` in this definition so its site builds and publishes from where it did.`,
+        });
+        continue;
+      }
+      const workingDir = entries.find((entry) => entryKey(entry) === "workingDir");
+      if (workingDir) rewrite(workingDir);
+      else {
+        const dir = JSON.stringify(rebasePattern("./", member.dir, toDir));
+        edits.push(addProperty(member.module.source, definition, `workingDir: ${dir}`));
+      }
+    }
+  }
+  for (const entry of value.findAll({
+    rule: { any: [{ kind: "pair" }, { kind: "shorthand_property_identifier" }] },
+  })) {
+    if (entryKey(entry) === "distPath") rewrite(entry);
+  }
   for (const node of value.findAll({
     rule: { any: [{ kind: "string" }, { kind: "template_string" }] },
   })) {
     const text = literalText(node);
     if (text === null || !/^\.\.?\//u.test(text)) continue;
-    const pair = node.parent();
+    const start = node.range().start.index;
     if (
-      pair?.kind() === "pair" &&
-      entryKey(pair) === "distPath" &&
-      pairValue(pair)?.range().start.index === node.range().start.index
+      handled.some((outer) => outer.range().start.index <= start && start < outer.range().end.index)
     ) {
-      const quote = node.text()[0]!;
-      edits.push(replaceNode(node, `${quote}${rebasePattern(text, member.dir, toDir)}${quote}`));
       continue;
     }
-    findings.push({
-      file: member.path,
+    reports.push({
       node,
       message: `This plugin option is a path relative to ${member.dir}; check it against the workspace config's directory.`,
     });
   }
+  findings.push(...reports.map((report) => ({ file: member.path, ...report })));
   return edits;
 }
 

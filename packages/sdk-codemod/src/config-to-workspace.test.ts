@@ -518,6 +518,72 @@ describe("v3/config-to-workspace", () => {
     ]);
   });
 
+  test("rewrites plugin paths relative to the config, and reports those it cannot rewrite", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/tailor.config.ts": lines(
+        'import { defineConfig, definePlugins } from "@tailor-platform/sdk";',
+        'import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";',
+        'import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";',
+        'import { frontendPlugin } from "@tailor-platform/sdk-plugin-frontend";',
+        "",
+        'const out = "generated";',
+        'const admin = { site: "admin", distDir: "dist" };',
+        'export default defineConfig({ name: "a", db: { a: { files: [] } } });',
+        "",
+        "export const plugins = definePlugins(",
+        '  kyselyTypePlugin({ distPath: "db.ts" }),',
+        "  enumConstantsPlugin({ distPath: `./${out}/enums.ts` }),",
+        "  frontendPlugin(",
+        '    { site: "web", distDir: "./dist" },',
+        '    { site: "docs", workingDir: "../docs", distDir: "dist" },',
+        '    { site: "home", workingDir: "..", distDir: "dist" },',
+        "    { ...admin },",
+        "    admin,",
+        "  ),",
+        ");",
+      ),
+      "b/tailor.config.ts": dbConfig("b"),
+    });
+
+    const result = await runOnProject(CODEMODS, project);
+
+    const output = project.read("tailor.config.ts")!;
+    const lineOf = (text: string) =>
+      output.split("\n").findIndex((line) => line.includes(text)) + 1;
+    const frontendMessage =
+      "frontendPlugin resolves `workingDir` relative to the registering config's directory, and defaults to that directory, which moves from a to the workspace config's; set `workingDir` in this definition so its site builds and publishes from where it did.";
+    expect(output).toContain(
+      lines(
+        '  kyselyTypePlugin({ distPath: "a/db.ts" }),',
+        "  enumConstantsPlugin({ distPath: `./${out}/enums.ts` }),",
+        "  frontendPlugin(",
+        '    { site: "web", distDir: "./dist", workingDir: "./a" },',
+        '    { site: "docs", workingDir: "docs", distDir: "dist" },',
+        '    { site: "home", workingDir: ".", distDir: "dist" },',
+        "    { ...admin },",
+        "    admin,",
+        "  ),",
+      ),
+    );
+    const findings = findingsOf(result).filter(({ file }) => file === "tailor.config.ts");
+    expect(findings.filter(({ excerpt }) => excerpt === "admin")).toEqual([
+      expect.objectContaining({ message: frontendMessage }),
+    ]);
+    expect(
+      findings
+        .filter(({ excerpt }) => excerpt !== "admin")
+        .map(({ line, message }) => ({ line, message })),
+    ).toEqual([
+      {
+        line: lineOf("enumConstantsPlugin("),
+        message:
+          "This `distPath` is not a literal, so it was not rewritten; check it against the workspace config's directory.",
+      },
+      { line: lineOf("{ ...admin },"), message: frontendMessage },
+    ]);
+  });
+
   test("reports a plugin that three configs register once", async () => {
     const config = (name: string) =>
       lines(

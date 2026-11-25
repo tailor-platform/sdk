@@ -163,6 +163,11 @@ export function rebasePattern(pattern: string, fromDir: string, toDir: string): 
   const body = negated ? pattern.slice(1) : pattern;
   if (fromDir === toDir || path.isAbsolute(body)) return pattern;
   const relative = path.relative(`/${toDir}`, path.join(`/${fromDir}`, body));
-  const rebased = relative.startsWith("../") || !body.startsWith("./") ? relative : `./${relative}`;
+  const rebased =
+    relative === ""
+      ? "."
+      : relative.startsWith("../") || !body.startsWith("./")
+        ? relative
+        : `./${relative}`;
   return `${negated ? "!" : ""}${rebased}`;
 }
