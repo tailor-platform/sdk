@@ -40,6 +40,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { protoEnumName } from "#/cli/shared/proto-enum";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { formatWaitError, isRetryableWaitError } from "#/cli/shared/wait-error";
+import { isFunctionRunResourceName } from "#/cli/shared/workflow-run-labels";
 import { omitUndefined } from "#/utils/omit-undefined";
 
 interface FunctionExecutionListInfo {
@@ -171,9 +172,15 @@ function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): str
   ].join("\n");
 }
 
-// Sources of a deployed bundle are relative to rolldown's default output folder, which is never created.
-function deployedBundleDir(): string {
-  return path.join(process.cwd(), "dist");
+/**
+ * Folder the `sources` of a script's bundle are relative to. A deployed bundle is relative to
+ * rolldown's default output folder, `dist`, which is never created; the bundle `function run
+ * --async` registers is relative to the project, as a synchronous run's is.
+ * @param scriptName - Script name of the execution
+ * @returns Absolute path of the folder
+ */
+export function bundleDirFor(scriptName: string): string {
+  return isFunctionRunResourceName(scriptName) ? process.cwd() : path.join(process.cwd(), "dist");
 }
 
 /**
@@ -181,15 +188,17 @@ function deployedBundleDir(): string {
  * when bundled code is available.
  * @param error - Function error info from FunctionExecution
  * @param bundledCode - Downloaded bundled script content (may be null)
+ * @param bundleDir - Folder the sources of the bundle are relative to (default: the `dist` folder of a deployed bundle)
  * @returns Formatted error string for display
  */
 export function formatExecutionError(
   error: FunctionExecutionErrorDisplay,
   bundledCode: string | null,
+  bundleDir: string = path.join(process.cwd(), "dist"),
 ): string {
   if (bundledCode && error.stackTrace) {
     const errorString = composeExecutionErrorString(error);
-    const formatted = formatErrorWithSourcemap(errorString, bundledCode, deployedBundleDir());
+    const formatted = formatErrorWithSourcemap(errorString, bundledCode, bundleDir);
     if (formatted) return formatted;
   }
   return formatExecutionErrorFallback(error);
@@ -254,7 +263,9 @@ function printFunctionExecutionOutcome(options: PrintFunctionExecutionOutcomeOpt
 
   if (detail.error) {
     logger.log(styles.bold("\nError:"));
-    logger.log(formatExecutionError(detail.error, bundledCode ?? null));
+    logger.log(
+      formatExecutionError(detail.error, bundledCode ?? null, bundleDirFor(detail.scriptName)),
+    );
   }
 }
 
