@@ -428,7 +428,7 @@ snapshots:
 				"@opentelemetry/semantic-conventions": "1.45.0",
 				"@oxc-project/types": "0.159.0",
 				"@politty/zod": "0.7.8",
-				"@secretlint/core": "14.0.1",
+				"@secretlint/core": "14.1.0",
 				"@standard-schema/spec": "1.1.0",
 				"@tailor-platform/function-kysely-tailordb": "0.1.3",
 				"@toiroakr/read-multiline": "0.4.3",
@@ -3369,8 +3369,8 @@ snapshots:
 			"integrity": "sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==",
 		},
 
-		"@secretlint/core@14.0.1": {
-			"integrity": "sha512-f+FtBzQaevqwbwzKYKo5isFhG+fS3G+2tMJ6FdkGYFgGQB5GLAVp6neBgf8bXQCKMWw+JsRDlvc+c/t6xsmhog==",
+		"@secretlint/core@14.1.0": {
+			"integrity": "sha512-K5fi9/LdFKL9M/sldhIGRUKZrhRWOTO/ARSqgjFzmQS+PX4yI4Is3jZzm+wpQXZZxr/5C9EnOtrNV0QartbEvg==",
 			"engines": {"node": ">=22.0.0"},
 			"peerDependencies": {
 				"supports-color": {
@@ -3379,8 +3379,8 @@ snapshots:
 				},
 			},
 			"dependencies": {
-				"@secretlint/profiler": "14.0.1",
-				"@secretlint/types": "14.0.1",
+				"@secretlint/profiler": "14.1.0",
+				"@secretlint/types": "14.1.0",
 				"@textlint/regexp-string-matcher": "2.0.3",
 				"debug": "4.4.3",
 				"picomatch": "4.0.7",
@@ -3388,13 +3388,13 @@ snapshots:
 			},
 		},
 
-		"@secretlint/profiler@14.0.1": {
-			"integrity": "sha512-BW+5m2f4dk2/lhyRwk9/Sp3Vr/DklC0CNxobTrjuodgbUH5iYChmP1sIgA13qgkGhoMPcfyVO2GbwtLQSVWFIw==",
+		"@secretlint/profiler@14.1.0": {
+			"integrity": "sha512-TWia4qNyW3aUTR5nMcGhu3tc7qFHMBA9U16PB/sCCqZwuuc8tyvggqRNiPr/FUOzFCZsnCwL69tu8k5z+O9svQ==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
-		"@secretlint/types@14.0.1": {
-			"integrity": "sha512-fCNeipppEuoq92cXdI9sAM9UGVJkMv+zH5ReGw6Epa8N+bL1UPt6oNVf8pbtjpMoTDdaqr3XBkFo3ZmlV/rHdw==",
+		"@secretlint/types@14.1.0": {
+			"integrity": "sha512-Z4VJk5upfLfanrjDbYwTJN1WK+KmZygoCoi1kvPdfS1KyNsLQIqCBG3ALNJLQV+hhHKD1qD3DfT+RLChaHyXGQ==",
 			"engines": {"node": ">=22.0.0"},
 		},
 
