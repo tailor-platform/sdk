@@ -946,6 +946,42 @@ describe("migration test runtime", () => {
     ).toThrow(expect.objectContaining({ code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING" }));
   });
 
+  test.each<{
+    record: string;
+    inProgress: Partial<RemoteSchemaVerificationResult>;
+    error: Record<string, unknown>;
+  }>([
+    {
+      record: "a migration in progress",
+      inProgress: { migrationInProgress: { number: 6, kind: "steps" } },
+      error: { code: "MIGRATION_IN_PROGRESS_CONFLICT" },
+    },
+    {
+      record: "an in-progress record it cannot read",
+      inProgress: { migrationInProgressInvalid: true },
+      error: {
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: expect.stringContaining("cannot be read"),
+      },
+    },
+  ])(
+    "rejects a source with a pending checkpoint repair and $record with the error its deploy stops with",
+    ({ inProgress, error }) => {
+      expect(() =>
+        assertSourceMatchesCheckpoints(
+          [
+            sourceCheck({
+              remoteMigrationNumber: 5,
+              checkpointRepair: { from: 5, to: 0, fromHistoryId: null, toHistoryId: "hcurrent" },
+              ...inProgress,
+            }),
+          ],
+          sourceContext,
+        ),
+      ).toThrow(expect.objectContaining(error));
+    },
+  );
+
   test("rejects a source with tables its checkpoint's migration removed that a deploy has not deleted", () => {
     expect(() =>
       assertSourceMatchesCheckpoints(

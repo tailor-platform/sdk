@@ -2,7 +2,7 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { checkpointRepairInProgressError } from "#/cli/commands/deploy/tailordb/migration-validation";
+import { checkpointRepairInProgressConflict } from "#/cli/commands/deploy/tailordb/migration-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -254,19 +254,18 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
+    const repairConflict = checkpointRepair
+      ? checkpointRepairInProgressConflict(namespace, remoteState)
+      : undefined;
+    if (repairConflict) {
+      rows.push({ status: "error", namespace, error: errorSummary(repairConflict) });
+      continue;
+    }
     if (remoteState.inProgressInvalid) {
       rows.push({
         status: "error",
         namespace,
         error: "Remote in-progress migration record is invalid.",
-      });
-      continue;
-    }
-    if (checkpointRepair && remoteState.inProgress) {
-      rows.push({
-        status: "error",
-        namespace,
-        error: errorSummary(checkpointRepairInProgressError(namespace)),
       });
       continue;
     }

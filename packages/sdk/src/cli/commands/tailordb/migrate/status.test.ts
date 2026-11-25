@@ -756,11 +756,27 @@ describe("tailordb migration status --json", () => {
   );
 
   test.each([
-    { record: "a migration in progress", inProgress: "m0006" },
-    { record: "an in-progress record the checkpoint already passed", inProgress: "m0005" },
+    {
+      record: "a migration in progress",
+      inProgress: "m0006",
+      error:
+        'A migration is in progress in namespace "tailordb", so its checkpoint cannot be repaired.',
+    },
+    {
+      record: "an in-progress record the checkpoint already passed",
+      inProgress: "m0005",
+      error:
+        'A migration is in progress in namespace "tailordb", so its checkpoint cannot be repaired.',
+    },
+    {
+      record: "an in-progress record it cannot read",
+      inProgress: "broken",
+      error:
+        'The in-progress migration recorded for namespace "tailordb" cannot be read.\nThe namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.',
+    },
   ])(
-    "reports that the next deploy cannot reset the checkpoint with $record",
-    async ({ inProgress }) => {
+    "reports the error the next deploy stops with for $record at a checkpoint it would reset",
+    async ({ inProgress, error }) => {
       writeRebaselineMarker(state.migrationsDir, "hlocal", {
         replacedHistoryId: "hprevious",
         replacedLatestMigration: 5,
@@ -782,13 +798,7 @@ describe("tailordb migration status --json", () => {
 
       expect(result.success).toBe(false);
       expect(JSON.parse(stdout.output)).toEqual([
-        {
-          status: "error",
-          namespace: "tailordb",
-          error: expect.stringContaining(
-            'A migration is in progress in namespace "tailordb", so its checkpoint cannot be repaired.',
-          ),
-        },
+        { status: "error", namespace: "tailordb", error: expect.stringContaining(error) },
       ]);
     },
   );

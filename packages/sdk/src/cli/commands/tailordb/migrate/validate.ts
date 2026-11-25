@@ -15,7 +15,7 @@ import {
 } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   checkMigrationInProgress,
-  checkpointRepairInProgressError,
+  checkpointRepairInProgressConflict,
   type MigrationInProgressOutcome,
 } from "#/cli/commands/deploy/tailordb/migration-validation";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
@@ -395,9 +395,10 @@ async function checkNamespaceInProgress(
 ): Promise<MigrationInProgressOutcome> {
   const { checks, namespace, state, pending, checkpointRepaired } = check;
   const { client, workspaceId, commandContext } = checks;
-  if (checkpointRepaired && (state.inProgress || state.inProgressInvalid)) {
-    throw checkpointRepairInProgressError(namespace);
-  }
+  const conflict = checkpointRepaired
+    ? checkpointRepairInProgressConflict(namespace, state)
+    : undefined;
+  if (conflict) throw conflict;
   return await checkMigrationInProgress({
     client,
     workspaceId,

@@ -4587,31 +4587,40 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(stderr.output).not.toContain("will be reset to 0000");
   });
 
-  test.each<{ record: string; labels: Record<string, string> }>([
-    { record: "a main run", labels: { "sdk-migration-in-progress": "m0006-main" } },
+  test.each<{ record: string; labels: Record<string, string>; error: Record<string, unknown> }>([
     {
-      record: "an unreadable record",
-      labels: { "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60" },
+      record: "a main run",
+      labels: { "sdk-migration-in-progress": "m0006-main" },
+      error: { code: "MIGRATION_IN_PROGRESS_CONFLICT" },
     },
-  ])("refuses a checkpoint reset while the namespace records $record", async ({ labels }) => {
-    using _stderr = captureStderr();
-    const userType = userSnapshotType();
-    writeUserSchemaSnapshot(userType, {
-      historyId: "hcurrent",
-      replacedHistoryId: null,
-      replacedLatestMigration: 5,
-    });
-    writeEmptyMigrationsThrough(5);
-    const planResult = planWithDeployDerivedSettings(userType);
-    const client = schemaVerificationClient(unchangedRemoteSettings());
-    client.getMetadata.mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0005", ...labels } },
-    });
+    {
+      record: "a record it cannot read",
+      labels: { "sdk-migration-execution": "e0190f3a27c1e7d4b9a6f1b2c3d4e5f60" },
+      error: {
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: expect.stringContaining("cannot be read"),
+      },
+    },
+  ])(
+    "refuses a checkpoint reset while the namespace records $record",
+    async ({ labels, error }) => {
+      using _stderr = captureStderr();
+      const userType = userSnapshotType();
+      writeUserSchemaSnapshot(userType, {
+        historyId: "hcurrent",
+        replacedHistoryId: null,
+        replacedLatestMigration: 5,
+      });
+      writeEmptyMigrationsThrough(5);
+      const planResult = planWithDeployDerivedSettings(userType);
+      const client = schemaVerificationClient(unchangedRemoteSettings());
+      client.getMetadata.mockResolvedValue({
+        metadata: { labels: { "sdk-migration": "m0005", ...labels } },
+      });
 
-    await expect(runValidation(client, planResult)).rejects.toMatchObject({
-      code: "MIGRATION_IN_PROGRESS_CONFLICT",
-    });
-  });
+      await expect(runValidation(client, planResult)).rejects.toMatchObject(error);
+    },
+  );
 
   test("rejects a missing remote checkpoint when the remote schema differs from baseline", async () => {
     using stderr = captureStderr();

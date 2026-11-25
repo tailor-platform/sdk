@@ -1272,12 +1272,23 @@ describe("tailordb migration validate", () => {
       });
     });
 
-    test.each([
-      { record: "a readable record", inProgressLabel: "m0006" },
-      { record: "a record it cannot read", inProgressLabel: "not-a-migration" },
+    test.each<{ record: string; inProgressLabel: string; error: Record<string, unknown> }>([
+      {
+        record: "a readable record",
+        inProgressLabel: "m0006",
+        error: { code: "MIGRATION_IN_PROGRESS_CONFLICT" },
+      },
+      {
+        record: "a record it cannot read",
+        inProgressLabel: "not-a-migration",
+        error: {
+          code: "MIGRATION_IN_PROGRESS_INVALID",
+          message: expect.stringContaining("cannot be read"),
+        },
+      },
     ])(
       "reports $record in a namespace whose checkpoint the next deploy would reset",
-      async ({ inProgressLabel }) => {
+      async ({ inProgressLabel, error }) => {
         using stdout = captureStdout();
         using _json = jsonMode();
         writeRebaselineMarker(state.migrationsDir, "htailordb", { replacedLatestMigration: 5 });
@@ -1287,9 +1298,7 @@ describe("tailordb migration validate", () => {
 
         expect(result.success).toBe(false);
         const [report] = JSON.parse(stdout.output);
-        expect(report.migrationInProgress.error).toMatchObject({
-          code: "MIGRATION_IN_PROGRESS_CONFLICT",
-        });
+        expect(report.migrationInProgress.error).toMatchObject(error);
       },
     );
 

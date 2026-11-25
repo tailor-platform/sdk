@@ -15,6 +15,7 @@ import {
   updateMigrationLabel,
   type MigrationMachineUsers,
 } from "#/cli/commands/deploy/tailordb/migration";
+import { checkpointRepairInProgressConflict } from "#/cli/commands/deploy/tailordb/migration-validation";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
   fetchRemoteSchemaSnapshot,
@@ -608,6 +609,11 @@ export function assertSourceMatchesCheckpoints(
   }
   const pendingRepair = checks.find((check) => check.checkpointRepair);
   if (pendingRepair) {
+    const conflict = checkpointRepairInProgressConflict(pendingRepair.namespace, {
+      inProgress: pendingRepair.migrationInProgress ?? null,
+      inProgressInvalid: pendingRepair.migrationInProgressInvalid ?? false,
+    });
+    if (conflict) throw conflict;
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
       message: `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair.`,
