@@ -5,6 +5,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
 import { runnableCodemod } from "./test-helpers/codemods";
+import { countChildNodes } from "./test-helpers/sg-node";
 import type { CodemodPackage } from "./types";
 
 type TestCodemodExtra = Pick<
@@ -1236,6 +1237,77 @@ describe("runCodemods", () => {
       expect(result.warnings).toHaveLength(1);
       expect(result.warnings[0]).toContain("commands.ts: contains");
       expect(result.warnings[0]).toContain("rule: test/rename-bin");
+    });
+
+    test.each([
+      [
+        "ignores a source command whose executable const is declared in a nested function",
+        ["function setup() {", '  const bin = "legacy-cli";', "}", 'spawn(bin, ["run"]);'],
+        0,
+      ],
+      [
+        "warns for a source command whose executable const follows a destructured const",
+        ['const [first] = "legacy-cli";', 'const bin = "legacy-cli";', 'spawn(bin, ["run"]);'],
+        1,
+      ],
+      [
+        "warns for an option value in an array nested in a Tailor CLI array",
+        ['const nested = ["tailor", ["--name", "tailor-sdk legacy-cli run"]];'],
+        1,
+      ],
+    ])("%s", async (_, lines, warnings) => {
+      const { result } = await runWarningCase({
+        fileName: "commands.ts",
+        source: lines.join("\n"),
+        codemod: makeCodemod("test/legacy-cli", partialTransformPath, ["**/*.ts"], [], {
+          sourceStringLegacyPatterns: ["legacy-cli run"],
+        }),
+      });
+
+      expect(result.warnings).toHaveLength(warnings);
+    });
+
+    test.each([
+      [
+        "calls with variable-backed executables",
+        (count: number) => [
+          ...Array.from({ length: count }, (_, i) => `const value${i} = "value${i}";`),
+          ...Array.from({ length: count }, (_, i) => `run(value${i}, ["deploy"]);`),
+        ],
+      ],
+      [
+        "declarators in one declaration",
+        (count: number) => [
+          `const ${Array.from({ length: count }, (_, i) => `value${i} = "value${i}"`).join(", ")};`,
+        ],
+      ],
+      [
+        "array elements",
+        (count: number) => [
+          "export const users = [",
+          ...Array.from({ length: count }, (_, i) => `  { id: ${i}, name: "user${i}" },`),
+          "];",
+        ],
+      ],
+    ])("warns for source command residuals beside many %s in linear time", async (_, linesFor) => {
+      const visitedNodes = (count: number) =>
+        countChildNodes(async () => {
+          const { result } = await runWarningCase({
+            fileName: "commands.ts",
+            source: [
+              ...linesFor(count),
+              'const bin = "tailor-sdk";',
+              'spawn(bin, ["apply"]);',
+            ].join("\n"),
+            codemod: makeCodemod("test/rename-bin", partialTransformPath, ["**/*.ts"], [], {
+              sourceStringLegacyPatterns: renameBin.sourceStringLegacyPatterns,
+            }),
+          });
+          expect(result.warnings).toHaveLength(1);
+          expect(result.warnings[0]).toContain("rule: test/rename-bin");
+        });
+
+      expect(await visitedNodes(200)).toBeLessThan(3 * (await visitedNodes(100)));
     });
 
     test("warns for source command residuals before later fragments", async () => {
