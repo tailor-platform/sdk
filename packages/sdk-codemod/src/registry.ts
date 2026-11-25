@@ -56,6 +56,8 @@ function functionRunNamePattern(quotedNewline: boolean): RegExp {
 const FUNCTION_RUN_NAME_PATTERN = functionRunNamePattern(false);
 const FUNCTION_RUN_NAME_DECODED_STRING_PATTERN = functionRunNamePattern(true);
 
+const GENERATE_WATCH_FLAG_PATTERN = /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/;
+
 const FUNCTION_SCRIPT_COMMAND_PATTERN =
   /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
 
@@ -1470,10 +1472,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
       "**/*.md",
     ],
-    suspiciousPatterns: [
-      /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/,
-      [/\bgenerate\s*\(/, /\bwatch\s*:/],
-    ],
+    suspiciousPatterns: [GENERATE_WATCH_FLAG_PATTERN, [/\bgenerate\s*\(/, /\bwatch\s*:/]],
+    jsonStringSuspiciousPatterns: [GENERATE_WATCH_FLAG_PATTERN],
     examples: [
       {
         lang: "sh",
