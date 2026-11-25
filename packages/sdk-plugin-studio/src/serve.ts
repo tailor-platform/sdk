@@ -26,7 +26,7 @@ const DEFAULT_TABS: readonly TabSpec[] = [
 const clientDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "client");
 
 export const uiCommand = defineAppCommand({
-  name: "studio",
+  name: "tailor-studio",
   description: "Serve the local web UI shell that hosts CLI plugin UIs. (beta)",
   args: z.strictObject({
     profile: workspaceArgs.profile,
