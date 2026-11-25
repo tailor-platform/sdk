@@ -172,7 +172,7 @@ read them:
 - `MIGRATION_IN_PROGRESS_INVALID`: the migration recorded as in progress cannot be read, is not the
   next pending migration, or no longer exports `steps` although some of its steps ran.
 - `MIGRATION_IN_PROGRESS_CONFLICT`: a namespace whose checkpoint the deploy would reset to `0000`
-  has a migration in progress.
+  records a readable in-progress migration, even one its checkpoint already passed.
 - `MIGRATION_SKIP_STEPS_FORMAT_INVALID`: a `--migration-skip-steps` entry is not in the form
   `<namespace>/<step>`.
 - `MIGRATION_SKIP_STEPS_INVALID`: a `--migration-skip-steps` entry names a namespace that no
@@ -218,7 +218,10 @@ read them:
   lists the problems of each namespace, including the migration file and deploy checks above.
 - `MIGRATION_STATUS_FAILED`: `status` could not report at least one namespace, for example because
   its migration files are invalid, its migration history differs from the workspace's, or its
-  checkpoint is past the latest local migration.
+  checkpoint is past the latest local migration. A namespace still at the checkpoint and migration
+  history that the local baseline replaced is not a failure: `status` reports the reset the next
+  deploy makes, unless the namespace records a migration in progress, which keeps that deploy from
+  resetting the checkpoint.
 - `MIGRATION_IN_PROGRESS`: `rebaseline`, `sync`, or `test` found a migration in progress in the
   namespace: partially applied steps, a script run that is not settled, or an in-progress record
   that cannot be read.
@@ -288,7 +291,8 @@ read them:
   without a checkpoint, do not match `0000`.
 - `MIGRATION_TEST_SOURCE_AHEAD`: a source namespace's checkpoint is past the latest local migration.
 - `MIGRATION_TEST_SOURCE_REPAIR_PENDING`: a source namespace's checkpoint is waiting for the reset
-  to `0000` that a deploy applies after a re-baseline.
+  to `0000` that a deploy applies after a re-baseline. When any namespace waiting for that reset
+  also records a migration in progress, `test` reports the error that deploy stops with instead.
 - `MIGRATION_TEST_SOURCE_CLEANUP_PENDING`: a source namespace still has tables that the migration
   at its checkpoint removed.
 - `MIGRATION_TEST_SOURCE_CHANGED`: with `--data clone`, the source workspace changed between
