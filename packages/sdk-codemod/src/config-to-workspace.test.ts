@@ -1188,22 +1188,35 @@ describe("v3/config-to-workspace", () => {
   );
 
   test.each([
-    ["only one Auth service defines it", '"seeder"', "{ admin: {} }", []],
+    ["only one Auth service defines it", '"seeder"', "{ machineUsers: { admin: {} } }", []],
     [
       "no machine user name is defined by several Auth services",
       "process.env.MIGRATION_USER",
-      "{ other: {} }",
+      "{ machineUsers: { other: {} } }",
       [],
     ],
+    ["another Auth service has no machine users", '"admin"', "{}", []],
     [
       "an Auth service's machine users cannot be read",
       '"admin"',
-      "users",
+      "{ machineUsers: users }",
+      [uncheckedMigrationUser],
+    ],
+    [
+      "an Auth service's machine users have a spread",
+      '"admin"',
+      "{ machineUsers: { ...users } }",
+      [uncheckedMigrationUser],
+    ],
+    [
+      "an Auth service's options may hide its machine users",
+      '"admin"',
+      "{ ...options }",
       [uncheckedMigrationUser],
     ],
   ])(
     "checks the machine user of a migration against the Auth services when %s",
-    async (_, machineUser, bMachineUsers, messages) => {
+    async (_, machineUser, bOptions, messages) => {
       const project = createProject({
         "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
         "a/tailor.config.ts": lines(
@@ -1214,7 +1227,8 @@ describe("v3/config-to-workspace", () => {
         "b/tailor.config.ts": lines(
           'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
           "const users = { admin: {} };",
-          `const bAuth = defineAuth("b-auth", { machineUsers: ${bMachineUsers} });`,
+          "const options = { machineUsers: users };",
+          `const bAuth = defineAuth("b-auth", ${bOptions});`,
           'export default defineConfig({ name: "b", auth: bAuth });',
         ),
       });

@@ -7,6 +7,7 @@ import {
   importBindings,
   objectEntries,
   pairValue,
+  staticEntries,
 } from "../ast-grep-helpers";
 import { findDefineConfigCalls } from "../define-config";
 import { isTailorConfigPath } from "../plugin-export-bindings";
@@ -35,7 +36,7 @@ export type ServiceRef = {
 
 /** What a `defineAuth()` call shows. */
 type AuthDefinition = {
-  /** Machine user names, or null when `machineUsers` is not an object literal. */
+  /** Machine user names, or null when `machineUsers` is not an object literal with static keys, or the options may hide it. */
   machineUsers: string[] | null;
   /** Whether it has a `userProfile` and an `idProvider` from a `defineIdp()` IdP (a built-in IdP). */
   builtInIdpUserProfile: boolean;
@@ -235,9 +236,9 @@ function authDefinition(cache: ModuleCache, module: SourceModule, call: SgNode):
       : undefined;
   return {
     machineUsers:
-      machineUsers?.kind() === "object"
-        ? objectEntries(machineUsers).flatMap((entry) => entryKey(entry) ?? [])
-        : null,
+      machineUsers === null && staticEntries(options) !== null
+        ? []
+        : (staticEntries(machineUsers)?.map((entry) => entryKey(entry)!) ?? null),
     builtInIdpUserProfile:
       objectEntryValue(options, "userProfile") !== null &&
       providerOwner !== undefined &&
