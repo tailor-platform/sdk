@@ -353,7 +353,16 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 }
 ```
 
-Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above.
+Some deploys also add `tailordbMaintenance` or `deployedHooks`, as described under **JSON result** above, or `warnings`, described below. Each is left out when it has no entries.
+
+After applying, `deploy` records its SDK version on the workspace as the `sdk-version` label, keeping the workspace's other labels.
+
+`warnings` lists the labels the deploy could not write. The deploy still succeeds and prints a warning for each entry:
+
+- `{ "type": "workspaceSdkVersionNotRecorded", "details": "<error>" }` — the workspace's `sdk-version` label, for example because the workspace has no room for more labels. `details` holds the error.
+- `{ "type": "onAppLabelsDropped", "resourceType": "<type>", "name": "<name>", "applications": ["<app>"] }` (Beta) — with a `defineWorkspace()` or `defineApp()` config, the labels naming the `applications` that use the resource identified by `resourceType` and `name`, because that resource has no room for more labels.
+
+When the workspace or a resource has no room for more labels, remove labels that `tailor` does not set from it to make room.
 
 ## remove
 

@@ -6,6 +6,7 @@ import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
+  isRequestFailure,
   staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -20,6 +21,7 @@ import { reclaimFinishedWorkflowRuns } from "#/cli/shared/workflow-run";
 import { withSpan } from "#/cli/telemetry/index";
 import { listEnvOverrides } from "#/parser/app-config/config-export";
 import { beginWaitPointScope } from "#/utils/wait-point-registry";
+import { workspaceTrn } from "../workspace/expiry";
 import { planAIGateway } from "./aigateway";
 import { applicationLabelLimitError, planApplication } from "./application";
 import {
@@ -93,8 +95,12 @@ import {
   type DeployOwner,
   hasMatchingSdkVersion,
   isOwnedBy,
+  labelCountViolation,
   resourceTrn,
   sdkNameLabelKey,
+  sdkVersionLabelKey,
+  sdkVersionLabelValue,
+  writeMetadataLabelsDirect,
 } from "./label";
 import { MANAGED_RESOURCE_LABELS } from "./managed-resource-type";
 import {
@@ -923,6 +929,35 @@ export function adjustApplicationForMigrationTest(
   };
 }
 
+type WorkspaceSdkVersionNotRecorded = { type: "workspaceSdkVersionNotRecorded"; details: string };
+
+/**
+ * Record on the workspace the SDK version that applied its resources, keeping its other labels.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @returns The warning to report when the Platform rejected the write or the request failed, which leaves the deploy applied
+ */
+async function recordWorkspaceSdkVersion(
+  client: OperatorClient,
+  workspaceId: string,
+): Promise<WorkspaceSdkVersionNotRecorded | undefined> {
+  try {
+    await writeMetadataLabelsDirect(client, {
+      trn: workspaceTrn(workspaceId),
+      labels: { [sdkVersionLabelKey]: await sdkVersionLabelValue() },
+    });
+    return undefined;
+  } catch (error) {
+    if (!isRequestFailure(error)) throw error;
+    logger.warn(
+      labelCountViolation(error) === undefined
+        ? `Could not record the SDK version on workspace "${workspaceId}": ${error.message}. The next deploy tries again.`
+        : `Workspace "${workspaceId}" has no room for more labels, so the SDK version that deployed it is not recorded on it. Remove labels that tailor does not set from it to make room.`,
+    );
+    return { type: "workspaceSdkVersionNotRecorded", details: error.message };
+  }
+}
+
 /**
  * Deploy the configured application to the Tailor platform.
  * @param options - Deploy execution options
@@ -1196,10 +1231,15 @@ async function deployInternal(
     } else {
       applied = await applyRemainingResources(client, deployments);
     }
+    const workspaceSdkVersionWarning = await recordWorkspaceSdkVersion(client, workspaceId);
     const { maintenance: tailordbMaintenance, labelRejections } = applied;
-    const warnings = [...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels].map(
-      (dropped) => ({ type: "onAppLabelsDropped" as const, ...dropped }),
-    );
+    const warnings = [
+      ...[...prerequisites.droppedOnAppLabels, ...applied.droppedOnAppLabels].map((dropped) => ({
+        type: "onAppLabelsDropped" as const,
+        ...dropped,
+      })),
+      ...(workspaceSdkVersionWarning ? [workspaceSdkVersionWarning] : []),
+    ];
 
     const deployed =
       logger.jsonMode && !internalContext?.suppressResultOutput && labelRejections.length === 0
