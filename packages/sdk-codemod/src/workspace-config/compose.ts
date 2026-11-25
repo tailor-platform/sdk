@@ -18,6 +18,7 @@ import {
   entryValue,
   parseConfigModule,
   resolveString,
+  evaluatesToObject,
   SDK_MODULE,
   type ConfigModule,
 } from "./config-module";
@@ -546,12 +547,12 @@ export function composeMembers(
           const entry = objectEntries(options).find(
             (candidate) => entryKey(candidate) === "machineUserName",
           );
-          const value = entry && entryValue(entry);
-          if (!entry || value?.kind() === "object") continue;
+          const value = (entry && entryValue(entry)) ?? null;
+          if (!entry || evaluatesToObject(cache, renamed.module, value)) continue;
           composed.seedMachineUsers.push({
             file: member.path,
             node: entry,
-            name: resolveString(cache, renamed.module, value ?? null),
+            name: resolveString(cache, renamed.module, value),
           });
         }
         const expressions = pluginExpressions(plugins);

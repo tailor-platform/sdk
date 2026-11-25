@@ -7,6 +7,7 @@ import {
   calleeName,
   entryValue,
   resolveString,
+  evaluatesToObject,
   type ConfigModule,
 } from "./config-module";
 import { literalText, type ModuleCache, type Report } from "./project";
@@ -25,6 +26,12 @@ const AUTH_TRIGGERS: ReadonlySet<string> = new Set([
   "authAccessTokenRefreshedTrigger",
   "authAccessTokenRevokedTrigger",
   "authAccessTokenTrigger",
+]);
+const OPERATION_KINDS_WITH_INVOKER: ReadonlySet<string> = new Set([
+  "function",
+  "jobFunction",
+  "graphql",
+  "workflow",
 ]);
 
 /** The service an executor trigger names, which a merge with several of them makes it name. */
@@ -146,6 +153,24 @@ function functionFiles(cache: ModuleCache, member: ConfigModule): string[] {
 }
 
 /**
+ * Whether an `invoker` entry sets the machine user something runs as: in an executor operation, a
+ * `createResolver()` config, or the options of a workflow's `.start()`.
+ * @param entry - The entry
+ * @returns Whether it does
+ */
+function setsMachineUser(entry: SgNode): boolean {
+  const object = entry.parent()!;
+  const kind = objectEntries(object).find((candidate) => entryKey(candidate) === "kind");
+  if (OPERATION_KINDS_WITH_INVOKER.has(literalText(kind && pairValue(kind)) ?? "")) return true;
+  const call = object.parent()!.parent()!;
+  const position = callArguments(call).findIndex(
+    (argument) => argument.range().start.index === object.range().start.index,
+  );
+  const name = calleeName(call);
+  return name === "createResolver" || (name === "start" && position === 1);
+}
+
+/**
  * Rewrite what the merge makes ambiguous in the functions of the merged configs: a string
  * invoker naming a machine user several Auth services define, an IdP or authAccessToken trigger
  * without its service, and a GraphQL operation without its application.
@@ -195,10 +220,22 @@ export function rewriteFunctionFiles(
       for (const pair of module.root.findAll({
         rule: { any: [{ kind: "pair" }, { kind: "shorthand_property_identifier" }] },
       })) {
-        if (entryKey(pair) !== "invoker") continue;
+        if (entryKey(pair) !== "invoker" || !setsMachineUser(pair)) continue;
         const value = entryValue(pair);
+        if (!value) continue;
         const name = resolveString(cache, module, value);
-        if (name === null || !value) continue;
+        if (name === null) {
+          if (
+            !evaluatesToObject(cache, module, value) &&
+            machineUserAmbiguity(facts, null) === "unknown"
+          ) {
+            report(
+              pair,
+              "The conversion cannot tell whether several Auth services of the merged workspace define the machine user this invoker names; write it as { namespace, machineUserName } with the Auth service it belongs to.",
+            );
+          }
+          continue;
+        }
         const ambiguity = machineUserAmbiguity(facts, name);
         if (ambiguity === "unknown") {
           report(

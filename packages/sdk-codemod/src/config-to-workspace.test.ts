@@ -270,46 +270,156 @@ describe("v3/config-to-workspace", () => {
     ]);
   });
 
-  test("reports an invoker when an Auth service's machine users cannot be read", async () => {
-    const sync = lines(
-      'import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";',
-      "export default createExecutor({",
-      '  name: "sync",',
-      '  trigger: scheduleTrigger({ cron: "0 * * * *" }),',
-      '  operation: { kind: "function", body: () => {}, invoker: "admin" },',
-      "});",
-    );
-    const project = createProject({
-      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": lines(
-        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
-        "const users = { admin: {} };",
-        'const auth = defineAuth("a-auth", { machineUsers: users });',
-        'export default defineConfig({ name: "a", auth });',
+  const uncheckedInvoker =
+    "The conversion cannot tell whether several Auth services of the merged workspace define the machine user this invoker names; write it as { namespace, machineUserName } with the Auth service it belongs to.";
+  const executor = (operation: string, ...before: string[]) => [
+    ...before,
+    "export default createExecutor({",
+    '  name: "sync",',
+    '  trigger: scheduleTrigger({ cron: "0 * * * *" }),',
+    `  operation: { ${operation} },`,
+    "});",
+  ];
+  test.each([
+    [
+      "a literal when an Auth service's machine users cannot be read",
+      "users",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => {}, invoker: "admin"'),
+      [
+        'The conversion cannot read every Auth service\'s machine users, so check whether invoker "admin" names one that several Auth services define.',
+      ],
+    ],
+    [
+      "a value that cannot be read in a function operation",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => {}, invoker: getInvoker()'),
+      [uncheckedInvoker],
+    ],
+    [
+      "a value that cannot be read in a jobFunction operation",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "jobFunction", body: () => {}, invoker: getInvoker()'),
+      [uncheckedInvoker],
+    ],
+    [
+      "a value that cannot be read in a graphql operation",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "graphql", appName: "b", query: "{ x }", invoker: getInvoker()'),
+      [uncheckedInvoker],
+    ],
+    [
+      "a value that cannot be read in a workflow operation",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "workflow", workflow: syncWorkflow, invoker: getInvoker()'),
+      [uncheckedInvoker],
+    ],
+    [
+      "a value that cannot be read in a createResolver() config",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      [
+        "export default createResolver({",
+        '  name: "sync",',
+        '  operation: "query",',
+        "  invoker: getInvoker(),",
+        "  body: () => {},",
+        "});",
+      ],
+      [uncheckedInvoker],
+    ],
+    [
+      "a value that cannot be read in the options of a workflow's .start()",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => workflow.start({}, { invoker: getInvoker() })'),
+      [uncheckedInvoker],
+    ],
+    [
+      "an object that names the Auth service",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: () => {}, invoker: { namespace: "b-auth", machineUserName: "admin" }',
       ),
-      "b/tailor.config.ts": lines(
-        'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
-        'const bAuth = defineAuth("b-auth", { machineUsers: { admin: {} } });',
-        'export default defineConfig({ name: "b", auth: bAuth, executor: { files: ["./executors/*.ts"] } });',
+      [],
+    ],
+    [
+      "a const holding an object that names the Auth service",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: () => {}, invoker',
+        'const invoker = { namespace: "b-auth", machineUserName: "admin" } as const;',
       ),
-      "b/executors/sync.ts": sync,
-    });
+      [],
+    ],
+    [
+      "an argument a function body passes on",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: (args) => audit({ invoker: args.invoker })'),
+      [],
+    ],
+    [
+      "a workflow input",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: (args) => workflow.start({ invoker: args.invoker })'),
+      [],
+    ],
+    [
+      "a literal workflow input",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => workflow.start({ invoker: "admin" })'),
+      [],
+    ],
+    [
+      "a value that cannot be read when no machine user name is shared",
+      "{ admin: {} }",
+      "{ sync: {} }",
+      executor('kind: "function", body: () => {}, invoker: getInvoker()'),
+      [],
+    ],
+  ])(
+    "checks an invoker written as %s against the merged Auth services",
+    async (_, aUsers, bUsers, source, messages) => {
+      const sync = lines(
+        'import { createExecutor, createResolver, scheduleTrigger } from "@tailor-platform/sdk";',
+        ...source,
+      );
+      const project = createProject({
+        "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+        "a/tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          "const users = { admin: {} };",
+          `const auth = defineAuth("a-auth", { machineUsers: ${aUsers} });`,
+          'export default defineConfig({ name: "a", auth });',
+        ),
+        "b/tailor.config.ts": lines(
+          'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
+          `const bAuth = defineAuth("b-auth", { machineUsers: ${bUsers} });`,
+          'export default defineConfig({ name: "b", auth: bAuth, executor: { files: ["./executors/*.ts"] } });',
+        ),
+        "b/executors/sync.ts": sync,
+      });
 
-    const result = await runOnProject(CODEMODS, project);
+      const result = await runOnProject(CODEMODS, project);
 
-    expect(project.read("b/executors/sync.ts")).toBe(sync);
-    expect(
-      findingsOf(result)
-        .filter(({ file }) => file === "b/executors/sync.ts")
-        .map(({ line, message }) => ({ line, message })),
-    ).toEqual([
-      {
-        line: 5,
-        message:
-          'The conversion cannot read every Auth service\'s machine users, so check whether invoker "admin" names one that several Auth services define.',
-      },
-    ]);
-  });
+      expect(project.read("b/executors/sync.ts")).toBe(sync);
+      const line = sync.split("\n").findLastIndex((text) => text.includes("invoker")) + 1;
+      expect(
+        findingsOf(result)
+          .filter(({ file }) => file === "b/executors/sync.ts")
+          .map((finding) => ({ line: finding.line, message: finding.message })),
+      ).toEqual(messages.map((message) => ({ line, message })));
+    },
+  );
 
   test("merges env and reports a key only some configs set", async () => {
     const project = createProject({
@@ -1157,6 +1267,7 @@ describe("v3/config-to-workspace", () => {
       'machineUserName: { namespace: "a-auth", machineUserName: "admin" }',
       [],
     ],
+    ["a const holding an object that names the Auth service", "machineUserName: seedInvoker", []],
     [
       "a value that cannot be read",
       "machineUserName: process.env.SEED_USER",
@@ -1181,6 +1292,7 @@ describe("v3/config-to-workspace", () => {
           "a",
           'const seedUser = "admin";',
           'const machineUserName = "admin";',
+          'const seedInvoker = { namespace: "a-auth", machineUserName: "admin" } satisfies AuthMachineUser;',
           `export const plugins = [seedPlugin({ distPath: "./seed", ${machineUser} }), auditPlugin({ machineUserName: "admin" })];`,
         ),
         "b/tailor.config.ts": config("b"),

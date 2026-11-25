@@ -155,6 +155,39 @@ function topLevelInitializer(root: SgNode, name: string): SgNode | null {
   return null;
 }
 
+function resolveValue(
+  cache: ModuleCache,
+  module: SourceModule,
+  node: SgNode | null,
+): SgNode | null {
+  if (!isIdentifierNode(node)) return node;
+  return resolveBinding(cache, module, node.text())?.value ?? null;
+}
+
+const TYPE_OPERATORS: ReadonlySet<string> = new Set(["as_expression", "satisfies_expression"]);
+
+function withoutTypeOperators(node: SgNode | null): SgNode | null {
+  return node && TYPE_OPERATORS.has(String(node.kind()))
+    ? withoutTypeOperators(node.children()[0] ?? null)
+    : node;
+}
+
+/**
+ * Whether a node evaluates to an object literal: written as one, or a `const` initialized with
+ * one, also through `as` or `satisfies`.
+ * @param cache - Module cache
+ * @param module - Module the node appears in
+ * @param node - Node to read
+ * @returns Whether it does
+ */
+export function evaluatesToObject(
+  cache: ModuleCache,
+  module: SourceModule,
+  node: SgNode | null,
+): boolean {
+  return withoutTypeOperators(resolveValue(cache, module, node))?.kind() === "object";
+}
+
 /**
  * Read a string a node evaluates to: a literal, or a `const` initialized with one.
  * @param cache - Module cache
@@ -167,11 +200,7 @@ export function resolveString(
   module: SourceModule,
   node: SgNode | null,
 ): string | null {
-  const literal = literalText(node);
-  if (literal !== null || !node) return literal;
-  if (!isIdentifierNode(node)) return null;
-  const binding = resolveBinding(cache, module, node.text());
-  return binding ? literalText(binding.value) : null;
+  return literalText(resolveValue(cache, module, node));
 }
 
 /**
