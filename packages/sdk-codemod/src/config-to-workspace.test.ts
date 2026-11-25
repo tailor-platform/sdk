@@ -1452,6 +1452,66 @@ describe("v3/config-to-workspace", () => {
 
   test.each([
     [
+      "on one line",
+      (name: string) =>
+        lines(
+          SDK_IMPORT,
+          `export default defineConfig({ name: "${name}", db: { ${name}: { files: ["e2e/*.test.ts", "db/*.ts"] } } });`,
+        ),
+    ],
+    [
+      "indented by four spaces",
+      (name: string) =>
+        lines(
+          SDK_IMPORT,
+          "export default defineConfig({",
+          `    name: "${name}",`,
+          "    db: {",
+          `        ${name}: {`,
+          '            files: ["e2e/*.test.ts", "db/*.ts"],',
+          "        },",
+          "    },",
+          "});",
+        ),
+    ],
+  ])(
+    "reports the findings an earlier codemod made on configs written %s at each config's line",
+    async (_, config) => {
+      const project = createProject({
+        "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+        "a/tailor.config.ts": config("a"),
+        "b/tailor.config.ts": config("b"),
+      });
+
+      const result = await runOnProject(
+        ["v3/files-config-relative", "v3/files-ignores-to-negation", ...CODEMODS],
+        project,
+      );
+
+      const filesLines = project
+        .read("tailor.config.ts")!
+        .split("\n")
+        .flatMap((text, index) => (text.includes("files:") ? [index + 1] : []));
+      const findings = result.llmReviews.flatMap((review) =>
+        review.codemodId === "v3/config-to-workspace"
+          ? []
+          : (review.findings ?? []).map(({ line, message }) => ({
+              codemodId: review.codemodId,
+              line,
+              member: /\bdb\.(\w+)\.files\b/u.exec(message)?.[1],
+            })),
+      );
+      expect(findings).toEqual(
+        ["v3/files-config-relative", "v3/files-ignores-to-negation"].flatMap((codemodId) => [
+          { codemodId, line: filesLines[0], member: "a" },
+          { codemodId, line: filesLines[1], member: "b" },
+        ]),
+      );
+    },
+  );
+
+  test.each([
+    [
       "both configs get it",
       "{ admin: {} }",
       '{ directory: "./m", machineUser: process.env.MIGRATION_USER! }',

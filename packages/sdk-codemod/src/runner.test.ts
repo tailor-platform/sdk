@@ -2547,19 +2547,20 @@ describe("runCodemods", () => {
           const c = project.read("c.ts");
           if (c === undefined) return {};
           return {
-            writes: { "merged.ts": "// second(); flagMe();\\n" + c },
+            writes: { "merged.ts": '// second(); flagMe(); rebased("x");\\n' + c.replace("./x", "./c/x") },
             deletes: ["c.ts"],
             mergedInto: { "c.ts": "merged.ts" },
             findings: [
               { file: "c.ts", line: 2, message: "moved", excerpt: "second();" },
               { file: "c.ts", line: 1, message: "gone", excerpt: "gone();" },
               { file: "c.ts", line: 3, message: "elsewhere", excerpt: "first();" },
+              { file: "c.ts", line: 4, message: "rewritten", excerpt: 'rebased("x");' },
             ],
           };
         }`,
         "utf-8",
       );
-      const dir = await project({ "c.ts": "first();\nsecond();\nflagMe();\n" });
+      const dir = await project({ "c.ts": 'first();\nsecond();\nflagMe();\nrebased("./x");\n' });
 
       const result = await runCodemods(
         [
@@ -2595,6 +2596,7 @@ describe("runCodemods", () => {
             { file: "merged.ts", line: 1, message: "gone", excerpt: "gone();" },
             { file: "merged.ts", line: 2, message: "elsewhere", excerpt: "first();" },
             { file: "merged.ts", line: 3, message: "moved", excerpt: "second();" },
+            { file: "merged.ts", line: 5, message: "rewritten", excerpt: 'rebased("x");' },
           ],
         },
       ]);

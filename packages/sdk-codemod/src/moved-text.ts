@@ -1,7 +1,7 @@
 /**
  * Where text moved to: the occurrence in `target` of `source.slice(start, start + length)`, or of
  * its longest prefix that `target` holds, down to its leading word, whose surrounding characters
- * match the source's furthest, the first one on a tie.
+ * match the source's furthest, any run of whitespace matching any other, the first one on a tie.
  * @param source - Text the moved text was in
  * @param start - Index of the moved text in `source`
  * @param length - Length of the moved text
@@ -9,13 +9,24 @@
  * @returns Index of the occurrence in `target`, or -1 when `target` holds none of those prefixes
  */
 export function movedIndex(source: string, start: number, length: number, target: string): number {
-  const moved = source.slice(start, start + length);
-  const shortest = Math.max(/^[\w$]*/u.exec(moved)![0].length, 1);
-  for (let size = moved.length; size >= shortest; size -= 1) {
+  for (const size of prefixLengths(source.slice(start, start + length))) {
     const at = bestOccurrence(source, start, size, target);
     if (at !== -1) return at;
   }
   return -1;
+}
+
+/**
+ * The lengths of a text's prefixes, longest first, down to its leading word.
+ * @param text - The text
+ * @returns The lengths, down to the length of its leading identifier, or to 1 without one
+ */
+export function prefixLengths(text: string): number[] {
+  const shortest = Math.max(/^[\w$]*/u.exec(text)![0].length, 1);
+  return Array.from(
+    { length: Math.max(text.length - shortest + 1, 0) },
+    (_, index) => text.length - index,
+  );
 }
 
 function bestOccurrence(source: string, start: number, length: number, target: string): number {
@@ -34,9 +45,24 @@ function bestOccurrence(source: string, start: number, length: number, target: s
   return best;
 }
 
+function isSpace(char: string | undefined): boolean {
+  return char !== undefined && /\s/u.test(char);
+}
+
 function sameRun(a: string, from: number, b: string, at: number, step: 1 | -1): number {
   let count = 0;
-  while (a[from + count * step] !== undefined && a[from + count * step] === b[at + count * step]) {
+  let i = from;
+  let j = at;
+  while (a[i] !== undefined && b[j] !== undefined) {
+    if (isSpace(a[i]) && isSpace(b[j])) {
+      while (isSpace(a[i])) i += step;
+      while (isSpace(b[j])) j += step;
+    } else if (a[i] === b[j]) {
+      i += step;
+      j += step;
+    } else {
+      break;
+    }
     count += 1;
   }
   return count;

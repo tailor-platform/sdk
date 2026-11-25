@@ -6,7 +6,7 @@ import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { takesSeparateGlobalValue } from "./command-line-pattern";
-import { lineOfIndex, movedIndex } from "./moved-text";
+import { lineOfIndex, movedIndex, prefixLengths } from "./moved-text";
 import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
@@ -527,14 +527,18 @@ function legacyPatternWarnings(
 function movedLine(prior: string | null, finding: LlmReviewFinding, content: string): number {
   const source = prior ?? "";
   const lines = source.split("\n");
-  const column = lines[finding.line - 1]?.indexOf(finding.excerpt) ?? -1;
+  const line = lines[finding.line - 1] ?? "";
+  const column =
+    prefixLengths(finding.excerpt)
+      .map((size) => line.indexOf(finding.excerpt.slice(0, size)))
+      .find((index) => index !== -1) ?? -1;
   const at =
     column === -1
       ? content.indexOf(finding.excerpt)
       : movedIndex(
           source,
-          lines.slice(0, finding.line - 1).reduce((sum, line) => sum + line.length + 1, column),
-          finding.excerpt.length,
+          lines.slice(0, finding.line - 1).reduce((sum, text) => sum + text.length + 1, column),
+          line.length - column,
           content,
         );
   return at === -1 ? 1 : lineOfIndex(content, at);
