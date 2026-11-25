@@ -2,19 +2,9 @@ import "@tailor-platform/app-shell/styles";
 import { AppShell, GlobalHeaderLayout, defineModule } from "@tailor-platform/app-shell";
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import type { ContextInfo, TabInfo } from "../src/shell-handler";
 
-type TabInfo =
-  | { id: string; title: string; state: "mounted" }
-  | { id: string; title: string; state: "not-installed"; installCommand: string }
-  | { id: string; title: string; state: "no-ui-support" };
-
-type PlatformInfo = { platformUrl?: string; oauth2ClientId?: string; consoleUrl?: string };
-
-type ContextInfo = {
-  platform?: PlatformInfo;
-  profiles: { name: string; workspaceId: string }[];
-  selected: { profile?: string; workspaceId?: string };
-};
+type PlatformInfo = NonNullable<ContextInfo["platform"]>;
 
 const BAR_COLORS = {
   selected: { background: "#535ae8", color: "#fff" },
@@ -73,8 +63,11 @@ function NewProfileDialog({
   const open = () => {
     setError(undefined);
     void fetch("/api/accounts")
-      .then((response) => response.json() as Promise<{ users: string[] }>)
-      .then((body) => setUsers(body.users))
+      .then((response) => response.json() as Promise<{ users: string[] } | { error: string }>)
+      .then((body) => {
+        if ("error" in body) setError(body.error);
+        else setUsers(body.users);
+      })
       .catch((e: unknown) => setError(String(e)));
     ref.current?.showModal();
   };

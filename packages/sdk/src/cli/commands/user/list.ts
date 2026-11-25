@@ -1,12 +1,9 @@
 import { z } from "zod";
 import { workspaceArgs } from "#/cli/shared/args";
-import {
-  getPlatformBaseUrl,
-  isDefaultPlatform,
-  type PlatformClientConfig,
-} from "#/cli/shared/client";
+import { type PlatformClientConfig } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
+  listUsersOnPlatform,
   platformConfigFromProfile,
   readPlatformConfig,
   resolveUserTokenKey,
@@ -29,14 +26,7 @@ type UserListInfo = {
  * @returns The email of each user that has one, otherwise its user name
  */
 export async function listLoggedInUsers(platformConfig?: PlatformClientConfig): Promise<string[]> {
-  const config = await readPlatformConfig();
-  const platformUrl = getPlatformBaseUrl(platformConfig);
-  const prefix = `${platformUrl}|`;
-  const isDefault = isDefaultPlatform(platformConfig);
-  return Object.entries(config.users).flatMap(([key, entry]) => {
-    if (isDefault ? key.includes("|") : !key.startsWith(prefix)) return [];
-    return [entry?.email ?? (isDefault ? key : key.slice(prefix.length))];
-  });
+  return listUsersOnPlatform((await readPlatformConfig()).users, platformConfig);
 }
 
 function activeCurrentUserKey(config: PlatformConfig, activeProfile?: string): string | null {

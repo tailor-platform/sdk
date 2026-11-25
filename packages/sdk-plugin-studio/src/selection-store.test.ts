@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { createSelectionStore } from "./selection-store";
+import { createSelectionStore, projectDirectory } from "./selection-store";
 
 let project: string;
 
@@ -43,5 +43,21 @@ describe("createSelectionStore", () => {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, "{not json");
     expect(createSelectionStore(project).load()).toBeUndefined();
+  });
+});
+
+describe("projectDirectory", () => {
+  test("is the directory of the config file the CLI passes, so a subdirectory shares its project's selection", () => {
+    expect(
+      projectDirectory({ TAILOR_CONFIG_PATH: "/work/app/tailor.config.ts" }, "/work/app/src/deep"),
+    ).toBe("/work/app");
+  });
+
+  test("falls back to the working directory when the CLI passed no config file", () => {
+    expect(projectDirectory({}, "/work/app")).toBe("/work/app");
+  });
+
+  test("treats an empty config path as none", () => {
+    expect(projectDirectory({ TAILOR_CONFIG_PATH: "" }, "/work/app")).toBe("/work/app");
   });
 });

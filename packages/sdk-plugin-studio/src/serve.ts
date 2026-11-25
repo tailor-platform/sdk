@@ -11,7 +11,7 @@ import { z } from "zod";
 import { createAccounts } from "./accounts";
 import { discoverTab, type TabSpec } from "./discover-tab";
 import { openBrowser } from "./open-browser";
-import { createSelectionStore } from "./selection-store";
+import { createSelectionStore, projectDirectory } from "./selection-store";
 import { startServer } from "./server";
 import { createShellHandler } from "./shell-handler";
 import { createWorkspaceContext, listProfiles } from "./workspace-context";
@@ -42,11 +42,16 @@ export const uiCommand = defineAppCommand({
       "The 'studio' command is a beta feature and may introduce breaking changes in future releases.",
     );
     const platform = platformConfigFromEnv();
-    const tabs = await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, process.cwd())));
+    const projectDir = projectDirectory(process.env, process.cwd());
+    const tabs = await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)));
     const workspace = createWorkspaceContext({
       ...(args.profile ? { initialProfile: args.profile } : {}),
       listProfiles: listProfiles,
-      store: createSelectionStore(process.cwd()),
+      store: createSelectionStore(projectDir),
+      onListenerError: (error) =>
+        logger.error(
+          `A selection listener failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
     });
     await workspace.restore();
     const server = await startServer({

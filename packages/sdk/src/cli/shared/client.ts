@@ -69,6 +69,24 @@ export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
   return Object.keys(effective).length > 0 ? effective : undefined;
 }
 
+/**
+ * The platform the environment names, as a profile would store it: a URL or an OAuth2 client ID
+ * equal to the default one is left out. A plugin the CLI starts always receives both in its
+ * environment, defaults included.
+ * @returns The settings that differ from the default platform, or undefined when none does
+ */
+export function platformConfigFromEnv(): PlatformClientConfig | undefined {
+  const { platformUrl, oauth2ClientId, consoleUrl } = getEffectivePlatformConfig() ?? {};
+  const custom: PlatformClientConfig = {
+    ...(platformUrl && normalizeBaseUrl(platformUrl) !== normalizeBaseUrl(defaultPlatformBaseUrl)
+      ? { platformUrl }
+      : {}),
+    ...(oauth2ClientId && oauth2ClientId !== defaultOAuth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
+  };
+  return Object.keys(custom).length > 0 ? custom : undefined;
+}
+
 export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {
   const effectiveConfig = getEffectivePlatformConfig(config);
   if (effectiveConfig) {
