@@ -1189,6 +1189,46 @@ describe("v3/config-to-workspace", () => {
     ]);
   });
 
+  test("keeps type-only imports type-only", async () => {
+    const project = createProject({
+      "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+      "a/schema.ts": lines(
+        "export default interface Schema { origin: string }",
+        'export const origin = "https://example.com";',
+      ),
+      "a/types.ts": "export type Origins = string[];\n",
+      "a/origins.ts": lines(
+        "export type Origin = string;",
+        'export default ["https://example.com"] satisfies Origin[];',
+      ),
+      "a/tailor.config.ts": lines(
+        SDK_IMPORT,
+        'import type Schema from "./schema";',
+        'import type * as Types from "./types";',
+        'import type { Origins } from "./types";',
+        'import { origin } from "./schema";',
+        'import origins, { type Origin } from "./origins";',
+        "",
+        'const cors: Origins & Types.Origins & Origin[] = [origin satisfies Schema["origin"], ...origins];',
+        "",
+        'export default defineConfig({ name: "a", cors, db: { a: { files: [] } } });',
+      ),
+      "b/tailor.config.ts": dbConfig("b"),
+    });
+
+    await runOnProject(CODEMODS, project);
+
+    expect(project.read("tailor.config.ts")).toContain(
+      lines(
+        'import type Schema from "./a/schema";',
+        'import { origin } from "./a/schema";',
+        'import type * as Types from "./a/types";',
+        'import type { Origins } from "./a/types";',
+        'import origins, { type Origin } from "./a/origins";',
+      ),
+    );
+  });
+
   test("reports the imports of a config whose tsconfig does not load", async () => {
     const project = createProject({
       "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),

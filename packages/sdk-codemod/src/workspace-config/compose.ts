@@ -620,8 +620,9 @@ export function renderImports(
     bySource.set(named.source, [...(bySource.get(named.source) ?? []), named]);
   }
   const lines: string[] = [];
-  const specifier = (named: ImportedName) =>
-    `${named.typeOnly ? "type " : ""}${named.imported === named.local ? named.local : `${named.imported} as ${named.local}`}`;
+  const importName = (named: ImportedName) =>
+    named.imported === named.local ? named.local : `${named.imported} as ${named.local}`;
+  const specifier = (named: ImportedName) => `${named.typeOnly ? "type " : ""}${importName(named)}`;
   const sdk = [...sdkNames];
   const defineConfigIndex = composed.members[0]
     ? findImportStatements(composed.members[0].module.root)
@@ -649,12 +650,21 @@ export function renderImports(
     const namespaces = names.filter((named) => named.kind === "namespace");
     const named = names.filter((entry) => entry.kind === "named");
     for (const namespace of namespaces)
-      lines.push(`import * as ${namespace.local} from "${source}";`);
-    const head = defaults.map((entry) => entry.local).join(", ");
+      lines.push(
+        `import ${namespace.typeOnly ? "type " : ""}* as ${namespace.local} from "${source}";`,
+      );
+    for (const entry of defaults.filter((entry) => entry.typeOnly))
+      lines.push(`import type ${entry.local} from "${source}";`);
+    const head = defaults
+      .filter((entry) => !entry.typeOnly)
+      .map((entry) => entry.local)
+      .join(", ");
     if (head === "" && named.length === 0) continue;
-    const braces = named.length > 0 ? `{ ${named.map(specifier).join(", ")} }` : "";
+    const typeOnly = head === "" && named.every((entry) => entry.typeOnly);
+    const braces =
+      named.length > 0 ? `{ ${named.map(typeOnly ? importName : specifier).join(", ")} }` : "";
     lines.push(
-      `import ${[head, braces].filter((part) => part !== "").join(", ")} from "${source}";`,
+      `import ${typeOnly ? "type " : ""}${[head, braces].filter((part) => part !== "").join(", ")} from "${source}";`,
     );
   }
   for (const source of composed.sideEffects) lines.push(`import "${source}";`);
