@@ -54,7 +54,12 @@ function functionRunNamePattern(quotedNewline: boolean): RegExp {
   );
 }
 const FUNCTION_RUN_NAME_PATTERN = functionRunNamePattern(false);
-const FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN = functionRunNamePattern(true);
+const FUNCTION_RUN_NAME_DECODED_STRING_PATTERN = functionRunNamePattern(true);
+
+const GENERATE_WATCH_FLAG_PATTERN = /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/;
+const GENERATE_WATCH_FLAG_DECODED_STRING_PATTERN =
+  /\bgenerate\b(?:[\\^\x60]\r?\n|[^\n])*?(?:--watch\b|\s-W\b)/;
+const GENERATE_WATCH_OPTION_PATTERNS = [/\bgenerate\s*\(/, /\bwatch\s*:/];
 
 const FUNCTION_SCRIPT_COMMAND_PATTERN =
   /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
@@ -1470,9 +1475,10 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
       "**/*.md",
     ],
-    suspiciousPatterns: [
-      /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/,
-      [/\bgenerate\s*\(/, /\bwatch\s*:/],
+    suspiciousPatterns: [GENERATE_WATCH_FLAG_PATTERN, GENERATE_WATCH_OPTION_PATTERNS],
+    jsonStringSuspiciousPatterns: [
+      GENERATE_WATCH_FLAG_DECODED_STRING_PATTERN,
+      GENERATE_WATCH_OPTION_PATTERNS,
     ],
     examples: [
       {
@@ -2339,7 +2345,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     suspiciousPatterns: [FUNCTION_RUN_NAME_PATTERN],
-    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_SOURCE_STRING_PATTERN],
+    sourceStringSuspiciousPatterns: [FUNCTION_RUN_NAME_DECODED_STRING_PATTERN],
+    jsonStringSuspiciousPatterns: [FUNCTION_RUN_NAME_DECODED_STRING_PATTERN],
     examples: [
       {
         before: "tailor function run workflows/sample.ts --name validate-order",

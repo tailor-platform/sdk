@@ -1,24 +1,8 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "pathe";
 import { describe, expect, test } from "vitest";
-import { allCodemods } from "./registry";
-import { runCodemods } from "./runner";
+import { reportedFiles as reportedFilesOf } from "./test-helpers/review-files";
 
-const codemod = allCodemods.find((entry) => entry.id === "v3/function-run-name-to-workflow-run")!;
-
-async function reportedFiles(relativePath: string, source: string): Promise<string[]> {
-  const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "function-run-name-"));
-  try {
-    const file = path.join(projectDir, relativePath);
-    await fs.promises.mkdir(path.dirname(file), { recursive: true });
-    await fs.promises.writeFile(file, source, "utf-8");
-    const result = await runCodemods([{ codemod }], projectDir, true);
-    return result.llmReviews.flatMap((review) => review.files);
-  } finally {
-    await fs.promises.rm(projectDir, { recursive: true, force: true });
-  }
-}
+const reportedFiles = (relativePath: string, source: string): Promise<string[]> =>
+  reportedFilesOf("v3/function-run-name-to-workflow-run", relativePath, source);
 
 describe("function run --name review", () => {
   test.each([
@@ -127,6 +111,24 @@ describe("function run --name review", () => {
       "execSync(\"tailor function run a.ts --arg '{\\n}' --name job\");\n",
     ],
     [
+      "--name in the second script of a compact package.json",
+      "package.json",
+      JSON.stringify({ scripts: { a: "tailor deploy", b: "tailor function run a.ts --name x" } }),
+    ],
+    [
+      "--name in a command outside scripts of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor deploy" },
+        "lint-staged": { "*.ts": "tailor function run a.ts --name x" },
+      }),
+    ],
+    [
+      "--name in a package.json that is not valid JSON",
+      "package.json",
+      '{"scripts":{"a":"tailor function run a.ts --name x",}}',
+    ],
+    [
       "a template substitution right after --name in a string of a TypeScript file",
       "run.ts",
       "execSync(`tailor function run a.ts --name${suffix} x`);\n",
@@ -181,6 +183,32 @@ describe("function run --name review", () => {
       "--name of function get in the next quoted step of a workflow",
       ".github/workflows/job.yml",
       'steps:\n  - run: "tailor function run a.ts"\n  - run: "tailor function get --name x"\n',
+    ],
+    [
+      "--name of function get in the next script of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor function get --name x" },
+      }),
+    ],
+    [
+      "--name of another command in the next script of a compact package.json",
+      "package.json",
+      JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor workspace create --name x" },
+      }),
+    ],
+    [
+      "--name of another command in the next script of a compact package.json that starts with a byte order mark",
+      "package.json",
+      `\uFEFF${JSON.stringify({
+        scripts: { a: "tailor function run a.ts", b: "tailor workspace create --name x" },
+      })}`,
+    ],
+    [
+      "-n in a later key of a compact package.json",
+      "package.json",
+      JSON.stringify({ scripts: { a: "tailor function run a.ts" }, description: "x -n y" }),
     ],
     [
       "many lines opening a quote without closing it, without taking quadratic time",

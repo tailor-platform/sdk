@@ -159,6 +159,7 @@ interface LoadedTransform {
   sourceTextLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   sourceStringSuspiciousPatterns: CodemodPatternGroup[];
+  jsonStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -167,6 +168,12 @@ function contentForResidualMatching(relative: string, content: string): string {
   const ext = path.extname(relative).toLowerCase();
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
+
+type ResidualEntry = {
+  residual: string;
+  sourceString: string | null;
+  jsonStrings: string[] | null;
+};
 
 const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
 
@@ -260,6 +267,30 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function jsonStringValuesForResidualMatching(relative: string, content: string): string[] | null {
+  if (path.extname(relative).toLowerCase() !== ".json") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content.replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+
+  const strings: string[] = [];
+  const pending: unknown[] = [parsed];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === "string") {
+      strings.push(value);
+    } else if (value !== null && typeof value === "object") {
+      const children = Object.values(value);
+      for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
+    }
+  }
+  return strings;
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -551,10 +582,13 @@ export async function runCodemods(
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
+      jsonStringSuspiciousPatterns: codemod.jsonStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
   }
+
+  const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
 
   const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
@@ -602,13 +636,16 @@ export async function runCodemods(
       }
     }
 
-    const residualBySnapshot = new Map<string, { residual: string; sourceString: string | null }>();
-    const residualFor = (content: string): { residual: string; sourceString: string | null } => {
+    const residualBySnapshot = new Map<string, ResidualEntry>();
+    const residualFor = (content: string): ResidualEntry => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
+          jsonStrings: needsJsonStrings
+            ? jsonStringValuesForResidualMatching(relative, content)
+            : null,
         };
         residualBySnapshot.set(content, entry);
       }
@@ -660,15 +697,25 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
-      if (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0) {
+      if (
+        lt.suspiciousPatterns.length === 0 &&
+        lt.sourceStringSuspiciousPatterns.length === 0 &&
+        lt.jsonStringSuspiciousPatterns.length === 0
+      ) {
         continue;
       }
-      const { residual, sourceString } = residualFor(snapshot);
+      const { residual, sourceString, jsonStrings } = residualFor(snapshot);
+      const readsJsonStrings = jsonStrings != null && lt.jsonStringSuspiciousPatterns.length > 0;
       const matchesSource =
-        lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
+        (!readsJsonStrings &&
+          lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null)) ||
         (sourceString != null &&
           lt.sourceStringSuspiciousPatterns.some(
             (p) => matchResidualPattern(sourceString, p) !== null,
+          )) ||
+        (jsonStrings != null &&
+          jsonStrings.some((value) =>
+            lt.jsonStringSuspiciousPatterns.some((p) => matchResidualPattern(value, p) !== null),
           ));
       if (matchesSource) {
         filesForReview().add(relative);
@@ -684,6 +731,7 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.jsonStringSuspiciousPatterns.length > 0 ||
       lt.reviewFindings ||
       lt.reviewFindingsBeforeTransform
     ) {
