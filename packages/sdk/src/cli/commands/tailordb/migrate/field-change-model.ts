@@ -69,21 +69,7 @@ export const FIELD_CHANGE_RULE_IDS = [
 
 export type FieldChangeRuleId = (typeof FIELD_CHANGE_RULE_IDS)[number];
 
-/** What the Pre-phase relaxes so `migrate.ts` can run against the rows stored before a change. */
-type Relaxation = {
-  optional: boolean;
-  notUnique: boolean;
-  withoutForeignKey: boolean;
-  previousEnumValues: boolean;
-};
-
-export type FieldChangeOutcome = {
-  breaks: Record<FieldChangeRuleId, Verdict>;
-  relax: Relaxation;
-};
-
 type FieldTerm = c.TermOf<RuleField>;
-type ChangeTerm = c.TermOf<FieldChange>;
 type Rule = ReturnType<FieldTerm["required"]["$eq"]>;
 
 function any(rules: readonly Rule[]): Rule {
@@ -144,224 +130,171 @@ function holds(breaks: Rule): c.Expression<Verdict> {
   return c.choose(breaks, "holds" as const, "none" as const);
 }
 
-const NO_EFFECTS = c.variants("kind", {});
-
-type ConcernRules<Result> = {
-  added: (change: c.TermOf<Extract<FieldChange, { kind: "added" }>>) => c.Template<Result>;
-  modified: (change: c.TermOf<Extract<FieldChange, { kind: "modified" }>>) => c.Template<Result>;
-};
-
-type EnsuresClause = { always: (name: string, rule: unknown) => unknown };
-
-function concern<Result>(
-  name: string,
-  result: c.Schema<Result>,
-  rules: ConcernRules<Result>,
-  ensures?: (input: ChangeTerm, answer: c.TermOf<Result>) => Rule,
-): c.AnyImplementation {
-  const definition = c.behavior(name, {
-    input: FieldChange,
-    result,
-    effects: NO_EFFECTS,
-    ...(ensures && {
-      ensures: (clause: EnsuresClause) => [clause.always(name, ensures)],
-    }),
-  } as never) as c.AnyBehavior;
-  return c.implement(definition, {
-    cases: {
-      added: c.model(`${name}: added`, (change) => ({
-        result: rules.added(change as never),
-        effects: [],
-      })),
-      modified: c.model(`${name}: modified`, (change) => ({
-        result: rules.modified(change as never),
-        effects: [],
-      })),
-    },
-  } as never) as c.AnyImplementation;
-}
-
-const typeRule = concern("a field changes its type", c.object({ typeChanged: Verdict }), {
-  added: () => ({ typeChanged: "none" as const }),
-  modified: ({ before, after, nestedMember }) => ({
-    typeChanged: verdict(
-      before.type.$ne(after.type),
-      nestedMember.$eq(true).$or(inPlaceTypeChange(before, after).$not()),
-    ),
+const FieldChangeOutcome = c.object({
+  breaks: c.object(
+    Object.fromEntries(FIELD_CHANGE_RULE_IDS.map((id) => [id, Verdict])) as Record<
+      FieldChangeRuleId,
+      typeof Verdict
+    >,
+  ),
+  relax: c.object({
+    optional: c.boolean(),
+    notUnique: c.boolean(),
+    withoutForeignKey: c.boolean(),
+    previousEnumValues: c.boolean(),
   }),
 });
 
-const arrayRule = concern(
-  "a field changes between one value and an array",
-  c.object({ arrayChanged: Verdict }),
-  {
-    added: () => ({ arrayChanged: "none" as const }),
-    modified: ({ before, after }) => ({
-      arrayChanged: c.choose(
-        before.array.$ne(after.array),
-        "unsupported" as const,
-        "none" as const,
-      ),
-    }),
-  },
-);
+const none = "none" as const;
 
-const foreignKeyRule = concern(
-  "the Pre-phase holds a top-level field to no foreign key its stored values may miss",
-  c.object({
-    foreignKeyRetargeted: Verdict,
-    foreignKeyAdded: Verdict,
-    withoutForeignKey: c.boolean(),
-  }),
-  {
-    added: () => ({
-      foreignKeyRetargeted: "none" as const,
-      foreignKeyAdded: "none" as const,
-      withoutForeignKey: false,
-    }),
-    modified: ({ before, after, nestedMember, renamedTarget }) => {
-      const added = nestedMember
+/**
+ * Field changes that rows stored under the previous schema can break, and what the Pre-phase
+ * relaxes so `migrate.ts` can run against those rows. Its `ensures` hold on every answer.
+ */
+export const fieldChange = c.behavior("field change", {
+  input: FieldChange,
+  result: FieldChangeOutcome,
+  effects: c.variants("kind", {}),
+  ensures: (clause) => [
+    clause.always("the Pre-phase never requires a value stored rows may lack", (change, outcome) =>
+      change.after.required
+        .$eq(false)
+        .$or(outcome.relax.optional.$eq(true))
+        .$or(change.kind.$eq("modified").$and(change.before.required.$eq(true))),
+    ),
+    clause.always(
+      "the Pre-phase never demands uniqueness stored rows may break",
+      (change, outcome) =>
+        change.after.unique
+          .$eq(false)
+          .$or(outcome.relax.notUnique.$eq(true))
+          .$or(change.kind.$eq("added"))
+          .$or(change.before.unique.$eq(true)),
+    ),
+    clause.always("the Pre-phase accepts every enum value stored rows hold", (change, outcome) =>
+      change.kind
+        .$eq("added")
+        .$or(outcome.relax.previousEnumValues.$eq(true))
+        .$or(change.before.type.$ne("enum"))
+        .$or(change.after.type.$ne("enum"))
+        .$or(
+          change.before.allowedValues.$all((value) =>
+            change.after.allowedValues.$any((kept) => kept.$eq(value)),
+          ),
+        ),
+    ),
+    clause.always(
+      "the Pre-phase holds a top-level field to no foreign key its stored values may miss",
+      (change, outcome) =>
+        change.kind
+          .$eq("added")
+          .$or(change.nestedMember.$eq(true))
+          .$or(outcome.relax.withoutForeignKey.$eq(true))
+          .$or(change.after.foreignKeyTarget.kind.$eq("none"))
+          .$or(
+            change.before.foreignKeyTarget.kind
+              .$eq("to")
+              .$and(change.before.foreignKeyTarget.table.$eq(change.after.foreignKeyTarget.table))
+              .$and(keysDiffer(change.before, change.after).$not()),
+          ),
+    ),
+  ],
+});
+
+/** The rules production code judges every field change by. */
+export const fieldChangeRules = c.implement(fieldChange, {
+  cases: {
+    added: c.model("added field", ({ after }) => ({
+      result: {
+        breaks: {
+          typeChanged: none,
+          arrayChanged: none,
+          foreignKeyRetargeted: none,
+          foreignKeyAdded: none,
+          requiredFieldAdded: holds(after.required.$eq(true)),
+          madeRequired: none,
+          decimalScaleChanged: none,
+          uniqueAdded: none,
+          enumValuesRemoved: none,
+        },
+        relax: {
+          optional: c.choose(after.required.$eq(true), true, false),
+          notUnique: false,
+          withoutForeignKey: false,
+          previousEnumValues: false,
+        },
+      },
+      effects: [],
+    })),
+    modified: c.model("modified field", ({ before, after, nestedMember, renamedTarget }) => {
+      const foreignKeyAdded = nestedMember
         .$eq(false)
         .$and(before.foreignKeyTarget.kind.$eq("none"))
         .$and(hasForeignKey(after));
-      return {
-        foreignKeyRetargeted: verdict(
-          changesForeignKeyTarget(before, after).$and(
-            keysDiffer(before, after)
-              .$or(renamedTarget.kind.$eq("none"))
-              .$or(renamedTarget.table.$ne(after.foreignKeyTarget.table)),
-          ),
-          nestedMember.$eq(true),
-        ),
-        foreignKeyAdded: holds(added),
-        withoutForeignKey: c.choose(changesForeignKeyTarget(before, after).$or(added), true, false),
-      };
-    },
-  },
-  (change, answer) =>
-    change.kind
-      .$eq("added")
-      .$or(change.nestedMember.$eq(true))
-      .$or(answer.withoutForeignKey.$eq(true))
-      .$or(change.after.foreignKeyTarget.kind.$eq("none"))
-      .$or(
-        change.before.foreignKeyTarget.kind
-          .$eq("to")
-          .$and(change.before.foreignKeyTarget.table.$eq(change.after.foreignKeyTarget.table))
-          .$and(keysDiffer(change.before, change.after).$not()),
-      ),
-);
-
-const requiredRule = concern(
-  "the Pre-phase never requires a value stored rows may lack",
-  c.object({ requiredFieldAdded: Verdict, madeRequired: Verdict, optional: c.boolean() }),
-  {
-    added: ({ after }) => ({
-      requiredFieldAdded: holds(after.required.$eq(true)),
-      madeRequired: "none" as const,
-      optional: c.choose(after.required.$eq(true), true, false),
-    }),
-    modified: ({ before, after }) => {
       const madeRequired = before.required.$eq(false).$and(after.required.$eq(true));
-      return {
-        requiredFieldAdded: "none" as const,
-        madeRequired: holds(madeRequired),
-        optional: c.choose(madeRequired, true, false),
-      };
-    },
-  },
-  (change, answer) =>
-    change.after.required
-      .$eq(false)
-      .$or(answer.optional.$eq(true))
-      .$or(change.kind.$eq("modified").$and(change.before.required.$eq(true))),
-);
-
-const scaleRule = concern(
-  "a decimal field changes its scale",
-  c.object({ decimalScaleChanged: Verdict }),
-  {
-    added: () => ({ decimalScaleChanged: "none" as const }),
-    modified: ({ before, after, nestedMember }) => ({
-      decimalScaleChanged: verdict(
-        before.type
-          .$eq("decimal")
-          .$and(after.type.$eq("decimal"))
-          .$and(
-            before.scale.kind
-              .$ne(after.scale.kind)
-              .$or(
-                before.scale.kind
-                  .$eq("set")
-                  .$and(after.scale.kind.$eq("set"))
-                  .$and(before.scale.digits.$ne(after.scale.digits)),
-              ),
-          ),
-        nestedMember.$eq(true),
-      ),
-    }),
-  },
-);
-
-const uniqueRule = concern(
-  "the Pre-phase never demands uniqueness stored rows may break",
-  c.object({ uniqueAdded: Verdict, notUnique: c.boolean() }),
-  {
-    added: () => ({ uniqueAdded: "none" as const, notUnique: false }),
-    modified: ({ before, after }) => {
-      const added = before.unique.$eq(false).$and(after.unique.$eq(true));
-      return { uniqueAdded: holds(added), notUnique: c.choose(added, true, false) };
-    },
-  },
-  (change, answer) =>
-    change.after.unique
-      .$eq(false)
-      .$or(answer.notUnique.$eq(true))
-      .$or(change.kind.$eq("added"))
-      .$or(change.before.unique.$eq(true)),
-);
-
-const enumRule = concern(
-  "the Pre-phase accepts every enum value stored rows hold",
-  c.object({ enumValuesRemoved: Verdict, previousEnumValues: c.boolean() }),
-  {
-    added: () => ({ enumValuesRemoved: "none" as const, previousEnumValues: false }),
-    modified: ({ before, after }) => {
-      const removed = before.type
+      const uniqueAdded = before.unique.$eq(false).$and(after.unique.$eq(true));
+      const enumValuesRemoved = before.type
         .$eq("enum")
         .$and(after.type.$eq("enum"))
         .$and(
           before.allowedValues.$any((value) => after.allowedValues.$all((kept) => kept.$ne(value))),
         );
       return {
-        enumValuesRemoved: holds(removed),
-        previousEnumValues: c.choose(removed, true, false),
+        result: {
+          breaks: {
+            typeChanged: verdict(
+              before.type.$ne(after.type),
+              nestedMember.$eq(true).$or(inPlaceTypeChange(before, after).$not()),
+            ),
+            arrayChanged: c.choose(before.array.$ne(after.array), "unsupported" as const, none),
+            foreignKeyRetargeted: verdict(
+              changesForeignKeyTarget(before, after).$and(
+                keysDiffer(before, after)
+                  .$or(renamedTarget.kind.$eq("none"))
+                  .$or(renamedTarget.table.$ne(after.foreignKeyTarget.table)),
+              ),
+              nestedMember.$eq(true),
+            ),
+            foreignKeyAdded: holds(foreignKeyAdded),
+            requiredFieldAdded: none,
+            madeRequired: holds(madeRequired),
+            decimalScaleChanged: verdict(
+              before.type
+                .$eq("decimal")
+                .$and(after.type.$eq("decimal"))
+                .$and(
+                  before.scale.kind
+                    .$ne(after.scale.kind)
+                    .$or(
+                      before.scale.kind
+                        .$eq("set")
+                        .$and(after.scale.kind.$eq("set"))
+                        .$and(before.scale.digits.$ne(after.scale.digits)),
+                    ),
+                ),
+              nestedMember.$eq(true),
+            ),
+            uniqueAdded: holds(uniqueAdded),
+            enumValuesRemoved: holds(enumValuesRemoved),
+          },
+          relax: {
+            optional: c.choose(madeRequired, true, false),
+            notUnique: c.choose(uniqueAdded, true, false),
+            withoutForeignKey: c.choose(
+              changesForeignKeyTarget(before, after).$or(foreignKeyAdded),
+              true,
+              false,
+            ),
+            previousEnumValues: c.choose(enumValuesRemoved, true, false),
+          },
+        },
+        effects: [],
       };
-    },
+    }),
   },
-  (change, answer) =>
-    change.kind
-      .$eq("added")
-      .$or(answer.previousEnumValues.$eq(true))
-      .$or(change.before.type.$ne("enum"))
-      .$or(change.after.type.$ne("enum"))
-      .$or(
-        change.before.allowedValues.$all((value) =>
-          change.after.allowedValues.$any((kept) => kept.$eq(value)),
-        ),
-      ),
-);
+});
 
-/** Each concern of the field change rules, as production code runs it and the tests check it. */
-export const FIELD_CHANGE_CONCERNS = [
-  typeRule,
-  arrayRule,
-  foreignKeyRule,
-  requiredRule,
-  scaleRule,
-  uniqueRule,
-  enumRule,
-] as const;
+export type FieldChangeOutcome = c.Infer<typeof FieldChangeOutcome>;
 
 function ruleField(config: SnapshotFieldConfig): RuleField {
   return {
@@ -413,24 +346,7 @@ export function evaluateFieldChange(input: FieldChangeInput): FieldChangeOutcome
           nestedMember,
           renamedTarget: renamedTargetOf(before, typeRenameTargets),
         };
-  const answers = Object.assign(
-    {},
-    ...FIELD_CHANGE_CONCERNS.map(
-      (concernRules) => c.performSync(concernRules as never, change as never).result as object,
-    ),
-  ) as Record<FieldChangeRuleId, Verdict> & Relaxation;
-  return {
-    breaks: Object.fromEntries(FIELD_CHANGE_RULE_IDS.map((id) => [id, answers[id]])) as Record<
-      FieldChangeRuleId,
-      Verdict
-    >,
-    relax: {
-      optional: answers.optional,
-      notUnique: answers.notUnique,
-      withoutForeignKey: answers.withoutForeignKey,
-      previousEnumValues: answers.previousEnumValues,
-    },
-  };
+  return c.performSync(fieldChangeRules, change).result;
 }
 
 function renamedTargetOf(

@@ -1,6 +1,6 @@
 import { check, examples, spec, verify } from "@toiroakr/chisel/full";
 import { describe, expect, test } from "vitest";
-import { evaluateFieldChange, FIELD_CHANGE_CONCERNS } from "./field-change-model";
+import { evaluateFieldChange, fieldChange, fieldChangeRules } from "./field-change-model";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
 function* fields(): Generator<SnapshotFieldConfig> {
@@ -22,33 +22,26 @@ function* fields(): Generator<SnapshotFieldConfig> {
 }
 
 describe("field change rules", () => {
-  test("every concern's branches and comparisons are read by chisel", async () => {
-    for (const implementation of FIELD_CHANGE_CONCERNS) {
-      const report = await check(
-        spec(implementation.behavior.name, {
-          implementation,
-          examples: examples(implementation.behavior, {}),
-        }),
-      );
-      expect(report.modelIssues).toEqual([]);
-      expect(report.measures.arms.status).toBe("complete");
-      expect(report.measures.rules.status).toBe("complete");
-      expect(report.measures.comparisons.status).toBe("complete");
-    }
+  test("chisel reads every branch and every way of the rules, and settles each", async () => {
+    const report = await check(
+      spec(fieldChange.name, {
+        implementation: fieldChangeRules,
+        examples: examples(fieldChange, {}),
+      }),
+    );
+    expect(report.modelIssues).toEqual([]);
+    expect(report.measures.arms.status).toBe("complete");
+    expect(report.measures.rules.status).toBe("complete");
+    expect(report.measures.comparisons.status).toBe("complete");
+    const rules = report.measures.rules.status === "complete" ? report.measures.rules.rules : [];
+    expect(rules.filter((rule) => rule.status === "undecided")).toEqual([]);
   }, 120_000);
 
-  test("the verdicts without a guarantee of their own are proved for every input", () => {
-    const proved = FIELD_CHANGE_CONCERNS.filter(
-      (implementation) => verify(implementation).status === "verified",
-    ).map((implementation) => implementation.behavior.name);
-    expect(proved).toEqual([
-      "a field changes its type",
-      "a field changes between one value and an array",
-      "a decimal field changes its scale",
-    ]);
+  test("every verdict and every guarantee is proved for every input", () => {
+    expect(verify(fieldChangeRules).status).toBe("verified");
   }, 60_000);
 
-  // The guarantees are each concern's `ensures`, held on every answer: a relaxation that left the
+  // The guarantees are the rules' `ensures`, held on every answer: a relaxation that left the
   // Pre-phase stricter than the stored rows would throw here.
   test("the Pre-phase keeps every stored row for every pair of these fields", () => {
     const all = [...fields()];
