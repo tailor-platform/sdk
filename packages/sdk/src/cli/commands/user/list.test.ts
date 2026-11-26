@@ -6,6 +6,7 @@ import { writePlatformConfig } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resetKeyringState } from "#/cli/shared/token-store";
+import { listLoggedInUsers } from "./list";
 import { userCommand } from ".";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-user-list-${Date.now()}-${Math.random()}`);
@@ -262,5 +263,75 @@ describe("user list", () => {
       code: "PROFILE_NOT_FOUND",
       message: 'Profile "missing" not found',
     });
+  });
+
+  test("listLoggedInUsers gives the email of a user that has one, and skips other platforms", async () => {
+    const token = {
+      storage: "file" as const,
+      access_token: "token",
+      refresh_token: "refresh",
+      token_expires_at: "2999-01-01T00:00:00.000Z",
+    };
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "d011fd3f-492b-447e-bdfd-34ad47ef2270": { ...token, email: "me@example.com" },
+        "machine-client-id": token,
+        "https://other.example|someone": token,
+      },
+      profiles: {},
+      current_user: null,
+    });
+
+    expect(await listLoggedInUsers()).toEqual(["me@example.com", "machine-client-id"]);
+  });
+
+  test("listLoggedInUsers gives the users of the platform it is asked about", async () => {
+    const token = {
+      storage: "file" as const,
+      access_token: "token",
+      refresh_token: "refresh",
+      token_expires_at: "2999-01-01T00:00:00.000Z",
+    };
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "d011fd3f-492b-447e-bdfd-34ad47ef2270": { ...token, email: "me@example.com" },
+        "https://other.example|subject-1": { ...token, email: "other@example.com" },
+        "https://other.example|machine-client": token,
+        "https://third.example|someone": token,
+      },
+      profiles: {},
+      current_user: null,
+    });
+
+    expect(await listLoggedInUsers({ platformUrl: "https://other.example" })).toEqual([
+      "other@example.com",
+      "machine-client",
+    ]);
+  });
+
+  test("listLoggedInUsers follows TAILOR_PLATFORM_URL when no platform is given", async () => {
+    const token = {
+      storage: "file" as const,
+      access_token: "token",
+      refresh_token: "refresh",
+      token_expires_at: "2999-01-01T00:00:00.000Z",
+    };
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "default-subject": { ...token, email: "me@example.com" },
+        "https://other.example|subject-1": { ...token, email: "other@example.com" },
+      },
+      profiles: {},
+      current_user: null,
+    });
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://other.example");
+
+    expect(await listLoggedInUsers()).toEqual(["other@example.com"]);
   });
 });

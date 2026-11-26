@@ -14,6 +14,7 @@ packages/
 ├── sdk-plugin-seed/          # CLI plugin: tailor seed
 ├── sdk-plugin-setup/         # CLI plugin: tailor setup
 ├── sdk-plugin-tailordb-erd/  # CLI plugin: tailor tailordb erd
+├── sdk-plugin-studio/         # CLI plugin: tailor studio
 ├── shared/                   # Internal utilities (private; bundled into sdk, eslint-plugin-sdk, and sdk-codemod)
 └── tailor-proto/             # Protocol buffer definitions (private; bundled into sdk)
 example/                      # Development/testing example app

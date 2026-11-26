@@ -51,6 +51,12 @@ export function normalizeBaseUrl(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
+/**
+ * Platform connection settings in effect: the given ones, completed from `TAILOR_PLATFORM_URL`,
+ * `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` and `TAILOR_PLATFORM_CONSOLE_URL`.
+ * @param config - Settings that take precedence over the environment
+ * @returns The effective settings, or undefined when none is set
+ */
 export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
   const platformUrl = config.platformUrl ?? getEnvPlatformUrl();
   const oauth2ClientId = config.oauth2ClientId ?? getEnvOAuth2ClientId();
@@ -61,6 +67,24 @@ export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
     ...(consoleUrl ? { consoleUrl } : {}),
   };
   return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+/**
+ * The platform the environment names, as a profile would store it: a URL or an OAuth2 client ID
+ * equal to the default one is left out. A plugin the CLI starts always receives both in its
+ * environment, defaults included.
+ * @returns The settings that differ from the default platform, or undefined when none does
+ */
+export function platformConfigFromEnv(): PlatformClientConfig | undefined {
+  const { platformUrl, oauth2ClientId, consoleUrl } = getEffectivePlatformConfig() ?? {};
+  const custom: PlatformClientConfig = {
+    ...(platformUrl && normalizeBaseUrl(platformUrl) !== normalizeBaseUrl(defaultPlatformBaseUrl)
+      ? { platformUrl }
+      : {}),
+    ...(oauth2ClientId && oauth2ClientId !== defaultOAuth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
+  };
+  return Object.keys(custom).length > 0 ? custom : undefined;
 }
 
 export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {

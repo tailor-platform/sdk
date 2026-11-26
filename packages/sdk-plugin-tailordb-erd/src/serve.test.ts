@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
-import { freshErdExportFailureMessage, resolveWatchPaths } from "./serve";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { freshErdExportFailureMessage, resolveWatchPaths, runFreshErdExport } from "./serve";
 import type { ErdBuildResult } from "./export";
 import type { LocalErdSchemaContext } from "./local-schema";
 
@@ -79,5 +79,50 @@ describe("freshErdExportFailureMessage", () => {
 
   test("returns undefined for empty output", () => {
     expect(freshErdExportFailureMessage("\n")).toBeUndefined();
+  });
+});
+
+describe("runFreshErdExport", () => {
+  let tempDir: string;
+
+  aroundEach(async (runTest) => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-export-"));
+    await runTest();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  function isRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  test("stops the export child when the signal aborts, so an abandoned load does not keep a full export running", async () => {
+    const cliEntry = path.join(tempDir, "slow-export.mjs");
+    const pidFile = path.join(tempDir, "pid");
+    fs.writeFileSync(
+      cliEntry,
+      `import * as fs from "node:fs";\nfs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));\nsetInterval(() => {}, 1000);\n`,
+    );
+    const abandoned = new AbortController();
+    const exporting = runFreshErdExport({
+      cliEntry,
+      outputDir: path.join(tempDir, "out"),
+      signal: abandoned.signal,
+    });
+    const outcome = exporting.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await vi.waitFor(() => expect(fs.existsSync(pidFile)).toBe(true), { timeout: 5000 });
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
+
+    abandoned.abort();
+
+    expect(await outcome).toMatchObject({ name: "AbortError" });
+    await vi.waitFor(() => expect(isRunning(pid)).toBe(false), { timeout: 5000 });
   });
 });

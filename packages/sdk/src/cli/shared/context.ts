@@ -248,18 +248,38 @@ type StoredUserTokensLookup = UserEntryLookupOptions & {
   profile?: string | undefined;
 };
 
+function isUserKeyOnPlatform(userKey: string, platformConfig?: PlatformClientConfig): boolean {
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  return platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)
+    ? !userKey.includes("|")
+    : userKey.startsWith(`${platformUrl}|`);
+}
+
+/**
+ * List the users that are logged in on a platform.
+ * @param users - The `users` of the platform configuration
+ * @param platformConfig - Platform to list; defaults to `TAILOR_PLATFORM_URL`, then the default platform
+ * @returns The email of each user that has one, otherwise its user name
+ */
+export function listUsersOnPlatform(
+  users: PfConfig["users"],
+  platformConfig?: PlatformClientConfig,
+): string[] {
+  return Object.entries(users).flatMap(([userKey, entry]) =>
+    isUserKeyOnPlatform(userKey, platformConfig)
+      ? [entry?.email ?? userFromPlatformUserKey(userKey, platformConfig)]
+      : [],
+  );
+}
+
 function findUserByEmail(
   users: PfConfig["users"],
   email: string,
   platformConfig?: PlatformClientConfig,
 ) {
-  const platformUrl = getPlatformBaseUrl(platformConfig);
-  const platformPrefix = `${platformUrl}|`;
-  const defaultPlatform = platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl);
-  return Object.entries(users).find(([key, entry]) => {
-    if (entry?.email !== email) return false;
-    return defaultPlatform ? !key.includes("|") : key.startsWith(platformPrefix);
-  });
+  return Object.entries(users).find(
+    ([key, entry]) => entry?.email === email && isUserKeyOnPlatform(key, platformConfig),
+  );
 }
 
 function findUserEntry(
