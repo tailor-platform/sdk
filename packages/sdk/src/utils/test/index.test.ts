@@ -106,15 +106,17 @@ describe("createTailorDBHook", () => {
   });
 
   describe("field-level create hook and default", () => {
-    test("returns dates from a field hook and a `now` default as ISO strings", () => {
+    test("returns dates from a field hook and a default as ISO strings", () => {
       const now = new Date("2026-04-15T00:00:00.000Z");
       const type = db.table("Test", {
         stampedAt: db.datetime().hooks({ create: ({ now }) => now }),
         createdAt: db.datetime().default("now"),
+        startsAt: db.datetime().default(new Date("2026-01-01T00:00:00.000Z")),
       });
       expect(createTailorDBHook(type)({}, now)).toMatchObject({
         stampedAt: "2026-04-15T00:00:00.000Z",
         createdAt: "2026-04-15T00:00:00.000Z",
+        startsAt: "2026-01-01T00:00:00.000Z",
       });
     });
   });
@@ -381,16 +383,16 @@ describe("createStandardSchema", () => {
       ...type.pickFields(["id", "day", "at"], { optional: true }),
       ...type.omitFields(["id", "day", "at"]),
     });
-    const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+    const now = new Date("2026-04-15T23:30:45.678Z");
+    const hook = createTailorDBHook(type);
+    const schema = createStandardSchema(schemaType, (data) => hook(data, now), type);
     vi.stubEnv("TZ", "Asia/Tokyo");
-    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-04-15T23:30:45.678Z") });
     try {
       const result = schema["~standard"].validate({ title: "a" });
       expect(result).toEqual({
         value: expect.objectContaining({ title: "a", day: "2026-04-15", at: "23:30" }),
       });
     } finally {
-      vi.useRealTimers();
       vi.unstubAllEnvs();
     }
   });

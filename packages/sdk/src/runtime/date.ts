@@ -27,7 +27,12 @@ function formatHoursMinutes(hour: number, minute: number): string {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function formatTime(date: Date): string {
+/**
+ * Format a Date using its UTC hours and minutes.
+ * @param date - Date to format
+ * @returns Time string in HH:mm format
+ */
+export function formatTime(date: Date): string {
   if (!Number.isFinite(date.getTime())) {
     throw new RangeError("Expected a valid Date, but received an invalid Date");
   }
