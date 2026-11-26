@@ -89,6 +89,20 @@ describe("toDDLTables", () => {
       idx_region_invoiceNumber: { fields: ["region", "invoiceNumber"], unique: undefined },
     });
   });
+
+  test("an integer serial made optional by clone or pickFields keeps its column nullable", () => {
+    const source = db.table("Source", { seq: db.int().serial({ start: 1 }) });
+    const ddl = generateSchemaDDL(
+      toDDLTables(
+        parsed({
+          ViaClone: db.table("ViaClone", { seq: source.fields.seq.clone({ optional: true }) }),
+          ViaPick: db.table("ViaPick", source.pickFields(["seq"], { optional: true })),
+        }),
+      ),
+    );
+    expect(ddl).toContain(`"seq" integer DEFAULT nextval('"ViaClone_seq_ee82dec4_seq"')`);
+    expect(ddl).toContain(`"seq" integer DEFAULT nextval('"ViaPick_seq_529ef848_seq"')`);
+  });
 });
 
 describe("generatePGliteSchemaModule", () => {

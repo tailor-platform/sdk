@@ -626,7 +626,7 @@ describe("writePgliteSchemaFile", () => {
   });
 });
 
-describe("agreement with db.ts", () => {
+describe("agreement with db.ts", { timeout: 30_000 }, () => {
   const dir = path.join(TEST_BASE, `parity-${process.pid}`);
   const order = table("Order", {
     total: snapshotField("integer", { required: true }),
@@ -645,6 +645,12 @@ describe("agreement with db.ts", () => {
       tableName: "User",
       fieldName: "note",
       after: snapshotField("string"),
+    },
+    {
+      kind: "field_added",
+      tableName: "User",
+      fieldName: "seq",
+      after: snapshotField("integer", { required: true, serial: { start: 1 } }),
     },
     {
       kind: "field_modified",
@@ -672,22 +678,37 @@ describe("agreement with db.ts", () => {
   ]);
   const previous = snapshot(user, session);
 
-  async function writeDbTypes(): Promise<string> {
+  async function declaredTables(): Promise<Record<string, [column: string, type: string][]>> {
     fs.mkdirSync(path.join(dir, formatMigrationNumber(1)), { recursive: true });
-    return fs.readFileSync(await writeDbTypesFile(previous, dir, 1, migration), "utf-8");
+    const dbTypes = fs.readFileSync(await writeDbTypesFile(previous, dir, 1, migration), "utf-8");
+    return Object.fromEntries(
+      [...dbTypes.matchAll(/^ {2}(\w+): \{\n((?: {4}.+\n)+) {2}\}$/gm)].map((m) => [
+        m[1]!,
+        [...m[2]!.matchAll(/^ {4}(\w+): (.+);$/gm)].map((c): [string, string] => [c[1]!, c[2]!]),
+      ]),
+    );
   }
 
   test("db.ts declares exactly the tables and columns the DDL is rendered from", async () => {
-    const dbTypes = await writeDbTypes();
-
     const declared = Object.fromEntries(
-      [...dbTypes.matchAll(/^ {2}(\w+): \{\n((?: {4}.+\n)+) {2}\}$/gm)].map((m) => [
-        m[1]!,
-        [...m[2]!.matchAll(/^ {4}(\w+): /gm)].map((column) => column[1]!).toSorted(),
+      Object.entries(await declaredTables()).map(([table, columns]) => [
+        table,
+        columns.map(([column]) => column).toSorted(),
       ]),
     );
     expect(declared).toEqual({
-      User: ["email", "handle", "id", "name", "nickname", "note", "region", "score", "status"],
+      User: [
+        "email",
+        "handle",
+        "id",
+        "name",
+        "nickname",
+        "note",
+        "region",
+        "score",
+        "seq",
+        "status",
+      ],
       Order: ["id", "memo", "total"],
       Session: ["id", "token"],
     });
@@ -702,21 +723,33 @@ describe("agreement with db.ts", () => {
   });
 
   test("every db.ts column exists in the DDL, and a nullable read is a nullable column", async () => {
-    const dbTypes = await writeDbTypes();
-    const ddl = generateMigrationPgliteSchema(previous, migration);
+    const pglite = new PGlite();
+    try {
+      await pglite.exec(generateSchemaDDL(buildPreMigrationTables(previous, migration)));
+      const { rows } = await pglite.query<{
+        table_name: string;
+        column_name: string;
+        is_nullable: string;
+      }>(
+        "SELECT table_name, column_name, is_nullable FROM information_schema.columns WHERE table_schema = 'public'",
+      );
+      const nullable = new Map(
+        rows.map((r) => [`${r.table_name}.${r.column_name}`, r.is_nullable === "YES"]),
+      );
 
-    const dbColumns = [...dbTypes.matchAll(/^ {4}(\w+): (.+);$/gm)].map((m): [string, string] => [
-      m[1]!,
-      m[2]!,
-    ]);
-    expect(dbColumns.length).toBeGreaterThan(5);
-    const problems = dbColumns.flatMap(([column, type]) => {
-      const line = new RegExp(`^ {2}"${column}" [^\\n]*$`, "m").exec(ddl)?.[0];
-      if (!line) return [`${column}: missing from the DDL`];
-      if (type.includes("| null") && line.includes("NOT NULL")) return [`${column}: NOT NULL`];
-      return [];
-    });
-    expect(problems).toEqual([]);
+      const declared = Object.entries(await declaredTables()).flatMap(([table, columns]) =>
+        columns.map(([column, type]) => [`${table}.${column}`, type] as const),
+      );
+      expect(declared.length).toBeGreaterThan(5);
+      const problems = declared.flatMap(([column, type]) => {
+        if (!nullable.has(column)) return [`${column}: missing from the DDL`];
+        if (type.includes("| null") && !nullable.get(column)) return [`${column}: NOT NULL`];
+        return [];
+      });
+      expect(problems).toEqual([]);
+    } finally {
+      await pglite.close();
+    }
   });
 });
 
