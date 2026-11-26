@@ -463,8 +463,7 @@ export async function executeSingleMigrationPrePhase(
     await client.createTailorDBType(clonedRequest);
   }
 
-  // Listed before the creates below, which need no update right after.
-  const planlessTables = planlessTableNames(changeSet, migration);
+  const planlessBeforeCreates = planlessTableNames(changeSet, migration);
   for (const tableName of missingTableNames(changeSet, migration, finalMigration, phaseSettings)) {
     const tailordbType = prePhaseManifest(tableName);
     if (!tailordbType) continue;
@@ -522,7 +521,7 @@ export async function executeSingleMigrationPrePhase(
     await client.updateTailorDBType(clonedRequest);
   }
 
-  for (const tableName of planlessTables) {
+  for (const tableName of planlessBeforeCreates) {
     const tailordbType = prePhaseManifest(tableName);
     if (!tailordbType) continue;
 
