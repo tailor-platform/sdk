@@ -93,6 +93,7 @@ const COVERED_CASES = [
 const MIN_CASE_COUNT = 10;
 const TRACE_COUNT = 3000;
 const MIN_DISTINCT_TRACES = TRACE_COUNT * 0.95;
+const MODEL_SEED = process.env.MODEL_SEED || "1";
 
 function modelApplication(): Application {
   return {
@@ -215,10 +216,10 @@ async function replay(trace: ModelTrace): Promise<string[]> {
   return failures;
 }
 
-describe("migration deploy model", () => {
+describe(`migration deploy model, MODEL_SEED=${MODEL_SEED}`, () => {
   let traces: ModelTrace[] = [];
   beforeAll(() => {
-    traces = simulateModelTraces(TRACE_COUNT);
+    traces = simulateModelTraces(TRACE_COUNT, MODEL_SEED);
   }, SIMULATION_TIMEOUT_MS);
 
   test("the simulated deploys reach each case often enough", () => {

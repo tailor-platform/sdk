@@ -118,10 +118,18 @@ const QUINT_TIMEOUT_MS = 180_000;
  */
 export const SIMULATION_TIMEOUT_MS = 3 * QUINT_TIMEOUT_MS;
 
-function runQuint(args: readonly string[]) {
+function runQuint(seed: string, args: readonly string[]) {
   return spawnSync(
     process.execPath,
-    [QUINT_CLI, "run", MODEL_SPEC, "--step=advance", "--seed=1", "--backend=typescript", ...args],
+    [
+      QUINT_CLI,
+      "run",
+      MODEL_SPEC,
+      "--step=advance",
+      `--seed=${seed}`,
+      "--backend=typescript",
+      ...args,
+    ],
     { encoding: "utf8", timeout: QUINT_TIMEOUT_MS },
   );
 }
@@ -133,23 +141,24 @@ function assertQuintPassed(run: ReturnType<typeof runQuint>): void {
 /**
  * Check the invariants of `migration-deploy.qnt` with Quint, simulate it, and read the traces.
  * @param samples - Number of traces to simulate
+ * @param seed - Quint's random seed
  * @returns One trace per distinct starting scenario, up to the first `Done` state
  */
-export function simulateModelTraces(samples: number): ModelTrace[] {
+export function simulateModelTraces(samples: number, seed: string): ModelTrace[] {
   assertQuintPassed(
-    runQuint(["--max-steps=0", "--max-samples=1", "--invariant=relaxServesScripts"]),
+    runQuint(seed, ["--max-steps=0", "--max-samples=1", "--invariant=relaxServesScripts"]),
   );
   const sampling = ["--max-steps=12", `--max-samples=${samples}`];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-model-"));
   try {
-    const run = runQuint([
+    const run = runQuint(seed, [
       ...sampling,
       `--n-traces=${samples}`,
       `--out-itf=${path.join(dir, "t{seq}.itf.json")}`,
     ]);
     // Asked for many traces, Quint does not name a violated invariant, so a run that exits with a
     // failure runs it again.
-    if (run.status !== 0 && run.error === undefined) assertQuintPassed(runQuint(sampling));
+    if (run.status !== 0 && run.error === undefined) assertQuintPassed(runQuint(seed, sampling));
     assertQuintPassed(run);
     return readModelTraces(dir);
   } finally {
