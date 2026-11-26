@@ -286,6 +286,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const configDir = path.dirname(config.path);
   const columnTypes: ColumnTypeOptions = {
     temporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal,
+    decimal: resolvePluginConfig(plugins, KyselyGeneratorID)?.decimal,
   };
   const dateDefault = effectiveDateDefault(config);
 
@@ -1401,7 +1402,7 @@ async function generateExpandContractMigrations(
     description,
     dateDefault = "legacy",
   } = input;
-  const columnTypes: ColumnTypeOptions = { temporal: input.temporal };
+  const columnTypes: ColumnTypeOptions = { temporal: input.temporal, decimal: input.decimal };
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
   // contract, which is what the deploy restores while the script clears it.

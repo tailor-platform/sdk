@@ -66,6 +66,15 @@ describe("COLUMN_TYPE_ALIASES", () => {
     expect(COLUMN_TYPE_ALIASES.get(alias)).toEqual({
       select: temporalType,
       write: `${temporalType} | string`,
+      spelledType: "Temporal",
+    });
+  });
+
+  test("expands DecimalValue to the slots its alias declaration uses", () => {
+    expect(COLUMN_TYPE_ALIASES.get("DecimalValue")).toEqual({
+      select: "Decimal",
+      write: "Decimal | string",
+      spelledType: "Decimal",
     });
   });
 });

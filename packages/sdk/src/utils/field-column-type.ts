@@ -74,7 +74,15 @@ export type ColumnTypeAliasExpansion = {
   readonly select: string;
   /** Type the alias accepts on insert and update. */
   readonly write: string;
+  /**
+   * The type from `@tailor-platform/sdk/kysely` that the expansion names, which a file
+   * spelling the expansion out instead of using the alias has to import itself.
+   */
+  readonly spelledType?: SpelledColumnType;
 };
+
+/** A type from `@tailor-platform/sdk/kysely` that an alias expansion names. */
+export type SpelledColumnType = "Temporal" | "Decimal";
 
 /**
  * Column types whose alias expands to a `ColumnType`, mapped to that expansion.
@@ -93,10 +101,31 @@ export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> 
   ColumnTypeAliasExpansion
 >([
   ["Timestamp", { select: "Date", write: "Date | string" }],
-  ["TemporalDate", { select: "Temporal.PlainDate", write: "Temporal.PlainDate | string" }],
-  ["TemporalInstant", { select: "Temporal.Instant", write: "Temporal.Instant | string" }],
-  ["TemporalTime", { select: "Temporal.PlainTime", write: "Temporal.PlainTime | string" }],
-  ["DecimalValue", { select: "Decimal", write: "Decimal | string" }],
+  [
+    "TemporalDate",
+    {
+      select: "Temporal.PlainDate",
+      write: "Temporal.PlainDate | string",
+      spelledType: "Temporal",
+    },
+  ],
+  [
+    "TemporalInstant",
+    {
+      select: "Temporal.Instant",
+      write: "Temporal.Instant | string",
+      spelledType: "Temporal",
+    },
+  ],
+  [
+    "TemporalTime",
+    {
+      select: "Temporal.PlainTime",
+      write: "Temporal.PlainTime | string",
+      spelledType: "Temporal",
+    },
+  ],
+  ["DecimalValue", { select: "Decimal", write: "Decimal | string", spelledType: "Decimal" }],
 ]);
 
 /** The settings of a TailorDB field that let the platform fill it on create. */

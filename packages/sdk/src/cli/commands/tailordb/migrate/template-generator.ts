@@ -256,6 +256,7 @@ export async function generateDataOnlyMigrationFiles(
     migrationsDir,
     migrationNumber,
     temporal: options.temporal,
+    decimal: options.decimal,
     dateDefault,
   });
 
@@ -741,6 +742,11 @@ export function generateMigrationPgliteTestScript(
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
   const temporalDefault = diff.dateRepresentation === "temporal";
+  const clientOptions = [
+    ...(diff.temporal ? ["temporal: true"] : []),
+    ...(diff.decimal ? ["decimal: Decimal"] : []),
+  ];
+  const pgliteClientOptions = clientOptions.length > 0 ? `, { ${clientOptions.join(", ")} }` : "";
   return `/**
  * PGlite test for the ${diff.namespace} migration script.
  *
@@ -764,10 +770,12 @@ import { PGlite } from "@electric-sql/pglite";
 import { applyDateRepresentation, createKyselyPGlite, prepareFixtures${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { pgliteSchema } from "./db.pglite";
+import { pgliteSchema } from "./db.pglite";${
+    diff.decimal ? '\nimport { Decimal } from "@tailor-platform/sdk/runtime";' : ""
+  }
 ${dateRepresentationPin(diff, isSteps ? "steps" : "main")}
 const pglite = new PGlite();
-const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
+const db = createKyselyPGlite<Unmigrated<Database>>(pglite${pgliteClientOptions});
 
 // PGlite loads Postgres on first use, which can take longer than the default hook timeout.
 beforeAll(async () => {

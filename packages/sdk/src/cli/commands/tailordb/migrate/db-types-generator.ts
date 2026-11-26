@@ -10,6 +10,7 @@ import { assertDefined } from "#/utils/assert";
 import {
   COLUMN_TYPE_ALIASES,
   type ColumnTypeOptions,
+  type SpelledColumnType,
   isFilledOnCreate,
   mapFieldTypeToColumnType,
 } from "#/utils/field-column-type";
@@ -176,12 +177,10 @@ function generateDbTypesFromSnapshot(
   }
 
   // Track which utility types are used
-  const usedUtilityTypes = new Set<
-    "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstant" | "TemporalTime"
-  >();
+  const usedUtilityTypes = new Set<UsedUtilityType>();
   let usedColumnType = false;
   let usedArrayColumnType = false;
-  let usesTemporalNamespace = false;
+  const spelledTypes = new Set<SpelledColumnType>();
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
@@ -190,7 +189,7 @@ function generateDbTypesFromSnapshot(
     for (const usedType of result.usedUtilityTypes) usedUtilityTypes.add(usedType);
     usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
-    usesTemporalNamespace = usesTemporalNamespace || result.usesTemporalNamespace;
+    for (const spelledType of result.spelledTypes) spelledTypes.add(spelledType);
     typeDefinitions.push(result.typeDef);
   }
 
@@ -219,9 +218,10 @@ function generateDbTypesFromSnapshot(
   if (usedUtilityTypes.has("TemporalTime")) {
     imports.push("type TemporalTime");
   }
-  if (usesTemporalNamespace) {
-    imports.push("type Temporal");
+  if (usedUtilityTypes.has("DecimalValue")) {
+    imports.push("type DecimalValue");
   }
+  for (const spelledType of spelledTypes) imports.push(`type ${spelledType}`);
 
   // Build output
   const lines: string[] = [
@@ -308,7 +308,7 @@ function generateEmptyDbTypes(namespace: string): string {
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
  * @param options - The column type options, such as `temporal` for Temporal column types
  * instead of the `Date`/`string` defaults
- * @returns {{ typeDef: string; usedUtilityTypes: ReadonlySet<UsedUtilityType>; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type and utility type usage
+ * @returns {{ typeDef: string; usedUtilityTypes: ReadonlySet<UsedUtilityType>; usedColumnType: boolean; usedArrayColumnType: boolean; spelledTypes: ReadonlySet<SpelledColumnType> }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
@@ -319,13 +319,13 @@ function generateTableType(
   usedUtilityTypes: ReadonlySet<UsedUtilityType>;
   usedColumnType: boolean;
   usedArrayColumnType: boolean;
-  usesTemporalNamespace: boolean;
+  spelledTypes: ReadonlySet<SpelledColumnType>;
 } {
   const fieldLines: string[] = [];
   const usedUtilityTypes = new Set<UsedUtilityType>();
   let usedColumnType = false;
   let usedArrayColumnType = false;
-  let usesTemporalNamespace = false;
+  const spelledTypes = new Set<SpelledColumnType>();
 
   // Add id field first
   fieldLines.push("    id: Generated<string>;");
@@ -367,16 +367,16 @@ function generateTableType(
     if (!clearable && result.usedUtilityType) usedUtilityTypes.add(result.usedUtilityType);
     usedColumnType = usedColumnType || result.usedColumnType || clearable;
     usedArrayColumnType = usedArrayColumnType || (!clearable && result.usedArrayColumnType);
-    usesTemporalNamespace =
-      usesTemporalNamespace ||
-      (clearable
-        ? (clearableResult?.usesTemporalNamespace ?? false)
-        : result.usesTemporalNamespace);
+    for (const spelledType of clearable
+      ? (clearableResult?.spelledTypes ?? NO_SPELLED_TYPES)
+      : result.spelledTypes) {
+      spelledTypes.add(spelledType);
+    }
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
-  return { typeDef, usedUtilityTypes, usedColumnType, usedArrayColumnType, usesTemporalNamespace };
+  return { typeDef, usedUtilityTypes, usedColumnType, usedArrayColumnType, spelledTypes };
 }
 
 /**
@@ -401,7 +401,15 @@ function wrapPlatformFilledColumn(
 }
 
 /** A utility type reported as used, so the generated file's imports cover it. */
-type UsedUtilityType = "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstant" | "TemporalTime";
+type UsedUtilityType =
+  | "Timestamp"
+  | "Serial"
+  | "TemporalDate"
+  | "TemporalInstant"
+  | "TemporalTime"
+  | "DecimalValue";
+
+const NO_SPELLED_TYPES: ReadonlySet<SpelledColumnType> = new Set();
 
 function mapToTsType(
   fieldType: string,
@@ -461,9 +469,6 @@ function generateEnumChangeColumnType(
   return `ColumnType<${selectType}, ${writeType}, ${writeType}>`;
 }
 
-/** Column types whose alias expansion spells the `Temporal` namespace out literally. */
-const TEMPORAL_COLUMN_TYPES = new Set(["TemporalDate", "TemporalInstant", "TemporalTime"]);
-
 /**
  * Column type for a field the migration script both reads and clears.
  *
@@ -479,41 +484,42 @@ function generateClearableFieldType(
   options: ColumnTypeOptions = {},
 ): {
   type: string;
-  usesTemporalNamespace: boolean;
+  spelledTypes: ReadonlySet<SpelledColumnType>;
 } {
   const { type } = mapToTsType(config.type, config.allowedValues, options);
   // A ColumnType cannot nest, so an alias contributes its own select and write
   // types to the slots rather than the alias itself. That inlines the
   // `Temporal.PlainDate`-style expansion as literal text, so this file needs its
-  // own `Temporal` import wherever the alias itself would otherwise have carried it.
-  const usesTemporalNamespace = TEMPORAL_COLUMN_TYPES.has(type);
+  // own import of the type the expansion names wherever the alias itself would
+  // otherwise have carried it.
   const alias = COLUMN_TYPE_ALIASES.get(type);
+  const spelledTypes = alias?.spelledType ? new Set([alias.spelledType]) : NO_SPELLED_TYPES;
   if (alias) {
     const select = config.array ? `${alias.select}[]` : alias.select;
     const write = config.array ? `(${alias.write})[]` : alias.write;
     return {
       type: `ColumnType<${select} | null, ${write} | null, ${write} | null>`,
-      usesTemporalNamespace,
+      spelledTypes,
     };
   }
   const base = config.array ? `${type}[]` : type;
   return {
     type: `ColumnType<${base} | null, ${base} | null, ${base} | null>`,
-    usesTemporalNamespace,
+    spelledTypes,
   };
 }
 
-function generateOptionalToRequiredDateColumnType(
+function generateOptionalToRequiredAliasColumnType(
   config: SnapshotFieldConfig,
   options: ColumnTypeOptions = {},
-): { type: string; usesTemporalNamespace: boolean } | null {
-  if (config.type !== "date" && config.type !== "datetime" && config.type !== "time") return null;
+): { type: string; spelledTypes: ReadonlySet<SpelledColumnType> } | null {
+  if (config.type === "enum" || config.type === "nested") return null;
 
   // The select slot has to stay nullable for existing rows, so the alias cannot
   // fill the property on its own and its expansion spells out the slots instead.
   // That inlines the `Temporal.PlainDate`-style expansion as literal text, so
-  // this file needs its own `Temporal` import wherever the alias itself would
-  // otherwise have carried it.
+  // this file needs its own import of the type the expansion names wherever the
+  // alias itself would otherwise have carried it.
   const columnType = mapFieldTypeToColumnType(config.type, options);
   const alias = COLUMN_TYPE_ALIASES.get(columnType);
   if (!alias) return null;
@@ -522,7 +528,7 @@ function generateOptionalToRequiredDateColumnType(
 
   return {
     type: `ColumnType<${select} | null, ${write}, ${write}>`,
-    usesTemporalNamespace: TEMPORAL_COLUMN_TYPES.has(columnType),
+    spelledTypes: alias.spelledType ? new Set([alias.spelledType]) : NO_SPELLED_TYPES,
   };
 }
 
@@ -533,7 +539,7 @@ function generateOptionalToRequiredDateColumnType(
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
  * @param options - The column type options, such as `temporal` for Temporal column types
  * instead of the `Date`/`string` defaults
- * @returns {{ type: string; usedUtilityType?: UsedUtilityType; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type string and utility type usage
+ * @returns {{ type: string; usedUtilityType?: UsedUtilityType; usedColumnType: boolean; usedArrayColumnType: boolean; spelledTypes: ReadonlySet<SpelledColumnType> }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
@@ -545,7 +551,7 @@ function generateFieldType(
   usedUtilityType?: UsedUtilityType | undefined;
   usedColumnType: boolean;
   usedArrayColumnType: boolean;
-  usesTemporalNamespace: boolean;
+  spelledTypes: ReadonlySet<SpelledColumnType>;
 } {
   // Handle enum value changes specially
   if (enumValueChange) {
@@ -553,7 +559,7 @@ function generateFieldType(
       type: generateEnumChangeColumnType(enumValueChange, config),
       usedColumnType: true,
       usedArrayColumnType: false,
-      usesTemporalNamespace: false,
+      spelledTypes: NO_SPELLED_TYPES,
     };
   }
 
@@ -571,13 +577,13 @@ function generateFieldType(
   }
 
   if (isOptionalToRequired) {
-    const dateColumnType = generateOptionalToRequiredDateColumnType(config, options);
-    if (dateColumnType) {
+    const aliasColumnType = generateOptionalToRequiredAliasColumnType(config, options);
+    if (aliasColumnType) {
       return {
-        type: dateColumnType.type,
+        type: aliasColumnType.type,
         usedColumnType: true,
         usedArrayColumnType: false,
-        usesTemporalNamespace: dateColumnType.usesTemporalNamespace,
+        spelledTypes: aliasColumnType.spelledTypes,
       };
     }
   }
@@ -594,7 +600,7 @@ function generateFieldType(
         usedUtilityType,
         usedColumnType: false,
         usedArrayColumnType: true,
-        usesTemporalNamespace: false,
+        spelledTypes: NO_SPELLED_TYPES,
       };
     }
     const needsParens =
@@ -612,7 +618,7 @@ function generateFieldType(
       usedUtilityType,
       usedColumnType: true,
       usedArrayColumnType: false,
-      usesTemporalNamespace: false,
+      spelledTypes: NO_SPELLED_TYPES,
     };
   }
 
@@ -625,7 +631,7 @@ function generateFieldType(
     usedUtilityType,
     usedColumnType: false,
     usedArrayColumnType: false,
-    usesTemporalNamespace: false,
+    spelledTypes: NO_SPELLED_TYPES,
   };
 }
 
