@@ -37,8 +37,6 @@ export interface ModelState {
   step: ModelStep;
   tables: ModelSchema;
   restricted: boolean;
-  unchecked: ReadonlySet<string>;
-  uncheckedPermissions: ReadonlySet<string>;
 }
 
 export interface ModelTrace {
@@ -88,8 +86,6 @@ function readModelTraces(dir: string): ModelTrace[] {
         step: state.step as ModelStep,
         tables: state.tables as ModelSchema,
         restricted: state.restricted as boolean,
-        unchecked: state.unchecked as ReadonlySet<string>,
-        uncheckedPermissions: state.uncheckedPermissions as ReadonlySet<string>,
       })),
     };
     const scenario = describeScenario(trace);
@@ -196,7 +192,10 @@ function modelFields(shape: ModelShape): Record<string, SnapshotFieldConfig> {
  * @returns Snapshot table
  */
 export function modelTable(name: string, shape: ModelShape): TailorDBSnapshotType {
-  return snapshotTable(name, modelFields(shape));
+  return {
+    ...snapshotTable(name, modelFields(shape)),
+    permissions: { gql: [{ conditions: [], actions: ["read"], permit: "allow" }] },
+  };
 }
 
 /**
@@ -342,23 +341,20 @@ export function compareTables(
   actual: ReadonlyMap<string, ObservedTable>,
   expected: ModelState,
 ): string[] {
-  return [...new Set([...actual.keys(), ...expected.tables.keys()])]
-    .toSorted()
-    .filter((name) => !expected.unchecked.has(name))
-    .flatMap((name) => {
-      const want = expected.tables.get(name);
-      const got = actual.get(name);
-      const wantShape = want === undefined ? "absent" : describeShape(want);
-      const gotShape = got?.shape ?? "absent";
-      const lines: string[] = [];
-      if (wantShape !== gotShape) lines.push(`${name}: expected ${wantShape}, got ${gotShape}`);
-      if (got && got.restricted !== expected.restricted) {
-        lines.push(`${name}: expected ${expected.restricted ? "restricted" : "unrestricted"}`);
-      }
-      const hasPermission = got?.permission ?? false;
-      if (!expected.uncheckedPermissions.has(name) && hasPermission !== expected.tables.has(name)) {
-        lines.push(`${name}: expected ${hasPermission ? "no permission" : "a permission"}`);
-      }
-      return lines;
-    });
+  return [...new Set([...actual.keys(), ...expected.tables.keys()])].toSorted().flatMap((name) => {
+    const want = expected.tables.get(name);
+    const got = actual.get(name);
+    const wantShape = want === undefined ? "absent" : describeShape(want);
+    const gotShape = got?.shape ?? "absent";
+    const lines: string[] = [];
+    if (wantShape !== gotShape) lines.push(`${name}: expected ${wantShape}, got ${gotShape}`);
+    if (got && got.restricted !== expected.restricted) {
+      lines.push(`${name}: expected ${expected.restricted ? "restricted" : "unrestricted"}`);
+    }
+    const hasPermission = got?.permission ?? false;
+    if (hasPermission !== expected.tables.has(name)) {
+      lines.push(`${name}: expected ${hasPermission ? "no permission" : "a permission"}`);
+    }
+    return lines;
+  });
 }

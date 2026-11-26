@@ -39,14 +39,10 @@ module migrationDeploy {
   var checkpoint: int
   var maintenance: Maintenance
   var step: Step
-  // Tables and shapes the namespace holds at `step`, except the tables in `unchecked`.
+  // Tables and shapes the namespace holds at `step`.
   var tables: Schema
   // Whether every table the namespace holds at `step` is restricted, or none is.
   var restricted: bool
-  // Every table the namespace holds has a GraphQL permission, except the tables in `unchecked` and
-  // `uncheckedPermissions`.
-  var unchecked: Set[Table]
-  var uncheckedPermissions: Set[Table]
 
   pure val FIELD_STATES: Set[FieldState] =
     Set(Absent).union(Set(true, false).map(r => Set(true, false).map(u => Present({ required: r, unique: u }))).flatten())
@@ -111,28 +107,7 @@ module migrationDeploy {
   pure def atCommit(prev: Schema, after: Schema): Schema =
     prev.keys().union(after.keys()).mapBy(t => if (after.keys().contains(t)) after.get(t) else prev.get(t))
 
-  pure def maxOf(values: Set[int]): int = values.fold(-1, (acc, v) => if (v > acc) v else acc)
-
-  // The migration that last added `t` at or before schema `i`; 0 when it is in the baseline.
-  pure def addedAt(h: List[Schema], t: Table, i: int): int =
-    maxOf(0.to(i).filter(j => j.to(i).forall(m => h[m].keys().contains(t)) and (j == 0 or not(h[j - 1].keys().contains(t)))))
-
   pure def lastOf(h: List[Schema]): Schema = h[h.length() - 1]
-
-  // Known gap: a table the local definitions lack is never created when a pending migration adds it.
-  pure def intermediateTables(h: List[Schema], cp: int, i: int): Set[Table] =
-    h[i - 1].keys().union(h[i].keys()).filter(t =>
-      not(lastOf(h).keys().contains(t)) and
-      addedAt(h, t, if (h[i].keys().contains(t)) i else i - 1) > cp)
-
-
-  // Known gap: a checkpoint table the workspace lacks, which the deploy creates and a pending
-  // migration removes, has no GraphQL permission until that migration commits.
-  pure def permissionlessTables(h: List[Schema], start: Schema, cp: int, i: int): Set[Table] =
-    h[cp].keys().filter(t =>
-      not(start.keys().contains(t)) and
-      (cp + 1).to(h.length() - 1).exists(j => not(h[j].keys().contains(t))) and
-      (cp + 1).to(i).forall(m => h[m - 1].keys().contains(t)))
 
   action init = {
     nondet n = 1.to(MAX_MIGRATIONS).oneOf()
@@ -179,8 +154,6 @@ module migrationDeploy {
       step' = Start,
       tables' = start,
       restricted' = false,
-      unchecked' = Set(),
-      uncheckedPermissions' = Set(),
     }
   }
 
@@ -190,8 +163,6 @@ module migrationDeploy {
       step' = if (scripted.contains(i)) Script(i) else Commit(i),
       tables' = shown,
       restricted' = maintenance != Off,
-      unchecked' = intermediateTables(history, checkpoint, i),
-      uncheckedPermissions' = permissionlessTables(history, if (fresh) Map() else history[checkpoint], checkpoint, i),
     }
   }
 
@@ -200,16 +171,12 @@ module migrationDeploy {
     step' = Held,
     tables' = lastOf(history),
     restricted' = true,
-    unchecked' = Set(),
-    uncheckedPermissions' = Set(),
   }
 
   action finish: bool = all {
     step' = Done,
     tables' = lastOf(history),
     restricted' = false,
-    unchecked' = Set(),
-    uncheckedPermissions' = Set(),
   }
 
   action advance = all {
@@ -226,8 +193,6 @@ module migrationDeploy {
           step' = Commit(i),
           tables' = shown,
           restricted' = restricted,
-          unchecked' = unchecked,
-          uncheckedPermissions' = uncheckedPermissions,
         }
       }
       | Commit(i) =>
@@ -240,8 +205,6 @@ module migrationDeploy {
         step' = step,
         tables' = tables,
         restricted' = restricted,
-        unchecked' = unchecked,
-        uncheckedPermissions' = uncheckedPermissions,
       }
     },
   }
