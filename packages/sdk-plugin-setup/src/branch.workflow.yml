@@ -49,6 +49,7 @@ jobs:
         uses: tailor-platform/actions/install@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __ENV_CHECK__
       # __GENERATE_CHECK_START__
       - id: tailor-generate-check
         uses: tailor-platform/actions/generate-check@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
@@ -690,6 +691,7 @@ jobs:
         uses: tailor-platform/actions/install@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __ENV_CHECK__
       - id: tailor-migration-test-login
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ vars.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID || secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
@@ -762,6 +764,7 @@ jobs:
         uses: tailor-platform/actions/install@1c1a451a463770897b3e1987c45df57b27369c8f # v2.9.0
         with:
           package-manager: __PACKAGE_MANAGER__
+      # __ENV_CHECK__
       # __SEED_PREFLIGHT_START__
       - id: tailor-seed-validate
         run: __TAILOR_CLI__ seed validate__SEED_VALIDATE_ARGS__

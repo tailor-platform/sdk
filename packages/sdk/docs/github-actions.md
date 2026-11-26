@@ -1037,6 +1037,24 @@ values.
 `--environment` narrows the check the same way, leaving out the repository
 entries. `--check` cannot be combined with `--format terraform`.
 
+### Empty entries in a workflow run
+
+Each generated job that reads these entries checks them in a `tailor-env-check`
+step before it uses them: right after `tailor-install` in the deploy, plan,
+preview, cleanup, and migration test jobs, and before the step that needs them
+in the autofix workflow. The step receives only whether each entry is set, never
+its value.
+
+- When a required entry the job reads is empty, the step fails the job with one
+  error that names every empty entry and points to `tailor setup ci env --check`
+  and `tailor setup ci env`. In the jobs listed above it also prints the output of
+  `tailor setup ci env --environment <environment>` in its log.
+- The plan job and the autofix workflow's agent job only warn. A pull request
+  opened before the workspace exists does not fail on the empty
+  `TAILOR_PLATFORM_WORKSPACE_ID` alone, and the codemods' changes are still
+  committed when the agent cannot sign in.
+- Empty optional entries are listed on one line of the log, without failing.
+
 ## GitHub Environments (approval gate)
 
 Both the `plan` and `deploy` jobs are associated with a GitHub Environment — the

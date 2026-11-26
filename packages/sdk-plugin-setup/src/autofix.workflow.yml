@@ -519,6 +519,7 @@ jobs:
           if-no-files-found: error
           overwrite: true
       # __UPLOAD_PATCH_END__
+      # __ENV_CHECK__
       # __SERVICE_COMMIT__
       # __CODEMOD_AGENT_PROMPT_START__
       - id: tailor-codemod-agent-prompt
@@ -550,6 +551,7 @@ jobs:
       changed: ${{ steps.tailor-codemod-agent-diff.outputs.changed }}
       commit-message: ${{ steps.tailor-codemod-agent-diff.outputs.commit-message }}
     steps:
+      # __ENV_CHECK__
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -703,6 +705,7 @@ jobs:
     permissions:
       contents: __PUSH_CONTENTS_PERMISSION__
     steps:
+      # __ENV_CHECK__
       # __APP_TOKEN_START__
       - id: tailor-app-token
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0

@@ -2,7 +2,6 @@ import { logger } from "@tailor-platform/sdk/cli";
 import {
   describeGroup,
   ENVIRONMENT_PREFERRED_SECRETS,
-  type EnvRequirement,
   type EnvironmentRequirements,
   loadEnvironmentRequirements,
   renderGhCommands,
@@ -10,6 +9,7 @@ import {
 } from "./env";
 import { defaultGhRunner, type GhOutput, type GhRunner, parseRepoView, REPO_VIEW_ARGS } from "./gh";
 import { detectRepository, GITHUB_HOST, type GitRunner, type Repository } from "./git";
+import type { EnvRequirement } from "./env-requirements";
 
 const GH_AUTH_REQUIRED_EXIT = 4;
 
