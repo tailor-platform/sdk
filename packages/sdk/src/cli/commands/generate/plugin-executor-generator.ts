@@ -28,7 +28,7 @@ import ml from "#/utils/multiline";
 import type {
   PluginExecutorInfoExtended,
   PluginTableGenerationResult,
-  SourceTableInfo,
+  SourceTableInfoMap,
 } from "#/plugin/manager";
 
 /**
@@ -47,7 +47,7 @@ interface TableImportInfo {
  * @param executors - Array of plugin executor information
  * @param outputDir - Base output directory (e.g., .tailor)
  * @param tableGenerationResult - Result from plugin table generation (for import resolution)
- * @param sourceTableInfoMap - Map of source table names to their source info
+ * @param sourceTableInfoMap - Source info of user-defined tables by namespace and table name
  * @param configPath - Path to tailor.config.ts (used for resolving plugin import paths)
  * @returns Array of generated file paths
  */
@@ -55,13 +55,14 @@ export function generatePluginExecutorFiles(
   executors: ReadonlyArray<PluginExecutorInfoExtended>,
   outputDir: string,
   tableGenerationResult?: PluginTableGenerationResult,
-  sourceTableInfoMap?: Map<string, SourceTableInfo>,
+  sourceTableInfoMap?: SourceTableInfoMap,
   configPath?: string,
 ): string[] {
   if (executors.length === 0) {
     return [];
   }
 
+  assertUniquePluginExecutorNames(executors);
   const generatedFiles: string[] = [];
   const baseDirs = getPluginImportBaseDirs(configPath);
 
@@ -84,12 +85,37 @@ export function generatePluginExecutorFiles(
   return generatedFiles;
 }
 
+function assertUniquePluginExecutorNames(
+  executors: ReadonlyArray<PluginExecutorInfoExtended>,
+): void {
+  const seen = new Map<string, PluginExecutorInfoExtended>();
+  for (const info of executors) {
+    const existing = seen.get(info.executor.name);
+    if (existing) {
+      throw CLIError({
+        code: "PLUGIN_EXECUTOR_NAME_DUPLICATE",
+        message:
+          `Plugins generate two executors named "${info.executor.name}": plugin "${existing.pluginId}" ` +
+          `for namespace "${existing.namespace}", and plugin "${info.pluginId}" for namespace "${info.namespace}".`,
+        suggestion:
+          "Executor names must be unique across the workspace. Rename one of the tables the plugin generates executors for, or update the plugin to name its executors apart.",
+        context: {
+          executor: info.executor.name,
+          plugins: [existing.pluginId, info.pluginId],
+          namespaces: [existing.namespace, info.namespace],
+        },
+      });
+    }
+    seen.set(info.executor.name, info);
+  }
+}
+
 /**
  * Generate a single executor file.
  * @param info - Plugin executor metadata and definition
  * @param outputDir - Base output directory (e.g., .tailor)
  * @param tableGenerationResult - Result from plugin table generation
- * @param sourceTableInfoMap - Map of source table names to their source info
+ * @param sourceTableInfoMap - Source info of user-defined tables by namespace and table name
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns Absolute path to the generated file
  */
@@ -97,7 +123,7 @@ function generateSingleExecutorFile(
   info: PluginExecutorInfoExtended,
   outputDir: string,
   tableGenerationResult?: PluginTableGenerationResult,
-  sourceTableInfoMap?: Map<string, SourceTableInfo>,
+  sourceTableInfoMap?: SourceTableInfoMap,
   baseDirs: string[] = [],
 ): string {
   const pluginDir = sanitizePluginId(info.pluginId);
@@ -132,7 +158,7 @@ function generateSingleExecutorFile(
  * @param executor - Executor definition with resolve
  * @param outputDir - Base output directory
  * @param tableGenerationResult - Result from plugin table generation
- * @param sourceTableInfoMap - Map of source table names to their source info
+ * @param sourceTableInfoMap - Source info of user-defined tables by namespace and table name
  * @param baseDirs - Base directories for resolving plugin import paths
  * @returns TypeScript source code for executor file
  */
@@ -141,7 +167,7 @@ function generateExecutorFileContentNew(
   executor: PluginGeneratedExecutorWithFile,
   outputDir: string,
   tableGenerationResult?: PluginTableGenerationResult,
-  sourceTableInfoMap?: Map<string, SourceTableInfo>,
+  sourceTableInfoMap?: SourceTableInfoMap,
   baseDirs: string[] = [],
 ): string {
   const { resolve, context } = executor;
@@ -159,7 +185,7 @@ function generateExecutorFileContentNew(
   const tableImports = collectTableImports(
     context,
     outputDir,
-    info.pluginId,
+    info,
     tableGenerationResult,
     sourceTableInfoMap,
   );
@@ -195,18 +221,19 @@ function generateExecutorFileContentNew(
  * Collect table imports needed for context.
  * @param context - Executor context values from plugin
  * @param outputDir - Base output directory for generated files
- * @param pluginId - Plugin identifier used for output paths
+ * @param info - Plugin that generated the executor, and the namespace it generated it for
  * @param tableGenerationResult - Result from plugin table generation
- * @param sourceTableInfoMap - Map of source table names to their source info
+ * @param sourceTableInfoMap - Source info of user-defined tables by namespace and table name
  * @returns Map of context keys to their import information
  */
 function collectTableImports(
   context: PluginExecutorContext,
   outputDir: string,
-  pluginId: string,
+  info: Pick<PluginExecutorInfoExtended, "pluginId" | "namespace">,
   tableGenerationResult?: PluginTableGenerationResult,
-  sourceTableInfoMap?: Map<string, SourceTableInfo>,
+  sourceTableInfoMap?: SourceTableInfoMap,
 ): Map<string, TableImportInfo> {
+  const { pluginId, namespace } = info;
   const tableImports = new Map<string, TableImportInfo>();
   const pluginDir = sanitizePluginId(pluginId);
   const executorDir = path.join(outputDir, pluginDir, "executors");
@@ -214,18 +241,15 @@ function collectTableImports(
   for (const [key, value] of Object.entries(context)) {
     if (isTableObject(value)) {
       const tableName = value.name;
-      const sourceInfo = sourceTableInfoMap?.get(tableName);
+      const sourceInfo = sourceTableInfoMap?.get(namespace)?.get(tableName);
       const variableName = sourceInfo?.exportName ?? toCamelCase(tableName);
+      const tableFilePath = tableGenerationResult?.tableFilePaths.get(namespace)?.get(tableName);
 
       // Check if it's a generated table
       let importPath: string;
 
-      if (tableGenerationResult?.tableFilePaths.has(tableName)) {
+      if (tableFilePath !== undefined) {
         // It's a generated table - import from plugin types directory
-        const tableFilePath = assertDefined(
-          tableGenerationResult.tableFilePaths.get(tableName),
-          "table file path missing",
-        );
         const absoluteTablePath = path.join(outputDir, tableFilePath);
         importPath = path.relative(executorDir, absoluteTablePath).replace(/\.ts$/, "");
         if (!importPath.startsWith(".")) {
@@ -359,7 +383,11 @@ function generateTriggerCode(trigger: PluginTriggerConfig): string {
       return `{
     kind: ${JSON.stringify(trigger.kind)},
     events: ${JSON.stringify(trigger.events)},
-    tableName: ${JSON.stringify(trigger.tableName)},
+    tableName: ${JSON.stringify(trigger.tableName)},${
+      trigger.namespace === undefined
+        ? ""
+        : `\n    namespace: ${JSON.stringify(trigger.namespace)},`
+    }
   }`;
 
     case "schedule":

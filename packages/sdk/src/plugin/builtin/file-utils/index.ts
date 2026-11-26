@@ -1,3 +1,4 @@
+import { sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
 import { generateUnifiedFileUtils } from "./generate-file-utils";
 import { processFileType } from "./process-file-type";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
@@ -49,7 +50,15 @@ export function fileUtilsPlugin(
 
       const files: GeneratorResult["files"] = [];
       if (namespaceData.length > 0) {
-        const content = generateUnifiedFileUtils(namespaceData);
+        const content = generateUnifiedFileUtils(
+          namespaceData,
+          sharedTailorDBTypeNames(
+            ctx.tailordb.map((ns) => ({
+              namespace: ns.namespace,
+              typeNames: Object.keys(ns.tables),
+            })),
+          ),
+        );
         if (content) {
           files.push({
             path: ctx.pluginConfig.distPath,

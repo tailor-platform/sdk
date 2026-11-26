@@ -340,7 +340,12 @@ export class PluginManager {
           `plugin "${plugin.id}" missing importPath`,
         );
         for (const [kind, table] of Object.entries(output.tables)) {
-          const tableKey = `${pluginId}:${kind}:${getRawPluginTableName(table) ?? ""}`;
+          const tableKey = JSON.stringify([
+            pluginId,
+            namespace,
+            kind,
+            getRawPluginTableName(table) ?? "",
+          ]);
           if (this.namespaceGeneratedTableKeys.has(tableKey)) {
             continue;
           }
@@ -562,17 +567,20 @@ export class PluginManager {
 /**
  * Source info for user-defined tables
  */
-export type SourceTableInfo = {
+type SourceTableInfo = {
   filePath: string;
   exportName: string;
 };
+
+/** Source info of user-defined tables by namespace and table name. */
+export type SourceTableInfoMap = ReadonlyMap<string, ReadonlyMap<string, SourceTableInfo>>;
 
 /**
  * Result of generating plugin table files
  */
 export interface PluginTableGenerationResult {
-  /** Map of table name to generated file path (relative to outputDir) */
-  tableFilePaths: Map<string, string>;
+  /** Generated file path (relative to outputDir) by namespace and table name */
+  tableFilePaths: ReadonlyMap<string, ReadonlyMap<string, string>>;
   /** List of all generated file paths (absolute) */
   generatedFiles: string[];
 }
@@ -583,8 +591,8 @@ export interface PluginTableGenerationResult {
 export interface GeneratePluginFilesParams {
   /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
-  /** Map of source table names to their source info */
-  sourceTableInfoMap: Map<string, SourceTableInfo>;
+  /** Source info of user-defined tables by namespace and table name */
+  sourceTableInfoMap: SourceTableInfoMap;
   /** Path to tailor.config.ts (used for resolving plugin import paths) */
   configPath: string;
   /** Function to generate table files */
@@ -597,7 +605,7 @@ export interface GeneratePluginFilesParams {
     executors: ReadonlyArray<PluginExecutorInfoExtended>,
     outputDir: string,
     tableGenerationResult: PluginTableGenerationResult,
-    sourceTableInfoMap: Map<string, SourceTableInfo>,
+    sourceTableInfoMap: SourceTableInfoMap,
     configPath: string,
   ) => string[];
 }

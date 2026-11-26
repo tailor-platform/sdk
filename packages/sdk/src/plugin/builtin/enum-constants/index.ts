@@ -1,3 +1,4 @@
+import { sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
 import { generateUnifiedEnumConstants } from "./generate-enum-constants";
 import { processEnumType } from "./process-enum-type";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
@@ -29,9 +30,15 @@ export function enumConstantsPlugin(
     ): Promise<GeneratorResult> {
       const allEnums: EnumDefinition[] = [];
 
+      const sharedTypeNames = sharedTailorDBTypeNames(
+        ctx.tailordb.map((ns) => ({ namespace: ns.namespace, typeNames: Object.keys(ns.tables) })),
+      );
       for (const ns of ctx.tailordb) {
         for (const type of Object.values(ns.tables)) {
-          const metadata = await processEnumType(type);
+          const metadata = await processEnumType(
+            type,
+            sharedTypeNames.has(type.name) ? ns.namespace : undefined,
+          );
           allEnums.push(...metadata.enums);
         }
       }

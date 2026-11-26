@@ -1,38 +1,42 @@
 import multiline from "#/utils/multiline";
+import { qualifiedTailorDBTypeName } from "#/utils/tailordb-type-names";
 import type { FileUtilMetadata } from "./types";
 
 /**
  * Generate unified file utility functions from collected metadata.
  * @param namespaceData - Namespace data with file utility metadata
+ * @param sharedTypeNames - Table names several namespaces of the config define
  * @returns Generated file utility code
  */
 export function generateUnifiedFileUtils(
   namespaceData: { namespace: string; types: FileUtilMetadata[] }[],
+  sharedTypeNames: ReadonlySet<string> = new Set(),
 ): string {
   if (namespaceData.length === 0) {
     return "";
   }
 
-  // Collect all tables with their namespace
-  const tableNamespaceMap = new Map<string, string>();
-  const typeFieldsMap = new Map<string, string[]>();
+  const tables = namespaceData.flatMap(({ namespace, types }) =>
+    types.map((type) => ({
+      key: qualifiedTailorDBTypeName(namespace, type.name, sharedTypeNames),
+      namespace,
+      typeName: type.name,
+      fileFields: type.fileFields,
+    })),
+  );
 
-  for (const { namespace, types } of namespaceData) {
-    for (const type of types) {
-      tableNamespaceMap.set(type.name, namespace);
-      typeFieldsMap.set(type.name, type.fileFields);
-    }
-  }
-
-  if (tableNamespaceMap.size === 0) {
+  if (tables.length === 0) {
     return "";
   }
 
+  const qualified = tables.some(({ key, typeName }) => key !== typeName);
+  const propertyKey = (key: string) => (key.includes(".") ? JSON.stringify(key) : key);
+
   // Generate interface fields
-  const interfaceFields = Array.from(typeFieldsMap.entries())
-    .map(([tableName, fields]) => {
-      const fieldNamesUnion = fields.map((field) => `"${field}"`).join(" | ");
-      return `  ${tableName}: {\n    fields: ${fieldNamesUnion};\n  };`;
+  const interfaceFields = tables
+    .map(({ key, fileFields }) => {
+      const fieldNamesUnion = fileFields.map((field) => `"${field}"`).join(" | ");
+      return `  ${propertyKey(key)}: {\n    fields: ${fieldNamesUnion};\n  };`;
     })
     .join("\n");
 
@@ -56,17 +60,30 @@ export function generateUnifiedFileUtils(
       }
     ` + "\n";
 
-  // Generate namespaces object
-  const namespaceEntries = Array.from(tableNamespaceMap.entries())
-    .map(([tableName, namespace]) => `  ${tableName}: "${namespace}"`)
+  // A key names the table's namespace when several namespaces define its name, so it is not the
+  // table name the file API takes.
+  const tableEntries = tables
+    .map(({ key, namespace, typeName }) =>
+      qualified
+        ? `  ${propertyKey(key)}: { namespace: "${namespace}", type: "${typeName}" }`
+        : `  ${key}: "${namespace}"`,
+    )
     .join(",\n");
 
-  const namespacesDefinition =
-    multiline /* ts */ `
-      const namespaces: Record<keyof TypeWithFiles, string> = {
-      ${namespaceEntries},
-      };
-    ` + "\n";
+  const namespacesDefinition = qualified
+    ? multiline /* ts */ `
+        const tables: Record<keyof TypeWithFiles, { namespace: string; type: string }> = {
+        ${tableEntries},
+        };
+      ` + "\n"
+    : multiline /* ts */ `
+        const namespaces: Record<keyof TypeWithFiles, string> = {
+        ${tableEntries},
+        };
+      ` + "\n";
+  const tableArgs = qualified
+    ? "tables[type].namespace, tables[type].type"
+    : "namespaces[type], type";
 
   // Generate downloadFile helper function
   const downloadFunction =
@@ -76,7 +93,7 @@ export function generateUnifiedFileUtils(
         field: TypeWithFiles[T]["fields"],
         recordId: string,
       ) {
-        return await file.download(namespaces[type], type, field, recordId);
+        return await file.download(${tableArgs}, field, recordId);
       }
     ` + "\n";
 
@@ -114,7 +131,7 @@ export function generateUnifiedFileUtils(
         data: string | FileUploadBytes,
         options?: FileUploadOptions,
       ): Promise<FileUploadResponse> {
-        return await file.upload(namespaces[type], type, field, recordId, data, options);
+        return await file.upload(${tableArgs}, field, recordId, data, options);
       }
     ` + "\n";
 
@@ -126,7 +143,7 @@ export function generateUnifiedFileUtils(
         field: TypeWithFiles[T]["fields"],
         recordId: string,
       ): Promise<void> {
-        return await file.delete(namespaces[type], type, field, recordId);
+        return await file.delete(${tableArgs}, field, recordId);
       }
     ` + "\n";
 
@@ -138,7 +155,7 @@ export function generateUnifiedFileUtils(
         field: TypeWithFiles[T]["fields"],
         recordId: string,
       ): Promise<FileMetadata> {
-        return await file.getMetadata(namespaces[type], type, field, recordId);
+        return await file.getMetadata(${tableArgs}, field, recordId);
       }
     ` + "\n";
 
@@ -150,7 +167,7 @@ export function generateUnifiedFileUtils(
         field: TypeWithFiles[T]["fields"],
         recordId: string,
       ): Promise<FileDownloadStreamResponse> {
-        return await file.downloadStream(namespaces[type], type, field, recordId);
+        return await file.downloadStream(${tableArgs}, field, recordId);
       }
     ` + "\n";
 

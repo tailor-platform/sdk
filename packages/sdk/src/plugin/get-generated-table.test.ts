@@ -312,6 +312,26 @@ export default {
         expect(globalThis.__testProcessNamespaceCalls).toEqual(["main"]);
       },
     );
+
+    test("returns the table for the namespace it is given", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "ns-plugin",
+  description: "test",
+  importPath: "@test/ns-plugin",
+  onTailorDBNamespaceLoaded({ namespace }) {
+    return { tables: { auditLog: { name: "AuditLog", fields: { [namespace + "Note"]: {} } } } };
+  },
+}];
+export default { db: { shop: { files: [] }, crm: { files: [] } } };
+`,
+      );
+
+      const table = await getGeneratedTable(configPath, "ns-plugin", null, "auditLog", "crm");
+
+      expect(Object.keys(table.fields)).toEqual(["crmNote"]);
+    });
   });
 
   describe("table-attached plugin", () => {

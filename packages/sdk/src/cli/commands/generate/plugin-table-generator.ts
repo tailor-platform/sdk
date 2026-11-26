@@ -10,6 +10,7 @@ import * as path from "pathe";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+import { sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
 import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/plugin/manager";
 import type { PluginGeneratedTable } from "#/plugin/types";
 
@@ -42,31 +43,40 @@ export function generatePluginTableFiles(
   tables: ReadonlyArray<PluginGeneratedTableInfo>,
   outputDir: string,
 ): PluginTableGenerationResult {
-  const tableFilePaths = new Map<string, string>();
+  const tableFilePaths = new Map<string, Map<string, string>>();
   const generatedFiles: string[] = [];
 
   if (tables.length === 0) {
     return { tableFilePaths, generatedFiles };
   }
 
-  const seenTableNames = new Map<string, PluginGeneratedTableInfo>();
+  const sharedTableNames = sharedTailorDBTypeNames(
+    [...Map.groupBy(tables, (info) => info.namespace)].map(([namespace, infos]) => ({
+      namespace,
+      typeNames: infos.map((info) => info.table.name),
+    })),
+  );
+  const seenTables = new Map<string, PluginGeneratedTableInfo>();
 
   for (const info of tables) {
-    const existing = seenTableNames.get(info.table.name);
+    const tableKey = JSON.stringify([info.namespace, info.table.name]);
+    const existing = seenTables.get(tableKey);
     if (existing) {
       throw CLIError({
         code: "PLUGIN_TABLE_NAME_DUPLICATE",
         message:
-          `Duplicate plugin-generated table name "${info.table.name}" detected. ` +
+          `Duplicate plugin-generated table name "${info.table.name}" detected in namespace "${info.namespace}". ` +
           `First: plugin "${existing.pluginId}" (kind: "${existing.kind}", source: "${existing.sourceTableName}"), ` +
           `Second: plugin "${info.pluginId}" (kind: "${info.kind}", source: "${info.sourceTableName}"). ` +
-          `Plugin-generated table names must be unique.`,
+          `Plugin-generated table names must be unique within a namespace.`,
       });
     }
-    seenTableNames.set(info.table.name, info);
+    seenTables.set(tableKey, info);
 
     const pluginDir = sanitizePluginId(info.pluginId);
-    const tableOutputDir = path.join(outputDir, pluginDir, "types");
+    const tableOutputDir = sharedTableNames.has(info.table.name)
+      ? path.join(outputDir, pluginDir, "types", info.namespace)
+      : path.join(outputDir, pluginDir, "types");
     fs.mkdirSync(tableOutputDir, { recursive: true });
 
     const fileName = `${toKebabCase(info.table.name)}.ts`;
@@ -77,8 +87,9 @@ export function generatePluginTableFiles(
     generatedFiles.push(filePath);
 
     // Store relative path from outputDir for import resolution
-    const relativePath = path.relative(outputDir, filePath);
-    tableFilePaths.set(info.table.name, relativePath);
+    const namespaceTablePaths = tableFilePaths.get(info.namespace) ?? new Map<string, string>();
+    namespaceTablePaths.set(info.table.name, path.relative(outputDir, filePath));
+    tableFilePaths.set(info.namespace, namespaceTablePaths);
 
     const displayPath = path.relative(process.cwd(), filePath);
     logger.log(

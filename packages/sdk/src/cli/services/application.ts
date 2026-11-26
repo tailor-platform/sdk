@@ -1175,18 +1175,18 @@ export function generatePluginFilesIfNeeded(
 ): string[] {
   if (!pluginManager) return [];
 
-  const sourceTableInfoMap = new Map<string, { filePath: string; exportName: string }>();
-  for (const db of tailorDBServices) {
-    const tableSourceInfo = db.typeSourceInfo;
-    for (const [tableName, sourceInfo] of Object.entries(tableSourceInfo)) {
-      if (sourceInfo.filePath) {
-        sourceTableInfoMap.set(tableName, {
-          filePath: sourceInfo.filePath,
-          exportName: sourceInfo.exportName,
-        });
-      }
-    }
-  }
+  const sourceTableInfoMap = new Map(
+    tailorDBServices.map((db) => [
+      db.namespace,
+      new Map(
+        Object.entries(db.typeSourceInfo).flatMap(([tableName, sourceInfo]) =>
+          sourceInfo.filePath
+            ? [[tableName, { filePath: sourceInfo.filePath, exportName: sourceInfo.exportName }]]
+            : [],
+        ),
+      ),
+    ]),
+  );
 
   return pluginManager.generatePluginFiles({
     outputDir: path.join(getDistDir(), "plugin"),

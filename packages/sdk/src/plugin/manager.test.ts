@@ -109,7 +109,7 @@ describe("PluginManager", () => {
     expect(manager.getPluginGeneratedTables().map((info) => info.table.name)).toEqual(["Setting"]);
   });
 
-  test("dedupes namespace plugin-generated outputs across namespaces", async () => {
+  test("records a namespace plugin's table per namespace and its executor once", async () => {
     const plugin: Plugin = {
       id: "namespace-plugin",
       description: "namespace generator",
@@ -134,7 +134,10 @@ describe("PluginManager", () => {
     await manager.processNamespacePlugins("main");
     await manager.processNamespacePlugins("analytics");
 
-    expect(manager.getPluginGeneratedTables()).toHaveLength(1);
+    expect(manager.getPluginGeneratedTables().map((info) => info.namespace)).toEqual([
+      "main",
+      "analytics",
+    ]);
     expect(manager.getPluginGeneratedExecutorsWithImportPath()).toHaveLength(1);
   });
 

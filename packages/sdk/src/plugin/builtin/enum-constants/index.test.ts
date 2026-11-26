@@ -57,6 +57,45 @@ describe("EnumConstantsPlugin", () => {
     );
   });
 
+  test("names the enum constants of a table several namespaces define after each namespace", async () => {
+    const customer = (values: [string, string]) =>
+      parseTailorDBType(toSchemaOutput(db.table("Customer", { tier: db.enum(values) })));
+    const order = parseTailorDBType(
+      toSchemaOutput(db.table("Order", { status: db.enum(["OPEN", "CLOSED"]) })),
+    );
+    const plugin = enumConstantsPlugin({ distPath: testDistPath });
+
+    const result = await plugin.onTailorDBReady!({
+      tailordb: [
+        {
+          namespace: "shop-db",
+          tables: { Customer: customer(["GOLD", "SILVER"]), Order: order },
+          sourceInfo: new Map(),
+          pluginAttachments: new Map(),
+        },
+        {
+          namespace: "2nd-crm",
+          tables: { Customer: customer(["LEAD", "ACTIVE"]) },
+          sourceInfo: new Map(),
+          pluginAttachments: new Map(),
+        },
+      ],
+      auths: {},
+      baseDir: "/test",
+      configPath: "/test/tailor.config.ts",
+      pluginConfig: { distPath: testDistPath },
+    });
+
+    const content = result.files[0]!.content;
+    expect(content).toContain(
+      'export const ShopDbCustomerTier = {\n  "GOLD": "GOLD",\n  "SILVER": "SILVER"\n} as const;',
+    );
+    expect(content).toContain(
+      'export const _2ndCrmCustomerTier = {\n  "LEAD": "LEAD",\n  "ACTIVE": "ACTIVE"\n} as const;',
+    );
+    expect(content).toContain("export const OrderStatus = {");
+  });
+
   describe("enum collection", () => {
     test("should collect top-level enum fields", async () => {
       const type = db.table("User", {
