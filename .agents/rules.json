@@ -32,7 +32,8 @@
         "packages/sdk/src/cli/commands/deploy/managed-resources.ts",
         "packages/sdk/src/cli/commands/deploy/managed-resources.test.ts",
         "packages/sdk/src/cli/commands/deploy/resources-in-use.ts",
-        "packages/sdk/src/cli/commands/deploy/label-refresh.test.ts"
+        "packages/sdk/src/cli/commands/deploy/label-refresh.test.ts",
+        "packages/sdk/src/cli/commands/deploy/drift-check-coverage.test.ts"
       ],
       "file": ".agents/rules/deploy-managed-resources.md"
     },
