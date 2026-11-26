@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { isEmptyObject } from "es-toolkit";
 import * as path from "pathe";
 import { getDistDir } from "#/cli/shared/dist-dir";
-import { serializeError } from "#/cli/shared/error-json";
+import { errorToJson, serializeError } from "#/cli/shared/error-json";
 import { errorSummary, isCLIError, locatedMessage } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { beginUserModuleRun } from "#/cli/shared/user-modules";
@@ -27,6 +27,32 @@ import type { Jsonifiable } from "type-fest";
 const DEBOUNCE_MS = 100;
 const STOP_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
 
+/**
+ * What a watch reports to `onEvent`, in the order it happens.
+ *
+ * **Beta:** This API may change in future releases.
+ */
+export type FunctionRunWatchEvent =
+  /** The watch is set up; the first run follows */
+  | { type: "ready"; argFile: string }
+  /** A watched file changed; a run starts once the changes stop for a moment */
+  | { type: "scheduled" }
+  /** A change arrived while a run was in flight; one more run starts after it */
+  | { type: "queued" }
+  /** A run began: the function is being read, bundled, and sent */
+  | { type: "started" }
+  /** The run ended: the same record `--json` writes to stdout */
+  | { type: "finished"; record: FunctionRunRecord }
+  /** The run could not complete: the same error envelope `--json` writes to stderr */
+  | { type: "failed"; error: unknown };
+
+/**
+ * One run's result as `--json` writes it.
+ *
+ * **Beta:** This API may change in future releases.
+ */
+export type FunctionRunRecord = ReturnType<typeof executionRecord> & { executionId: string };
+
 export interface FunctionRunWatchOptions {
   /** Function to run and the context it runs in */
   target: FunctionRunTarget;
@@ -34,8 +60,15 @@ export interface FunctionRunWatchOptions {
   argFile: string | undefined;
   /** Initial content of the temporary argument file; `{}` when undefined */
   initialArg: Jsonifiable | undefined;
+  /** Receives each event instead of the run lines and the Ready line being printed */
+  onEvent?: ((event: FunctionRunWatchEvent) => void) | undefined;
+  /** Run once as soon as the watch is set up; true when undefined, false waits for the first change */
+  runOnStart?: boolean | undefined;
+  /** Stop on SIGINT, SIGTERM, and SIGHUP by removing the temporary argument file and exiting; true when undefined */
+  handleSignals?: boolean | undefined;
 }
 
+/** **Beta:** This API may change in future releases. */
 export interface FunctionRunWatch {
   /** Settles once the watch is closed */
   readonly closed: Promise<void>;
@@ -153,7 +186,9 @@ export async function startFunctionRunWatch(
     removeTempArgFile();
     process.exit(0);
   };
-  for (const signal of STOP_SIGNALS) process.prependListener(signal, onStopSignal);
+  const handleSignals = options.handleSignals ?? true;
+  if (handleSignals)
+    for (const signal of STOP_SIGNALS) process.prependListener(signal, onStopSignal);
 
   let watched = new Set([functionFile, argFile]);
   const ignored = (file: string): boolean =>
@@ -177,8 +212,10 @@ export async function startFunctionRunWatch(
 
   let preparationFailed = false;
   let startedJobsWarned = false;
+  const { onEvent } = options;
   const runOnce = async () => {
     preparationFailed = true;
+    onEvent?.({ type: "started" });
     try {
       const arg = readFunctionArgFile(argFile);
       beginUserModuleRun();
@@ -196,12 +233,19 @@ export async function startFunctionRunWatch(
         arg: argumentToSend(prepared, isEmptyObject(arg.value) ? undefined : arg),
         onStart: (id) => {
           executionId = id;
-          printStarted(prepared, id);
+          if (!onEvent) printStarted(prepared, id);
         },
       });
-      printFinished(prepared, result, executionId);
+      if (onEvent)
+        onEvent({
+          type: "finished",
+          record: { ...executionRecord(prepared, result), executionId },
+        });
+      else printFinished(prepared, result, executionId);
     } catch (error) {
-      printFailure(error);
+      if (onEvent)
+        onEvent({ type: "failed", error: errorToJson(error, { includeStack: logger.verbose }) });
+      else printFailure(error);
     }
   };
 
@@ -210,6 +254,7 @@ export async function startFunctionRunWatch(
   let closing = false;
   const cycle = async (): Promise<void> => {
     if (running) {
+      if (!pending) onEvent?.({ type: "queued" });
       pending = true;
       return;
     }
@@ -227,6 +272,7 @@ export async function startFunctionRunWatch(
 
   let debounceTimer: NodeJS.Timeout | undefined;
   const schedule = () => {
+    onEvent?.({ type: "scheduled" });
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => void cycle(), DEBOUNCE_MS);
   };
@@ -239,14 +285,35 @@ export async function startFunctionRunWatch(
   watcher.on("unlink", (file) => {
     if (watched.has(file)) schedule();
   });
-  watcher.on("error", printFailure);
+  watcher.on("error", (error) =>
+    onEvent
+      ? onEvent({ type: "failed", error: errorToJson(error, { includeStack: logger.verbose }) })
+      : printFailure(error),
+  );
   await new Promise<void>((resolve) => watcher.once("ready", () => resolve()));
 
-  const tty = process.stderr.isTTY ? "> " : "";
-  logger.log(
-    `${tty}Ready! Running ${styles.path(displayPath(target.filePath))} on every save. Edit ${styles.path(displayPath(options.argFile ?? argFile))} to change its argument (^C to quit)`,
-  );
-  void cycle();
+  const runOnStart = options.runOnStart ?? true;
+  if (!runOnStart) {
+    try {
+      beginUserModuleRun();
+      const prepared = await prepareFunction({
+        target,
+        progress: (message) => logger.debug(message),
+      });
+      updateWatched(prepared.sourceFiles);
+    } catch {
+      preparationFailed = true;
+    }
+  }
+  if (onEvent) {
+    onEvent({ type: "ready", argFile });
+  } else {
+    const tty = process.stderr.isTTY ? "> " : "";
+    logger.log(
+      `${tty}Ready! Running ${styles.path(displayPath(target.filePath))} on every save. Edit ${styles.path(displayPath(options.argFile ?? argFile))} to change its argument (^C to quit)`,
+    );
+  }
+  if (runOnStart) void cycle();
 
   let resolveClosed: () => void = () => {};
   const closed = new Promise<void>((resolve) => {
@@ -258,7 +325,7 @@ export async function startFunctionRunWatch(
       if (closing) return;
       closing = true;
       clearTimeout(debounceTimer);
-      for (const signal of STOP_SIGNALS) process.off(signal, onStopSignal);
+      if (handleSignals) for (const signal of STOP_SIGNALS) process.off(signal, onStopSignal);
       await watcher.close();
       removeTempArgFile();
       resolveClosed();

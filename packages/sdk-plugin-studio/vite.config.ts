@@ -5,5 +5,11 @@ export default defineConfig({
   root: "client",
   base: "/",
   plugins: [react()],
-  build: { outDir: "../dist/client", emptyOutDir: true },
+  build: {
+    outDir: "../dist/client",
+    emptyOutDir: true,
+    rolldownOptions: {
+      input: { index: "client/index.html", "function-run": "client/function-run.html" },
+    },
+  },
 });

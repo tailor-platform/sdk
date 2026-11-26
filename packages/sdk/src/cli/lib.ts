@@ -130,6 +130,12 @@ export {
 } from "./commands/workspace/app/health";
 export type { AppInfo, AppHealthInfo } from "./commands/workspace/app/transform";
 export { getFunctionRegistry, type GetFunctionRegistryOptions } from "./commands/function/get";
+export { runFunctionWatch, type RunFunctionWatchOptions } from "./commands/function/run-watch";
+export type {
+  FunctionRunRecord,
+  FunctionRunWatch,
+  FunctionRunWatchEvent,
+} from "./commands/function/watch";
 export {
   listFunctionRegistries,
   type ListFunctionRegistriesOptions,
