@@ -438,3 +438,39 @@ describe("seedDumpCommand", () => {
     );
   });
 });
+
+describe("seedDumpCommand with a table name several namespaces define", () => {
+  test("writes each namespace's table to the file named after its namespace", async () => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: ["shop-db", "crm-db"].map((namespace) => ({
+        dependencies: { Customer: [] },
+        namespace,
+        requiredFields: { Customer: [] },
+        selfRefTypes: [],
+        types: ["Customer"],
+        entityNames: { Customer: `${namespace}.Customer` },
+      })),
+    });
+    sdk.executeScript.mockImplementation(dumpRows({ Customer: [{ id: "c1" }] }));
+
+    await runDump(["--json", "crm-db.Customer"]);
+
+    expect(sdk.loadSeedContext).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSharedTableNames: true }),
+    );
+    expect(jsonl.beginSeedDataWrite).toHaveBeenCalledTimes(1);
+    expect(jsonl.beginSeedDataWrite).toHaveBeenCalledWith("/seed/data", "crm-db.Customer");
+    expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ arg: expect.objectContaining({ table: "Customer" }) }),
+    );
+    expect(logger.out).toHaveBeenCalledWith({
+      success: true,
+      path: "/seed/data",
+      dumped: { "crm-db.Customer": 1 },
+    });
+  });
+});

@@ -28,6 +28,12 @@ import {
   selectDatasets,
 } from "./datasets";
 import { selectEntities } from "./entities";
+import {
+  assertNoSharedTableFileUnderItsOwnName,
+  entityNameOf,
+  namespaceEntityNames,
+  selectedTables,
+} from "./entity-names";
 import { parseExecutionResult } from "./execution-result";
 import { resolveSeedInvoker } from "./invoker";
 import {
@@ -101,6 +107,8 @@ function withSeedWorkflow<T>(
 interface NamespaceSeedPlan {
   namespace: string;
   sortedTypes: string[];
+  /** Entity name of each table, as data files and results name it. */
+  entityNames: Record<string, string>;
   data: SeedData;
   selfRefTypes: string[];
   selfRefFields: Record<string, string[]>;
@@ -146,10 +154,27 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
   const selfRefFields = nsConfig.selfRefFields ?? {};
   const selfRefKeys = nsConfig.selfRefKeys ?? {};
   const sortedTypes = topologicalSort(typesToSeed, nsConfig.dependencies);
-  const data = loadSeedData(dataDirs, sortedTypes, {
-    requireId: upsert,
-    requiredFieldsByType: upsert ? nsConfig.requiredFields : {},
-  });
+  const entityNames = Object.fromEntries(
+    sortedTypes.map((type) => [type, entityNameOf(nsConfig, type)]),
+  );
+  const entityData = loadSeedData(
+    dataDirs,
+    sortedTypes.map((type) => entityNames[type] ?? type),
+    {
+      requireId: upsert,
+      requiredFieldsByType: upsert
+        ? Object.fromEntries(
+            Object.entries(nsConfig.requiredFields).map(([type, fields]) => [
+              entityNameOf(nsConfig, type),
+              fields,
+            ]),
+          )
+        : {},
+    },
+  );
+  const data = Object.fromEntries(
+    sortedTypes.map((type) => [type, entityData[entityNames[type] ?? type] ?? []]),
+  );
   // Sort each self-referencing table's full record set before chunkSeedData
   // splits it by byte size, so a table split across script executions still
   // has its parents in the same or an earlier chunk than their children.
@@ -163,6 +188,7 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
   return {
     namespace: nsConfig.namespace,
     sortedTypes,
+    entityNames,
     data,
     selfRefTypes: nsConfig.selfRefTypes,
     selfRefFields,
@@ -172,7 +198,8 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   const { execution, plan, upsert, configDir, buildOptions } = params;
-  const { namespace, sortedTypes, data, selfRefTypes, selfRefFields, selfRefKeys } = plan;
+  const { namespace, sortedTypes, entityNames, data, selfRefTypes, selfRefFields, selfRefKeys } =
+    plan;
   const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
@@ -223,12 +250,14 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
           { inserted: number; updated: number; skipped: number }
         >;
         for (const [type, counts] of Object.entries(processed)) {
-          processedTotals[type] = (processedTotals[type] ?? 0) + counts.inserted + counts.updated;
+          const entity = entityNames[type] ?? type;
+          processedTotals[entity] =
+            (processedTotals[entity] ?? 0) + counts.inserted + counts.updated;
           const skippedSuffix = counts.skipped > 0 ? `, ${counts.skipped} skipped` : "";
           const message = upsert
             ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
             : `${counts.inserted} rows inserted`;
-          logger.log(styles.success(`    ✓ ${type}: ${message}`));
+          logger.log(styles.success(`    ✓ ${entity}: ${message}`));
         }
         if (!chunkSuccess) {
           logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
@@ -604,12 +633,13 @@ export const seedApplyCommand = defineAppCommand({
     if (args["no-base"] && args.dataset.length === 0 && !args["all-datasets"]) {
       throw new Error("--no-base needs at least one --dataset or --all-datasets to apply.");
     }
-    const context = await loadSeedContext({ configPath: args.config });
+    const context = await loadSeedContext({
+      configPath: args.config,
+      allowSharedTableNames: true,
+    });
     const datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
 
-    const namespaceTables = Object.fromEntries(
-      context.namespaces.map((ns) => [ns.namespace, ns.types]),
-    );
+    const namespaceTables = namespaceEntityNames(context);
     const hasIdpUser = context.idpUser !== null;
     const selection = selectEntities({
       namespaceTables,
@@ -646,6 +676,7 @@ export const seedApplyCommand = defineAppCommand({
 
     const dataDir = path.join(context.distPath, "data");
     assertSeedDataDirectory(dataDir);
+    assertNoSharedTableFileUnderItsOwnName(context, dataDir);
     const dataDirs = [...(args["no-base"] ? [] : [dataDir]), ...datasets.dirs];
     if (datasets.names.length > 0) {
       logger.info(
@@ -660,9 +691,7 @@ export const seedApplyCommand = defineAppCommand({
     const plans = namespacesToProcess.flatMap((namespace) => {
       const nsConfig = context.namespaces.find((ns) => ns.namespace === namespace);
       if (!nsConfig) return [];
-      const typesToSeed = selection.entitiesToProcess
-        ? nsConfig.types.filter((type) => selection.entitiesToProcess?.includes(type))
-        : nsConfig.types;
+      const typesToSeed = selectedTables(nsConfig, selection.entitiesToProcess);
       if (typesToSeed.length === 0) return [];
       return [buildNamespaceSeedPlan({ nsConfig, typesToSeed, dataDirs, upsert: args.upsert })];
     });
@@ -733,17 +762,22 @@ export const seedApplyCommand = defineAppCommand({
           namespace: args.namespace,
         });
       } else if (args.entities.length > 0) {
-        const typesToTruncate = (selection.entitiesToProcess ?? []).filter(
-          (type) => type !== "_User",
-        );
-        if (typesToTruncate.length > 0) {
+        const tablesToTruncate = context.namespaces
+          .map((ns) => ({
+            namespace: ns.namespace,
+            tables: selectedTables(ns, selection.entitiesToProcess),
+          }))
+          .filter(({ tables }) => tables.length > 0);
+        for (const { namespace, tables } of tablesToTruncate) {
           await truncate({
             configPath: args.config,
             profile: args.profile,
             workspaceId: args["workspace-id"],
-            tables: typesToTruncate,
+            namespace,
+            tables,
           });
-        } else {
+        }
+        if (tablesToTruncate.length === 0) {
           logger.log(styles.dim("No TailorDB tables to truncate (only _User was specified)."));
         }
       } else {

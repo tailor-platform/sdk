@@ -16,6 +16,7 @@ import * as path from "pathe";
 import { z } from "zod";
 import { datasetDumpDirectory } from "./datasets";
 import { selectEntities } from "./entities";
+import { entityNameOf, namespaceEntityNames, selectedTables } from "./entity-names";
 import { parseExecutionResult } from "./execution-result";
 import { resolveSeedInvoker } from "./invoker";
 import {
@@ -212,13 +213,14 @@ export const seedDumpCommand = defineAppCommand({
       );
     }
 
-    const context = await loadSeedContext({ configPath: args.config });
+    const context = await loadSeedContext({
+      configPath: args.config,
+      allowSharedTableNames: true,
+    });
     const datasetDir =
       args.dataset !== undefined ? datasetDumpDirectory(context, args.dataset) : undefined;
 
-    const namespaceTables = Object.fromEntries(
-      context.namespaces.map((ns) => [ns.namespace, ns.types]),
-    );
+    const namespaceTables = namespaceEntityNames(context);
     const selection = selectEntities({
       namespaceTables,
       hasIdpUser: false,
@@ -261,19 +263,14 @@ export const seedDumpCommand = defineAppCommand({
     const plan = namespacesToDump
       .map((ns) => ({
         config: ns,
-        tables: topologicalSort(
-          selection.entitiesToProcess
-            ? ns.types.filter((type) => selection.entitiesToProcess?.includes(type))
-            : ns.types,
-          ns.dependencies,
-        ),
+        tables: topologicalSort(selectedTables(ns, selection.entitiesToProcess), ns.dependencies),
       }))
       .filter((entry) => entry.tables.length > 0);
 
     if (!args.force) {
       const existing = existingSeedDataFiles(
         dataDir,
-        plan.flatMap((entry) => entry.tables),
+        plan.flatMap((entry) => entry.tables.map((table) => entityNameOf(entry.config, table))),
       );
       if (existing.length > 0) {
         throw new Error(
@@ -320,7 +317,8 @@ export const seedDumpCommand = defineAppCommand({
         );
 
         for (const table of entry.tables) {
-          const tmpPath = beginSeedDataWrite(dataDir, table);
+          const entity = entityNameOf(entry.config, table);
+          const tmpPath = beginSeedDataWrite(dataDir, entity);
           let rowCount: number;
           try {
             rowCount = await dumpTable(
@@ -336,13 +334,13 @@ export const seedDumpCommand = defineAppCommand({
                 appendSeedDataRows(tmpPath, rows);
               },
             );
-            commitSeedDataWrite(dataDir, table, tmpPath, args.force);
+            commitSeedDataWrite(dataDir, entity, tmpPath, args.force);
           } catch (error) {
             discardSeedDataWrite(tmpPath);
             throw error;
           }
-          dumped[table] = rowCount;
-          logger.log(styles.success(`    ✓ ${table}: ${String(rowCount)} rows`));
+          dumped[entity] = rowCount;
+          logger.log(styles.success(`    ✓ ${entity}: ${String(rowCount)} rows`));
         }
       }
     } catch (error) {

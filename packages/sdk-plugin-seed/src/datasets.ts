@@ -3,6 +3,7 @@ import { arg } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { z } from "zod";
 import { seedableEntities } from "./entities";
+import { namespaceEntityNames } from "./entity-names";
 import { assertSeedDataDirectory } from "./jsonl";
 import type { SeedContext } from "@tailor-platform/sdk/cli";
 
@@ -84,10 +85,7 @@ function listDatasetDirectories(dataDir: string): string[] {
 
 function seededTables(context: SeedContext): Set<string> {
   return new Set(
-    seedableEntities(
-      context.namespaces.flatMap((namespace) => namespace.types),
-      context.idpUser !== null,
-    ),
+    seedableEntities(Object.values(namespaceEntityNames(context)).flat(), context.idpUser !== null),
   );
 }
 

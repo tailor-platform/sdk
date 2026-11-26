@@ -239,6 +239,17 @@ describe("migration test runtime", () => {
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
+  test("reads a table several namespaces define from the file named after its namespace", () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+    temporaryDirectories.push(dataDir);
+    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), '{"id":"bare"}\n');
+    fs.writeFileSync(path.join(dataDir, "crm-db.Customer.jsonl"), '{"id":"crm"}\n');
+
+    expect(
+      loadSnapshotSeedData(dataDir, ["Customer"], undefined, { Customer: "crm-db.Customer" }),
+    ).toEqual({ Customer: [{ id: "crm" }] });
+  });
+
   test.each([
     ["an interior blank line", '{"id":1}\n\n{"id":2}\n'],
     ["whitespace-only lines", '{"id":1}\n \t \n{"id":2}\n'],

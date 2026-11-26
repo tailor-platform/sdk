@@ -336,17 +336,19 @@ export async function waitForCloneApplicationData(
  * @param dataDir - Directory containing `<Type>.jsonl` files
  * @param tableNames - Baseline table names to load
  * @param snapshot - Baseline schema used to remove fields introduced by pending migrations
+ * @param entityNames - File name of each table whose name several namespaces define
  * @returns Seed rows keyed by table name
  */
 export function loadSnapshotSeedData(
   dataDir: string,
   tableNames: string[],
   snapshot?: NormalizedSchemaSnapshot,
+  entityNames: Readonly<Record<string, string>> = {},
 ): SeedData {
   const data: SeedData = {};
   for (const tableName of tableNames) {
     const snapshotType = snapshot?.tables[tableName];
-    const jsonlPath = path.join(dataDir, `${tableName}.jsonl`);
+    const jsonlPath = path.join(dataDir, `${entityNames[tableName] ?? tableName}.jsonl`);
     let content: string;
     try {
       content = fs.readFileSync(jsonlPath, "utf8");
@@ -811,7 +813,12 @@ function prepareSeedData(
         tables: input.types,
       });
     const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
-    const data = loadSnapshotSeedData(dataDir, order, snapshot);
+    const data = loadSnapshotSeedData(
+      dataDir,
+      order,
+      snapshot,
+      seedContext.namespaces.find((ns) => ns.namespace === service.namespace)?.entityNames,
+    );
     const typesWithData = order.filter((tableName) => (data[tableName]?.length ?? 0) > 0);
     if (typesWithData.length > 0) {
       seeds.push({ namespace: service.namespace, data, order, selfRefTypes, typesWithData });
@@ -859,7 +866,10 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
 
   let seedContext: SeedContext | undefined;
   if (options.data === "seed") {
-    seedContext = await loadSeedContext({ configPath: loaded.config.path });
+    seedContext = await loadSeedContext({
+      configPath: loaded.config.path,
+      allowSharedTableNames: true,
+    });
     assertSeedDataDirectory(path.join(seedContext.distPath, "data"));
   }
   if (options.assertionPath) {
