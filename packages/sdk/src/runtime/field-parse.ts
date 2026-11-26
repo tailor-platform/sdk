@@ -465,11 +465,11 @@ export function parseDateFields<Output>(
 }
 
 /**
- * Parse a value like `field.parse`, converting fields declared with `as: "decimal"`
- * even in bundles that leave that conversion out of `field.parse`.
+ * Parse a value like `field.parse`, converting fields declared with `as: "decimal"`, `as: "date"`,
+ * or `as: "temporal"` even in bundles that leave that conversion out of `field.parse`.
  * @param field - Field defining the value's shape
  * @param args - Value to parse, with the context data and invoker passed to validators
- * @returns Validation result with decimal fields converted to Decimal
+ * @returns Validation result with Decimal, Date, and Temporal fields converted
  */
 export function parseDecimalFields<Output>(
   field: ParsableField<Output>,
@@ -477,6 +477,6 @@ export function parseDecimalFields<Output>(
 ): StandardSchemaV1.Result<Output> {
   return parseInternal(
     { ...args, field, pathArray: [] },
-    { ...bundledDateParsers, decimal: parseAsDecimal },
+    { ...allDateParsers, decimal: parseAsDecimal },
   );
 }

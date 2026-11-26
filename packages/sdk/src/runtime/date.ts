@@ -109,7 +109,7 @@ function bundledDateDefault(): EffectiveDateDefault {
 }
 
 /**
- * Get the Date or Temporal representation a field converts its values to.
+ * Get the Date, Temporal, or Decimal representation a field converts its values to.
  * @param type - Field type
  * @param as - The field's `as` option
  * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
@@ -245,7 +245,7 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
 }
 
 /**
- * Check whether a field or any of its nested fields uses a Date or Temporal representation.
+ * Check whether a field or any of its nested fields uses a Date, Temporal, or Decimal representation.
  * @param field - Field to inspect
  * @param representation - Only match fields using this representation
  * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
@@ -266,10 +266,10 @@ export function hasDateRepresentationFields(
 }
 
 /**
- * Convert fields using Date or Temporal representations to date, datetime, or time strings.
+ * Convert fields using Date, Temporal, or Decimal representations to their date, datetime, time, or decimal strings.
  * @param field - Field defining the value's shape
  * @param value - Value to serialize
- * @returns Value with Date and Temporal fields converted to strings
+ * @returns Value with Date, Temporal, and Decimal fields converted to strings
  * @internal
  */
 export function serializeDateFields(field: DateField, value: unknown): unknown {

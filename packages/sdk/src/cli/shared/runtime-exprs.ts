@@ -308,7 +308,7 @@ export type ResolverResultSerialization = {
 
 /**
  * Build the code that turns a resolver's `body` result into its response.
- * Date serialization is only imported when the output uses a Date or Temporal
+ * Serialization is only imported when the output uses a Date, Temporal, or Decimal
  * representation. Requires `_internalResolver` and `result` in the enclosing scope.
  * @param output - The resolver's output field, or undefined when unknown
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
@@ -338,7 +338,7 @@ export type ResolverFields = Pick<Resolver, "input" | "output"> | undefined;
  * `t.date()` parsed inside `body` resolves the way the config promises.
  * @param resolver - The resolver's input and output fields, or undefined when unknown
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
- * @returns Date representations used by any input or output field, or by the default
+ * @returns Value representations used by any input or output field, or by the default
  */
 export function resolverDateRepresentations(
   resolver: ResolverFields,

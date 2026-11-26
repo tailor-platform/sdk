@@ -219,7 +219,7 @@ const price: Decimal = new Decimal("12.34");
 
 Arithmetic on `Decimal` rounds results to 20 significant digits by default (decimal.js's default precision), so `new Decimal("12345678901234567890.123456789").plus(1)` becomes `12345678901234567891`. Parsing and output do not round. If your values need more digits, raise the precision before calculating, for example `Decimal.set({ precision: 40 })` at the top of the resolver file.
 
-A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDecimalFields`, exported by `@tailor-platform/sdk/runtime`. It takes the same arguments and returns the same result as `.parse()`, and converts decimal fields even when the bundle would not. `parseDateFields` does not convert decimal fields; it throws an error that points to `parseDecimalFields`.
+A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDecimalFields`, exported by `@tailor-platform/sdk/runtime`. It takes the same arguments and returns the same result as `.parse()`, and converts decimal fields even when the bundle would not. `parseDecimalFields` also converts `as: "date"` and `as: "temporal"` fields in the same schema. `parseDateFields` does not convert decimal fields; it throws an error that points to `parseDecimalFields`.
 
 ### Custom Type Name (`typeName`)
 
