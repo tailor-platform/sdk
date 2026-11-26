@@ -15,6 +15,7 @@ import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { buildPreMigrationSnapshot } from "./pre-migration-schema";
 import { getMigrationFilePath } from "./snapshot";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 import type { MigrationDiff } from "./diff-calculator";
 import type { ExpandContractPlan } from "./expand-contract";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot-types";
@@ -81,7 +82,7 @@ export async function writePgliteSchemaFile(
 }
 
 /** Inputs for {@link writeMigrationTypeFiles}. */
-export interface WriteMigrationTypeFilesOptions {
+export interface WriteMigrationTypeFilesOptions extends ColumnTypeOptions {
   /** Schema before the migration */
   previousSnapshot: SchemaSnapshot;
   /** The migration's diff */
@@ -90,12 +91,6 @@ export interface WriteMigrationTypeFilesOptions {
   migrationNumber: number;
   /** Field changes carried through temporary fields */
   expandPlans?: readonly ExpandContractPlan[] | undefined;
-  /**
-   * Whether date/datetime/time fields in `db.ts` resolve to their Temporal column
-   * types instead of their `Date`/`string` defaults. Should match whatever
-   * `kyselyTypePlugin` was configured with. Defaults to `false`.
-   */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }

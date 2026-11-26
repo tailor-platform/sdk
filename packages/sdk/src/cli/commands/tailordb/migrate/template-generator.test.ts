@@ -927,7 +927,7 @@ describe("template-generator", () => {
         previousSnapshot,
         undefined,
         [],
-        true,
+        { temporal: true },
       );
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
@@ -942,7 +942,7 @@ describe("template-generator", () => {
         previousSnapshot,
         undefined,
         [],
-        false,
+        { temporal: false },
         "temporal",
       );
       expect(JSON.parse(await fs.readFile(pinned.diffFilePath, "utf-8")).dateRepresentation).toBe(
@@ -974,15 +974,9 @@ describe("template-generator", () => {
         ],
       });
 
-      const result = await generateDiffFiles(
-        diff,
-        tempDir,
-        1,
-        previousSnapshot,
-        undefined,
-        [],
-        true,
-      );
+      const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot, undefined, [], {
+        temporal: true,
+      });
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed).not.toHaveProperty("temporal");

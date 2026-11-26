@@ -90,6 +90,7 @@ import {
   generateDataOnlyMigrationFiles,
 } from "./template-generator";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 
 /** **Beta:** This API may change in future releases. */
 export interface GenerateOptions {
@@ -283,7 +284,9 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
   const { plugins } = loaded;
   const config = configOf(loaded);
   const configDir = path.dirname(config.path);
-  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
+  const columnTypes: ColumnTypeOptions = {
+    temporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal,
+  };
   const dateDefault = effectiveDateDefault(config);
 
   // Get namespaces with migrations config
@@ -435,7 +438,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
       generations,
       targetNamespace,
       options,
-      temporal,
+      columnTypes,
       dateDefault,
     );
     return {
@@ -620,7 +623,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
         options,
         currentSnapshot,
         expandPlans ?? [],
-        temporal,
+        columnTypes,
         dateDefault,
       );
       if (generated.declined) skippedNamespaces.push(namespace);
@@ -644,7 +647,7 @@ async function generateMigrations(options: GenerateOptions): Promise<GenerateRes
  * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
  * @param {string} namespace - Target namespace
  * @param {GenerateOptions} options - Generate options
- * @param {boolean} temporal - Whether date/datetime/time fields resolve to their Temporal column types
+ * @param columnTypes - Which opt-in column representations, such as Temporal, the migration files use
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<GeneratedMigration>} The migration written
  */
@@ -652,7 +655,7 @@ async function generateDataOnlyMigration(
   generations: readonly NamespaceGeneration[],
   namespace: string,
   options: GenerateOptions,
-  temporal: boolean,
+  columnTypes: ColumnTypeOptions,
   dateDefault: EffectiveDateDefault,
 ): Promise<GeneratedMigration> {
   const generation = generations.find((g) => g.namespace === namespace);
@@ -691,7 +694,7 @@ async function generateDataOnlyMigration(
     migrationNumber,
     snapshot: previousSnapshot,
     description: options.name,
-    temporal,
+    ...columnTypes,
     dateDefault,
   });
 
@@ -1207,8 +1210,8 @@ type DiffGeneration = {
  * @param {GenerateOptions} options - Generate options
  * @param currentSnapshot - Schema the user now declares
  * @param expandPlans - Field changes confirmed for a migration pair
- * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
- * column types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param columnTypes - Which opt-in column representations, such as Temporal, `db.ts` uses
+ * instead of the defaults. Defaults to none.
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @returns {Promise<DiffGeneration>} Whether the user declined, and the files written otherwise
  */
@@ -1219,7 +1222,7 @@ async function generateDiffFromSnapshot(
   options: GenerateOptions,
   currentSnapshot: NormalizedSchemaSnapshot,
   expandPlans: readonly ExpandContractPlan[] = [],
-  temporal = false,
+  columnTypes: ColumnTypeOptions = {},
   dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<DiffGeneration> {
   if (!hasChanges(diff)) {
@@ -1319,7 +1322,7 @@ async function generateDiffFromSnapshot(
       plans: expandPlans,
       migrationsDir,
       description: options.name,
-      temporal,
+      ...columnTypes,
       dateDefault,
     });
     return { declined: false, migrations: pair };
@@ -1336,7 +1339,7 @@ async function generateDiffFromSnapshot(
     previousSnapshot,
     options.name,
     [],
-    temporal,
+    columnTypes,
     dateDefault,
   );
 
@@ -1369,19 +1372,13 @@ async function generateDiffFromSnapshot(
 }
 
 /** Inputs for {@link generateExpandContractMigrations}. */
-interface GenerateExpandContractOptions {
+interface GenerateExpandContractOptions extends ColumnTypeOptions {
   previousSnapshot: NormalizedSchemaSnapshot;
   currentSnapshot: NormalizedSchemaSnapshot;
   resolvedDiff: MigrationDiff;
   plans: readonly ExpandContractPlan[];
   migrationsDir: string;
   description?: string | undefined;
-  /**
-   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
-   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
-   * was configured with. Defaults to `false`.
-   */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }
@@ -1402,9 +1399,9 @@ async function generateExpandContractMigrations(
     plans,
     migrationsDir,
     description,
-    temporal = false,
     dateDefault = "legacy",
   } = input;
+  const columnTypes: ColumnTypeOptions = { temporal: input.temporal };
   const intermediateSnapshot = buildIntermediateSnapshot(previousSnapshot, plans);
   // Comparing from the relaxed base records the removal with an optional
   // contract, which is what the deploy restores while the script clears it.
@@ -1449,7 +1446,7 @@ async function generateExpandContractMigrations(
     previousSnapshot,
     description,
     plans,
-    temporal,
+    columnTypes,
     dateDefault,
   );
   const contract = await generateDiffFiles(
@@ -1459,7 +1456,7 @@ async function generateExpandContractMigrations(
     intermediateSnapshot,
     description,
     [],
-    temporal,
+    columnTypes,
     dateDefault,
     plans,
   );
