@@ -13,13 +13,13 @@ import {
   APPLY_DONE,
   APPLY_FLUSH,
   APPLY_RELEASE,
+  APPLY_STEP_SPANS,
   applyMachine,
   applyStart,
+  isBatched,
   type ApplyStage,
   type ApplyState,
   type ApplyStep,
-  type ApplyStepRequest,
-  type ReleaseRequest,
 } from "./apply-machine";
 import { applyAuth, type planAuth } from "./auth";
 import { type DeploymentSource, sourceApplicationName } from "./deployment-target";
@@ -415,7 +415,7 @@ async function driveApply(
       return;
     }
     if (effect.name === APPLY_RELEASE) {
-      const { applyFailed } = effect.request as ReleaseRequest;
+      const applyFailed = effect.before.failed;
       outcomes.maintenance?.push(
         ...(await releaseMaintenanceModes(client, outcomes.held ?? [], applyFailed)),
       );
@@ -423,8 +423,8 @@ async function driveApply(
     }
     if (!isApplyStep(effect.name)) throw new TypeError(`Unknown apply step ${effect.name}`);
     const apply = APPLY_STEPS[effect.name];
-    const { span, batched } = effect.request as ApplyStepRequest;
-    const stepClient = batched ? batch.client : client;
+    const span = APPLY_STEP_SPANS.get(effect.name);
+    const stepClient = isBatched(effect.before) ? batch.client : client;
     const run = () =>
       forEachDeployment(deployments, (deployment) =>
         apply({ client: stepClient, deployment, outcomes }),

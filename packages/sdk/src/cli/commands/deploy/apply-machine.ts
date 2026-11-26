@@ -68,6 +68,13 @@ export const APPLY_PHASE_STEPS = {
 } as const satisfies Record<string, readonly StepDeclaration[]>;
 
 export type ApplyStepPhase = keyof typeof APPLY_PHASE_STEPS;
+
+/** The span each step that has one runs in. */
+export const APPLY_STEP_SPANS: ReadonlyMap<string, string> = new Map(
+  Object.values(APPLY_PHASE_STEPS).flatMap((steps: readonly StepDeclaration[]) =>
+    steps.flatMap(({ step, span }) => (span === undefined ? [] : [[step, span] as const])),
+  ),
+);
 export type ApplyStep = (typeof APPLY_PHASE_STEPS)[ApplyStepPhase][number]["step"];
 
 /** Writes the metadata labels the phases before it queued. */
@@ -117,11 +124,6 @@ const ApplyState = c.object({
 export type ApplyState = c.Infer<typeof ApplyState>;
 export type ApplyPhase = ApplyState["phase"];
 
-/** What a step effect asks its performer to do. */
-export type ApplyStepRequest = { readonly span?: string; readonly batched: boolean };
-/** What the release effect asks its performer to do. */
-export type ReleaseRequest = { readonly applyFailed: boolean };
-
 const APPLY_COMMAND = c.enum(["next"]);
 
 function phasesOf(stage: ApplyStage): ReadonlyArray<ApplyPhase> {
@@ -143,7 +145,13 @@ function cleanupAfter(stage: ApplyStage, phase: ApplyPhase): ApplyPhase {
   );
 }
 
-function isBatched(stage: ApplyStage, phase: ApplyPhase): boolean {
+/**
+ * Whether a phase's steps write metadata labels to the batch the stage's flush writes.
+ * @param state - State whose phase runs
+ * @returns Whether the phase is batched
+ */
+export function isBatched(state: ApplyState): boolean {
+  const { stage, phase } = state;
   const phases = phasesOf(stage);
   return phases.includes(FLUSH) && phases.indexOf(phase) < phases.indexOf(FLUSH);
 }
@@ -175,7 +183,7 @@ function transitionOf(
             { stage, phase: cleanupAfter(stage, phase), failed: true },
             { stage, phase: after(stage, phase), failed: false },
           ),
-          { request: {}, failure },
+          { failure },
         ),
       ],
     };
@@ -183,19 +191,14 @@ function transitionOf(
   if (phase === RELEASE) {
     return {
       effects: [
-        c.effect<ApplyState>(
-          RELEASE,
-          { stage, phase: DONE, failed: state.failed },
-          { request: { applyFailed: state.failed }, failure },
-        ),
+        c.effect<ApplyState>(RELEASE, { stage, phase: DONE, failed: state.failed }, { failure }),
       ],
     };
   }
   if (phase === DONE) return { state: { stage, phase, failed: state.failed } };
   const steps: readonly StepDeclaration[] = APPLY_PHASE_STEPS[phase];
-  const batched = isBatched(stage, phase);
   return {
-    effects: steps.map(({ step, span }, index) =>
+    effects: steps.map(({ step }, index) =>
       c.effect<ApplyState>(
         step,
         {
@@ -203,10 +206,7 @@ function transitionOf(
           phase: index === steps.length - 1 ? after(stage, phase) : phase,
           failed: false,
         },
-        {
-          request: { ...(span === undefined ? {} : { span }), batched } satisfies ApplyStepRequest,
-          failure,
-        },
+        { failure },
       ),
     ),
   };
