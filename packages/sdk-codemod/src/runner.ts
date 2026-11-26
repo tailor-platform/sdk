@@ -5,6 +5,7 @@ import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
+import { takesSeparateGlobalValue } from "./command-line-pattern";
 import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
@@ -368,7 +369,7 @@ function isSourceCliBinary(value: string | null): boolean {
 }
 
 function isSourceCliValueFlag(value: string | null): boolean {
-  return value != null && TAILOR_CLI_VALUE_FLAG_SET.has(value);
+  return value != null && (TAILOR_CLI_VALUE_FLAG_SET.has(value) || takesSeparateGlobalValue(value));
 }
 
 function sourceLang(relative: string): Lang {

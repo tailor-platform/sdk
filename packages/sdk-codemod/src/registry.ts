@@ -1,6 +1,7 @@
 import * as url from "node:url";
 import * as path from "pathe";
 import { gte, lt, parse, valid } from "semver";
+import { TAILOR_BINARY, tailorCommandPrefix } from "./command-line-pattern";
 import { TAILOR_CLI_COMMANDS, TAILOR_CLI_VALUE_FLAGS } from "./tailor-cli-tokens";
 import type { CodemodPackage } from "./types";
 
@@ -42,6 +43,14 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
     "(?=\\s*(?:apply\\b|crash-report\\b|[^\"'`]*\\s--machineuser\\b))",
   ].join(""),
 );
+const FUNCTION_TEST_RUN_PATTERN = new RegExp(
+  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true })}test-run(?![\\w.-])`,
+);
+// A source string may be an argv array whose option values were removed, so a value can be missing.
+const FUNCTION_TEST_RUN_SOURCE_STRING_PATTERN = new RegExp(
+  `${tailorCommandPrefix("\\bfunction", [], { crossLines: true, valuesMayBeOmitted: true })}test-run(?![\\w.-])`,
+);
+
 function shellArgumentUnit(quotedNewline: boolean): string {
   const newline = quotedNewline ? "" : String.raw`\n`;
   return String.raw`(?:"(?:[^"\\${newline}\0]|\\[^\0])*"|'[^'${newline}\0]*'|\\"(?:[^\\\n\0]|\\(?!"))*?\\"|[\x60^]\r?\n|\\(?!")[^\0]|[^\n\0&|;"'\\])`;
@@ -61,8 +70,13 @@ const GENERATE_WATCH_FLAG_DECODED_STRING_PATTERN =
   /\bgenerate\b(?:[\\^\x60]\r?\n|[^\n])*?(?:--watch\b|\s-W\b)/;
 const GENERATE_WATCH_OPTION_PATTERNS = [/\bgenerate\s*\(/, /\bwatch\s*:/];
 
-const FUNCTION_SCRIPT_COMMAND_PATTERN =
-  /(?:(?<![\w.-])tailor(?:-sdk)?(?:\.(?:cmd|ps1|exe))?|@tailor-platform\/sdk(?:@[^\s'"`]+)?)[\s\\]{1,16}function[\s\\]{1,16}script(?![\w.-])/;
+const TAILOR_PACKAGE_RUNNER_TARGET = `(?:${TAILOR_BINARY}|@tailor-platform\\/sdk(?:@[^\\s'"\`]+)?)`;
+const FUNCTION_SCRIPT_COMMAND_PATTERN = new RegExp(
+  `${tailorCommandPrefix(TAILOR_PACKAGE_RUNNER_TARGET, ["function"], { crossLines: true })}script(?![\\w.-])`,
+);
+const FUNCTION_SCRIPT_SOURCE_STRING_PATTERN = new RegExp(
+  `${tailorCommandPrefix(TAILOR_PACKAGE_RUNNER_TARGET, ["function"], { crossLines: true, valuesMayBeOmitted: true })}script(?![\\w.-])`,
+);
 
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
@@ -1752,8 +1766,8 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.md",
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
-    legacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
-    sourceStringLegacyPatterns: [/\bfunction[\s\\]{1,16}test-run(?![\w.-])/],
+    legacyPatterns: [FUNCTION_TEST_RUN_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_TEST_RUN_SOURCE_STRING_PATTERN],
     examples: [
       {
         lang: "sh",
@@ -1785,7 +1799,7 @@ export const allCodemods: CodemodPackage[] = [
       "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
     ],
     legacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
-    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_COMMAND_PATTERN],
+    sourceStringLegacyPatterns: [FUNCTION_SCRIPT_SOURCE_STRING_PATTERN],
     examples: [
       {
         lang: "sh",

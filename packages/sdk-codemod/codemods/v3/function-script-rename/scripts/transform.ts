@@ -1,16 +1,14 @@
 import * as path from "pathe";
+import { TAILOR_BINARY, tailorCommandPrefix } from "../../../../src/command-line-pattern";
 import { transformPackageScripts } from "../../../../src/package-json-scripts";
 
 // Match `function script` only as part of a tailor CLI invocation (`tailor`,
 // the v1 `tailor-sdk` binary, or their Windows launcher forms), so a
 // `function script()` declaration or prose that names the subcommand is left
-// alone. Tokens may be separated by backslash-newline shell continuations as
-// well as spaces. The leading lookbehind keeps other binaries (e.g.
-// `custom-tailor`) and the trailing lookahead keeps similarly named tokens
-// (e.g. a `script.ts` file path) from being rewritten.
-const TOKEN_SEPARATOR = "(?:[ \\t]|\\\\\\r?\\n)+";
+// alone. The trailing lookahead keeps similarly named tokens (e.g. a
+// `script.ts` file path) from being rewritten.
 const COMMAND_PATTERN = new RegExp(
-  `(?<![\\w.-])(tailor(?:-sdk)?(?:\\.(?:cmd|ps1|exe))?${TOKEN_SEPARATOR}function${TOKEN_SEPARATOR})script(?![\\w.-])`,
+  `(${tailorCommandPrefix(TAILOR_BINARY, ["function"])})script(?![\\w.-])`,
   "g",
 );
 
