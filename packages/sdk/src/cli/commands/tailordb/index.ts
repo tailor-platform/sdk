@@ -1,5 +1,6 @@
 import { defineCommand } from "@politty/zod";
 import { migrationCommand } from "./migrate";
+import { replicationCommand } from "./replication";
 import { truncateCommand } from "./truncate";
 
 export const tailordbCommand = defineCommand({
@@ -10,5 +11,6 @@ export const tailordbCommand = defineCommand({
   subCommands: {
     truncate: truncateCommand,
     migration: migrationCommand,
+    replication: replicationCommand,
   },
 });

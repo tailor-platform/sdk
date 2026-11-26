@@ -20,10 +20,11 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                     | Description                                         |
-| ------------------------------------------- | --------------------------------------------------- |
-| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables. |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations (beta).           |
+| Command                                         | Description                                                       |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| [`tailordb truncate`](#tailordb-truncate)       | Truncate (delete all records from) TailorDB tables.               |
+| [`tailordb migration`](#tailordb-migration)     | Manage TailorDB schema migrations (beta).                         |
+| [`tailordb replication`](#tailordb-replication) | Inspect and repair replications of TailorDB tables into BigQuery. |
 
 ### tailordb truncate
 
@@ -356,6 +357,151 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 Migration scripts are checked across the full migration history, not only the pending migrations that `deploy` checks. Like `deploy`, the command bundles only the pending scripts and checks the machine user that runs them.
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
+
+### tailordb replication
+
+Inspect and repair replications of TailorDB tables into BigQuery.
+
+**Usage**
+
+```
+tailor tailordb replication <command>
+```
+
+**Commands**
+
+| Command                                                                 | Description                                                     |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [`tailordb replication list`](#tailordb-replication-list)               | List the TailorDB replications in the workspace.                |
+| [`tailordb replication status`](#tailordb-replication-status)           | Show the state of each table a TailorDB replication writes.     |
+| [`tailordb replication repair`](#tailordb-replication-repair)           | Rewrite tables of a TailorDB replication from their records.    |
+| [`tailordb replication destination`](#tailordb-replication-destination) | Inspect the BigQuery datasets TailorDB replications write into. |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+#### tailordb replication list
+
+List the TailorDB replications in the workspace.
+
+**Usage**
+
+```
+tailor tailordb replication list [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+#### tailordb replication status
+
+Show the state of each table a TailorDB replication writes.
+
+**Usage**
+
+```
+tailor tailordb replication status [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description      | Required |
+| -------- | ---------------- | -------- |
+| `name`   | Replication name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description       | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID      | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+A table is `PENDING` while it waits for its records to be copied, `BACKFILLING` while they are, `STREAMING` once changes are written as they happen, and `ERROR` when writing it failed, for example because the table was deleted in BigQuery. Run `tailor tailordb replication repair` to rewrite tables in `ERROR`.
+
+#### tailordb replication repair
+
+Rewrite tables of a TailorDB replication from their records.
+
+**Usage**
+
+```
+tailor tailordb replication repair [options] <name>
+```
+
+**Arguments**
+
+| Argument | Description      | Required |
+| -------- | ---------------- | -------- |
+| `name`   | Replication name | Yes      |
+
+**Options**
+
+| Option                          | Alias | Description                                     | Required | Default | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------- | -------- | ------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                    | No       | -       | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                               | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
+| `--yes`                         | `-y`  | Skip confirmation prompts                       | No       | `false` | -                              |
+| `--type <TYPE>`                 | `-t`  | Type whose table to rewrite; repeat for several | No       | `[]`    | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Without `--type`, rewrites the tables in `ERROR`, such as a table deleted or replaced in BigQuery. With `--type`, rewrites those types' tables in any state but `PENDING` or `BACKFILLING`, and asks for confirmation first, since each table is copied again in full. The tables go to `PENDING`, and are rewritten shortly after; follow them with `tailor tailordb replication status`. The replication must be enabled, and its destination must have access to its dataset.
+
+#### tailordb replication destination
+
+Inspect the BigQuery datasets TailorDB replications write into.
+
+**Usage**
+
+```
+tailor tailordb replication destination <command>
+```
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Commands**
+
+| Command                                                                           | Description                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`tailordb replication destination list`](#tailordb-replication-destination-list) | List the TailorDB replication destinations in the workspace. |
+
+##### tailordb replication destination list
+
+List the TailorDB replication destinations in the workspace.
+
+**Usage**
+
+```
+tailor tailordb replication destination list [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                              | Required | Default  | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------- | -------- | -------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                             | No       | -        | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                        | No       | -        | `TAILOR_PLATFORM_PROFILE`      |
+| `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
+| `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+A destination is `PENDING_PERMISSION` until its service account is granted the BigQuery Data Editor role on the dataset and the BigQuery Job User role on its project, and `ACTIVE` once `tailor deploy` finds the grant.
 
 ### tailordb erd (Beta)
 
