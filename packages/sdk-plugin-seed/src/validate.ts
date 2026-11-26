@@ -70,6 +70,7 @@ export const seedValidateCommand = defineAppCommand({
           loadSeedData(dataDirs, namespace.types, {
             requireId: true,
             requiredFieldsByType: namespace.requiredFields,
+            warnAboutStrayWhitespace: false,
           });
         }
       }

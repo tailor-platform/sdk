@@ -59,6 +59,12 @@ export interface LoadSeedDataOptions {
    * defined in more than one of them is rejected. Defaults to `id`.
    */
   keyField?: string;
+  /**
+   * Warn about a row surrounded by a character JSON does not allow as
+   * whitespace, such as a no-break space. Defaults to true. Validation turns it
+   * off because it reports the same rows itself.
+   */
+  warnAboutStrayWhitespace?: boolean;
 }
 
 /**
@@ -145,7 +151,7 @@ function readSeedRows(
   typeName: string,
   options: LoadSeedDataOptions,
 ): { row: SeedData[string][number]; line: number }[] {
-  const { requireId = false, requiredFieldsByType = {} } = options;
+  const { requireId = false, requiredFieldsByType = {}, warnAboutStrayWhitespace = true } = options;
   let content: string;
   try {
     content = readFileSync(jsonlPath, "utf-8");
@@ -157,7 +163,8 @@ function readSeedRows(
   }
   const records = jsonlRecordLines(content);
   for (const { line, warning } of records) {
-    if (warning) logger.warn(`${relativeRowLocation({ file: jsonlPath, line })} ${warning}`);
+    if (warning && warnAboutStrayWhitespace)
+      logger.warn(`${relativeRowLocation({ file: jsonlPath, line })} ${warning}`);
   }
   return records.map(({ text, line }) => {
     let value: unknown;

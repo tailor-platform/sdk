@@ -114,6 +114,21 @@ describe("seedValidateCommand", () => {
     expect(logger.out).not.toHaveBeenCalledWith(expect.objectContaining({ valid: true }));
   });
 
+  test.each([[[]], [["--upsert"]]])(
+    "reports a row surrounded by a no-break space once, with %j",
+    async (flags) => {
+      writeFileSync(path.join(dataDir, "Item.jsonl"), '{"id":"i1","name":"item"}\u00A0\n');
+
+      const result = await runValidate(flags);
+
+      expect(result.exitCode).toBe(0);
+      const reported = [...logger.warn.mock.calls, ...logger.log.mock.calls]
+        .map(([message]) => String(message))
+        .filter((message) => message.includes("U+00A0"));
+      expect(reported).toHaveLength(1);
+    },
+  );
+
   test("checks the same required fields as apply --upsert", async () => {
     const context = await sdk.loadSeedContext();
     context.namespaces[0].requiredFields.Item = ["name"];
