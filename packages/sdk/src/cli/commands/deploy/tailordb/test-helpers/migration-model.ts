@@ -7,7 +7,6 @@ import * as path from "pathe";
 import { assert } from "vitest";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { snapshotTable } from "./migration-apply";
-import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
   SnapshotFieldConfig,
   TailorDBSnapshotType,
@@ -16,14 +15,14 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
-/** A table's optional string field `f` and optional enum field `e`, as the model encodes them. */
+/** A table's string field `f` and enum field `e`, each of which a table may lack. */
 export interface ModelShape {
   f: { tag: "Absent" } | { tag: "Present"; value: { required: boolean; unique: boolean } };
   e: { tag: "NoEnum" } | { tag: "Values"; value: ReadonlySet<string> };
 }
 
 /** Tables of one namespace, each with its shape. */
-export type ModelSchema = ReadonlyMap<string, ModelShape>;
+type ModelSchema = ReadonlyMap<string, ModelShape>;
 
 type Maintenance = "DuringMigrations" | "DuringDeploy" | "Off";
 
@@ -38,7 +37,6 @@ export interface ModelState {
   step: ModelStep;
   tables: ModelSchema;
   restricted: boolean;
-  permissions: ReadonlySet<string>;
   unchecked: ReadonlySet<string>;
   uncheckedPermissions: ReadonlySet<string>;
 }
@@ -90,7 +88,6 @@ function readModelTraces(dir: string): ModelTrace[] {
         step: state.step as ModelStep,
         tables: state.tables as ModelSchema,
         restricted: state.restricted as boolean,
-        permissions: state.permissions as ReadonlySet<string>,
         unchecked: state.unchecked as ReadonlySet<string>,
         uncheckedPermissions: state.uncheckedPermissions as ReadonlySet<string>,
       })),
@@ -140,12 +137,21 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
  * @returns The description
  */
 export function describeShape(shape: ModelShape): string {
-  const f =
-    shape.f.tag === "Absent"
-      ? "-"
-      : `${shape.f.value.required ? "req" : "opt"}${shape.f.value.unique ? "+uniq" : ""}`;
-  const e = shape.e.tag === "NoEnum" ? "-" : [...shape.e.value].toSorted().join("");
-  return `f=${f} e=${e}`;
+  return describeFields(
+    shape.f.tag === "Present" ? shape.f.value : undefined,
+    shape.e.tag === "Values" ? [...shape.e.value] : undefined,
+  );
+}
+
+interface StringFieldState {
+  required?: boolean | undefined;
+  unique?: boolean | undefined;
+}
+
+function describeFields(f: StringFieldState | undefined, values: string[] | undefined): string {
+  const fState = f ? `${f.required ? "req" : "opt"}${f.unique ? "+uniq" : ""}` : "-";
+  const eState = values ? values.toSorted().join("") : "-";
+  return `f=${fState} e=${eState}`;
 }
 
 /**
@@ -206,49 +212,6 @@ export function modelManifest(
   return generateTailorDBTypeManifestFromSnapshot(modelTable(name, shape), { subscribed: false });
 }
 
-/**
- * The diff of a migration between two model schemas.
- * @param before - Schema before the migration
- * @param after - Schema after the migration
- * @returns Diff changes
- */
-export function modelDiff(before: ModelSchema, after: ModelSchema): DiffChange[] {
-  const changes: DiffChange[] = [];
-  for (const [name, shape] of after) {
-    const previous = before.get(name);
-    if (previous === undefined) {
-      changes.push({ kind: "table_added", tableName: name, after: modelTable(name, shape) });
-      continue;
-    }
-    const beforeFields = modelFields(previous);
-    const afterFields = modelFields(shape);
-    for (const fieldName of ["f", "e"]) {
-      const was = beforeFields[fieldName];
-      const now = afterFields[fieldName];
-      if (was && now) {
-        if (JSON.stringify(was) === JSON.stringify(now)) continue;
-        changes.push({
-          kind: "field_modified",
-          tableName: name,
-          fieldName,
-          before: was,
-          after: now,
-        });
-      } else if (now) {
-        changes.push({ kind: "field_added", tableName: name, fieldName, after: now });
-      } else if (was) {
-        changes.push({ kind: "field_removed", tableName: name, fieldName, before: was });
-      }
-    }
-  }
-  for (const [name, shape] of before) {
-    if (!after.has(name)) {
-      changes.push({ kind: "table_removed", tableName: name, before: modelTable(name, shape) });
-    }
-  }
-  return changes;
-}
-
 interface FakeTable {
   type: MessageInitShape<typeof TailorDBTypeSchema>;
   permission: boolean;
@@ -259,14 +222,14 @@ interface FakeTable {
  * permission that exists fails with `AlreadyExists`, and writing a missing one with `NotFound`.
  * Deleting a table also deletes its permission.
  * @param namespace - The namespace the fake holds
- * @param start - Tables and permissions the namespace starts with
+ * @param start - Tables the namespace starts with, each with a GraphQL permission
  * @returns The client overrides, the tables, and every rejected write
  */
 export function createFakeNamespace(namespace: string, start: ModelState) {
   const tables = new Map<string, FakeTable>(
     [...start.tables].map(([name, shape]) => [
       name,
-      { type: modelManifest(name, shape), permission: start.permissions.has(name) },
+      { type: modelManifest(name, shape), permission: true },
     ]),
   );
   const rejections: string[] = [];
@@ -341,26 +304,12 @@ interface ObservedTable {
 
 function describeManifest(type: MessageInitShape<typeof TailorDBTypeSchema>): string {
   const { f, e } = type.schema?.fields ?? {};
-  const fState = f ? `${f.required ? "req" : "opt"}${f.unique ? "+uniq" : ""}` : "-";
-  const eState = e
-    ? (e.allowedValues ?? [])
-        .map((value) => value.value)
-        .toSorted()
-        .join("")
-    : "-";
-  return `f=${fState} e=${eState}`;
+  return describeFields(f, e && (e.allowedValues ?? []).map((value) => value.value ?? ""));
 }
 
 function isRestricted(type: MessageInitShape<typeof TailorDBTypeSchema>): boolean {
-  const settings = type.schema?.settings;
-  const ops = settings?.disableGqlOperations;
-  return (
-    ops?.create === true &&
-    ops.update === true &&
-    ops.delete === true &&
-    settings?.publishRecordEvents !== true &&
-    settings?.bulkUpsert !== true
-  );
+  const ops = type.schema?.settings?.disableGqlOperations;
+  return ops?.create === true && ops.update === true && ops.delete === true;
 }
 
 /**
@@ -407,10 +356,7 @@ export function compareTables(
         lines.push(`${name}: expected ${expected.restricted ? "restricted" : "unrestricted"}`);
       }
       const hasPermission = got?.permission ?? false;
-      if (
-        !expected.uncheckedPermissions.has(name) &&
-        hasPermission !== expected.permissions.has(name)
-      ) {
+      if (!expected.uncheckedPermissions.has(name) && hasPermission !== expected.tables.has(name)) {
         lines.push(`${name}: expected ${hasPermission ? "no permission" : "a permission"}`);
       }
       return lines;

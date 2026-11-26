@@ -3,6 +3,7 @@ import {
   getLatestMigrationNumber,
   reconstructSnapshotFromMigrations,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { compareSnapshots } from "#/cli/commands/tailordb/migrate/snapshot-comparison";
 import { logger } from "#/cli/shared/logger";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { assertDefined } from "#/utils/assert";
@@ -17,6 +18,7 @@ import {
   snapshotAt,
   typeDeletion,
   typeMetaRequest,
+  typeUnchanged,
 } from "./test-helpers/migration-apply";
 import {
   compareTables,
@@ -26,7 +28,6 @@ import {
   type ModelShape,
   type ModelState,
   type ModelTrace,
-  modelDiff,
   modelManifest,
   modelTable,
   observeTables,
@@ -113,46 +114,46 @@ async function replay(trace: ModelTrace): Promise<string[]> {
     },
     metaRequest: typeMetaRequest(name),
   });
-  const startShape = (name: string) => {
+  const startDescription = (name: string) => {
     const shape = start.tables.get(name);
     return shape && describeShape(shape);
   };
-  const kept = [...last].filter(([name]) => start.tables.has(name));
-  const deletes = [...start.tables.keys()].filter((name) => !last.has(name));
+  const pendingNumbers = history.map((_schema, i) => i).filter((i) => i > checkpoint);
+  // The planner deletes a kept table a pending migration removes and creates it again.
+  const recreated = new Set(
+    [...last.keys()].filter((name) =>
+      pendingNumbers.some((i) => history[i - 1]?.has(name) && !history[i]?.has(name)),
+    ),
+  );
+  const remote = [...start.tables.keys()];
+  const kept = [...last].filter(([name]) => start.tables.has(name) && !recreated.has(name));
+  const created = [...last].filter(([name]) => !start.tables.has(name) || recreated.has(name));
+  const deleted = remote.filter((name) => !last.has(name) || recreated.has(name));
   const planResult = createPlanResult({
     type: {
-      creates: [...last].filter(([name]) => !start.tables.has(name)).map(entryOf),
+      creates: created.map(entryOf),
       updates: kept
-        .filter(([name, shape]) => startShape(name) !== describeShape(shape))
+        .filter(([name, shape]) => startDescription(name) !== describeShape(shape))
         .map(entryOf),
       unchanged: kept
-        .filter(([name, shape]) => startShape(name) === describeShape(shape))
-        .map(([name]) => ({
-          name,
-          request: { namespaceName: NAMESPACE },
-          metaRequest: typeMetaRequest(name),
-        })),
-      deletes: deletes.map((name) => typeDeletion(name)),
+        .filter(([name, shape]) => startDescription(name) === describeShape(shape))
+        .map(([name]) => typeUnchanged(name)),
+      deletes: deleted.map((name) => typeDeletion(name)),
     },
     gqlPermission: {
-      creates: [...last.keys()]
-        .filter((name) => !start.permissions.has(name))
-        .map((name) => gqlPermissionEntry(name)),
-      deletes: [...start.permissions]
-        .filter((name) => !last.has(name))
-        .map((name) => gqlPermissionDeletion(name)),
+      creates: created.map(([name]) => gqlPermissionEntry(name)),
+      deletes: deleted.map((name) => gqlPermissionDeletion(name)),
     },
     local: [...last].map(([name, shape]) => modelTable(name, shape)),
     context: { config: { ...mockConfig, maintenanceMode: MAINTENANCE_MODES[trace.maintenance] } },
   });
-  const pending = history.slice(checkpoint + 1).map((schema, offset) => {
-    const number = checkpoint + 1 + offset;
-    const before = assertDefined(history[number - 1], "every pending migration has a predecessor");
-    return mkPendingMigration(modelDiff(before, schema), {
-      number,
-      hasScript: trace.scripted.has(number),
-    });
-  });
+  const pending = pendingNumbers.map((number) =>
+    mkPendingMigration(
+      compareSnapshots(snapshotAt(tablesByVersion, number - 1), snapshotAt(tablesByVersion, number))
+        .changes,
+      { number, hasScript: trace.scripted.has(number) },
+    ),
+  );
   planResult.context.pendingMigrations = remoteCheckpoint.mockPending(pending);
   const client = remoteCheckpoint.createMockClient(fake.overrides);
   using _logger = silenceLogger("success", "warn", "log", "newline");
@@ -191,7 +192,6 @@ describe("migration deploy model", () => {
     { timeout: 120_000 },
     async () => {
       const traces = simulateModelTraces(3000);
-      expect(traces.length).toBeGreaterThan(2900);
       const failed: string[] = [];
       for (const trace of traces) {
         vi.clearAllMocks();
@@ -199,11 +199,11 @@ describe("migration deploy model", () => {
         if (failures.length > 0)
           failed.push(`${trace.file} ${describeScenario(trace)}\n  ${failures.join("\n  ")}`);
       }
-      expect({ traces: traces.length, failed: failed.length, first: failed.slice(0, 15) }).toEqual({
-        traces: traces.length,
-        failed: 0,
-        first: [],
-      });
+      expect({
+        enoughTraces: traces.length > 2900,
+        failed: failed.length,
+        first: failed.slice(0, 15),
+      }).toEqual({ enoughTraces: true, failed: 0, first: [] });
     },
   );
 });

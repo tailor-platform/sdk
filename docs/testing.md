@@ -41,16 +41,14 @@ Before raising the minimum supported migration format, identify a released bridg
 
 - Put the `.qnt` file under `test-helpers/` beside its test, which keeps it out of the changeset check's package sources. Check it with `pnpm exec quint typecheck <file>` in `packages/sdk`.
 - Write the specification as the intended behavior, observed where the test can stop the code: a mocked call, or the end of the command. The test replays each trace against the real code, compares at those points, and compares the steps it reached with the trace's steps.
-- Generate only scenarios a user can reach through the CLI, by constraining `init`, and build each value valid by construction: a guard in `init` that fails makes `quint run` hang.
+- Generate only scenarios a user can reach through the CLI, by constraining `init`, and build each value valid by construction: a guard in `init` that fails can make `quint run` hang, as it did for `migration-deploy.qnt`.
 - After changing what `init` chooses, check coverage: the number of distinct traces, how often the cases that matter appear, and that known bugs still fail the test. Choosing among a few outcomes first (which tables exist, then their shapes) keeps rare branches common.
 - A behavior the code does not have yet is a known gap. Reproduce it, then name it as a definition of the tables, or the part of them such as their permissions, the specification leaves unchecked, with a comment saying what the code does instead. Name the fix that will remove it in the PR that adds it. The fix removes the definition, so the test pins it.
 - To show the test catches a bug, temporarily put the bug back (or revert the fix's source change) and confirm the test fails at the step you expect.
 - To reproduce one failing scenario, temporarily replace `init` with the values the failure message prints and run the test.
 - Run Quint with `--backend=typescript`: the Rust backend downloads a binary at run time. Keep `--max-samples` equal to `--n-traces` and `--seed` fixed; try other seeds locally.
-- Resolve Quint's CLI with `import.meta.resolve`, which knip traces.
-- In Quint, `next` is a builtin name; every branch of a `match` in an action assigns the same variables; and `Map.get` on a missing key fails, so check `keys().contains` first. ITF traces encode integers as `#bigint`, maps as `#map`, sets as `#set`, tuples as `#tup`, and variants as `{ tag, value }`.
+- In Quint, `next` is a builtin name; every branch of a `match` in an action assigns the same variables; and `Map.get` on a missing key fails, so check `keys().contains` first.
 - When a second specification arrives, move the Quint run and the ITF decoding out of `migration-model.ts` into a shared test helper.
-- When upgrading Quint, check whether `trustPolicyExclude` in `pnpm-workspace.yaml` still needs its `@octokit/endpoint` entry.
 
 ## E2E Tests
 
