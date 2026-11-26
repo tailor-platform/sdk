@@ -67,7 +67,7 @@ tailor seed studio --dataset cogs
 
 ### Tables several namespaces define
 
-When several TailorDB namespaces define a table with the same name, each goes by `<namespace>.<Table>`: its files are `seed/data/shop-db.Customer.jsonl` and `seed/data/shop-db.Customer.schema.ts`, the commands take that name as an entity (`tailor seed apply shop-db.Customer`), and `--json` results key it that way. A table whose name only one namespace defines keeps its own name. `apply` and `validate` stop when `seed/data/Customer.jsonl` still holds rows for such a table; move each row to the file of its namespace's table.
+When several TailorDB namespaces define a table with the same name, each goes by `<namespace>.<Table>`: its files are `seed/data/shop-db.Customer.jsonl` and `seed/data/shop-db.Customer.schema.ts`, the commands take that name as an entity (`tailor seed apply shop-db.Customer`), and `--json` results key it that way. A table whose name only one namespace defines keeps its own name. The commands stop when `seed/data/Customer.jsonl` still holds rows for such a table; move each row to the file of its namespace's table.
 
 ## Datasets
 

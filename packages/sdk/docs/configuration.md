@@ -612,6 +612,8 @@ export const plugins = definePlugins(
 
 Relative output paths in the options of the built-in plugins, such as `distPath`, are resolved against the directory of `tailor.config.ts`, so `tailor generate` writes to the same place from any directory.
 
+When several TailorDB namespaces define a table with the same name, which namespaces of different applications in a `defineWorkspace()` config (Beta) can, `fileUtilsPlugin`, `enumConstantsPlugin`, and seedPlugin name that table after its namespace: `fileUtilsPlugin` keys it `"crm-db.Customer"`, `enumConstantsPlugin` starts its constants with the namespace (`CrmDbCustomerTier`), and seedPlugin names its files `crm-db.Customer.jsonl` and `crm-db.Customer.schema.ts`. A table whose name only one namespace defines keeps its own name. The `Table`, `Insertable`, `Selectable`, and `Updateable` types that `kyselyTypePlugin` generates take a table name alone, so for such a name they describe the tables of every namespace that defines it at once. Queries through `getDB("crm-db")` are typed by that namespace's tables, and `Namespace["crm-db"]["Customer"]` from the same module is that namespace's table type.
+
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
 
 ```typescript
@@ -670,7 +672,5 @@ Then forbid importing `getDB` from the generated file. For example, an `.oxlintr
   "overrides": [{ "files": ["src/shop/db.ts"], "rules": { "no-restricted-imports": "off" } }]
 }
 ```
-
-When several TailorDB namespaces define a table with the same name, the built-in plugins name it after its namespace wherever their output names tables alone: `fileUtilsPlugin` keys it `"crm-db.Customer"`, `enumConstantsPlugin` starts its constants with the namespace (`CrmDbCustomerTier`), and seedPlugin names its files `crm-db.Customer.jsonl` and `crm-db.Customer.schema.ts`. A table whose name only one namespace defines keeps its own name. The `Table`, `Insertable`, `Selectable`, and `Updateable` types that `kyselyTypePlugin` generates take a table name alone, so for such a name they describe the tables of every namespace that defines it at once; for one namespace's table, use `Namespace["crm-db"]["Customer"]`.
 
 The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.

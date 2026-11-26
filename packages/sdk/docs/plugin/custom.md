@@ -154,7 +154,7 @@ that source table's plugin processing.
 - Add fields to existing tables (e.g., `deletedAt` for soft delete)
 - Generate executors triggered by record events on the source table
 
-Executor names are unique across the workspace, and several namespaces can define a table with the same name, so put the namespace in the name of an executor generated per table. Pass `namespace` to the record trigger of such an executor too, so `deploy` subscribes it to the source table of its own namespace.
+Executor names are unique across the workspace, and several namespaces can define a table with the same name, so put the namespace in the names of an executor generated per table: the `name` the hook returns, which names the generated file, and the `name` the executor module passes to `createExecutor()`. Pass `namespace` to the record trigger of such an executor too, so `deploy` subscribes it to the source table of its own namespace.
 
 ```typescript
 onTableLoaded(context) {
@@ -574,7 +574,7 @@ function processSoftDelete(
     extends: { fields: extendFields },
     executors: [
       {
-        name: `${table.name.toLowerCase()}-on-delete`,
+        name: `${namespace}-${table.name.toLowerCase()}-on-delete`,
         resolve: async () => await import("./executors/on-delete"),
         context: {
           sourceTable: table,
@@ -621,9 +621,9 @@ export default withPluginContext((ctx: SoftDeleteContext) => {
   const { sourceTable, archiveTable, namespace } = ctx;
 
   return createExecutor({
-    name: `${sourceTable.name.toLowerCase()}-on-delete`,
+    name: `${namespace}-${sourceTable.name.toLowerCase()}-on-delete`,
     description: `Archives deleted ${sourceTable.name} records`,
-    trigger: recordDeletedTrigger({ type: sourceTable }),
+    trigger: recordDeletedTrigger({ type: sourceTable, namespace }),
     operation: {
       kind: "function",
       body: async ({ oldRecord, user }) => {
