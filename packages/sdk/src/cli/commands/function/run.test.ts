@@ -13,6 +13,7 @@ import { executeScriptReportingStart } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
@@ -294,8 +295,7 @@ describe("function run --json", () => {
         "--machine-user",
         "admin",
       ];
-      const originalArgv = process.argv;
-      process.argv = ["node", "tailor", "function", "run", ...args];
+      using _argv = tailorArgv(["function", "run", ...args]);
       using stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
@@ -303,12 +303,13 @@ describe("function run --json", () => {
       try {
         await runCommand(runFunctionCommand, args);
       } finally {
-        process.argv = originalArgv;
         delete process.env.FUNCTION_RUN_TEST_ENV_FILE;
       }
 
       const { suggestion } = JSON.parse(stdout.output) as { suggestion: string };
-      expect(suggestion).toContain(`--env-file=${envFile} --env-file-if-exists=missing.env`);
+      expect(suggestion).toContain(
+        `--env-file=${envFile} --env-file-if-exists=${path.resolve("missing.env")}`,
+      );
     });
 
     test("prints the same hint after the error when the output is for a person", async () => {
@@ -539,19 +540,21 @@ describe("function run --json", () => {
 
     test("stops waiting at --timeout, leaving the run going, and says how to read it and remove its resources", async () => {
       vi.mocked(awaitFunctionAsyncRun).mockResolvedValue({ state: "timedOut" });
+      using _argv = tailorArgv(["function", "run", scriptPath, "--async", "-e", ".env"]);
       using _stdout = captureStdout();
       using _stderr = captureStderr();
       using _json = jsonMode();
 
       const result = await runAsync("--timeout", "1s");
 
+      const envFileArg = `--env-file=${path.resolve(".env")}`;
       expect(result.error).toMatchObject({
         code: "FUNCTION_RUN_WAIT_TIMEOUT",
-        suggestion: expect.stringContaining("tailor function logs exec-1"),
+        suggestion: expect.stringContaining(`tailor function logs exec-1 ${envFileArg}`),
         context: { runId: asyncRun.runId, executionId: asyncRun.executionId },
       });
       expect(result.error).toMatchObject({
-        suggestion: expect.stringContaining("tailor workflow prune"),
+        suggestion: expect.stringContaining(`tailor workflow prune ${envFileArg}`),
       });
     });
 

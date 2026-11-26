@@ -4,7 +4,6 @@ import { deployFromCLI } from "#/cli/commands/deploy/deploy";
 import { parseMigrationSkipSteps } from "#/cli/commands/deploy/tailordb/migration-skip-steps";
 import {
   confirmationArgs,
-  readEnvFileArgs,
   locationIds,
   multiConfigArg,
   readDeployConfigPathEnv,
@@ -81,12 +80,7 @@ export const deployCommand = defineAppCommand({
         noCache: args["no-cache"],
         cleanCache: args["clean-cache"],
       },
-      {
-        // Parsed values drop the occurrences given before the subcommand name.
-        ...readEnvFileArgs(process.argv.slice(2)),
-        verbose: args.verbose,
-        json: args.json,
-      },
+      { verbose: args.verbose, json: args.json },
     );
   },
 });

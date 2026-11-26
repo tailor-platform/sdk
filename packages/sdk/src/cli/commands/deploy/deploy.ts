@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { type ConfigServices } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
-import { recoveryContextArgs, type EnvFileArgs } from "#/cli/shared/args";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOrNull,
   hasStaticWebsiteUrlPlaceholder,
@@ -167,7 +167,7 @@ export interface DeployOptions {
   buildOnly?: boolean | undefined;
 }
 
-interface DeployCLIContext extends Partial<EnvFileArgs> {
+interface DeployCLIContext {
   verbose?: boolean | undefined;
   json?: boolean | undefined;
 }
@@ -341,7 +341,7 @@ type PlanDeploymentTargetParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
-  migrationRecoveryArgs?: readonly string[] | undefined;
+  migrationRecoveryProfile?: string | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
   migrationMachineUserOverride?: string | undefined;
@@ -373,7 +373,7 @@ type PlanDeploymentTargetsParams = {
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
-  migrationRecoveryArgs?: readonly string[] | undefined;
+  migrationRecoveryProfile?: string | undefined;
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline> | undefined;
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots | undefined;
   migrationMachineUserOverride?: string | undefined;
@@ -383,23 +383,6 @@ type PlanDeploymentTargetsParams = {
   /** Prior plan results, matched to targets by config path, source for `skip` reuse. */
   previousDeployments?: ReadonlyArray<PlannedDeployment> | undefined;
 };
-
-function recoveryEnvironmentArgs(
-  options: DeployOptions | undefined,
-  cliContext?: DeployCLIContext,
-): readonly string[] {
-  return [
-    ...(cliContext?.envFiles ?? []).flatMap((file) => [
-      "--env-file",
-      path.resolve(process.cwd(), file),
-    ]),
-    ...(cliContext?.envFilesIfExists ?? []).flatMap((file) => [
-      "--env-file-if-exists",
-      path.resolve(process.cwd(), file),
-    ]),
-    ...recoveryContextArgs({ profile: options?.profile }),
-  ];
-}
 
 function recoveryOutputArgs(cliContext?: DeployCLIContext): readonly string[] {
   return [
@@ -422,7 +405,7 @@ function retryDeployArgs(
     "deploy",
     "--config",
     configPaths.join(","),
-    ...recoveryEnvironmentArgs(options, cliContext),
+    ...recoveryContextArgs({ profile: options?.profile }),
     ...(options?.dryRun ? ["--dry-run"] : []),
     ...(options?.yes ? ["--yes"] : []),
     ...(options?.noSchemaCheck ? ["--no-schema-check"] : []),
@@ -439,7 +422,7 @@ function workspaceRecoveryArgs(
   cliContext?: DeployCLIContext,
 ): readonly string[] {
   return [
-    ...recoveryEnvironmentArgs(options, cliContext),
+    ...recoveryContextArgs({ profile: options?.profile }),
     ...(cliContext?.verbose ? ["--verbose"] : []),
   ];
 }
@@ -524,7 +507,7 @@ async function planDeploymentTarget(
     workspaceId,
     noSchemaCheck,
     migrationSkipSteps,
-    migrationRecoveryArgs,
+    migrationRecoveryProfile,
     migrationTestBaselines,
     migrationTestSnapshots,
     migrationMachineUserOverride,
@@ -587,7 +570,7 @@ async function planDeploymentTarget(
       envOverrides: target.envOverrides,
       noSchemaCheck,
       migrationSkipSteps,
-      migrationRecoveryArgs,
+      migrationRecoveryProfile,
       migrationTestBaselines,
       migrationTestSnapshots,
       migrationMachineUserOverride,
@@ -1124,7 +1107,7 @@ async function deployInternal(
         workspaceId,
         noSchemaCheck: options?.noSchemaCheck,
         migrationSkipSteps: options?.migrationSkipSteps,
-        migrationRecoveryArgs: recoveryEnvironmentArgs(options, cliContext),
+        migrationRecoveryProfile: options?.profile,
         migrationTestBaselines: internalContext?.migrationTestBaselines,
         migrationTestSnapshots: internalContext?.migrationTestSnapshots,
         migrationMachineUserOverride: internalContext?.migrationMachineUserOverride,

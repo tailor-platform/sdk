@@ -7,6 +7,7 @@ import { loadConfigFile } from "#/cli/shared/config-loader";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { generate, generateCommand } from "./generate";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import { getNextMigrationNumber, loadDiff, reconstructSnapshotFromMigrations } from "./snapshot";
@@ -1671,6 +1672,20 @@ describe("tailordb migration generate at the last migration number", () => {
     expect(result.error).toMatchObject({
       suggestion: expect.stringContaining(
         "`tailor tailordb migration rebaseline --namespace tailordb --config=custom.config.ts`",
+      ),
+    });
+  });
+
+  test("includes the env files of the run in the re-baseline command", async () => {
+    addNamespace(tmpDir, "tailordb", "User", userWithoutName());
+    vi.mocked(getNextMigrationNumber).mockReturnValue(10000);
+    using _argv = tailorArgv(["tailordb", "migration", "generate", "-e", ".env"]);
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.error).toMatchObject({
+      suggestion: expect.stringContaining(
+        `\`tailor tailordb migration rebaseline --namespace tailordb --env-file=${path.resolve(".env")}\``,
       ),
     });
   });

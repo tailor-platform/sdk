@@ -365,7 +365,7 @@ function assertCheckpointsInLocalHistory(
  * @param {ServiceSettings} config - Settings of the config the namespaces belong to
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
- * @param {readonly string[] | undefined} migrationRecoveryArgs - Profile and env-file arguments of the deploy, kept in the suggested commands
+ * @param {string | undefined} migrationRecoveryProfile - Profile of the deploy, kept in the suggested commands
  * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 export async function validateAndDetectMigrations(
@@ -375,13 +375,13 @@ export async function validateAndDetectMigrations(
   config: ServiceSettings,
   noSchemaCheck: boolean,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  migrationRecoveryArgs: readonly string[] | undefined,
+  migrationRecoveryProfile: string | undefined,
 ): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const commandContext = migrationCommandContext({
     workspaceId,
+    profile: migrationRecoveryProfile,
     configPath: config.path,
-    extraArgs: migrationRecoveryArgs,
   });
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   const migrationsDirs = new Map(

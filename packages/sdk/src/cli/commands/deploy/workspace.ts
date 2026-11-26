@@ -213,10 +213,7 @@ async function rememberWorkspaceContext(
         message: "The workspace selection could not be saved for every configuration file.",
         details: error instanceof Error ? error.message : String(error),
         suggestion: "Fix project state permissions, then rerun deploy with the workspace ID.",
-        next: executableAction([
-          ...deployArgs(options),
-          ...recoveryContextArgs({ workspaceId: context.workspaceId }),
-        ]),
+        next: executableAction([...deployArgs(options), `--workspace-id=${context.workspaceId}`]),
         context: {
           workspaceId: context.workspaceId,
           configPaths: options.contextTargets?.map(({ configPath }) => configPath),

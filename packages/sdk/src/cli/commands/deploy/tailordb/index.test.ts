@@ -35,6 +35,7 @@ import {
   type OperatorClientMocks,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "../label";
 import { tailorDBPlanResultContext } from "../test-helpers/plan-results";
@@ -409,10 +410,10 @@ describe("planTailorDB (service level)", () => {
       owner: appOwner,
       forRemoval: false,
       config: mockConfig,
-      migrationRecoveryArgs: ["--profile=staging"],
+      migrationRecoveryProfile: "staging",
     });
 
-    expect(result.context.migrationRecoveryArgs).toEqual(["--profile=staging"]);
+    expect(result.context.migrationRecoveryProfile).toBe("staging");
   });
 
   describe("rename scenarios (service level)", () => {
@@ -2735,7 +2736,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       planResult.context.config,
       planResult.context.noSchemaCheck,
       planResult.context.tailorDBInputs,
-      planResult.context.migrationRecoveryArgs,
+      planResult.context.migrationRecoveryProfile,
     );
   }
 
@@ -2851,7 +2852,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       const { client } = createMigrationClient({ "sdk-migration": "m0002" });
       using _stderr = captureStderr();
       const planResult = makePlanResult(noSchemaCheck);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       const error = await runValidation(client, planResult).catch((failure: unknown) => failure);
 
@@ -2890,13 +2891,40 @@ describe("applyTailorDB migration label reconciliation", () => {
       forRemoval: false,
       config,
       noSchemaCheck: true,
-      migrationRecoveryArgs: ["--profile=staging"],
+      migrationRecoveryProfile: "staging",
     }).catch((failure: unknown) => failure);
 
     expect(error).toMatchObject({
       code: "MIGRATION_CHECKPOINT_UNKNOWN",
       suggestion: expect.stringMatching(
         /`tailor tailordb migration sync 0000 --namespace test-tailordb --config=\S+tailor\.config\.ts --workspace-id=test-workspace --profile=staging`/,
+      ),
+    });
+  });
+
+  test("keeps the deploy's env files once in the checkpoint recovery commands", async () => {
+    const { client } = createMigrationClient({ "sdk-migration": "m0002" });
+    using _stderr = captureStderr();
+    using _argv = tailorArgv(["-e", ".env", "deploy"]);
+    const { application, config, owner } = makePlanResult().context;
+
+    const error = await planTailorDB({
+      client,
+      workspaceId: "test-workspace",
+      application,
+      applications: [],
+      owner,
+      forRemoval: false,
+      config,
+      noSchemaCheck: true,
+      migrationRecoveryProfile: "staging",
+    }).catch((failure: unknown) => failure);
+
+    const envFileArg = `--env-file=${path.resolve(".env")}`;
+    expect(error).toMatchObject({
+      code: "MIGRATION_CHECKPOINT_UNKNOWN",
+      suggestion: expect.stringContaining(
+        `tailor.config.ts ${envFileArg} --workspace-id=test-workspace --profile=staging\``,
       ),
     });
   });
@@ -3077,7 +3105,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   test("leaves a checkpoint that moves ahead of the local migration history during the deploy", async () => {
     const planResult = makePlanResult(true);
-    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+    planResult.context.migrationRecoveryProfile = "staging";
     addSentinelTypeCreate(planResult);
     const remoteLabels = { "sdk-migration": "m0000" };
     const { client, setMetadata } = createMigrationClient(remoteLabels);
@@ -3461,7 +3489,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       async ({ status, runStatus, next }) => {
         writeMainMigration();
         const planResult = makePlanResult(true);
-        planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+        planResult.context.migrationRecoveryProfile = "staging";
         addSentinelTypeCreate(planResult);
         planResult.context.migrationFileState = captureMigrationFileState(
           planResult.context.namespacesWithMigrations,
@@ -3500,7 +3528,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         },
       );
       const planResult = makePlanResult(true);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       const error = await runValidation(client, planResult).catch((caught: unknown) => caught);
 
@@ -3529,7 +3557,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         },
       );
       const planResult = makePlanResult(true);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       const error = await runValidation(client, planResult).catch((caught: unknown) => caught);
 
@@ -4973,7 +5001,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     client.getMetadata.mockResolvedValue({ metadata: { labels: {} } });
 
     const planResult = planWithDeployDerivedSettings(userType);
-    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+    planResult.context.migrationRecoveryProfile = "staging";
 
     const error = await runValidation(client, planResult).catch((failure: unknown) => failure);
 

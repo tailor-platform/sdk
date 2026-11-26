@@ -1,4 +1,5 @@
 import { NotificationSeverity } from "@tailor-platform/tailor-proto/notification_resource_pb";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { displayWidth } from "#/cli/shared/ascii-table";
 import { formatCommandHint } from "#/cli/shared/errors";
 import { sanitizeTerminalText, styles, symbols } from "#/cli/shared/logger";
@@ -104,14 +105,14 @@ export function formatNotificationBanner(
     const detail = hiddenCritical > 0 ? ` (${hiddenCritical} CRITICAL)` : "";
     lines.push(styles.dim(`  …and ${more} more${detail}.`));
   }
-  const profileArgs = options.profile ? ["--profile", options.profile] : [];
+  const contextArgs = recoveryContextArgs({ profile: options.profile });
   const listHint = formatCommandHint({
     command: "tailor",
-    args: ["notification", "list", ...profileArgs],
+    args: ["notification", "list", ...contextArgs],
   });
   const readHint = formatCommandHint({
     command: "tailor",
-    args: ["notification", "read", ID_PLACEHOLDER, ...profileArgs],
+    args: ["notification", "read", ID_PLACEHOLDER, ...contextArgs],
   }).replaceAll(` read ${ID_PLACEHOLDER}`, " read <id>");
   lines.push(styles.dim(`  Run ${listHint} for details.`));
   lines.push(styles.dim(`  Run ${readHint} to clear a notification.`));

@@ -9,6 +9,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import {
   SCRIPT_SNAPSHOT_FILE_NAME,
@@ -343,6 +344,18 @@ describe("verifyScriptSchemaSnapshot", () => {
       expect([...new Set(suggestion.match(/--config=[^\s`]+/g))]).toEqual(configHints);
     },
   );
+
+  test("keeps the env files of the run in the drift suggestion", async () => {
+    const drifted = makeSnapshot();
+    drifted.tables.Product!.fields.price = { type: "float", required: false };
+    vi.mocked(fetchRemoteSchemaSnapshot).mockResolvedValue(normalizeSchemaSnapshot(drifted));
+    using _argv = tailorArgv(["function", "run", "scripts/fix.ts", "-e", ".env"]);
+
+    const error = await verifyScriptSchemaSnapshot(makeOptions()).catch((error: unknown) => error);
+
+    const { suggestion } = error as { suggestion: string };
+    expect(suggestion).toContain(`--env-file=${path.resolve(".env")} --workspace-id=ws-1`);
+  });
 
   test("accepts a local snapshot when the deployed schema carries the same generated contract", async () => {
     const remoteDerived = makeSnapshot();

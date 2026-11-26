@@ -1497,7 +1497,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       planResult.context.pendingMigrations = setPendingMigrations([
         mkAddTypeMigration(1, "StockReservation"),
       ]);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_UNVERIFIED",
@@ -1507,7 +1507,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         context: { namespace: "test-ns", tables: expect.arrayContaining(["GoodsReceipt"]) },
       });
       expect(vi.mocked(migrationModule.executeMigrations).mock.calls[0]![0]).toMatchObject({
-        migrationRecoveryArgs: ["--profile=staging"],
+        migrationRecoveryProfile: "staging",
       });
     });
 
@@ -1607,7 +1607,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       planResult.context.pendingMigrations = setPendingMigrations([
         mkAddTypeMigration(1, "StockReservation"),
       ]);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
         code: "MIGRATION_CHECKPOINT_CONFLICT",
@@ -2141,7 +2141,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       planResult.context.pendingMigrations = setPendingMigrations([
         mkAddFieldMigration(1, "GoodsReceipt", "note"),
       ]);
-      planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+      planResult.context.migrationRecoveryProfile = "staging";
 
       const error = await applyTailorDB(client, planResult, "create-update").catch(
         (caught: unknown) => caught,

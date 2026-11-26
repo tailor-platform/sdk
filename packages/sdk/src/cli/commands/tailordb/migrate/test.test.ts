@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { runCommand } from "@politty/zod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import {
   runMigrationTest,
@@ -447,6 +448,7 @@ describe("tailordb migration test", () => {
     );
     const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const log = vi.spyOn(logger, "log").mockImplementation(() => {});
+    using _argv = tailorArgv(["tailordb", "migration", "test", "-e", ".env"]);
 
     const result = await runMigrationTest(
       { data: "seed", keep: true, keepTtl: "24h" },
@@ -459,7 +461,7 @@ describe("tailordb migration test", () => {
       "Failed to record an expiry on temporary workspace 44444444-4444-4444-8444-444444444444: label write failed",
     );
     expect(log).toHaveBeenCalledWith(
-      "Record one with `tailor workspace ttl set --ttl 24h --workspace-id=44444444-4444-4444-8444-444444444444`.",
+      `Record one with \`tailor workspace ttl set --ttl 24h --env-file=${path.resolve(".env")} --workspace-id=44444444-4444-4444-8444-444444444444\`.`,
     );
     warn.mockRestore();
     log.mockRestore();
@@ -544,6 +546,7 @@ describe("tailordb migration test", () => {
   test("points at the workspace delete command for the orphaned workspace", async () => {
     const dependencies = createDependencies([]);
     vi.mocked(dependencies.deleteWorkspace).mockRejectedValueOnce(new Error("delete failed"));
+    using _argv = tailorArgv(["tailordb", "migration", "test", "-e", ".env"]);
 
     await expect(
       runMigrationTest({ data: "seed", profile: "staging" }, dependencies),
@@ -552,7 +555,12 @@ describe("tailordb migration test", () => {
       suggestion: "Delete the temporary workspace manually with TAILOR_PLATFORM_PROFILE=staging.",
       next: {
         command: "tailor",
-        args: ["workspace", "delete", "--workspace-id", "44444444-4444-4444-8444-444444444444"],
+        args: [
+          "workspace",
+          "delete",
+          `--env-file=${path.resolve(".env")}`,
+          "--workspace-id=44444444-4444-4444-8444-444444444444",
+        ],
       },
     });
   });

@@ -133,8 +133,8 @@ import type { ApplyPhase } from "../types";
 function deployCommandContext(context: TailorDBPlanResult["context"]): MigrationCommandContext {
   return migrationCommandContext({
     workspaceId: context.workspaceId,
+    profile: context.migrationRecoveryProfile,
     configPath: context.config.path,
-    extraArgs: context.migrationRecoveryArgs,
   });
 }
 
@@ -237,8 +237,8 @@ async function buildMigrationContextForScripts(
     invokerByNamespace: machineUsers.byNamespace,
     env,
     configPath: migrationContext.config.path,
-    ...(migrationContext.migrationRecoveryArgs
-      ? { migrationRecoveryArgs: migrationContext.migrationRecoveryArgs }
+    ...(migrationContext.migrationRecoveryProfile
+      ? { migrationRecoveryProfile: migrationContext.migrationRecoveryProfile }
       : {}),
     owner: migrationContext.owner,
     maintenanceMode,
@@ -321,7 +321,7 @@ async function validateTailorDBMigrationState(
     context.config,
     context.noSchemaCheck,
     context.tailorDBInputs,
-    context.migrationRecoveryArgs,
+    context.migrationRecoveryProfile,
   );
   const approvedRepairs = context.checkpointRepairs;
   const repairPlanChanged =

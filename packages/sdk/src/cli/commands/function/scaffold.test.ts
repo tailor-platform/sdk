@@ -15,6 +15,7 @@ import { logger } from "#/cli/shared/logger";
 import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { scaffoldCommand } from "./scaffold";
@@ -260,6 +261,21 @@ describe("function scaffold", () => {
       expect(nextHint?.match(/--config=[^\s`]+/g) ?? []).toEqual(configHints);
     },
   );
+
+  test("keeps the env files it was given in the next-step hint", async () => {
+    using tmp = tempCwd("sdk-function-script-");
+    using _logger = silenceLogger("info", "success", "warn");
+    using _argv = tailorArgv(["function", "scaffold", "scripts/fix.ts", "-e", ".env"]);
+    mockConfig(tmp.dir);
+
+    await runCommand(scaffoldCommand, ["scripts/fix.ts"]);
+
+    const nextHint = vi
+      .mocked(logger.info)
+      .mock.calls.map(([message]) => String(message))
+      .find((message) => message.startsWith("Next:"));
+    expect(nextHint).toContain(`function run scripts/fix.ts --env-file=${path.resolve(".env")}`);
+  });
 
   test("generates db.ts and db.snapshot.json from local definitions without authentication by default", async () => {
     using tmp = tempCwd("sdk-function-script-");

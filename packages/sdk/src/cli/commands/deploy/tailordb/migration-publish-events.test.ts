@@ -867,7 +867,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       ]),
     ]);
     vi.mocked(client.deleteTailorDBType).mockRejectedValueOnce(new Error("cleanup failed"));
-    planResult.context.migrationRecoveryArgs = ["--profile=staging"];
+    planResult.context.migrationRecoveryProfile = "staging";
     using stderr = captureStderr();
 
     const error = await applyTailorDB(client, planResult, "create-update").catch(

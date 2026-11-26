@@ -147,7 +147,7 @@ export async function planTailorDB(context: PlanContext) {
     config,
     noSchemaCheck,
     migrationSkipSteps,
-    migrationRecoveryArgs,
+    migrationRecoveryProfile,
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
@@ -224,7 +224,7 @@ export async function planTailorDB(context: PlanContext) {
           config,
           noSchemaCheck ?? false,
           tailordbs,
-          migrationRecoveryArgs,
+          migrationRecoveryProfile,
         );
   if (detected) {
     await assertPendingMigrationsRunnable({
@@ -310,7 +310,7 @@ export async function planTailorDB(context: PlanContext) {
       config,
       noSchemaCheck: noSchemaCheck ?? false,
       ...(migrationSkipSteps ? { migrationSkipSteps } : {}),
-      ...(migrationRecoveryArgs ? { migrationRecoveryArgs } : {}),
+      ...(migrationRecoveryProfile ? { migrationRecoveryProfile } : {}),
       ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       ...(context.migrationMachineUserOverride !== undefined
         ? { migrationMachineUserOverride: context.migrationMachineUserOverride }

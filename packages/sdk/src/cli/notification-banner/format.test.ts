@@ -1,7 +1,9 @@
 import { stripVTControlCharacters } from "node:util";
 import { NotificationSeverity } from "@tailor-platform/tailor-proto/notification_resource_pb";
+import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import { displayWidth } from "#/cli/shared/ascii-table";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { formatNotificationBanner } from "./format";
 
 interface PlainBanner {
@@ -118,11 +120,21 @@ describe("formatNotificationBanner", () => {
     expect(
       plain(formatNotificationBanner([warning("x")], 1, { profile: "staging" })).lines.slice(-2),
     ).toEqual([
-      "  Run `tailor notification list --profile staging` for details.",
-      "  Run `tailor notification read <id> --profile staging` to clear a notification.",
+      "  Run `tailor notification list --profile=staging` for details.",
+      "  Run `tailor notification read <id> --profile=staging` to clear a notification.",
     ]);
     const quoted = plain(formatNotificationBanner([warning("x")], 1, { profile: "my profile" }));
-    expect(quoted.lines.at(-2)).toContain("--profile 'my profile'");
-    expect(quoted.lines.at(-1)).toContain("read <id> --profile 'my profile'");
+    expect(quoted.lines.at(-2)).toContain("'--profile=my profile'");
+    expect(quoted.lines.at(-1)).toContain("read <id> '--profile=my profile'");
+  });
+
+  test("keeps the env files of the run in the hint", () => {
+    using _argv = tailorArgv(["-e", ".env", "workspace", "list"]);
+
+    const envFileArg = `--env-file=${path.resolve(".env")}`;
+    expect(plain(formatNotificationBanner([warning("x")], 1, {})).lines.slice(-2)).toEqual([
+      `  Run \`tailor notification list ${envFileArg}\` for details.`,
+      `  Run \`tailor notification read <id> ${envFileArg}\` to clear a notification.`,
+    ]);
   });
 });

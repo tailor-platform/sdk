@@ -97,7 +97,7 @@ async function loadOptions(options?: RemoveOptions) {
     });
     const deleteWorkspace = formatCommandHint({
       command: "tailor",
-      args: ["workspace", "delete", `--workspace-id=${context.workspaceId}`],
+      args: ["workspace", "delete", ...recoveryContextArgs({ workspaceId: context.workspaceId })],
     });
     throw configKindUnsupportedError(loaded.workspace, {
       message: "tailor remove does not remove the resources of a workspace config.",

@@ -54,15 +54,13 @@ export function formatRebaselineHint(options: RebaselineCommandOptions): string 
 export interface MigrationCommandContext {
   /** Config path the current run used; omitted from the command when it resolves to the default */
   configPath?: string | undefined;
-  /** Workspace, profile, and env-file selection to keep */
+  /** Workspace, profile, and env-file selection to keep; without it, the run's env files alone */
   contextArgs?: readonly string[] | undefined;
 }
 
 /** Config, workspace, and profile the current run used. */
 export interface MigrationRunContext extends RecoveryContext {
   configPath?: string | undefined;
-  /** Further arguments of the run to keep, such as a deploy's env files and profile */
-  extraArgs?: readonly string[] | undefined;
 }
 
 /**
@@ -73,7 +71,7 @@ export interface MigrationRunContext extends RecoveryContext {
 export function migrationCommandContext(run: MigrationRunContext): MigrationCommandContext {
   return {
     configPath: run.configPath,
-    contextArgs: [...recoveryContextArgs(run), ...(run.extraArgs ?? [])],
+    contextArgs: recoveryContextArgs(run),
   };
 }
 
@@ -103,7 +101,10 @@ export interface NamespaceMigrationCommandOptions extends MigrationCommandContex
  */
 export function migrationContextArgs(context: MigrationCommandContext): string[] {
   const configArg = formatConfigArg(context.configPath);
-  return [...(configArg === undefined ? [] : [configArg]), ...(context.contextArgs ?? [])];
+  return [
+    ...(configArg === undefined ? [] : [configArg]),
+    ...(context.contextArgs ?? recoveryContextArgs({})),
+  ];
 }
 
 /**

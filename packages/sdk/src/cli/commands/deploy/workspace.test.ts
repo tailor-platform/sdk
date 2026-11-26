@@ -1,8 +1,10 @@
 import { Code, ConnectError } from "@connectrpc/connect";
+import * as path from "pathe";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
 import type * as ContextModule from "#/cli/shared/context";
@@ -1220,6 +1222,28 @@ describe("resolveDeployWorkspace", () => {
     ).rejects.toMatchObject({
       name: "CLIError",
       code: "WORKSPACE_CONTEXT_SAVE_FAILED",
+    });
+  });
+
+  test("keeps the deploy's env files once in the rerun suggested when saving the selection fails", async () => {
+    const available = workspace("f2f2f2f2-f2f2-42f2-82f2-f2f2f2f2f2f2");
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.listWorkspacesWithClient.mockResolvedValue([available]);
+    mocks.select.mockResolvedValue(available.id);
+    mocks.saveWorkspaceContext
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("read-only filesystem"));
+    using _argv = tailorArgv(["-e", ".env", "deploy"]);
+    const envFileArg = `--env-file=${path.resolve(".env")}`;
+
+    await expect(
+      resolveDeployWorkspace({
+        contextTargets: contextTargets("/apps/a/tailor.config.ts", "/apps/b/tailor.config.ts"),
+        deployArgs: ["deploy", envFileArg],
+      }),
+    ).rejects.toMatchObject({
+      code: "WORKSPACE_CONTEXT_SAVE_FAILED",
+      next: { command: "tailor", args: ["deploy", envFileArg, `--workspace-id=${available.id}`] },
     });
   });
 

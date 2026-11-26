@@ -139,8 +139,8 @@ export interface MigrationContext {
   env: Record<string, string | number | boolean>;
   /** Config file the deploy loaded. */
   configPath: string;
-  /** Profile and env-file arguments of the deploy, kept in the migration commands it suggests. */
-  migrationRecoveryArgs?: readonly string[] | undefined;
+  /** Profile of the deploy, kept in the migration commands it suggests. */
+  migrationRecoveryProfile?: string | undefined;
   /** Owner whose labels a migration's temporary resources carry. */
   owner: DeployOwner;
   /** Whether the migrating namespaces are in maintenance mode. */
@@ -1354,8 +1354,8 @@ export async function executeMigrations(
       localHistoryId: context.migrationHistoryIds[namespace] ?? null,
       commandContext: migrationCommandContext({
         workspaceId: context.workspaceId,
+        profile: context.migrationRecoveryProfile,
         configPath: context.configPath,
-        extraArgs: context.migrationRecoveryArgs,
       }),
     };
 
