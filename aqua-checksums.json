@@ -61,33 +61,33 @@
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/zizmorcore/zizmor/v1.32.0/zizmor-aarch64-apple-darwin.tar.gz",
-      "checksum": "6EFED18C4539A663FD3C851A2BE9533FD8456C4E646D9416206DA059154A0D3C",
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.33.1/zizmor-aarch64-apple-darwin.tar.gz",
+      "checksum": "68516D45723AAC36E9C87C47D56E8418009FCB919C6CEB44514D85B9D0C1C011",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/zizmorcore/zizmor/v1.32.0/zizmor-aarch64-unknown-linux-gnu.tar.gz",
-      "checksum": "CB152B207F815116D7FA1C1EE4614F61578803351395052908095E79ADFD9FD0",
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.33.1/zizmor-aarch64-unknown-linux-gnu.tar.gz",
+      "checksum": "AA487C792A7CBBE86E4F8DCCD3B66DE33B3B51813C090AAA0842D7EA08A3FC35",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/zizmorcore/zizmor/v1.32.0/zizmor-x86_64-apple-darwin.tar.gz",
-      "checksum": "6983143C719ADA6845A69CC4DD2BACC215F971662FECD8BBD2678388E5CE5969",
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.33.1/zizmor-x86_64-apple-darwin.tar.gz",
+      "checksum": "8B609D38243C6DD6DDD29BF93D02D886EB507383FE4735B1CDE73E66E4DE4F29",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/zizmorcore/zizmor/v1.32.0/zizmor-x86_64-pc-windows-msvc.zip",
-      "checksum": "D284A16E09D9DF4CE2C000357E7B59BD531BE093BEA5718A1CE225B449B59D49",
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.33.1/zizmor-x86_64-pc-windows-msvc.zip",
+      "checksum": "F02EBEEDF651DA468B4DE19D31F0609050AF74E11BE41DC46D82E355CF44F68B",
       "algorithm": "sha256"
     },
     {
-      "id": "github_release/github.com/zizmorcore/zizmor/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz",
-      "checksum": "BB110CC765ECA9CD7EFB2E284A956BE5974C60027B0970F16397D86208A9957B",
+      "id": "github_release/github.com/zizmorcore/zizmor/v1.33.1/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+      "checksum": "3E6A301C7A820A2501915F5A9DE8C0486DA82BDEC7965F068477538A98743D43",
       "algorithm": "sha256"
     },
     {
-      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.592.0/registry.yaml",
-      "checksum": "2B0B50801B481DF187682B8E6DF4CEF1F382B62A44602EEAC146EB5E77122D09",
+      "id": "registries/github_content/github.com/aquaproj/aqua-registry/v4.593.0/registry.yaml",
+      "checksum": "761D91F165038484891F74F0C4DFDFCA4C1A3523A0C4995455FEB4E9C6F2B908",
       "algorithm": "sha256"
     }
   ]

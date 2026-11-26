@@ -20,14 +20,14 @@ import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface GetMachineUserTokenOptions {
-  name?: string;
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  name?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
 }
 
 type GetMachineUserTokenInternalOptions = GetMachineUserTokenOptions & {
-  nameSource?: MachineUserInputSource;
+  nameSource?: MachineUserInputSource | undefined;
 };
 
 export interface MachineUserTokenInfo {

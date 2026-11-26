@@ -35,7 +35,11 @@ describe("createCacheManager", () => {
     return JSON.parse(fs.readFileSync(manifestPath(), "utf-8"));
   }
 
-  function seedCache(overrides?: { lockfileHash?: string }): void {
+  interface SeedCacheOverrides {
+    lockfileHash?: string;
+  }
+
+  function seedCache(overrides?: SeedCacheOverrides): void {
     fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });
     const manifest = {
       version: 1,

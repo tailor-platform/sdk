@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const KILL_GRACE_MS = 2000;
 
 interface ExecFailure {
-  stdout?: string;
+  stdout?: string | undefined;
 }
 
 function reportedBy(failure: ExecFailure): Evaluation | undefined {

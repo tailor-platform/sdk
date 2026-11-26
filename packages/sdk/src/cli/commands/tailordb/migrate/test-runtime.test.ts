@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { errorToJson } from "#/cli/shared/error-json";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
@@ -852,7 +853,7 @@ describe("migration test runtime", () => {
       { namespace: "main", migrationsDir: "/project/migrations/main" },
     ]);
     vi.mocked(verifyRemoteSchema).mockResolvedValue([check]);
-    const client = mockOperatorClient({ getMetadata: { metadata } });
+    const client = mockOperatorClient({ getMetadata: omitUndefined({ metadata }) });
     const prepared = preparedMigrationTest({
       baselines: new Map([
         ["main", { migrationNumber: 0, snapshot: emptySnapshot("main"), historyId: null }],
@@ -944,6 +945,50 @@ describe("migration test runtime", () => {
       ),
     ).toThrow(expect.objectContaining({ code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING" }));
   });
+
+  test.each<{
+    record: string;
+    inProgress: Partial<RemoteSchemaVerificationResult>;
+    error: Record<string, unknown>;
+  }>([
+    {
+      record: "a migration in progress",
+      inProgress: { migrationInProgress: { number: 6, kind: "steps" } },
+      error: { code: "MIGRATION_IN_PROGRESS_CONFLICT" },
+    },
+    {
+      record: "an in-progress record it cannot read",
+      inProgress: { migrationInProgressInvalid: true },
+      error: {
+        code: "MIGRATION_IN_PROGRESS_INVALID",
+        message: expect.stringContaining("cannot be read"),
+      },
+    },
+  ])(
+    "rejects source namespaces with pending checkpoint repairs, the later one with $record, with the error the deploy stops with",
+    ({ inProgress, error }) => {
+      const checkpointRepair = {
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      } as const;
+      expect(() =>
+        assertSourceMatchesCheckpoints(
+          [
+            sourceCheck({ namespace: "a", remoteMigrationNumber: 5, checkpointRepair }),
+            sourceCheck({
+              namespace: "b",
+              remoteMigrationNumber: 5,
+              checkpointRepair,
+              ...inProgress,
+            }),
+          ],
+          sourceContext,
+        ),
+      ).toThrow(expect.objectContaining(error));
+    },
+  );
 
   test("rejects a source with tables its checkpoint's migration removed that a deploy has not deleted", () => {
     expect(() =>

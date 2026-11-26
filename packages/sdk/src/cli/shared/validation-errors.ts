@@ -11,7 +11,7 @@ interface ConfigServiceRef {
   /** `defineConfig` property the service is configured under. */
   configKey: keyof AppConfig;
   /** Service name, or the namespace for TailorDB. */
-  name?: string;
+  name?: string | undefined;
 }
 
 interface ConfigErrorTarget {
@@ -22,23 +22,23 @@ interface ConfigErrorTarget {
   /** What failed, as it reads after "Invalid", such as `Tailor config`. */
   subject: string;
   /** The service that failed, when a single service config failed. */
-  service?: ConfigServiceRef;
+  service?: ConfigServiceRef | undefined;
 }
 
 export interface ConfigInvalidErrorParams extends ConfigErrorTarget {
   /** Validation error of the failing value. */
   error: z.ZodError;
   /** Path of the failing value within `exportName`. */
-  pathPrefix?: FlatIssue["path"];
+  pathPrefix?: FlatIssue["path"] | undefined;
 }
 
 export interface ConfigIssuesErrorParams extends ConfigErrorTarget {
   /** What is wrong, one entry per offending value, with paths within `exportName`. */
   issues: readonly FlatIssue[];
   /** Why the values are rejected. */
-  details?: string;
+  details?: string | undefined;
   /** How to fix the values. */
-  suggestion?: string;
+  suggestion?: string | undefined;
   /** Failure the issues were derived from. */
   cause?: unknown;
 }
@@ -161,22 +161,22 @@ interface NamedDefinition {
   /** Name the definition declares. */
   name: string;
   /** Absolute path of the file that exports the definition, when a file does. */
-  file?: string;
+  file?: string | undefined;
   /** Export the definition was found under, when a file exports it. */
-  exportName?: string;
+  exportName?: string | undefined;
   /** Where the definition comes from when its file does not say, such as its namespace or the plugin that generated it. */
-  source?: string;
+  source?: string | undefined;
   /** Path within the exported config, when the definition is a config entry. */
-  path?: FlatIssue["path"];
+  path?: FlatIssue["path"] | undefined;
 }
 
 export interface UniqueDefinitionNamesParams {
   /** Kind of definition whose names must be unique. */
   kind: keyof typeof DUPLICATE_NAME_LABELS;
   /** Namespace the names must be unique in, when the kind has one. */
-  namespace?: string;
+  namespace?: string | undefined;
   /** What the names must be unique across when that spans namespaces, such as "all TailorDB namespaces in the application". */
-  uniqueAcross?: string;
+  uniqueAcross?: string | undefined;
   /** Loaded definitions to check. */
   definitions: readonly NamedDefinition[];
 }

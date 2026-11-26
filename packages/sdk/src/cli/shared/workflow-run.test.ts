@@ -856,7 +856,7 @@ describe("awaitWorkflowRun deadline", () => {
 
 interface Remote {
   /** What the resource is (default: a workflow) */
-  kind?: "workflow" | "jobFunction" | "function";
+  kind?: "workflow" | "jobFunction" | "function" | undefined;
   name: string;
   labels: Record<string, string>;
   executions?: WorkflowExecution_Status[];
@@ -864,6 +864,8 @@ interface Remote {
   createdAt?: Date;
   /** When the executions finished */
   finishedAt?: Date;
+  /** Executions started directly on the function, without a workflow */
+  functionExecutions?: FunctionExecution_Status[];
 }
 
 function createSweepClient(remote: Remote[]) {
@@ -900,6 +902,21 @@ function createSweepClient(remote: Remote[]) {
         nextPageToken: "",
       };
     },
+    listFunctionExecutions: async ({ filter }) => {
+      const scriptName = filter?.condition?.value?.kind?.value;
+      const item = remote.find(
+        (candidate) => candidate.kind === "function" && candidate.name === scriptName,
+      );
+      return {
+        executions: (item?.functionExecutions ?? []).map((status, index) => ({
+          id: `fe${index}`,
+          scriptName: item?.name,
+          status,
+          finishedAt: item?.finishedAt && timestampFromDate(item.finishedAt),
+        })),
+        nextPageToken: "",
+      };
+    },
     deleteWorkflow: async () => ({}),
     deleteWorkflowJobFunction: async () => ({}),
     deleteFunctionRegistry: async () => ({}),
@@ -917,14 +934,14 @@ describe("reclaimWorkflowRuns", () => {
         labels: run(runId),
         executions: [WorkflowExecution_Status.SUCCESS],
       },
-      { kind: "function", name: `tmp-run-${runId}`, labels: run(runId) },
+      { kind: "function", name: `tmp-run-${runId}-main`, labels: run(runId) },
     ]);
     await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
 
     expect(client.deleteWorkflow.mock.calls[0]?.[0].workflowId).toBe("wf-0");
     expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
       workspaceId: "ws",
-      name: `tmp-run-${runId}`,
+      name: `tmp-run-${runId}-main`,
     });
   });
 
@@ -984,6 +1001,97 @@ describe("reclaimWorkflowRuns", () => {
   test("removes a run that never started once it is old enough", async () => {
     const client = createSweepClient([
       { name: `tmp-run-${runId}`, labels: run(runId), executions: [] },
+    ]);
+    await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+    expect(client.deleteWorkflow).toHaveBeenCalledOnce();
+  });
+
+  describe("for a run that started its function directly, without a workflow", () => {
+    const directFunction = (functionExecutions: FunctionExecution_Status[], finishedAt?: Date) =>
+      createSweepClient([
+        {
+          kind: "function",
+          name: `tmp-fn-${runId}`,
+          labels: run(runId),
+          functionExecutions,
+          ...(finishedAt === undefined ? {} : { finishedAt }),
+        },
+      ]);
+
+    test("keeps the function while its execution is still running", async () => {
+      const client = directFunction([FunctionExecution_Status.RUNNING]);
+      await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+      expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    });
+
+    test("keeps the function while its execution is running even when `workflow prune` asks to remove finished runs at once", async () => {
+      const client = directFunction([FunctionExecution_Status.RUNNING]);
+      await reclaimWorkflowRuns({
+        client,
+        workspaceId: "ws",
+        now: old,
+        ignoreFinishedGrace: true,
+      });
+
+      expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    });
+
+    test("keeps the function of an execution that finished moments ago, so its waiter can read the outcome", async () => {
+      const client = directFunction([FunctionExecution_Status.SUCCESS], old);
+      await reclaimWorkflowRuns({
+        client,
+        workspaceId: "ws",
+        now: new Date(old.getTime() + 5000),
+      });
+
+      expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    });
+
+    test("removes the function of an execution that finished long ago", async () => {
+      const client = directFunction([FunctionExecution_Status.FAILED], now);
+      await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
+        workspaceId: "ws",
+        name: `tmp-fn-${runId}`,
+      });
+    });
+
+    test("reports the removed run by the name of its function", async () => {
+      const client = directFunction([FunctionExecution_Status.FAILED], now);
+      const { removed } = await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
+
+      expect(removed).toEqual([`tmp-fn-${runId}`]);
+    });
+
+    test("removes the function of a finished execution at once when asked to", async () => {
+      const client = directFunction([FunctionExecution_Status.SUCCESS], old);
+      await reclaimWorkflowRuns({
+        client,
+        workspaceId: "ws",
+        now: new Date(old.getTime() + 5000),
+        ignoreFinishedGrace: true,
+      });
+
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledOnce();
+    });
+  });
+
+  test("removes a finished workflow run whose job function stays suspended after it started another job", async () => {
+    const client = createSweepClient([
+      {
+        name: `tmp-run-${runId}`,
+        labels: run(runId),
+        executions: [WorkflowExecution_Status.SUCCESS],
+      },
+      {
+        kind: "function",
+        name: `tmp-run-${runId}-main`,
+        labels: run(runId),
+        functionExecutions: [FunctionExecution_Status.SUSPEND],
+      },
     ]);
     await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
 
@@ -1373,6 +1481,24 @@ describe("reclaimWorkflowRuns with resources that carry no run label", () => {
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
   });
 
+  test("leaves the function of an async run that is still executing alone even with the flag", async () => {
+    const client = createSweepClient([
+      orphan("function", {
+        name: `tmp-fn-${runId}`,
+        functionExecutions: [FunctionExecution_Status.RUNNING],
+      }),
+    ]);
+
+    await reclaimWorkflowRuns({
+      client,
+      workspaceId: "ws",
+      now: old,
+      includeUnlabeled: true,
+    });
+
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+
   test("never counts a resource an app owns as unlabeled", async () => {
     const client = createSweepClient([orphan("function", { labels: { "sdk-name": "app" } })]);
 
@@ -1586,6 +1712,23 @@ describe("assertWaitTimeout", () => {
   test("refuses a wait the timer would end at once, with a code of its own", () => {
     expect(() => assertWaitTimeout(2_147_483_648)).toThrow(
       expect.objectContaining({ code: "WORKFLOW_RUN_TIMEOUT_TOO_LONG" }),
+    );
+  });
+});
+
+describe("the checks of a wait name the command that waits", () => {
+  test("a poll interval that is too long", () => {
+    expect(() => assertPollInterval(60_001, "function run")).toThrow(
+      expect.objectContaining({ command: "function run" }),
+    );
+    expect(() => assertPollInterval(60_001)).toThrow(
+      expect.objectContaining({ command: "workflow run" }),
+    );
+  });
+
+  test("a timeout that is too long", () => {
+    expect(() => assertWaitTimeout(2_147_483_648, "function run")).toThrow(
+      expect.objectContaining({ command: "function run" }),
     );
   });
 });

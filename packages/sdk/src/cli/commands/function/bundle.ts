@@ -62,26 +62,26 @@ interface BundleForRunOptions {
   /** Directory to resolve the bundler's tsconfig against (the owning config's directory) */
   baseDir: string;
   /** Environment variables (injected into workflow job bundles) */
-  env?: Record<string, string | number | boolean>;
+  env?: Record<string, string | number | boolean> | undefined;
   /** Inline sourcemap config value from defineConfig */
-  inlineSourcemap?: boolean;
+  inlineSourcemap?: boolean | undefined;
   /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean | string[];
-  inlineSourcemapProjectSources?: ProjectSourcesFilter;
+  inlineSourcemapDependencySources?: boolean | string[] | undefined;
+  inlineSourcemapProjectSources?: ProjectSourcesFilter | undefined;
   /** Log level config value from defineConfig */
-  logLevel?: LogLevelInput;
+  logLevel?: LogLevelInput | undefined;
   /** Treeshake config value from defineConfig */
-  treeshake?: TreeshakeOptions;
+  treeshake?: TreeshakeOptions | undefined;
   /** Machine user info for injecting principal context into the bundle */
   machineUser: ResolvedMachineUser;
   /** Workspace ID for user context */
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
-  defaultPermission?: Resolver["permission"];
+  defaultPermission?: Resolver["permission"] | undefined;
   /** Representation applied to `t` date fields that omit `as` */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
-  kyselyTemporal?: boolean;
+  kyselyTemporal?: boolean | undefined;
 }
 
 interface BundleForRunResult {
@@ -203,7 +203,7 @@ type GenerateEntryOptions = {
   machineUser: ResolvedMachineUser;
   workspaceId: string;
   /** For resolvers: the `defaultPermission` of the namespace owning the file */
-  defaultPermission?: Resolver["permission"];
+  defaultPermission?: Resolver["permission"] | undefined;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault: EffectiveDateDefault;
 };

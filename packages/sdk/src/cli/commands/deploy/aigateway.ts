@@ -6,6 +6,7 @@ import {
 } from "@tailor-platform/tailor-proto/aigateway_pb";
 import { resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
@@ -139,12 +140,12 @@ export async function planAIGateway(context: PlanContext) {
       "AIGateway CORS",
       { expectedLocalNames: expectedLocalWebsites },
     );
-    const request = {
+    const request = omitUndefined({
       workspaceId,
       aigatewayName: name,
       authNamespace: config.authNamespace,
       cors: config.cors ? [...config.cors] : [],
-    };
+    });
     desired.push({
       name,
       request,

@@ -332,6 +332,10 @@ export function mockSandbox() {
       return { executions: items.map(executionView), nextPageToken };
     };
 
+    interface ReadFileOptions {
+      encoding: string;
+    }
+
     const sandbox: Sandbox = {
       id: nextId("sandbox"),
       name: opts.name ?? "",
@@ -365,7 +369,7 @@ export function mockSandbox() {
       async executions(listOpts) {
         return listPage(listOpts);
       },
-      readFile: (async (path: string, readOpts?: { encoding: string }) => {
+      readFile: (async (path: string, readOpts?: ReadFileOptions) => {
         requireUsable(state, "readFile");
         const bytes = state.files.get(normalizePath(path));
         if (!bytes) throw new SandboxErrorMock(`file ${path} not found`, "NOT_FOUND");

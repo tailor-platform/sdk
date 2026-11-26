@@ -7,21 +7,21 @@ import type { ScriptInvoker } from "#/cli/shared/script-executor";
 type MigrationTestDataMode = "seed" | "clone";
 
 export interface MigrationTestOptions {
-  configPath?: string;
-  workspaceId?: string;
-  profile?: string;
+  configPath?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
   data: MigrationTestDataMode;
-  targetWorkspaceId?: string;
-  keep?: boolean;
-  keepTtl?: string;
-  organizationId?: string;
-  folderId?: string;
-  assertionPath?: string;
-  assertionNamespace?: string;
-  machineUser?: string;
-  cloneTimeout?: number;
-  yes?: boolean;
-  json?: boolean;
+  targetWorkspaceId?: string | undefined;
+  keep?: boolean | undefined;
+  keepTtl?: string | undefined;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
+  assertionPath?: string | undefined;
+  assertionNamespace?: string | undefined;
+  machineUser?: string | undefined;
+  cloneTimeout?: number | undefined;
+  yes?: boolean | undefined;
+  json?: boolean | undefined;
 }
 
 type MigrationTestBaseline = TailorDBMigrationTestBaseline;
@@ -32,30 +32,32 @@ export interface PreparedAssertion {
 }
 
 export interface PreparedMigrationTest {
-  assertion?: PreparedAssertion;
+  assertion?: PreparedAssertion | undefined;
   sourceWorkspaceId: string;
   /** Application `--data clone` copies; undefined for a workspace config that clones none. */
   sourceApplicationName: string | undefined;
   temporaryWorkspace: {
     name: string;
     region: string;
-    organizationId?: string;
-    folderId?: string;
+    organizationId?: string | undefined;
+    folderId?: string | undefined;
   };
   baselines: ReadonlyMap<string, MigrationTestBaseline>;
   baselineSnapshots: TailorDBMigrationTestSnapshots;
   targetSnapshots: TailorDBMigrationTestSnapshots;
   pendingNamespaces: string[];
-  designatedTarget?: {
-    id: string;
-    region: string;
-  };
+  designatedTarget?:
+    | {
+        id: string;
+        region: string;
+      }
+    | undefined;
 }
 
 interface MigrationTestWorkspace {
   id: string;
   name: string;
-  createdAt?: Date;
+  createdAt?: Date | undefined;
 }
 
 interface MigrationTestTarget {
@@ -66,11 +68,11 @@ interface MigrationTestTarget {
 interface MigrationTestDataTarget extends MigrationTestTarget {
   sourceWorkspaceId: string;
   applicationName: string | undefined;
-  cloneTimeout?: number;
+  cloneTimeout?: number | undefined;
 }
 
 interface MigrationTestScriptTarget extends MigrationTestTarget {
-  machineUser?: string;
+  machineUser?: string | undefined;
 }
 
 interface MigrationTestAssertionTarget extends MigrationTestTarget {
@@ -93,7 +95,7 @@ export interface MigrationTestDependencies {
 export interface MigrationTestResult {
   success: true;
   workspaceId: string;
-  workspaceName?: string;
+  workspaceName?: string | undefined;
   temporary: boolean;
   deleted: boolean;
   data: MigrationTestDataMode;

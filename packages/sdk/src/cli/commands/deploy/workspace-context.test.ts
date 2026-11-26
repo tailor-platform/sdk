@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { aroundEach, describe, expect, test } from "vitest";
 import { loadWorkspaceContext, saveWorkspaceContext } from "./workspace-context";
 
@@ -145,6 +145,42 @@ describe("workspace context", () => {
     ).rejects.toThrow(/rename/);
     await expect(readdir(stateDirectory)).resolves.toEqual(["tailor.config.ts.context.json"]);
   });
+
+  test.each([
+    ["an absolute", "first", "second", (root: string) => join(root, "shared")],
+    ["a parent-relative", "first", "second", () => join("..", "shared")],
+    ["an absolute nested", ".", "nested", (root: string) => join(root, "nested", "shared")],
+  ])(
+    "stores separate contexts in %s build output directory shared by configuration files in different directories",
+    async (_kind, firstDirectory, secondDirectory, outputDirectory) => {
+      const root = await temporaryDirectory();
+      process.env.TAILOR_BUILD_OUTPUT_DIR = outputDirectory(root);
+      const firstConfigPath = join(root, firstDirectory, "tailor.config.ts");
+      const secondConfigPath = join(root, secondDirectory, "tailor.config.ts");
+      const firstContext = {
+        version: 1 as const,
+        platformUrl: "https://api.tailor.tech",
+        workspaceId: "11111111-1111-4111-8111-111111111111",
+      };
+      const secondContext = {
+        ...firstContext,
+        workspaceId: "22222222-2222-4222-8222-222222222222",
+      };
+
+      await saveWorkspaceContext(firstContext, firstConfigPath);
+      await saveWorkspaceContext(secondContext, secondConfigPath);
+
+      await expect(
+        loadWorkspaceContext("https://api.tailor.tech", firstConfigPath),
+      ).resolves.toEqual(firstContext);
+      await expect(
+        loadWorkspaceContext("https://api.tailor.tech", secondConfigPath),
+      ).resolves.toEqual(secondContext);
+      await expect(
+        readdir(resolve(root, firstDirectory, outputDirectory(root))),
+      ).resolves.toHaveLength(2);
+    },
+  );
 
   test.each([
     ["missing", undefined],

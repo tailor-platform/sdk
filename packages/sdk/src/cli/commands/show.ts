@@ -24,18 +24,18 @@ import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./wo
 import type { AuthOAuth2ClientSummary } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 export interface ShowOptions {
-  workspaceId?: string;
-  profile?: string;
-  configPath?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  configPath?: string | undefined;
   /** Application to show when the config defines several. Defaults to the only application. */
-  app?: string;
+  app?: string | undefined;
 }
 
 interface WorkspaceInfo {
   workspaceId: string;
   workspaceName: string;
-  workspaceFolderName?: string;
-  workspaceRegion?: string;
+  workspaceFolderName?: string | undefined;
+  workspaceRegion?: string | undefined;
 }
 
 /** A service the application's GraphQL API exposes. */

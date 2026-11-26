@@ -38,34 +38,34 @@ import type { EffectiveDateDefault } from "#/runtime/types";
  */
 export interface FunctionBundleSettings {
   /** Start context for workflow/job transformations */
-  startContext?: StartContext;
+  startContext?: StartContext | undefined;
   /** Optional bundle cache for skipping unchanged builds */
-  cache?: BundleCache;
+  cache?: BundleCache | undefined;
   /** Whether to enable inline sourcemaps */
-  inlineSourcemap?: boolean;
+  inlineSourcemap?: boolean | undefined;
   /** Whether inline sourcemaps embed the source text of installed packages */
-  inlineSourcemapDependencySources?: boolean | string[];
+  inlineSourcemapDependencySources?: boolean | string[] | undefined;
   /** Which of the project's own sources keep their text in inline sourcemaps */
-  inlineSourcemapProjectSources?: ProjectSourcesFilter;
+  inlineSourcemapProjectSources?: ProjectSourcesFilter | undefined;
   /** Controls which console calls are kept in bundled code */
-  bundleLogLevel?: LogLevel;
+  bundleLogLevel?: LogLevel | undefined;
   /** Overrides how unused code is removed from bundled code */
-  bundleTreeshake?: TreeshakeOptions;
+  bundleTreeshake?: TreeshakeOptions | undefined;
   /** Optional tsconfig lookup cache shared across bundles in this CLI run */
-  tsconfigCache?: TsconfigLookupCache;
+  tsconfigCache?: TsconfigLookupCache | undefined;
   /** Optional SDK builder annotation results shared across bundles in this CLI run */
-  sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache;
+  sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache | undefined;
   /** Representation applied to `t` date fields that omit `as` */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
-  kyselyTemporal?: boolean;
+  kyselyTemporal?: boolean | undefined;
 }
 
 interface RuntimeGlobalsCheck {
   /** Names the function in error messages */
   label: string;
   /** Globals each installed package may reference */
-  allowed?: AllowedRuntimeGlobals;
+  allowed?: AllowedRuntimeGlobals | undefined;
 }
 
 /**
@@ -75,7 +75,7 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   /** Function kind, used for the cache key and the entry module ID */
   kind: "resolver" | "executor" | "workflow-job" | "auth-hook";
   /** Namespace the function name is unique within, if any */
-  namespace?: string;
+  namespace?: string | undefined;
   /** Function name */
   name: string;
   /** File the entry imports the function from */
@@ -85,11 +85,13 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   /** Generates the entry module source. The source is part of the cache key, so this also runs on a cache hit and must have no side effects */
   entry: (absoluteSourcePath: string) => string;
   /** Creates the plugins that rewrite the function's sources before path resolution; defaults to the start transform */
-  createTransformPlugins?: (hookFailures: HookFailures) => (rolldown.Plugin | undefined)[];
+  createTransformPlugins?:
+    | ((hookFailures: HookFailures) => (rolldown.Plugin | undefined)[])
+    | undefined;
   /** Date representations whose conversion code the bundle keeps */
-  dateRepresentations?: BundledDateRepresentations;
+  dateRepresentations?: BundledDateRepresentations | undefined;
   /** Expressions replaced with constants while bundling */
-  define?: Record<string, string>;
+  define?: Record<string, string> | undefined;
   /** Rejects Node-only globals in the bundle, or `false` to skip the check */
   runtimeGlobals: RuntimeGlobalsCheck | false;
 }

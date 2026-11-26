@@ -4,6 +4,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { getFunctionRegistry } from "./get";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -69,7 +70,7 @@ describe("getFunctionRegistry", () => {
   });
 
   test("throws not-found when response.function is missing", async () => {
-    client.getFunctionRegistry.mockResolvedValue({ function: undefined });
+    client.getFunctionRegistry.mockResolvedValue(omitUndefined({ function: undefined }));
 
     await expect(getFunctionRegistry({ name: "ghost" })).rejects.toThrow(
       'Function registry "ghost" not found.',

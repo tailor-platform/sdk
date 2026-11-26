@@ -123,7 +123,9 @@ function oauth2Connection(name: string): MessageInitShape<typeof AuthConnectionS
   };
 }
 
-function createMockClient(opts: { connections: ConnectionFixture[] }) {
+type CreateMockClientOptions = { connections: ConnectionFixture[] };
+
+function createMockClient(opts: CreateMockClientOptions) {
   return mockOperatorClient({
     listAuthConnections: {
       connections: opts.connections.map((c) => oauth2Connection(c.name)),

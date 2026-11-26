@@ -6,11 +6,11 @@ import type { Program, CallExpression } from "@oxc-project/types";
 
 export interface JobLocation {
   name: string;
-  exportName?: string;
+  exportName?: string | undefined;
   nameRange: { start: number; end: number };
   bodyValueRange: { start: number; end: number };
   // Range of the entire variable declaration statement (for removal)
-  statementRange?: { start: number; end: number };
+  statementRange?: { start: number; end: number } | undefined;
 }
 
 /**
@@ -48,7 +48,7 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
             const parent = assertDefined(parents[i], `parent at index ${i} missing`);
             if (parent.type === "VariableDeclarator") {
               const declarator = parent as unknown as {
-                id?: { type?: string; name?: string };
+                id?: { type?: string | undefined; name?: string | undefined } | undefined;
               };
               if (declarator.id?.type === "Identifier") {
                 exportName = declarator.id.name;

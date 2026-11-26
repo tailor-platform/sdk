@@ -241,9 +241,11 @@ export function main() {
   });
 
   describe("source text in inline sourcemaps", () => {
-    async function embeddedSourceTexts(options: {
+    interface EmbeddedSourceTextsOptions {
       inlineSourcemapDependencySources?: boolean;
-    }): Promise<string[]> {
+    }
+
+    async function embeddedSourceTexts(options: EmbeddedSourceTextsOptions): Promise<string[]> {
       const libDir = path.join(testDir, "node_modules", "function-sourcemap-lib");
       fs.mkdirSync(libDir, { recursive: true });
       fs.writeFileSync(

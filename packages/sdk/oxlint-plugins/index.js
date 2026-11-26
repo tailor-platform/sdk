@@ -12,8 +12,8 @@ function jsdocBlockBefore(sourceCode, node) {
   return last;
 }
 
-function paramNamesFromJsdoc(block) {
-  const names = new Set();
+function jsdocParamNames(block) {
+  const names = [];
   for (const line of block.value.split("\n")) {
     const head = line.match(/^\s*\*?\s*@param\s+/);
     if (!head) continue;
@@ -34,10 +34,16 @@ function paramNamesFromJsdoc(block) {
       rest = rest.slice(i).replace(/^\s+/, "");
     }
     const nameMatch = rest.match(/^\[?([\w$.]+)(?:=[^\]]*)?\]?/);
-    if (!nameMatch) continue;
+    if (nameMatch) names.push(nameMatch[1]);
+  }
+  return names;
+}
+
+function paramNamesFromJsdoc(block) {
+  const names = new Set();
+  for (const full of jsdocParamNames(block)) {
     // Record both the full dotted form (`obj.id`) and the leaf identifier
     // (`id`) so the lookup matches either documentation style.
-    const full = nameMatch[1];
     names.add(full);
     const leaf = full.includes(".") ? full.split(".").pop() : full;
     if (leaf) names.add(leaf);
@@ -45,8 +51,13 @@ function paramNamesFromJsdoc(block) {
   return names;
 }
 
-// Returns one [{ astNode, names: string[] }] entry per function parameter.
-// `names` is the set of identifier names that must be documented in JSDoc:
+function isThisParam(param) {
+  return param.type === "Identifier" && param.name === "this";
+}
+
+// Returns one [{ astNode, names: string[] }] entry per function parameter
+// other than `this`. `names` is the set of identifier names that must be
+// documented in JSDoc:
 // the parameter itself for plain identifiers, the destructured leaves for
 // object/array patterns (matching the repo JSDoc convention of one
 // `@param obj.prop` per leaf).
@@ -77,7 +88,53 @@ function functionParamSlots(node) {
     }
     return [];
   }
-  return node.params.map((p) => ({ astNode: p, names: collect(p) }));
+  return node.params.filter((p) => !isThisParam(p)).map((p) => ({ astNode: p, names: collect(p) }));
+}
+
+// Find the nearest enclosing node that the JSDoc block could be
+// attached to. For `function foo() {}` that's the function itself;
+// for `export const foo = () => {}` it's the VariableDeclaration (or
+// the wrapping ExportNamedDeclaration); for `class C { m() {} }`
+// it's the MethodDefinition; for `{ m() {} }` it's the Property.
+function jsdocCarrier(node, ancestors) {
+  let target = node;
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const parent = ancestors[i];
+    const wraps =
+      (parent.type === "VariableDeclarator" && parent.init === target) ||
+      (parent.type === "VariableDeclaration" && parent.declarations.includes(target)) ||
+      (parent.type === "ExportNamedDeclaration" && parent.declaration === target) ||
+      (parent.type === "ExportDefaultDeclaration" && parent.declaration === target) ||
+      (parent.type === "MethodDefinition" && parent.value === target) ||
+      (parent.type === "Property" && parent.value === target) ||
+      (parent.type === "PropertyDefinition" && parent.value === target);
+    if (!wraps) break;
+    target = parent;
+  }
+  return target;
+}
+
+function isCallArgument(node, parent) {
+  return (
+    (parent?.type === "CallExpression" || parent?.type === "NewExpression") &&
+    parent.callee !== node
+  );
+}
+
+function objectLiteralType(annotation) {
+  if (annotation?.type === "TSTypeLiteral") return annotation;
+  if (annotation?.type !== "TSUnionType") return undefined;
+  const rest = annotation.types.filter(
+    (type) => type.type !== "TSUndefinedKeyword" && type.type !== "TSNullKeyword",
+  );
+  return rest.length === 1 && rest[0].type === "TSTypeLiteral" ? rest[0] : undefined;
+}
+
+function memberKeyName(member) {
+  if (member.computed) return undefined;
+  if (member.key?.type === "Identifier") return member.key.name;
+  if (typeof member.key?.value === "string") return member.key.value;
+  return undefined;
 }
 
 function resolveVariable(context, node, name) {
@@ -259,29 +316,6 @@ export default {
         schema: [],
       },
       create(context) {
-        // Find the nearest enclosing node that the JSDoc block could be
-        // attached to. For `function foo() {}` that's the function itself;
-        // for `export const foo = () => {}` it's the VariableDeclaration (or
-        // the wrapping ExportNamedDeclaration); for `class C { m() {} }`
-        // it's the MethodDefinition; for `{ m() {} }` it's the Property.
-        function jsdocCarrier(node, ancestors) {
-          let target = node;
-          for (let i = ancestors.length - 1; i >= 0; i--) {
-            const parent = ancestors[i];
-            const wraps =
-              (parent.type === "VariableDeclarator" && parent.init === target) ||
-              (parent.type === "VariableDeclaration" && parent.declarations.includes(target)) ||
-              (parent.type === "ExportNamedDeclaration" && parent.declaration === target) ||
-              (parent.type === "ExportDefaultDeclaration" && parent.declaration === target) ||
-              (parent.type === "MethodDefinition" && parent.value === target) ||
-              (parent.type === "Property" && parent.value === target) ||
-              (parent.type === "PropertyDefinition" && parent.value === target);
-            if (!wraps) break;
-            target = parent;
-          }
-          return target;
-        }
-
         function checkFunction(node) {
           const ancestors = context.sourceCode.getAncestors(node);
           const carrier = jsdocCarrier(node, ancestors);
@@ -289,8 +323,8 @@ export default {
           if (!block) return;
           const documented = paramNamesFromJsdoc(block);
           for (const slot of functionParamSlots(node)) {
-            // A slot with no extractable names (e.g. a TypeScript-only
-            // `this:` parameter) is treated as documented.
+            // A slot with no extractable names (e.g. a constructor parameter
+            // property) is treated as documented.
             if (slot.names.length === 0) continue;
             const missing = slot.names.find((n) => !documented.has(n));
             if (missing) {
@@ -300,6 +334,80 @@ export default {
                 data: { name: missing },
               });
               return;
+            }
+          }
+        }
+
+        return {
+          FunctionDeclaration: checkFunction,
+          FunctionExpression: checkFunction,
+          ArrowFunctionExpression: checkFunction,
+        };
+      },
+    },
+
+    "require-named-param-type": {
+      meta: {
+        type: "suggestion",
+        docs: {
+          description:
+            "Require a named type for an object parameter unless the function's JSDoc documents each of its properties.",
+        },
+        messages: {
+          inline:
+            "Extract the type of parameter '{{name}}' into a named type or interface, or, when every property has a name, document each with `@param {{name}}.<property>`.",
+          destructured:
+            "Take a single parameter of a named type and destructure it inside the function, or, when every property has a name, document the parameter with a `@param <name>` tag at its position and each property with `@param <name>.<property>`.",
+        },
+        schema: [],
+      },
+      create(context) {
+        function checkFunction(node) {
+          const ancestors = context.sourceCode.getAncestors(node);
+          const parent = ancestors[ancestors.length - 1];
+          // A callback written inline, alone or as a property of an object argument, carries no JSDoc.
+          if (isCallArgument(node, parent)) return;
+          if (
+            parent?.type === "Property" &&
+            parent.value === node &&
+            isCallArgument(ancestors[ancestors.length - 2], ancestors[ancestors.length - 3])
+          ) {
+            return;
+          }
+          const params = node.params.filter((param) => !isThisParam(param));
+          const targets = params.map((param) => {
+            const declared = param.type === "TSParameterProperty" ? param.parameter : param;
+            return declared.type === "AssignmentPattern" ? declared.left : declared;
+          });
+          const identifierNames = new Set(
+            targets.filter((target) => target.type === "Identifier").map((target) => target.name),
+          );
+          let documented;
+          let roots;
+          for (const [index, target] of targets.entries()) {
+            const destructured = target.type !== "Identifier";
+            const literal = objectLiteralType(target.typeAnnotation?.typeAnnotation);
+            if (!literal) continue;
+            if (!documented) {
+              const block = jsdocBlockBefore(context.sourceCode, jsdocCarrier(node, ancestors));
+              const names = block ? jsdocParamNames(block) : [];
+              documented = new Set(names);
+              roots = names.filter((name) => !name.includes(".") && name !== "this");
+            }
+            // As in eslint-plugin-jsdoc, a destructured parameter takes the root `@param` at its position.
+            const root = destructured ? roots[index] : target.name;
+            const covered =
+              !(destructured && identifierNames.has(root)) &&
+              literal.members.every((member) => {
+                const key = memberKeyName(member);
+                return key !== undefined && documented.has(`${root}.${key}`);
+              });
+            if (!covered) {
+              context.report(
+                destructured
+                  ? { node: params[index], messageId: "destructured" }
+                  : { node: params[index], messageId: "inline", data: { name: root } },
+              );
             }
           }
         }

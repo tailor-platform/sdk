@@ -1,4 +1,3 @@
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
 import { arg } from "@politty/zod";
@@ -16,6 +15,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { configOf } from "#/cli/shared/config-file";
 import { loadConfigFile } from "#/cli/shared/config-loader";
 import { CLIError, isCLIError } from "#/cli/shared/errors";
+import { exitAfterOutput } from "#/cli/shared/exit-after-output";
 import { logger } from "#/cli/shared/logger";
 import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -24,12 +24,15 @@ import {
   assertWaitTimeout,
   assertWorkflowArg,
   awaitWorkflowRun,
-  pruneHint,
-  reclaimFinishedWorkflowRuns,
   startWorkflowRun,
   workflowRunHints,
 } from "#/cli/shared/workflow-run";
-import { createRunId, workflowRunJobFunctionName } from "#/cli/shared/workflow-run-labels";
+import {
+  createRunId,
+  createRunIdSuffix,
+  workflowRunJobFunctionName,
+} from "#/cli/shared/workflow-run-labels";
+import { sweepBeforeRun } from "#/cli/shared/workflow-run-sweep";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { assertDefined } from "#/utils/assert";
@@ -166,7 +169,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       authNamespace,
       machineUser,
     };
-    const runId = createRunId(new Date(), crypto.randomBytes(3).toString("hex"));
+    const runId = createRunId(new Date(), createRunIdSuffix());
     const progress = (message: string) => logger.info(message);
     progress(`Bundling job "${detected.name}" with the jobs it starts...`);
     const bundled = await bundleWorkflowRunJobs({ target, runId, jobName: detected.name });
@@ -187,13 +190,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       jobs: bundled.jobs,
     };
 
-    const swept = await reclaimFinishedWorkflowRuns({ client, workspaceId, now: new Date() });
-    if (swept && swept.keptUnlabeled.length > 0) {
-      logger.warn(
-        `${swept.keptUnlabeled.length} resource(s) named \`tmp-run-…\` carry no \`workflow run\` label and were left in place. ` +
-          `If they are leftovers of an interrupted run, ${pruneHint({ workspaceId, profile: args.profile, includeUnlabeled: true })} removes them.`,
-      );
-    }
+    await sweepBeforeRun({ client, workspaceId, profile: args.profile });
 
     const started = await startWorkflowRun({
       ...source,
@@ -274,14 +271,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
         result,
       );
     }
-    if (!result.success) {
-      // Exiting at once would cut off what is still queued for a pipe.
-      const queued = [process.stdout, process.stderr].filter((stream) => stream.writableLength > 0);
-      await Promise.all(
-        queued.map((stream) => new Promise<void>((resolve) => stream.write("", () => resolve()))),
-      );
-      process.exit(1);
-    }
+    if (!result.success) await exitAfterOutput(1);
   },
 });
 

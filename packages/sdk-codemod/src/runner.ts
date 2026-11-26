@@ -6,7 +6,7 @@ import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { takesSeparateGlobalValue } from "./command-line-pattern";
-import { nodeRangeKey, sourceArrayElements, sourceStaticStringContent } from "./source-strings";
+import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
 import type {
@@ -160,6 +160,7 @@ interface LoadedTransform {
   sourceTextLegacyPatterns: CodemodPatternGroup[];
   suspiciousPatterns: CodemodPatternGroup[];
   sourceStringSuspiciousPatterns: CodemodPatternGroup[];
+  jsonStringSuspiciousPatterns: CodemodPatternGroup[];
   prompt?: string;
   reviewSupersededBy: string[];
 }
@@ -169,31 +170,68 @@ function contentForResidualMatching(relative: string, content: string): string {
   return SOURCE_EXTENSIONS.has(ext) ? maskSourceNonCode(relative, content) : content;
 }
 
+type ResidualEntry = {
+  residual: string;
+  sourceString: string | null;
+  jsonStrings: string[] | null;
+};
+
+const SOURCE_STRING_OPAQUE_VALUE = "\u0001";
+
+function sourceStringEscapeForResidualMatching(escape: string): string {
+  if (/^\\[nr]$/.test(escape)) return "\n";
+  if (/^\\(?:[tvf]|\r\n|\r|\n)$/.test(escape)) return " ";
+  if (/^\\[\\"'`/]$/.test(escape)) return escape.slice(1);
+  return SOURCE_STRING_OPAQUE_VALUE;
+}
+
 function sourceStringFragmentGapForResidualMatching(gap: string): string {
-  if (/^\\["']$/.test(gap)) return gap.slice(1);
-  return /^(?:\\(?:[nrtvf]|\r\n|\r|\n)|\s)+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+  return /^\s+$/.test(gap) ? " " : SOURCE_STRING_FRAGMENT_SEPARATOR;
+}
+
+function isRawTemplate(node: SgNode): boolean {
+  const parent = node.parent();
+  return parent?.kind() === "call_expression" && parent.field("function")?.text() === "String.raw";
 }
 
 function sourceStringNodeContentForResidualMatching(node: SgNode, content: string): string | null {
+  const raw = isRawTemplate(node);
   const parts: string[] = [];
-  let previousFragmentEnd: number | null = null;
+  let previousEnd: number | null = null;
+  let pending = "";
+  let hasFragment = false;
 
   for (const child of node.children()) {
-    if (child.kind() !== "string_fragment") continue;
+    const kind = child.kind();
+    if (
+      kind !== "string_fragment" &&
+      kind !== "escape_sequence" &&
+      kind !== "template_substitution"
+    ) {
+      continue;
+    }
 
     const range = child.range();
-    if (previousFragmentEnd != null && range.start.index > previousFragmentEnd) {
-      parts.push(
-        sourceStringFragmentGapForResidualMatching(
-          content.slice(previousFragmentEnd, range.start.index),
-        ),
+    if (previousEnd != null && range.start.index > previousEnd) {
+      pending += sourceStringFragmentGapForResidualMatching(
+        content.slice(previousEnd, range.start.index),
       );
     }
-    parts.push(child.text());
-    previousFragmentEnd = range.end.index;
+    previousEnd = range.end.index;
+
+    if (kind === "string_fragment" || (raw && kind === "escape_sequence")) {
+      if (hasFragment) parts.push(pending);
+      pending = "";
+      hasFragment = true;
+      parts.push(child.text());
+    } else if (kind === "escape_sequence") {
+      pending += sourceStringEscapeForResidualMatching(child.text());
+    } else {
+      pending += SOURCE_STRING_OPAQUE_VALUE;
+    }
   }
 
-  return parts.length === 0 ? null : parts.join("");
+  return hasFragment ? parts.join("") : null;
 }
 
 function sourceStringContentForResidualMatching(relative: string, content: string): string | null {
@@ -208,18 +246,25 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   }
 
   const sourceStrings: string[] = [];
+  const valueArgumentIds = new Set<number>();
   const visit = (node: SgNode): void => {
     if (node.kind() === "arguments") {
       const value = sourceArgumentsCommandContent(node, content);
       if (value != null) sourceStrings.push(value);
     }
     if (node.kind() === "array") {
-      const value = sourceArrayCommandContent(node, content);
-      if (value != null) sourceStrings.push(value);
+      const command = sourceArrayCommand(node, content);
+      for (const id of command.valueArgumentIds) valueArgumentIds.add(id);
+      if (command.values.length >= 2) sourceStrings.push(command.values.join(" "));
     }
     const kind = node.kind();
     if (kind === "string" || kind === "template_string") {
-      if (isSourceTailorSdkValueArgument(node, content)) return;
+      if (
+        valueArgumentIds.has(node.id()) &&
+        sourceStaticStringContent(node, content)?.includes("tailor-sdk")
+      ) {
+        return;
+      }
       const sourceString = sourceStringNodeContentForResidualMatching(node, content);
       if (sourceString != null) sourceStrings.push(sourceString);
     }
@@ -230,6 +275,30 @@ function sourceStringContentForResidualMatching(relative: string, content: strin
   };
   visit(root);
   return sourceStrings.join(SOURCE_STRING_FRAGMENT_SEPARATOR);
+}
+
+function jsonStringValuesForResidualMatching(relative: string, content: string): string[] | null {
+  if (path.extname(relative).toLowerCase() !== ".json") return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content.replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+
+  const strings: string[] = [];
+  const pending: unknown[] = [parsed];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === "string") {
+      strings.push(value);
+    } else if (value !== null && typeof value === "object") {
+      const children = Object.values(value);
+      for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
+    }
+  }
+  return strings;
 }
 
 function sourceTextContentForResidualMatching(relative: string, content: string): string | null {
@@ -263,65 +332,44 @@ function sourceArgumentsCommandContent(node: SgNode, source: string): string | n
   const argv = args[1];
   if (executable == null || argv?.kind() !== "array") return null;
 
-  const values = sourceArrayCommandValues(argv, source);
+  const { values } = sourceArrayCommand(argv, source);
   return values.length === 0 ? null : [executable, ...values].join(" ");
 }
 
-function sourceArrayCommandContent(node: SgNode, source: string): string | null {
-  const values = sourceArrayCommandValues(node, source);
-  return values.length < 2 ? null : values.join(" ");
-}
-
-function sourceArrayCommandValues(node: SgNode, source: string): string[] {
+function sourceArrayCommand(
+  node: SgNode,
+  source: string,
+): { values: string[]; valueArgumentIds: number[] } {
   const values: string[] = [];
+  const valueArgumentIds: number[] = [];
+  let tailorCli = hasTailorCliExecutable(node, source);
+  let previous: string | null = null;
   for (const element of sourceArrayElements(node)) {
-    if (isSourceValueArgument(element, source)) continue;
     const value = sourceStaticStringContent(element, source);
-    if (value != null) values.push(value);
+    if (tailorCli && isSourceCliValueFlag(previous)) {
+      valueArgumentIds.push(element.id());
+    } else if (value != null) {
+      values.push(value);
+    }
+    tailorCli ||= isSourceCliBinary(value);
+    previous = value;
   }
-  return values;
+  return { values, valueArgumentIds };
 }
 
-function isSourceTailorSdkValueArgument(fragment: SgNode, source: string): boolean {
-  const text =
-    fragment.kind() === "string_fragment"
-      ? fragment.text()
-      : sourceStaticStringContent(fragment, source);
-  return text != null && text.includes("tailor-sdk") && isSourceValueArgument(fragment, source);
-}
-
-function isSourceValueArgument(fragment: SgNode, source: string): boolean {
-  const stringNode = fragment.kind() === "string_fragment" ? fragment.parent() : fragment;
-  if (stringNode == null) return false;
-  const parent = stringNode.parent();
-  if (parent?.kind() !== "array") return false;
-
-  const elements = sourceArrayElements(parent);
-  const index = elements.findIndex((element) => nodeRangeKey(element) === nodeRangeKey(stringNode));
-  if (index <= 0) return false;
-  if (!isTailorCliArgumentArray(parent, index, source)) return false;
-
-  const previous = sourceStaticStringContent(elements[index - 1]!, source);
-  return (
-    previous != null &&
-    ((TAILOR_CLI_VALUE_FLAG_SET.has(previous.split("=", 1)[0]!) && !previous.includes("=")) ||
-      takesSeparateGlobalValue(previous))
-  );
-}
-
-function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: string): boolean {
+function hasTailorCliExecutable(arrayNode: SgNode, source: string): boolean {
   const argumentsNode = arrayNode.parent();
-  if (argumentsNode?.kind() === "arguments") {
-    const callArgs = sourceArrayElements(argumentsNode);
-    const executable = callArgs[0] == null ? null : sourceStaticStringContent(callArgs[0]!, source);
-    if (executable != null && SOURCE_CLI_BINARY_RE.test(executable)) return true;
-  }
+  if (argumentsNode?.kind() !== "arguments") return false;
+  const executable = sourceArrayElements(argumentsNode)[0];
+  return executable != null && isSourceCliBinary(sourceStaticStringContent(executable, source));
+}
 
-  const elements = sourceArrayElements(arrayNode);
-  return elements.slice(0, index).some((element) => {
-    const value = sourceStaticStringContent(element, source);
-    return value != null && SOURCE_CLI_BINARY_RE.test(value);
-  });
+function isSourceCliBinary(value: string | null): boolean {
+  return value != null && SOURCE_CLI_BINARY_RE.test(value);
+}
+
+function isSourceCliValueFlag(value: string | null): boolean {
+  return value != null && (TAILOR_CLI_VALUE_FLAG_SET.has(value) || takesSeparateGlobalValue(value));
 }
 
 function sourceLang(relative: string): Lang {
@@ -521,10 +569,13 @@ export async function runCodemods(
       sourceTextLegacyPatterns: codemod.sourceTextLegacyPatterns ?? [],
       suspiciousPatterns: codemod.suspiciousPatterns ?? [],
       sourceStringSuspiciousPatterns: codemod.sourceStringSuspiciousPatterns ?? [],
+      jsonStringSuspiciousPatterns: codemod.jsonStringSuspiciousPatterns ?? [],
       prompt: codemod.prompt,
       reviewSupersededBy: codemod.reviewSupersededBy ?? [],
     });
   }
+
+  const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
 
   const absoluteTargetPath = path.resolve(targetPath);
   const filesModified: string[] = [];
@@ -572,13 +623,16 @@ export async function runCodemods(
       }
     }
 
-    const residualBySnapshot = new Map<string, { residual: string; sourceString: string | null }>();
-    const residualFor = (content: string): { residual: string; sourceString: string | null } => {
+    const residualBySnapshot = new Map<string, ResidualEntry>();
+    const residualFor = (content: string): ResidualEntry => {
       let entry = residualBySnapshot.get(content);
       if (!entry) {
         entry = {
           residual: contentForResidualMatching(relative, content),
           sourceString: sourceStringContentForResidualMatching(relative, content),
+          jsonStrings: needsJsonStrings
+            ? jsonStringValuesForResidualMatching(relative, content)
+            : null,
         };
         residualBySnapshot.set(content, entry);
       }
@@ -630,15 +684,25 @@ export async function runCodemods(
           existing.push(...findings);
         }
       }
-      if (lt.suspiciousPatterns.length === 0 && lt.sourceStringSuspiciousPatterns.length === 0) {
+      if (
+        lt.suspiciousPatterns.length === 0 &&
+        lt.sourceStringSuspiciousPatterns.length === 0 &&
+        lt.jsonStringSuspiciousPatterns.length === 0
+      ) {
         continue;
       }
-      const { residual, sourceString } = residualFor(snapshot);
+      const { residual, sourceString, jsonStrings } = residualFor(snapshot);
+      const readsJsonStrings = jsonStrings != null && lt.jsonStringSuspiciousPatterns.length > 0;
       const matchesSource =
-        lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null) ||
+        (!readsJsonStrings &&
+          lt.suspiciousPatterns.some((p) => matchResidualPattern(residual, p) !== null)) ||
         (sourceString != null &&
           lt.sourceStringSuspiciousPatterns.some(
             (p) => matchResidualPattern(sourceString, p) !== null,
+          )) ||
+        (jsonStrings != null &&
+          jsonStrings.some((value) =>
+            lt.jsonStringSuspiciousPatterns.some((p) => matchResidualPattern(value, p) !== null),
           ));
       if (matchesSource) {
         filesForReview().add(relative);
@@ -654,6 +718,7 @@ export async function runCodemods(
     if (
       lt.suspiciousPatterns.length > 0 ||
       lt.sourceStringSuspiciousPatterns.length > 0 ||
+      lt.jsonStringSuspiciousPatterns.length > 0 ||
       lt.reviewFindings ||
       lt.reviewFindingsBeforeTransform
     ) {

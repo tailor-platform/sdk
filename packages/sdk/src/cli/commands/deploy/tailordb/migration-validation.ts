@@ -177,13 +177,28 @@ async function assertMainRunSettled(
   });
 }
 
+function inProgressRecordUnreadableError(namespace: string): CLIError {
+  return CLIError({
+    code: "MIGRATION_IN_PROGRESS_INVALID",
+    message: `The in-progress migration recorded for namespace "${namespace}" cannot be read.`,
+    suggestion:
+      "The namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.",
+  });
+}
+
 /**
- * Create the error for a namespace whose checkpoint would be repaired while it records a migration
- * in progress.
+ * The error a deploy stops with for the in-progress record of a namespace whose checkpoint it
+ * would reset to `0000`, before any other check of that record.
  * @param namespace - TailorDB namespace
- * @returns The error
+ * @param state - In-progress record of the namespace
+ * @returns The error, or `undefined` when the namespace records no migration in progress
  */
-export function checkpointRepairInProgressError(namespace: string): CLIError {
+export function checkpointRepairInProgressConflict(
+  namespace: string,
+  state: Pick<RemoteMigrationState, "inProgress" | "inProgressInvalid">,
+): CLIError | undefined {
+  if (state.inProgressInvalid) return inProgressRecordUnreadableError(namespace);
+  if (!state.inProgress) return undefined;
   return CLIError({
     code: "MIGRATION_IN_PROGRESS_CONFLICT",
     message: `A migration is in progress in namespace "${namespace}", so its checkpoint cannot be repaired.`,
@@ -221,14 +236,7 @@ export async function checkMigrationInProgress(
   check: MigrationInProgressCheck,
 ): Promise<MigrationInProgressOutcome> {
   const { client, workspaceId, namespace, state, next, commandContext } = check;
-  if (state.inProgressInvalid) {
-    throw CLIError({
-      code: "MIGRATION_IN_PROGRESS_INVALID",
-      message: `The in-progress migration recorded for namespace "${namespace}" cannot be read.`,
-      suggestion:
-        "The namespace metadata was edited outside the SDK. Restore the in-progress labels it recorded before deploying again.",
-    });
-  }
+  if (state.inProgressInvalid) throw inProgressRecordUnreadableError(namespace);
   const inProgress = state.inProgress;
   if (!inProgress) return { kind: "none" };
   if (isStaleMigrationInProgress(state)) {
@@ -262,7 +270,7 @@ export async function checkMigrationInProgress(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param remoteStates - Remote migration state of each namespace whose checkpoint is not being repaired
- * @param repairedInProgress - Namespaces under checkpoint repair that also record a migration in progress
+ * @param repairedStates - Remote migration state of each namespace whose checkpoint is being repaired
  * @param pendingMigrations - Pending migrations, sorted by namespace and number
  * @param commandContext - Config and workspace selection of the deploy, kept in the suggested commands
  * @returns In-progress migrations to resume and stale records to clear
@@ -271,12 +279,14 @@ async function validateMigrationsInProgress(
   client: OperatorClient,
   workspaceId: string,
   remoteStates: ReadonlyMap<string, RemoteMigrationState>,
-  repairedInProgress: readonly string[],
+  repairedStates: ReadonlyMap<string, RemoteMigrationState>,
   pendingMigrations: readonly PendingMigration[],
   commandContext: MigrationCommandContext,
 ): Promise<InProgressValidation> {
-  const repaired = repairedInProgress[0];
-  if (repaired !== undefined) throw checkpointRepairInProgressError(repaired);
+  for (const [namespace, state] of repairedStates) {
+    const conflict = checkpointRepairInProgressConflict(namespace, state);
+    if (conflict) throw conflict;
+  }
 
   const result: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
   for (const [namespace, state] of remoteStates) {
@@ -380,7 +390,7 @@ export async function validateAndDetectMigrations(
   let pendingMigrations: PendingMigration[] = [];
   let checkpointRepairs: MigrationCheckpointRepair[] = [];
   let inProgress: InProgressValidation = { inProgressMigrations: {}, staleInProgress: [] };
-  let repairedInProgress: string[] = [];
+  const repairedStates = new Map<string, RemoteMigrationState>();
   const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
   const rebaselines = new Map<string, RebaselineMarker | undefined>();
   const checkpoints = new Map<string, ExpectedMigrationCheckpoint>();
@@ -421,26 +431,30 @@ export async function validateAndDetectMigrations(
       }
 
       // 2. Check remote schema vs local snapshot (new check)
+      const verifiedStates = new Map<string, RemoteMigrationState>();
       const remoteVerificationResults = await verifyRemoteSchema(
         client,
         workspaceId,
         namespacesWithMigrations,
         config,
         tailorDBInputs,
-        { acceptUnfinishedRemovals: true, acceptInterruptedMigration: true },
+        {
+          acceptUnfinishedRemovals: true,
+          acceptInterruptedMigration: true,
+          remoteStates: verifiedStates,
+        },
       );
       checkpointRepairs = remoteVerificationResults.flatMap((result) =>
         result.checkpointRepair
           ? [{ namespace: result.namespace, ...result.checkpointRepair }]
           : [],
       );
-      repairedInProgress = remoteVerificationResults
-        .filter(
-          (result) =>
-            result.checkpointRepair &&
-            (result.migrationInProgress || result.migrationInProgressInvalid),
-        )
-        .map((result) => result.namespace);
+      for (const { namespace } of checkpointRepairs) {
+        repairedStates.set(
+          namespace,
+          assertDefined(verifiedStates.get(namespace), "the verification read every namespace"),
+        );
+      }
       assertCheckpointsInLocalHistory(
         remoteVerificationResults.flatMap((result) =>
           result.checkpointMissingLocal
@@ -542,7 +556,7 @@ export async function validateAndDetectMigrations(
       client,
       workspaceId,
       remoteStates,
-      repairedInProgress,
+      repairedStates,
       pendingMigrations,
       commandContext,
     );

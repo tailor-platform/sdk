@@ -27,7 +27,7 @@ export interface FunctionRunTarget {
   jobName: string | undefined;
   /** Loaded config of either kind */
   config: LoadedConfig | LoadedWorkspaceConfig;
-  kyselyTemporal?: boolean;
+  kyselyTemporal?: boolean | undefined;
   /** Operator client */
   client: OperatorClient;
   /** Workspace the function runs in */
@@ -77,7 +77,7 @@ interface ExecuteFunctionOptions {
   /** Argument passed to the function */
   arg: Jsonifiable | undefined;
   /** Called with the execution ID once the Platform accepts the script */
-  onStart?: (executionId: string) => void;
+  onStart?: ((executionId: string) => void) | undefined;
 }
 
 /**

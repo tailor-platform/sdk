@@ -264,7 +264,7 @@ export function buildResolverPermissionGuardExpr(
  */
 export type ResolverPermissionResolution = {
   permission: Resolver["permission"];
-  defaultPermission?: Resolver["permission"];
+  defaultPermission?: Resolver["permission"] | undefined;
 };
 
 /**

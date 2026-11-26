@@ -18,6 +18,7 @@ import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { omitUndefined } from "#/utils/omit-undefined";
 import {
   cloneWorkspaceArgs,
   formatElapsed,
@@ -30,14 +31,14 @@ interface CloneOptions {
   sourceWorkspaceId: string;
   targetWorkspaceId: string;
   name: string;
-  config?: string;
-  nameFromConfig?: boolean;
+  config?: string | undefined;
+  nameFromConfig?: boolean | undefined;
   /** TailorDB namespaces the application exposes, when the config is a workspace config. */
-  tailordbNamespaces?: string[];
-  copyFiles?: boolean;
-  copyIdpUsers?: boolean;
-  noWait?: boolean;
-  profile?: string;
+  tailordbNamespaces?: string[] | undefined;
+  copyFiles?: boolean | undefined;
+  copyIdpUsers?: boolean | undefined;
+  noWait?: boolean | undefined;
+  profile?: string | undefined;
 }
 
 function truncateScopes(options: CloneOptions): string[] {
@@ -158,14 +159,16 @@ async function $clone(options: CloneOptions & { yes?: boolean }) {
 
   let operationId: string;
   try {
-    const response = await client.cloneApplicationData({
-      sourceWorkspaceId: options.sourceWorkspaceId,
-      sourceApplicationName: options.name,
-      targetWorkspaceId: options.targetWorkspaceId,
-      targetApplicationName: options.name,
-      copyFiles: options.copyFiles,
-      copyIdpUsers: options.copyIdpUsers,
-    });
+    const response = await client.cloneApplicationData(
+      omitUndefined({
+        sourceWorkspaceId: options.sourceWorkspaceId,
+        sourceApplicationName: options.name,
+        targetWorkspaceId: options.targetWorkspaceId,
+        targetApplicationName: options.name,
+        copyFiles: options.copyFiles,
+        copyIdpUsers: options.copyIdpUsers,
+      }),
+    );
     operationId = response.operationId;
   } catch (error) {
     if (error instanceof ConnectError && error.code === Code.Unimplemented) {

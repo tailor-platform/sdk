@@ -7,6 +7,7 @@
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
+import { omitUndefined } from "#/utils/omit-undefined";
 import * as migrationModule from "./migration";
 import {
   createMockClient as createBaseMockClient,
@@ -79,21 +80,23 @@ function deleteEntry(namespace: string, tableName: string) {
   };
 }
 
-function createMockPlanResult(options: {
+type CreateMockPlanResultOptions = {
   creates?: TypeEntry[];
   updates?: TypeEntry[];
   unchanged?: Omit<TypeEntry, "request">[];
   deletes?: DeleteEntry[];
   pendingMigrations: PlannedPendingMigrations;
-}) {
+};
+
+function createMockPlanResult(options: CreateMockPlanResultOptions) {
   const deletes = options.deletes ?? [];
   return createPlanResult({
-    type: {
+    type: omitUndefined({
       creates: options.creates,
       updates: options.updates,
       deletes: deletes.map((entry) => entry.type),
       unchanged: options.unchanged,
-    },
+    }),
     gqlPermission: { deletes: deletes.map((entry) => entry.gqlPermission) },
     context: {
       namespacesWithMigrations: state.migratingNamespaces.map((namespace) => ({
@@ -168,7 +171,9 @@ function mockPending(pending: PendingMigration[]) {
   }));
 }
 
-function typeWritesOf(mock: { calls: unknown[][] }, namespace: string, tableName: string) {
+type TypeWritesOfMock = { calls: unknown[][] };
+
+function typeWritesOf(mock: TypeWritesOfMock, namespace: string, tableName: string) {
   return mock.calls
     .map((call) => call[0] as TypeWrite)
     .filter(

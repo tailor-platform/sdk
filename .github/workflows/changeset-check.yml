@@ -48,6 +48,7 @@ jobs:
               - 'packages/sdk-codemod/**'
               - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/sdk-plugin-frontend/**'
+              - 'packages/sdk-plugin-studio/**'
               - 'packages/tailor-proto/**'
               - 'packages/shared/**'
             codemod_source:
@@ -71,6 +72,9 @@ jobs:
               - 'packages/sdk-plugin-tailordb-erd/src/**'
               - 'packages/sdk-plugin-tailordb-erd/bin/**'
               - 'packages/sdk-plugin-frontend/src/**'
+              - 'packages/sdk-plugin-studio/src/**'
+              - 'packages/sdk-plugin-studio/bin/**'
+              - 'packages/sdk-plugin-studio/client/**'
               - 'packages/tailor-proto/src/**'
               - 'packages/shared/src/**'
               - '!packages/*/src/**/*.test.ts'

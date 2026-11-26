@@ -49,7 +49,7 @@ export interface RequestComparison<
   /** Members that identify the resource or that the SDK leaves to the Platform. */
   excluded: readonly Excluded[];
   /** Rewrites Platform-filled defaults and order-insensitive lists in place, on both sides. */
-  normalize?: (request: MessageShape<Desc>) => void;
+  normalize?: ((request: MessageShape<Desc>) => void) | undefined;
 }
 
 type ComparedMember<Desc extends DescMessage, Excluded extends MemberName<Desc>> = Exclude<
@@ -126,18 +126,26 @@ export function actionPolicyLists<Desc extends DescMessage>(
   return schema.members.map((action) => permission[action.localName as MemberName<Desc>]);
 }
 
+type UnsetEmptyMessageParams<Desc extends DescMessage, Key extends string> = {
+  schema: Desc;
+  owner: { [K in Key]?: MessageShape<Desc> };
+  key: Key;
+};
+
 /**
  * Treat a submessage with no field set as unset, for a Platform that returns
  * an empty submessage where the SDK sends none.
- * @param schema - Submessage schema
- * @param message - Submessage to check
- * @returns The submessage, or undefined when no field is set
+ * @param params - Submessage schema, the message holding it, and the field name
+ * @param params.schema - Submessage schema
+ * @param params.owner - Message holding the submessage
+ * @param params.key - Field name of the submessage in the owner
  */
-export function emptyMessageAsUnset<Desc extends DescMessage>(
-  schema: Desc,
-  message: MessageShape<Desc> | undefined,
-): MessageShape<Desc> | undefined {
-  return message && toBinary(schema, message).length > 0 ? message : undefined;
+export function unsetEmptyMessage<Desc extends DescMessage, Key extends string>(
+  params: UnsetEmptyMessageParams<Desc, Key>,
+): void {
+  const { schema, owner, key } = params;
+  const message = owner[key];
+  if (!message || toBinary(schema, message).length === 0) delete owner[key];
 }
 
 /**

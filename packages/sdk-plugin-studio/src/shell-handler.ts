@@ -1,0 +1,249 @@
+import { guardRequest } from "./request-guard";
+import { serveStatic } from "./static-files";
+import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
+import type { PlatformClientConfig } from "@tailor-platform/sdk/cli";
+
+export interface UiHandlerContext {
+  basePath: string;
+  /** The profile / workspace chosen in the shell, read again on every call. */
+  getSelection: () => WorkspaceSelection;
+  /** Call `listener` whenever the selection changes; returns the function that stops it. */
+  onSelectionChange: (listener: () => void) => () => void;
+}
+
+export type UiHandler = (
+  request: Request,
+  context: UiHandlerContext,
+) => Response | Promise<Response>;
+
+export type Tab =
+  | { id: string; title: string; state: "mounted"; handler: UiHandler }
+  | { id: string; title: string; state: "not-installed"; installCommand: string }
+  | { id: string; title: string; state: "no-ui-support" };
+
+interface NewProfile {
+  name: string;
+  user: string;
+  workspaceId: string;
+  permission?: "write" | "read";
+}
+
+export interface Accounts {
+  listUsers(): Promise<string[]>;
+  listWorkspaces(user: string): Promise<{ id: string; name: string }[]>;
+  createProfile(profile: NewProfile): Promise<void>;
+}
+
+export interface ShellHandlerOptions {
+  tabs: readonly Tab[];
+  port: number;
+  workspace: WorkspaceContext;
+  accounts: Accounts;
+  /** Platform settings taken from the environment; absent for the default platform. */
+  platform?: PlatformClientConfig;
+  clientDir?: string;
+  onError?: (error: unknown, pluginId: string) => void;
+}
+
+const FRAME_ANCESTORS = "frame-ancestors 'self'";
+
+function withFramingProtection(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("x-frame-options", "SAMEORIGIN");
+  const csp = headers.get("content-security-policy");
+  headers.set("content-security-policy", csp ? `${csp}, ${FRAME_ANCESTORS}` : FRAME_ANCESTORS);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+const PLUGIN_PATH = /^\/plugins\/([^/]+)(\/.*)?$/;
+
+function describeTab(tab: Tab) {
+  const { id, title, state } = tab;
+  return tab.state === "not-installed"
+    ? { id, title, state, installCommand: tab.installCommand }
+    : { id, title, state };
+}
+
+/** A tab as `/api/tabs` lists it. */
+export type TabInfo = ReturnType<typeof describeTab>;
+
+/** What `/api/context` answers: the selection and its profiles, with the platform when it is not the default. */
+export type ContextInfo = Awaited<ReturnType<WorkspaceContext["describe"]>> & {
+  platform?: PlatformClientConfig;
+};
+
+/**
+ * Build the request handler of the shell: it guards every request, serves the
+ * tab list, and forwards `/plugins/<id>/*` to the plugin's handler.
+ * @param options - Tabs and listening port
+ * @returns A Web-standard fetch handler
+ */
+export function createShellHandler(options: ShellHandlerOptions) {
+  const byId = new Map(options.tabs.map((tab) => [tab.id, tab]));
+
+  const contextBody = async (): Promise<ContextInfo> => ({
+    ...(options.platform === undefined ? {} : { platform: options.platform }),
+    ...(await options.workspace.describe()),
+  });
+
+  const failure = (error: unknown) =>
+    Response.json(
+      { error: error instanceof Error ? error.message : String(error) },
+      { status: 400 },
+    );
+
+  const handleContext = async (request: Request): Promise<Response> => {
+    try {
+      if (request.method.toUpperCase() === "PUT") {
+        const body = (await request.json()) as { profile?: string | null };
+        await options.workspace.select(body.profile ?? null);
+      } else if (!["GET", "HEAD"].includes(request.method.toUpperCase())) {
+        return new Response("Method Not Allowed\n", {
+          status: 405,
+          headers: { allow: "GET, HEAD, PUT" },
+        });
+      }
+      return Response.json(await contextBody());
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
+  const handleContextEvents = (request: Request): Response => {
+    const encoder = new TextEncoder();
+    let stop = () => {};
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const send = (text: string) => {
+          try {
+            controller.enqueue(encoder.encode(text));
+          } catch {
+            stop();
+          }
+        };
+        const unsubscribe = options.workspace.subscribe(() => send("event: changed\ndata: {}\n\n"));
+        stop = () => {
+          unsubscribe();
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        };
+        request.signal.addEventListener("abort", stop, { once: true });
+        send(": connected\n\n");
+      },
+      cancel() {
+        stop();
+      },
+    });
+    return new Response(body, {
+      headers: { "content-type": "text/event-stream", "cache-control": "no-store" },
+    });
+  };
+
+  const handleUsers = async (): Promise<Response> => {
+    try {
+      return Response.json({ users: await options.accounts.listUsers() });
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
+  const handleWorkspaces = async (url: URL): Promise<Response> => {
+    const user = url.searchParams.get("user");
+    if (!user) return failure(new Error("user is required"));
+    try {
+      return Response.json(await options.accounts.listWorkspaces(user));
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
+  const handleCreateProfile = async (request: Request): Promise<Response> => {
+    if (request.method.toUpperCase() !== "POST") {
+      return new Response("Method Not Allowed\n", { status: 405, headers: { allow: "POST" } });
+    }
+    try {
+      const body = (await request.json()) as Record<string, unknown>;
+      const { name, user, workspaceId, permission } = body;
+      if (
+        typeof name !== "string" ||
+        typeof user !== "string" ||
+        typeof workspaceId !== "string" ||
+        !name ||
+        !user ||
+        !workspaceId
+      ) {
+        throw new Error("name, user and workspaceId are required");
+      }
+      if (permission !== undefined && permission !== "write" && permission !== "read") {
+        throw new Error('permission must be "write" or "read"');
+      }
+      await options.accounts.createProfile({
+        name,
+        user,
+        workspaceId,
+        ...(permission === undefined ? {} : { permission }),
+      });
+      await options.workspace.select(name);
+      return Response.json(await contextBody());
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
+  const handle = async (request: Request): Promise<Response> => {
+    const denied = guardRequest(request, options);
+    if (denied) return denied;
+
+    const url = new URL(request.url);
+    if (url.pathname === "/api/tabs") return Response.json(options.tabs.map(describeTab));
+
+    if (url.pathname === "/api/context/events") return handleContextEvents(request);
+    if (url.pathname === "/api/context") return handleContext(request);
+
+    if (url.pathname === "/api/accounts") return handleUsers();
+    if (url.pathname === "/api/accounts/workspaces") return handleWorkspaces(url);
+    if (url.pathname === "/api/profiles") return handleCreateProfile(request);
+
+    const match = PLUGIN_PATH.exec(url.pathname);
+    if (!match) {
+      return options.clientDir === undefined
+        ? new Response("Not Found\n", { status: 404 })
+        : serveStatic(options.clientDir, url.pathname);
+    }
+
+    const [, id, rest] = match;
+    const tab = byId.get(id!);
+    if (tab?.state !== "mounted") return new Response("Not Found\n", { status: 404 });
+    if (rest === undefined) {
+      return new Response(null, {
+        status: 308,
+        headers: { location: `/plugins/${id}/${url.search}` },
+      });
+    }
+
+    const forwardedUrl = new URL(url.origin);
+    forwardedUrl.pathname = rest;
+    forwardedUrl.search = url.search;
+    const forwarded = new Request(forwardedUrl, request);
+    try {
+      return await tab.handler(forwarded, {
+        basePath: `/plugins/${id}/`,
+        getSelection: () => options.workspace.selection(),
+        onSelectionChange: (listener) => options.workspace.subscribe(listener),
+      });
+    } catch (error) {
+      options.onError?.(error, id!);
+      return new Response("Plugin handler failed\n", { status: 500 });
+    }
+  };
+
+  return async (request: Request): Promise<Response> =>
+    withFramingProtection(await handle(request));
+}

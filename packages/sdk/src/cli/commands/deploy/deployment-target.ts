@@ -54,25 +54,25 @@ type LoadDeployConfigsParams = Omit<LoadDeployConfigParams, "configPath"> & {
 
 type BuildDeploymentTargetParams = {
   configPath: string | undefined;
-  loadedConfig?: LoadedDeployConfig;
+  loadedConfig?: LoadedDeployConfig | undefined;
   dryRun: boolean;
   buildOnly: boolean;
   noCache: boolean;
   packageVersion: string;
   cacheDir: string;
   /** Operator client used to resolve `env` static website placeholders while bundling. Omitted in `--build-only`. */
-  client?: OperatorClient;
+  client?: OperatorClient | undefined;
   /** Workspace ID paired with `client`. */
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   /** Static website names planned by any config in the same deploy run. */
-  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string> | undefined;
   /**
    * This same config's own prior build. When present, only `env` resolution
    * and the workflow-job/auth-hook bundles it feeds are redone; everything
    * else (config parsing, TailorDB loading, plugin execution, and the
    * resolver/executor/HTTP-adapter bundles) is reused as-is.
    */
-  previous?: BuiltDeploymentTarget;
+  previous?: BuiltDeploymentTarget | undefined;
 };
 
 /** The config file a deployment target builds. */
@@ -133,10 +133,12 @@ type BuildDeploymentTargetsParams = Omit<
   "configPath" | "loadedConfig" | "previous"
 > & {
   configPaths: ReadonlyArray<string | undefined>;
-  loadedConfigs?: ReadonlyArray<LoadedDeployConfig>;
-  buildTarget?: (params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>;
+  loadedConfigs?: ReadonlyArray<LoadedDeployConfig> | undefined;
+  buildTarget?:
+    | ((params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>)
+    | undefined;
   /** Prior builds, matched to `configPaths` by index (same array, same order). */
-  previousTargets?: ReadonlyArray<BuiltDeploymentTarget>;
+  previousTargets?: ReadonlyArray<BuiltDeploymentTarget> | undefined;
 };
 /**
  * Parse the deploy config option into one or more config paths.

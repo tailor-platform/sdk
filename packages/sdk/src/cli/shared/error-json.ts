@@ -39,7 +39,7 @@ function redactStringValues(_key: string, value: unknown): unknown {
 
 export interface ErrorToJsonOptions {
   /** Include the original stack trace in the error envelope. */
-  includeStack?: boolean;
+  includeStack?: boolean | undefined;
 }
 
 type ErrorEnvelope = { error: Readonly<Record<string, Jsonifiable | undefined>> };

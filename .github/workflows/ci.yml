@@ -25,9 +25,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install aqua
-        uses: $/.github/actions/install-aqua
-
       - name: Install deps
         uses: $/.github/actions/install-deps
 

@@ -1,13 +1,13 @@
 import * as globals from "globals";
 
 type GlobalsShape = {
-  builtin?: Record<string, boolean>;
-  "shared-node-browser"?: Record<string, boolean>;
-  node?: Record<string, boolean>;
+  builtin?: Record<string, boolean> | undefined;
+  "shared-node-browser"?: Record<string, boolean> | undefined;
+  node?: Record<string, boolean> | undefined;
 };
 
 const globalsMap: GlobalsShape =
-  (globals as unknown as { default?: GlobalsShape }).default ?? globals;
+  (globals as unknown as { default?: GlobalsShape | undefined }).default ?? globals;
 
 /**
  * Runtime globals available in the PF execution environment.

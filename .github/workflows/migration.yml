@@ -30,9 +30,12 @@ jobs:
           filters: |
             changes:
               - .github/workflows/migration.yml
+              - .github/actions/**
               - example/**
               - packages/**
               - package.json
+              - tsconfig.json
+              - pnpm-workspace.yaml
               - pnpm-lock.yaml
 
   migration:
@@ -48,9 +51,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: "false"
-
-      - name: Install aqua
-        uses: $/.github/actions/install-aqua
 
       - name: Install deps
         uses: $/.github/actions/install-deps

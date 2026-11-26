@@ -18,10 +18,12 @@ afterEach(() => {
   resetSecretRegistry();
 });
 
-function makeReport(
-  error: unknown,
-  overrides: { sdkVersion?: string; errorType?: ErrorType } = {},
-) {
+interface MakeReportOverrides {
+  sdkVersion?: string;
+  errorType?: ErrorType;
+}
+
+function makeReport(error: unknown, overrides: MakeReportOverrides = {}) {
   return buildCrashReport({
     error,
     sdkVersion: overrides.sdkVersion ?? "1.0.0",

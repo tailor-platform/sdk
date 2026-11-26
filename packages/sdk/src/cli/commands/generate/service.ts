@@ -77,7 +77,7 @@ export interface CreateGenerationManagerParams {
   /** The `defineConfig()` or workspace config the services come from */
   config: LoadedConfig | LoadedWorkspaceConfig;
   /** Plugin manager for processing plugins */
-  pluginManager?: PluginManager;
+  pluginManager?: PluginManager | undefined;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { writeMetadataLabelsDirect } from "../label";
 import {
   assertNoActiveMigrationExecution,
@@ -65,7 +66,7 @@ interface JobSpec {
 interface ExecutionSpec {
   id: string;
   status: WorkflowExecution_Status;
-  jobs?: JobSpec[];
+  jobs?: JobSpec[] | undefined;
 }
 
 interface StepsClientOptions {
@@ -605,7 +606,7 @@ describe("executeMigrationStepsAsWorkflow", () => {
     const { client } = createStepsClient({
       run: { statuses: [WorkflowExecution_Status.SUCCESS], jobs: ALL_STEPS_SUCCEEDED },
     });
-    client.getWorkflowExecution.mockResolvedValueOnce({ execution: undefined });
+    client.getWorkflowExecution.mockResolvedValueOnce(omitUndefined({ execution: undefined }));
 
     const result = await run(client);
 

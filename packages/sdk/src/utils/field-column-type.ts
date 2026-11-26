@@ -86,9 +86,9 @@ export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> 
 
 /** The settings of a TailorDB field that let the platform fill it on create. */
 interface FilledOnCreateFieldConfig {
-  hooks?: { create?: unknown };
+  hooks?: { create?: unknown } | undefined;
   default?: unknown;
-  optionalOnCreate?: boolean;
+  optionalOnCreate?: boolean | undefined;
 }
 
 /**

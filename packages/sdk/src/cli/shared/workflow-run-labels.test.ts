@@ -1,9 +1,12 @@
 import { describe, expect, test } from "vitest";
 import {
   createRunId,
+  createRunIdSuffix,
+  functionRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
-  isWorkflowRunResourceName,
+  isFunctionRunResourceName,
+  isTemporaryRunResourceName,
   workflowRunJobFunctionName,
   workflowRunLabels,
   workflowRunResourceName,
@@ -64,9 +67,10 @@ describe("workflowRunResourceName", () => {
 
   test("starts with tmp-run-, the prefix a prune looks for", () => {
     expect(workflowRunResourceName("r1")).toBe("tmp-run-r1");
-    expect(isWorkflowRunResourceName("tmp-run-r1")).toBe(true);
-    expect(isWorkflowRunResourceName("tmp-r1")).toBe(false);
-    expect(isWorkflowRunResourceName("validate-order")).toBe(false);
+    expect(isTemporaryRunResourceName("tmp-run-r1")).toBe(true);
+    expect(isTemporaryRunResourceName("tmp-fn-r1")).toBe(true);
+    expect(isTemporaryRunResourceName("tmp-r1")).toBe(false);
+    expect(isTemporaryRunResourceName("validate-order")).toBe(false);
   });
 });
 
@@ -122,5 +126,39 @@ describe("runIdStartedAt", () => {
 
   test("returns nothing for an id this module did not create", () => {
     expect(runIdStartedAt("nightly")).toBeUndefined();
+  });
+});
+
+describe("functionRunResourceName", () => {
+  test("starts with a prefix of its own, which a workflow run's resources do not use", () => {
+    const runId = createRunId(new Date(), "c0a100");
+    expect(functionRunResourceName(runId)).toBe(`tmp-fn-${runId}`);
+    expect(functionRunResourceName(runId)).not.toBe(workflowRunResourceName(runId));
+  });
+});
+
+describe("isFunctionRunResourceName", () => {
+  const runId = createRunId(new Date(), "c0a100");
+
+  test("is true for the name `function run --async` gives its function", () => {
+    expect(isFunctionRunResourceName(functionRunResourceName(runId))).toBe(true);
+  });
+
+  test("is true for the name a freshly created run id gives its function", () => {
+    const fresh = createRunId(new Date(), createRunIdSuffix());
+    expect(isFunctionRunResourceName(functionRunResourceName(fresh))).toBe(true);
+  });
+
+  test("is false for the resources of a workflow run", () => {
+    expect(isFunctionRunResourceName(workflowRunResourceName(runId))).toBe(false);
+    expect(isFunctionRunResourceName(workflowRunJobFunctionName(runId, "cleanup"))).toBe(false);
+  });
+
+  test("is false for a deployed job that only starts with the prefix", () => {
+    expect(isFunctionRunResourceName("tmp-fn-cleanup")).toBe(false);
+  });
+
+  test("is false for a deployed job named like a run id with a suffix no run makes", () => {
+    expect(isFunctionRunResourceName("tmp-fn-r20261124-backfill")).toBe(false);
   });
 });

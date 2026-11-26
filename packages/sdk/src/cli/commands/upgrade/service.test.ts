@@ -1,4 +1,5 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { RunOutput } from "./types";
 import type { SpawnSyncReturns } from "node:child_process";
 
@@ -48,7 +49,7 @@ function makeOutput(overrides: Partial<RunOutput> = {}): RunOutput {
 function makeSpawnSyncResult(
   overrides: Partial<SpawnSyncReturns<string>> = {},
 ): SpawnSyncReturns<string> {
-  return {
+  return omitUndefined({
     stdout: JSON.stringify(makeOutput()),
     stderr: "",
     status: 0,
@@ -57,7 +58,7 @@ function makeSpawnSyncResult(
     output: [],
     error: undefined,
     ...overrides,
-  };
+  });
 }
 
 async function setupUpgrade(version: string | null) {

@@ -1197,29 +1197,19 @@ function isTailorCliArgumentArray(arrayNode: SgNode, index: number, source: stri
 }
 
 function isCliValueArgument(node: SgNode, source: string): boolean {
+  const text = sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
+  if (text == null || !text.includes("tailor-sdk")) return false;
   const parent = node.parent();
   if (parent?.kind() !== "array") return false;
   const elements = sourceArrayElements(parent);
   const index = nodeIndex(elements, node);
   if (index < 0) return false;
   if (!isTailorCliArgumentArray(parent, index, source)) return false;
-  const text = sourceStringContent(node, source) ?? sourceStringRawContent(node, source);
-  if (
-    text != null &&
-    text.includes("tailor-sdk") &&
-    isTailorCliValueFlag(text) &&
-    text.includes("=")
-  ) {
-    return true;
-  }
+  if (isTailorCliValueFlag(text) && text.includes("=")) return true;
   if (index === 0) return false;
   const previousValue = sourceStaticStringContent(elements[index - 1]!, source);
   return (
-    text != null &&
-    text.includes("tailor-sdk") &&
-    previousValue != null &&
-    isTailorCliValueFlag(previousValue) &&
-    !previousValue.includes("=")
+    previousValue != null && isTailorCliValueFlag(previousValue) && !previousValue.includes("=")
   );
 }
 

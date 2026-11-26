@@ -15,6 +15,7 @@ import {
   updateMigrationLabel,
   type MigrationMachineUsers,
 } from "#/cli/commands/deploy/tailordb/migration";
+import { checkpointRepairInProgressConflict } from "#/cli/commands/deploy/tailordb/migration-validation";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
   fetchRemoteSchemaSnapshot,
@@ -91,7 +92,7 @@ interface RuntimeState {
   loaded: MigrationTestLoaded;
   options: MigrationTestOptions;
   seeds: PreparedSeed[];
-  seedMachineUsers?: MigrationMachineUsers;
+  seedMachineUsers?: MigrationMachineUsers | undefined;
 }
 
 interface PreparedSeed {
@@ -106,10 +107,10 @@ interface WaitForCloneOptions {
   sourceWorkspaceId: string;
   targetWorkspaceId: string;
   operationId: string;
-  pollInterval?: number;
-  timeout?: number;
-  errorCodePrefix?: string;
-  onStatus?: (status: CloneOperationStatus) => void;
+  pollInterval?: number | undefined;
+  timeout?: number | undefined;
+  errorCodePrefix?: string | undefined;
+  onStatus?: ((status: CloneOperationStatus) => void) | undefined;
 }
 
 function delay(milliseconds: number): Promise<void> {
@@ -472,8 +473,8 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
 }
 
 interface TemporaryWorkspaceLocation {
-  organizationId?: string;
-  folderId?: string;
+  organizationId?: string | undefined;
+  folderId?: string | undefined;
 }
 
 interface DesignatedTargetLocation extends TemporaryWorkspaceLocation {
@@ -606,7 +607,15 @@ export function assertSourceMatchesCheckpoints(
         : `Run ${validateHint} to check the migration history and source schema, or ${statusHint} to inspect the source workspace's checkpoint.`,
     });
   }
-  const pendingRepair = checks.find((check) => check.checkpointRepair);
+  const pendingRepairs = checks.filter((check) => check.checkpointRepair);
+  for (const repair of pendingRepairs) {
+    const conflict = checkpointRepairInProgressConflict(repair.namespace, {
+      inProgress: repair.migrationInProgress ?? null,
+      inProgressInvalid: repair.migrationInProgressInvalid ?? false,
+    });
+    if (conflict) throw conflict;
+  }
+  const pendingRepair = pendingRepairs[0];
   if (pendingRepair) {
     throw CLIError({
       code: "MIGRATION_TEST_SOURCE_REPAIR_PENDING",
@@ -810,6 +819,22 @@ function prepareSeedData(
   return seeds;
 }
 
+interface SourceApplication {
+  workspaceId: string;
+  applicationName: string;
+}
+
+async function assertSourceApplication(
+  client: OperatorClient,
+  source: SourceApplication,
+): Promise<void> {
+  const { application } = await client.getApplication(source);
+  assertDefined(
+    application,
+    `application "${source.applicationName}" not found in source workspace`,
+  );
+}
+
 async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   state: RuntimeState;
   prepared: PreparedMigrationTest;
@@ -851,28 +876,22 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
   assertTargetWorkspaceDiffers(sourceWorkspaceId, options.targetWorkspaceId);
 
   const configApplicationName = loaded.file.kind === "config" ? loaded.file.config.name : undefined;
-  const [workspaceResponse, applicationResponse, targetWorkspaceResponse] = await Promise.all([
+  const [workspaceResponse, targetWorkspaceResponse] = await Promise.all([
     client.getWorkspace({ workspaceId: sourceWorkspaceId }),
-    configApplicationName === undefined
-      ? Promise.resolve(undefined)
-      : client.getApplication({
-          workspaceId: sourceWorkspaceId,
-          applicationName: configApplicationName,
-        }),
     options.targetWorkspaceId
       ? client.getWorkspace({ workspaceId: options.targetWorkspaceId })
       : Promise.resolve(undefined),
+    configApplicationName === undefined
+      ? Promise.resolve()
+      : assertSourceApplication(client, {
+          workspaceId: sourceWorkspaceId,
+          applicationName: configApplicationName,
+        }),
   ]);
   const sourceWorkspace = assertDefined(
     workspaceResponse.workspace,
     `source workspace "${sourceWorkspaceId}" not found`,
   );
-  if (applicationResponse) {
-    assertDefined(
-      applicationResponse.application,
-      `application "${configApplicationName}" not found in source workspace`,
-    );
-  }
   const designatedTarget = targetWorkspaceResponse
     ? assertDefined(
         targetWorkspaceResponse.workspace,
@@ -962,6 +981,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     options.data === "clone"
       ? migrationTestCloneApplication(loaded.file, pendingNamespaces)
       : configApplicationName;
+  if (configApplicationName === undefined && sourceApplicationName !== undefined) {
+    await assertSourceApplication(client, {
+      workspaceId: sourceWorkspaceId,
+      applicationName: sourceApplicationName,
+    });
+  }
 
   const machineUserSource = {
     application: loaded.application,
@@ -1115,7 +1140,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
               message: execution.error ?? `Seed execution failed for namespace "${namespace}".`,
             });
           }
-          const result = JSON.parse(execution.result || "{}") as { success?: boolean };
+          const result = JSON.parse(execution.result || "{}") as { success?: boolean | undefined };
           if (result.success !== true) {
             throw CLIError({
               code: "MIGRATION_TEST_SEED_FAILED",

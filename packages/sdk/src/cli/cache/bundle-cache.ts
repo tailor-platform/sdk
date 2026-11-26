@@ -18,23 +18,23 @@ type BundleKind =
 
 type BundleCacheRestoreParams = {
   kind: BundleKind;
-  namespace?: string;
+  namespace?: string | undefined;
   name: string;
   /** Optional hash of non-file context (e.g., env variables) to include in cache validation. */
-  contextHash?: string;
+  contextHash?: string | undefined;
 };
 
 type BundleCacheSaveParams = {
   kind: BundleKind;
-  namespace?: string;
+  namespace?: string | undefined;
   name: string;
   sourceFile: string;
   content: string;
   /** Forbidden globals the bundle's installed packages reference, checked again on restore. */
-  packageRuntimeGlobals?: PackageRuntimeGlobals;
+  packageRuntimeGlobals?: PackageRuntimeGlobals | undefined;
   dependencyPaths: string[];
   /** Optional hash of non-file context (e.g., env variables) to include in cache key computation. */
-  contextHash?: string;
+  contextHash?: string | undefined;
 };
 
 /** A bundle's code and the forbidden globals its installed packages reference. */
@@ -66,13 +66,13 @@ function combineHash(fileHash: string, contextHash?: string): string {
 type ComputeBundlerContextHashParams = {
   sourceFile: string;
   extraContext: string;
-  tsconfig?: string;
-  inlineSourcemap?: boolean;
-  inlineSourcemapDependencySources?: boolean | string[];
-  inlineSourcemapProjectSources?: ProjectSourcesFilter;
-  bundleLogLevel?: string;
-  bundleTreeshake?: TreeshakeOptions;
-  prefix?: string;
+  tsconfig?: string | undefined;
+  inlineSourcemap?: boolean | undefined;
+  inlineSourcemapDependencySources?: boolean | string[] | undefined;
+  inlineSourcemapProjectSources?: ProjectSourcesFilter | undefined;
+  bundleLogLevel?: string | undefined;
+  bundleTreeshake?: TreeshakeOptions | undefined;
+  prefix?: string | undefined;
 };
 
 /**
@@ -129,7 +129,7 @@ function projectSourcesKey(value: ProjectSourcesFilter | undefined): string {
 type WithCacheParams = {
   cache: BundleCache | undefined;
   kind: BundleKind;
-  namespace?: string;
+  namespace?: string | undefined;
   name: string;
   sourceFile: string;
   contextHash: string | undefined;

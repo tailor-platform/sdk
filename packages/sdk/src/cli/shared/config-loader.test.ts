@@ -448,7 +448,7 @@ const otherPluginValidationErrorBrand = Symbol.for("tailor-platform/sdk:plugin-v
 class OtherPluginValidationError extends Error {
   readonly [otherPluginValidationErrorBrand] = true;
   readonly code: string;
-  readonly suggestion?: string;
+  readonly suggestion?: string | undefined;
   readonly context?: PluginValidationError["context"];
 
   constructor(options: ConstructorParameters<typeof PluginValidationError>[0]) {

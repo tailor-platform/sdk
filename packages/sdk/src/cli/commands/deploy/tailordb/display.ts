@@ -3,7 +3,8 @@ import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "..
 
 type TailorDBDisplayEntry = GroupedDisplayEntry;
 
-type NamespacedItem = HasName & UpdateAnnotation & { request?: { namespaceName?: string } };
+type NamespacedItem = HasName &
+  UpdateAnnotation & { request?: { namespaceName?: string | undefined } | undefined };
 
 function itemKey(item: NamespacedItem): string {
   return `${item.request?.namespaceName ?? ""}/${item.name}`;

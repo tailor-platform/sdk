@@ -51,12 +51,12 @@ import type { EffectiveDateDefault } from "#/runtime/types";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 interface ScriptOptions {
-  configPath?: string;
+  configPath?: string | undefined;
   number: string;
-  namespace?: string;
-  noScript?: boolean;
-  reason?: string;
-  withTest?: boolean;
+  namespace?: string | undefined;
+  noScript?: boolean | undefined;
+  reason?: string | undefined;
+  withTest?: boolean | undefined;
 }
 
 export interface MarkScriptSkippedOptions {
@@ -68,36 +68,36 @@ export interface MarkScriptSkippedOptions {
 export interface AddMigrationScriptFilesOptions {
   migrationsDir: string;
   migrationNumber: number;
-  withTest?: boolean;
+  withTest?: boolean | undefined;
   /** Whether the project has `@electric-sql/pglite` installed; gates the PGlite test scaffold. */
-  pgliteAvailable?: boolean;
+  pgliteAvailable?: boolean | undefined;
   /**
    * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
    * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
    * was configured with. Defaults to `false`.
    */
-  temporal?: boolean;
+  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
-  dateDefault?: EffectiveDateDefault;
+  dateDefault?: EffectiveDateDefault | undefined;
 }
 
 export interface AddMigrationScriptFilesResult {
   /** Created migrate.ts path; undefined when the script already existed. */
-  migratePath?: string;
+  migratePath?: string | undefined;
   /** Created db.ts path; undefined when the script already existed. */
-  dbTypesPath?: string;
+  dbTypesPath?: string | undefined;
   /** Created db.pglite.ts path; undefined when it already existed or could not be generated. */
-  pgliteSchemaPath?: string;
+  pgliteSchemaPath?: string | undefined;
   /** Why db.pglite.ts could not be generated */
-  pgliteSchemaError?: string;
+  pgliteSchemaError?: string | undefined;
   /** Created migrate.test.ts path; undefined unless withTest was set. */
-  testPath?: string;
+  testPath?: string | undefined;
   /** Created migrate.pglite.test.ts path; undefined unless withTest was set and PGlite is available. */
-  pgliteTestPath?: string;
+  pgliteTestPath?: string | undefined;
   /** True when this run was asked for a PGlite test that migrate.pglite.test.ts did not already have. */
-  pgliteTestRequested?: boolean;
+  pgliteTestRequested?: boolean | undefined;
   /** True when this run removed a recorded --no-script acknowledgment. */
-  clearedScriptSkip?: boolean;
+  clearedScriptSkip?: boolean | undefined;
 }
 
 /**

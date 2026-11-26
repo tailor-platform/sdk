@@ -3,7 +3,7 @@ export interface SyntaxDiagnostic {
   code: "InvalidSyntax";
   message: string;
   filename: string;
-  startLine?: number;
+  startLine?: number | undefined;
 }
 
 /**

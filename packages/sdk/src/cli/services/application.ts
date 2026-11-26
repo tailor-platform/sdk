@@ -168,9 +168,9 @@ export interface LoadApplicationResult {
   /** Fully initialized application */
   application: Application;
   /** Workflow bundling result (if workflows were bundled) */
-  workflowBuildResult?: BundleWorkflowJobsResult;
+  workflowBuildResult?: BundleWorkflowJobsResult | undefined;
   /** HTTP adapter bundling result (if adapters were bundled) */
-  httpAdapterBuildResult?: HttpAdapterBundleResult;
+  httpAdapterBuildResult?: HttpAdapterBundleResult | undefined;
   /** In-memory bundled scripts organized by kind */
   bundledScripts: BundledScripts;
   /** State a later `previous`-driven reload reuses instead of recomputing. */
@@ -192,9 +192,9 @@ interface ServiceConfigTarget {
   /** `defineConfig` property the service is configured under. */
   configKey: keyof typeof SERVICE_LABELS;
   /** The service's namespace or list index under `configKey`, when it has one. */
-  key?: string | number;
+  key?: string | number | undefined;
   /** Service name, or the namespace for TailorDB. */
-  name?: string;
+  name?: string | undefined;
 }
 
 function parseServiceConfig<Schema extends z.ZodType>(
@@ -402,7 +402,7 @@ function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
 /** A service configured in a config, with its key under the service's config property, when it has one. */
 interface ServiceEntry<Config, Key extends string | number = string | number> {
   config: Config;
-  key?: Key;
+  key?: Key | undefined;
 }
 
 function defineIdp(
@@ -795,11 +795,11 @@ export interface DefineApplicationParams {
   /** Application configuration object (must be loaded via loadConfig) */
   config: LoadedConfig;
   /** Plugin manager for processing plugins */
-  pluginManager?: PluginManager;
+  pluginManager?: PluginManager | undefined;
   /** Optional bundle cache for skipping unchanged builds */
-  bundleCache?: BundleCache;
+  bundleCache?: BundleCache | undefined;
   /** Bundle each TailorDB table's hook and validator scripts while loading. Defaults to `true`; turn it off when only the table definitions are read. */
-  precompileTailorDBScripts?: boolean;
+  precompileTailorDBScripts?: boolean | undefined;
 }
 
 /**
@@ -812,16 +812,16 @@ export interface LoadApplicationParams extends DefineApplicationParams {
    * hook code. Omit to skip resolution (e.g. `--build-only`, which never
    * reaches the platform); `env` then keeps any unresolved placeholder.
    */
-  client?: OperatorClient;
+  client?: OperatorClient | undefined;
   /** Workspace ID paired with `client`. */
-  workspaceId?: string;
+  workspaceId?: string | undefined;
   /**
    * Static website names planned by any config in the same deploy run. An
    * unresolved placeholder naming one of these is kept (with a warning
    * explaining that this run's rebuild will resolve it once the website
    * exists), instead of the warning used for a name outside this set.
    */
-  expectedLocalStaticWebsiteNames?: ReadonlySet<string>;
+  expectedLocalStaticWebsiteNames?: ReadonlySet<string> | undefined;
   /**
    * A prior `loadApplication` result for this same config. When present,
    * everything independent of `env` (config parsing, TailorDB loading,
@@ -831,7 +831,7 @@ export interface LoadApplicationParams extends DefineApplicationParams {
    * code that actually change when `env` newly resolves to a static
    * website's URL.
    */
-  previous?: LoadApplicationResult;
+  previous?: LoadApplicationResult | undefined;
 }
 
 /**
@@ -1084,7 +1084,7 @@ interface BundleEnvDependentScriptsParams {
   services: Pick<ConfigServices, "workflowService" | "authServices">;
   resolved: ResolvedEnv;
   bundleSettings: EnvDependentBundleSettings;
-  previousUsedJobs?: BundleWorkflowJobsResult;
+  previousUsedJobs?: BundleWorkflowJobsResult | undefined;
 }
 
 interface EnvDependentBundles {
@@ -1519,7 +1519,7 @@ export interface LoadWorkspaceParams extends Omit<LoadApplicationParams, "config
   /** Workspace loaded from a `defineWorkspace()` or `defineApp()` config */
   workspace: LoadedWorkspaceConfig;
   /** A prior `loadWorkspace` result for this same config, reused as `loadApplication` reuses its `previous`. */
-  previous?: LoadWorkspaceResult;
+  previous?: LoadWorkspaceResult | undefined;
 }
 
 /**

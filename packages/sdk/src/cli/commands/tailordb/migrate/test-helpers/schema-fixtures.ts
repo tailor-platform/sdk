@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "../diff-calculator";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type {
@@ -105,14 +106,14 @@ export function remoteType(name: string, fieldNames: string[]): RemoteTailorDBTy
 export function restrictedRemoteType(name: string, fieldNames: string[]): RemoteTailorDBType {
   return {
     name,
-    schema: {
+    schema: omitUndefined({
       fields: remoteType(name, fieldNames).schema?.fields,
       settings: {
         bulkUpsert: false,
         publishRecordEvents: false,
         disableGqlOperations: { create: true, update: true, delete: true, read: false },
       },
-    },
+    }),
   };
 }
 

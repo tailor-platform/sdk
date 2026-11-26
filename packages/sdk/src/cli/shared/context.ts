@@ -136,27 +136,27 @@ type PfConfigV1 = z.output<typeof pfConfigSchemaV1>;
 type PfConfigV2 = z.output<typeof pfConfigSchemaV2>;
 type PfConfig = z.output<typeof pfConfigSchemaV3>;
 type PfUser = z.output<typeof pfUserSchemaV3>;
-type UserTokens = { accessToken: string; refreshToken?: string };
+type UserTokens = { accessToken: string; refreshToken?: string | undefined };
 type PfConfigV3 = PfConfig;
 type LoadWorkspaceIdOptions = {
-  workspaceId?: string;
-  profile?: string;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
 };
 type LoadAccessTokenOptions = {
-  profile?: string;
+  profile?: string | undefined;
 };
 type LoadPlatformClientConfigOptions = {
-  profile?: string;
-  allowMissingProfile?: boolean;
+  profile?: string | undefined;
+  allowMissingProfile?: boolean | undefined;
 };
 type LoadConsoleBaseUrlOptions = {
-  profile?: string;
-  allowMissingProfile?: boolean;
+  profile?: string | undefined;
+  allowMissingProfile?: boolean | undefined;
 };
 type LoadMachineUserNameOptions = {
-  machineUser?: string;
-  machineUserSource?: MachineUserInputSource;
-  profile?: string;
+  machineUser?: string | undefined;
+  machineUserSource?: MachineUserInputSource | undefined;
+  profile?: string | undefined;
 };
 type ExplicitMachineUser = {
   source: MachineUserInputSource;
@@ -196,9 +196,9 @@ export function platformConfigExists(): boolean {
 }
 
 type ProfilePlatformSettings = {
-  platform_url?: string;
-  oauth2_client_id?: string;
-  console_url?: string;
+  platform_url?: string | undefined;
+  oauth2_client_id?: string | undefined;
+  console_url?: string | undefined;
 };
 
 /**
@@ -239,27 +239,47 @@ function canUseLegacyUserKey(platformUrl: string): boolean {
 }
 
 type UserEntryLookupOptions = {
-  allowLegacyUserKey?: boolean;
+  allowLegacyUserKey?: boolean | undefined;
 };
 
 type StoredUserTokensLookup = UserEntryLookupOptions & {
-  platformConfig?: PlatformClientConfig;
+  platformConfig?: PlatformClientConfig | undefined;
   /** Selected profile for login recovery */
-  profile?: string;
+  profile?: string | undefined;
 };
+
+function isUserKeyOnPlatform(userKey: string, platformConfig?: PlatformClientConfig): boolean {
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  return platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl)
+    ? !userKey.includes("|")
+    : userKey.startsWith(`${platformUrl}|`);
+}
+
+/**
+ * List the users that are logged in on a platform.
+ * @param users - The `users` of the platform configuration
+ * @param platformConfig - Platform to list; defaults to `TAILOR_PLATFORM_URL`, then the default platform
+ * @returns The email of each user that has one, otherwise its user name
+ */
+export function listUsersOnPlatform(
+  users: PfConfig["users"],
+  platformConfig?: PlatformClientConfig,
+): string[] {
+  return Object.entries(users).flatMap(([userKey, entry]) =>
+    isUserKeyOnPlatform(userKey, platformConfig)
+      ? [entry?.email ?? userFromPlatformUserKey(userKey, platformConfig)]
+      : [],
+  );
+}
 
 function findUserByEmail(
   users: PfConfig["users"],
   email: string,
   platformConfig?: PlatformClientConfig,
 ) {
-  const platformUrl = getPlatformBaseUrl(platformConfig);
-  const platformPrefix = `${platformUrl}|`;
-  const defaultPlatform = platformUrl === normalizeBaseUrl(defaultPlatformBaseUrl);
-  return Object.entries(users).find(([key, entry]) => {
-    if (entry?.email !== email) return false;
-    return defaultPlatform ? !key.includes("|") : key.startsWith(platformPrefix);
-  });
+  return Object.entries(users).find(
+    ([key, entry]) => entry?.email === email && isUserKeyOnPlatform(key, platformConfig),
+  );
 }
 
 function findUserEntry(
@@ -449,10 +469,12 @@ async function trySaveTokensInKeyring(user: string, tokens: UserTokens): Promise
 
 let warnedAboutNewerConfig = false;
 
-async function warnIfNewerConfigAvailable(config: {
-  latest_version?: number;
-  latest_min_sdk_version?: string;
-}) {
+type WarnIfNewerConfigAvailableConfig = {
+  latest_version?: number | undefined;
+  latest_min_sdk_version?: string | undefined;
+};
+
+async function warnIfNewerConfigAvailable(config: WarnIfNewerConfigAvailableConfig) {
   if (!config.latest_min_sdk_version || warnedAboutNewerConfig) return;
   const packageJson = await readPackageJson();
   const sdkVersion = packageJson.version ?? "0.0.0";
@@ -973,7 +995,7 @@ export async function loadAuthStatus(opts?: LoadAccessTokenOptions): Promise<Aut
 /** Where `workspace create` places a workspace when no location is given. */
 export type UserWorkspaceDefaults = {
   organizationId: string;
-  folderId?: string;
+  folderId?: string | undefined;
 };
 
 /**
@@ -1080,7 +1102,7 @@ export async function resolveTokens(
   user: string,
   label: string,
   loginFailure: LoginFailure,
-): Promise<{ accessToken: string; refreshToken?: string }> {
+): Promise<{ accessToken: string; refreshToken?: string | undefined }> {
   if (userEntry.storage === "keyring") {
     let tokens: UserTokens | undefined;
     try {
@@ -1139,6 +1161,11 @@ async function removeUserAlias(
   delete config.users[aliasKey];
 }
 
+type SaveUserTokensOptions = {
+  platformConfig?: PlatformClientConfig | undefined;
+  email?: string | undefined;
+};
+
 /**
  * Save tokens for a user, writing to keyring by default when available.
  * @param config - Platform config
@@ -1154,7 +1181,7 @@ export async function saveUserTokens(
   user: string,
   tokens: UserTokens,
   expiresAt: string,
-  opts: { platformConfig?: PlatformClientConfig; email?: string } = {},
+  opts: SaveUserTokensOptions = {},
 ): Promise<void> {
   registerTokenSecrets(tokens);
   const userKey = platformUserKey(user, opts.platformConfig);
@@ -1218,7 +1245,7 @@ export async function loadStoredUserTokens(
   | {
       userEntry: PfUser;
       accessToken: string;
-      refreshToken?: string;
+      refreshToken?: string | undefined;
     }
   | undefined
 > {
@@ -1299,10 +1326,10 @@ type StoredToken = {
 type TokenRequest = {
   config: PfConfig;
   user: string;
-  platformConfig?: PlatformClientConfig;
-  profile?: string;
+  platformConfig?: PlatformClientConfig | undefined;
+  profile?: string | undefined;
   /** A token the Platform rejected; a stored token equal to it counts as expired. */
-  rejectedToken?: string;
+  rejectedToken?: string | undefined;
 };
 
 function expiresWithin(expiresAt: number, marginMs: number): boolean {
@@ -1543,8 +1570,8 @@ const FORCED_RENEWAL_INTERVAL_MS = 60_000;
 
 type StoredTokenSourceInit = {
   token: ResolvedToken;
-  platformConfig?: PlatformClientConfig;
-  profile?: string;
+  platformConfig?: PlatformClientConfig | undefined;
+  profile?: string | undefined;
 };
 
 /**

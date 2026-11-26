@@ -16,6 +16,7 @@ import {
 import { runCliCommand } from "#/cli/shared/test-helpers/run-cli-command";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createCommand, createWorkspace } from "./create";
 import { encodeExpiresAt, expiresAtLabelKey } from "./expiry";
 
@@ -88,6 +89,11 @@ function stubClient(
   });
   vi.mocked(initOperatorClient).mockResolvedValue(client);
   return client;
+}
+
+function createWorkspaceReceivedFolderId(client: ReturnType<typeof stubClient>): boolean {
+  const request = vi.mocked(client.createWorkspace).mock.lastCall?.[0];
+  return request !== undefined && Object.hasOwn(request, "folderId");
 }
 
 aroundAll(async (runSuite) => {
@@ -720,8 +726,9 @@ describe("workspace create with user defaults", () => {
     await runCreateWithDefaults();
 
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: defaultOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: defaultOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each(["invalid region", "missing login"])(
@@ -783,8 +790,9 @@ describe("workspace create with user defaults", () => {
 
     expect(result.success).toBe(true);
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: otherOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each([
@@ -858,8 +866,9 @@ describe("workspace create with user defaults", () => {
 
       expect(result.success).toBe(true);
       expect(client.createWorkspace).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId, folderId }),
+        expect.objectContaining(omitUndefined({ organizationId, folderId })),
       );
+      expect(createWorkspaceReceivedFolderId(client)).toBe(folderId !== undefined);
     });
 
     test("rejects a folder-only --env-file before creating a workspace", async () => {
@@ -913,7 +922,10 @@ describe("workspace create with user defaults", () => {
       const result = await runCreateWithDefaults("--env-file", envFilePath, ...args);
 
       expect(result.success).toBe(true);
-      expect(client.createWorkspace).toHaveBeenCalledWith(expect.objectContaining(expected));
+      expect(client.createWorkspace).toHaveBeenCalledWith(
+        expect.objectContaining(omitUndefined(expected)),
+      );
+      expect(createWorkspaceReceivedFolderId(client)).toBe(expected.folderId !== undefined);
     },
   );
 
@@ -946,8 +958,9 @@ describe("workspace create with user defaults", () => {
 
     expect(initOperatorClient).toHaveBeenCalledWith("profile-token", undefined);
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: profileOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: profileOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test.each([
@@ -1020,8 +1033,9 @@ describe("workspace create with user defaults", () => {
     });
 
     expect(client.createWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: otherOrganizationId, folderId: undefined }),
+      expect.objectContaining({ organizationId: otherOrganizationId }),
     );
+    expect(createWorkspaceReceivedFolderId(client)).toBe(false);
   });
 
   test("ignores user defaults for an environment-authenticated programmatic call", async () => {

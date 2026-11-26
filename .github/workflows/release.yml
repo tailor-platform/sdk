@@ -67,6 +67,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RELEASES_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag
+          NPM_UNCONFIRMED_PACKAGES: ${{ env.NPM_UNCONFIRMED_PACKAGES || '[]' }}
           PUBLISHED_PACKAGES: ${{ steps.changesets.outputs['published-packages'] }}
         shell: bash
         run: |
@@ -74,7 +75,8 @@ jobs:
             --arg run "$RUN_URL" \
             --arg releases "$RELEASES_URL" \
             --argjson pkgs "$PUBLISHED_PACKAGES" \
-            '{text: (":rocket: Release <\($run)|succeeded>\n" + ($pkgs | map("• <\($releases)/\(.name)@\(.version)|\(.name)@\(.version)>") | join("\n")))}' \
+            --argjson unconfirmed "${NPM_UNCONFIRMED_PACKAGES:-[]}" \
+            '{text: (":rocket: Release <\($run)|succeeded>\n" + ($pkgs | map("• <\($releases)/\(.name)@\(.version)|\(.name)@\(.version)>") | join("\n")) + (if ($unconfirmed | length) > 0 then "\n:warning: npm での公開確認はまだ取れていません: " + ($unconfirmed | join(", ")) else "" end))}' \
             | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"
 
       - name: Notify Slack on failure

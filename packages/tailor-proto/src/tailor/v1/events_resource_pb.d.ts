@@ -16,7 +16,8 @@ export declare const file_tailor_v1_events_resource: GenFile;
  */
 export declare type DataplaneEvent = Message<"tailor.v1.DataplaneEvent"> & {
   /**
-   * @generated from field: string idempotency_key = 1;
+   * @generated from field: string idempotency_key = 1 [deprecated = true];
+   * @deprecated
    */
   idempotencyKey: string;
 
@@ -44,6 +45,11 @@ export declare type DataplaneEvent = Message<"tailor.v1.DataplaneEvent"> & {
    * @generated from field: google.protobuf.Timestamp time = 6;
    */
   time?: Timestamp;
+
+  /**
+   * @generated from field: string id = 7;
+   */
+  id: string;
 };
 
 /**
@@ -57,7 +63,8 @@ export declare const DataplaneEventSchema: GenMessage<DataplaneEvent>;
  */
 export declare type ControlplaneActivityLog = Message<"tailor.v1.ControlplaneActivityLog"> & {
   /**
-   * @generated from field: string idempotency_key = 1;
+   * @generated from field: string idempotency_key = 1 [deprecated = true];
+   * @deprecated
    */
   idempotencyKey: string;
 
@@ -90,6 +97,11 @@ export declare type ControlplaneActivityLog = Message<"tailor.v1.ControlplaneAct
    * @generated from field: google.protobuf.Timestamp operated_at = 7;
    */
   operatedAt?: Timestamp;
+
+  /**
+   * @generated from field: string id = 8;
+   */
+  id: string;
 };
 
 /**
@@ -103,7 +115,8 @@ export declare const ControlplaneActivityLogSchema: GenMessage<ControlplaneActiv
  */
 export declare type OrganizationActivityLog = Message<"tailor.v1.OrganizationActivityLog"> & {
   /**
-   * @generated from field: string idempotency_key = 1;
+   * @generated from field: string idempotency_key = 1 [deprecated = true];
+   * @deprecated
    */
   idempotencyKey: string;
 
@@ -136,6 +149,11 @@ export declare type OrganizationActivityLog = Message<"tailor.v1.OrganizationAct
    * @generated from field: google.protobuf.Timestamp operated_at = 7;
    */
   operatedAt?: Timestamp;
+
+  /**
+   * @generated from field: string id = 8;
+   */
+  id: string;
 };
 
 /**

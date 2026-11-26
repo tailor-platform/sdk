@@ -96,13 +96,13 @@ export interface LongRunningMigrationOptions {
   onBeforeStart: () => Promise<void>;
   /** Called as soon as a new execution exists, before waiting on it. */
   onExecutionStarted: (executionId: string) => Promise<void>;
-  pollIntervalMs?: number;
+  pollIntervalMs?: number | undefined;
   /**
    * Called when no job is running the script (`waiting`, also when waiting starts), when a job is
    * (`running`), when a poll cannot tell (`unknown`), on every poll that finds the run active, and
    * when the run finished, with whether any job was seen running the script.
    */
-  onRunEvent?: (event: MigrationRunEvent) => void;
+  onRunEvent?: ((event: MigrationRunEvent) => void) | undefined;
 }
 
 export interface MainMigrationWorkflowOptions extends LongRunningMigrationOptions {
@@ -113,7 +113,7 @@ export interface MainMigrationWorkflowOptions extends LongRunningMigrationOption
 export interface LongRunningMigrationResult {
   success: boolean;
   logs: string;
-  error?: string;
+  error?: string | undefined;
 }
 
 const MIGRATION_SUBJECT = "migration";
@@ -218,7 +218,7 @@ interface CreateMigrationWorkflowParams {
   /** Owner whose labels the migration's temporary resources carry. */
   owner: DeployOwner;
   /** Extra labels for the workflow. */
-  workflowLabels?: Record<string, string>;
+  workflowLabels?: Record<string, string> | undefined;
 }
 
 async function createMigrationWorkflow(
@@ -403,7 +403,7 @@ interface OutcomeUnknownDetails {
   /** The failure that hid the outcome. */
   cause?: unknown;
   /** The execution whose outcome is unknown, when it is known. */
-  executionId?: string;
+  executionId?: string | undefined;
   /** Whether the namespace records the run as in progress, which `migration resolve` settles. */
   recorded: boolean;
 }
@@ -456,7 +456,7 @@ function outcomeUnknownError(
 }
 
 type ObserveRunParams = CollectJobOutcomesOptions & {
-  onActive?: PollExecutionOptions["onActive"];
+  onActive?: PollExecutionOptions["onActive"] | undefined;
 };
 
 /**
@@ -585,9 +585,9 @@ interface JobOutcomes {
 
 interface CollectJobOutcomesOptions {
   /** Prefix for a job's log lines, e.g. the step it ran. */
-  labelJob?: (job: WorkflowJobExecution) => string | undefined;
+  labelJob?: ((job: WorkflowJobExecution) => string | undefined) | undefined;
   /** Whether a job's error or result can explain the failure. */
-  reportsFailure?: (job: WorkflowJobExecution) => boolean;
+  reportsFailure?: ((job: WorkflowJobExecution) => boolean) | undefined;
   /** Whether a job runs the migration script itself, as opposed to orchestrating it. */
   runsScript: (job: WorkflowJobExecution) => boolean;
 }
@@ -707,36 +707,36 @@ export interface MigrationStepsWorkflowOptions extends LongRunningMigrationOptio
    * Set when an earlier deploy left this migration partially applied; holds
    * the execution it recorded, when it got that far.
    */
-  inProgress?: { executionId?: string };
+  inProgress?: { executionId?: string | undefined } | undefined;
   /**
    * Steps of the earlier run that are reported as done instead of run again.
    * Each must have succeeded in that run; see {@link assertSkippableSteps}.
    */
-  skipSteps?: readonly string[];
+  skipSteps?: readonly string[] | undefined;
   /** Reports what happens to an earlier run, with what to do about it when there is something to do. */
   notify: (level: "info" | "warn", message: string, suggestion?: string) => void;
   /** Called while waiting, with the number of steps that have completed. */
-  onProgress?: (completedSteps: number, totalSteps: number) => void;
+  onProgress?: ((completedSteps: number, totalSteps: number) => void) | undefined;
 }
 
 export interface MigrationStepsWorkflowResult {
   success: boolean;
   logs: string;
-  error?: string;
-  executionId?: string;
+  error?: string | undefined;
+  executionId?: string | undefined;
   completedSteps: string[];
   failedSteps: string[];
   /** Whether any step may have committed: a job succeeded, or the outcome could not be observed. */
   stepsMayHaveCommitted: boolean;
   /** Whether the execution was observed in a final state, so no job of the run can still be writing. */
-  runEnded?: boolean;
+  runEnded?: boolean | undefined;
   /** Whether the run was canceled, so the next deploy runs every step again. */
-  canceled?: boolean;
+  canceled?: boolean | undefined;
   /**
    * Whether the steps completed in an earlier run, which this deploy reused
    * without running them again.
    */
-  reusedEarlierRun?: boolean;
+  reusedEarlierRun?: boolean | undefined;
 }
 
 interface StepOutcome {
@@ -831,7 +831,7 @@ export interface SkippableStepsOptions {
   /** Step names of the migration, in execution order. */
   order: readonly string[];
   /** What an earlier deploy recorded for this migration, if anything. */
-  inProgress: { executionId?: string } | undefined;
+  inProgress: { executionId?: string | undefined } | undefined;
   /** Steps the caller asked to skip. */
   requested: readonly string[];
 }
@@ -954,7 +954,7 @@ interface ActiveExecutionErrors {
   /** Builds the error refusing an execution that is still running. */
   active: (message: string, executionId: string) => Error;
   /** Builds the error for a failed listing; the listing's own error is thrown when omitted. */
-  lookupFailed?: (error: unknown) => Error;
+  lookupFailed?: ((error: unknown) => Error) | undefined;
 }
 
 const EXECUTION_ACTIVE_ERRORS: ActiveExecutionErrors = {

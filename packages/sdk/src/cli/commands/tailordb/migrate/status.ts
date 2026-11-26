@@ -2,6 +2,7 @@ import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
+import { checkpointRepairInProgressConflict } from "#/cli/commands/deploy/tailordb/migration-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -13,6 +14,7 @@ import { loadOperatorWorkspaceContext } from "#/cli/shared/operator-context";
 import { getNamespacesWithMigrations, migrationConfigNotFoundError } from "./config";
 import { migrationCommandContext, type MigrationCommandContext } from "./hints";
 import {
+  deployMaintenanceModeRelease,
   fetchRemoteMigrationState,
   formatInProgressMigrationAction,
   inProgressMigrationActions,
@@ -21,6 +23,7 @@ import {
   matchesLocalMigrationHistory,
   maintenanceModeReleaseAction,
   type MaintenanceModeRelease,
+  type RemoteMigrationState,
 } from "./remote-state";
 import {
   locateRemoteCheckpoint,
@@ -36,19 +39,20 @@ import {
   MIGRATION_FILE_VERSION_UNSUPPORTED,
   type RebaselineMarker,
 } from "./snapshot";
+import type { MigrationCheckpointRepair } from "./types";
 
 interface StatusOptions {
-  configPath?: string;
-  namespace?: string;
-  workspaceId?: string;
-  profile?: string;
-  json?: boolean;
+  configPath?: string | undefined;
+  namespace?: string | undefined;
+  workspaceId?: string | undefined;
+  profile?: string | undefined;
+  json?: boolean | undefined;
 }
 
 interface PendingMigrationStatusInfo {
   number: number;
   label: string;
-  description?: string;
+  description?: string | undefined;
 }
 
 interface MigrationStatusInfo {
@@ -56,22 +60,24 @@ interface MigrationStatusInfo {
   namespace: string;
   currentMigration: number;
   currentMigrationLabel: string;
+  /** Reset of a checkpoint the local baseline replaced, which the next deploy asks to make once the remote schema matches `0000`; the pending migrations follow `0000`. */
+  checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace"> | undefined;
   pendingMigrations: PendingMigrationStatusInfo[];
   /** Migration an earlier deploy left in progress. */
-  inProgressMigration?: number;
-  inProgressMigrationLabel?: string;
+  inProgressMigration?: number | undefined;
+  inProgressMigrationLabel?: string | undefined;
   /**
    * How the in-progress migration ran: `steps` partly committed, which the next deploy resumes, or
    * a `main` run whose outcome `migration resolve` settles before the next deploy.
    */
-  inProgressMigrationRun?: "steps" | "main";
+  inProgressMigrationRun?: "steps" | "main" | undefined;
   /** Commands that continue or settle the in-progress migration. */
-  inProgressMigrationActions?: InProgressMigrationAction[];
+  inProgressMigrationActions?: InProgressMigrationAction[] | undefined;
   /** Checkpoint a deploy's maintenance mode record names, when no migration is in progress. */
-  maintenanceModeCheckpoint?: number;
-  maintenanceModeCheckpointLabel?: string;
+  maintenanceModeCheckpoint?: number | undefined;
+  maintenanceModeCheckpointLabel?: string | undefined;
   /** Command that removes the record, taking the tables out of maintenance mode if they are in it. */
-  maintenanceModeRelease?: MaintenanceModeRelease;
+  maintenanceModeRelease?: MaintenanceModeRelease | undefined;
 }
 
 interface MigrationStatusFailure {
@@ -105,6 +111,22 @@ function formatCheckpointRecovery(
     commandContext,
   );
   return hints.map((hint) => `\n${hint}`).join("");
+}
+
+/**
+ * The deploy that resets a checkpoint the local baseline replaced, as the release of a maintenance
+ * mode record: `migration resolve` and `migration sync` refuse a namespace that records another
+ * migration history.
+ * @param state - Remote migration state of the namespace
+ * @param context - Invocation context of the current run
+ * @returns The deploy, or `undefined` without a record
+ */
+function resettingDeployRelease(
+  state: RemoteMigrationState,
+  context: MigrationCommandContext,
+): MaintenanceModeRelease | undefined {
+  if (state.maintenanceModeCheckpoint === null) return undefined;
+  return deployMaintenanceModeRelease(context);
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
@@ -220,11 +242,9 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       continue;
     }
     const currentMigration = remoteState.number ?? 0;
-    const checkpointRecovery = formatCheckpointRecovery(
-      locateRemoteCheckpoint(remoteState, migrationsDir, rebaseline),
-      namespace,
-      commandContext,
-    );
+    const location = locateRemoteCheckpoint(remoteState, migrationsDir, rebaseline);
+    const checkpointRepair = location.kind === "inside" ? location.checkpointRepair : undefined;
+    const checkpointRecovery = formatCheckpointRecovery(location, namespace, commandContext);
 
     if (remoteState.historyIdInvalid) {
       rows.push({
@@ -232,6 +252,13 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
         namespace,
         error: "Remote migration history ID is invalid." + checkpointRecovery,
       });
+      continue;
+    }
+    const repairConflict = checkpointRepair
+      ? checkpointRepairInProgressConflict(namespace, remoteState)
+      : undefined;
+    if (repairConflict) {
+      rows.push({ status: "error", namespace, error: errorSummary(repairConflict) });
       continue;
     }
     if (remoteState.inProgressInvalid) {
@@ -243,7 +270,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       continue;
     }
 
-    if (!matchesLocalMigrationHistory(remoteState, localHistoryId)) {
+    if (!checkpointRepair && !matchesLocalMigrationHistory(remoteState, localHistoryId)) {
       rows.push({
         status: "error",
         namespace,
@@ -260,7 +287,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
       .toSorted((a, b) => a - b);
     const latestLocalMigration = availableNumbers.at(-1) ?? 0;
-    if (currentMigration > latestLocalMigration) {
+    if (!checkpointRepair && currentMigration > latestLocalMigration) {
       rows.push({
         status: "error",
         namespace,
@@ -271,7 +298,9 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
-    const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
+    const pendingNumbers = availableNumbers.filter(
+      (n) => n > (checkpointRepair?.to ?? currentMigration),
+    );
 
     const pendingMigrations = pendingNumbers.map((num) => ({
       number: num,
@@ -279,17 +308,16 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
     }));
     const inProgress = isStaleMigrationInProgress(remoteState) ? null : remoteState.inProgress;
-    const maintenanceModeRelease = maintenanceModeReleaseAction(
-      remoteState,
-      namespace,
-      commandContext,
-    );
+    const maintenanceModeRelease = checkpointRepair
+      ? resettingDeployRelease(remoteState, commandContext)
+      : maintenanceModeReleaseAction(remoteState, namespace, commandContext);
 
     rows.push({
       status: "ok",
       namespace,
       currentMigration,
       currentMigrationLabel: formatMigrationNumber(currentMigration),
+      ...(checkpointRepair ? { checkpointRepair } : {}),
       pendingMigrations,
       ...(inProgress
         ? {
@@ -327,6 +355,12 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
       continue;
     }
     logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
+    if (row.checkpointRepair) {
+      const { from, to, fromHistoryId, toHistoryId } = row.checkpointRepair;
+      logger.log(
+        `  Checkpoint reset: the next deploy checks that the remote schema matches ${formatMigrationNumber(to)}, then asks to reset the checkpoint ${formatMigrationNumber(from)} → ${formatMigrationNumber(to)} and the migration history ID ${fromHistoryId ?? "<unset>"} → ${toHistoryId}`,
+      );
+    }
     if (row.inProgressMigrationLabel) {
       logger.log(
         row.inProgressMigrationRun === "main"
@@ -399,7 +433,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Local migration files are checked for a valid layout (numbering and required files in each migration directory) and a compatible format version, and deployed migration history IDs must match the local baseline. A namespace still at the checkpoint and migration history ID that the local baseline replaced is reported with the reset to 0000 that the next deploy asks to make once the remote schema matches 0000, and its pending migrations are those after 0000. Invalid or incompatible files, history mismatches, a remote checkpoint ahead of the latest local migration, an in-progress record (even one the checkpoint already passed) at a checkpoint the next deploy would reset, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

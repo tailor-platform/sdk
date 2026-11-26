@@ -7,8 +7,8 @@ checksum:
   require_checksum: true
 registries:
   - type: standard
-    ref: v4.592.0 # renovate: depName=aquaproj/aqua-registry
+    ref: v4.593.0 # renovate: depName=aquaproj/aqua-registry
 packages:
-  - name: zizmorcore/zizmor@v1.32.0
+  - name: zizmorcore/zizmor@v1.33.1
   - name: suzuki-shunsuke/ghalint@v1.6.0
   - name: bufbuild/buf@v1.75.0

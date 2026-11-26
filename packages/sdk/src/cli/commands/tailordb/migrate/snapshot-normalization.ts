@@ -201,7 +201,7 @@ export function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnaps
   // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
   // snapshots may have it undefined at runtime — backfill from inflection.
   const pluralForm =
-    (type as { pluralForm?: string }).pluralForm || inflection.pluralize(type.name);
+    (type as { pluralForm?: string | undefined }).pluralForm || inflection.pluralize(type.name);
   const fields = createSnapshotRecord<SnapshotFieldConfig>();
   for (const [fieldName, field] of Object.entries(type.fields)) {
     fields[fieldName] = normalizeSnapshotField(field);

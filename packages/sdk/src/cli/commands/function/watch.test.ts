@@ -508,8 +508,12 @@ describe("startFunctionRunWatch", () => {
   describe("a workflow job", () => {
     const skippedWarning = "the jobs it starts with `.start()` do not";
 
+    interface RunTwiceStderr {
+      output: string;
+    }
+
     async function runTwice(
-      stderr: { output: string },
+      stderr: RunTwiceStderr,
       overrides: Partial<FunctionRunTarget> = {},
     ): Promise<void> {
       vi.mocked(detectFunctionType).mockResolvedValue({

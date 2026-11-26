@@ -19,7 +19,13 @@ const workspaceId = "123e4567-e89b-12d3-a456-426614174000";
 const future = "2999-01-01T00:00:00.000Z";
 const past = "2000-01-01T00:00:00.000Z";
 
-function writeConfig(options?: { expired?: boolean; refreshable?: boolean; readonly?: boolean }) {
+interface WriteConfigOptions {
+  expired?: boolean;
+  refreshable?: boolean;
+  readonly?: boolean;
+}
+
+function writeConfig(options?: WriteConfigOptions) {
   const userEntry = {
     storage: "file" as const,
     access_token: "secret-access-token",

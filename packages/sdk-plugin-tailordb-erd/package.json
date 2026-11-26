@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-tailordb-erd",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Tailor CLI plugin providing the `tailor tailordb erd` commands (TailorDB ERD viewer)",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "@politty/zod": "0.7.5",
+    "@politty/zod": "0.7.8",
     "chokidar": "5.0.0",
     "mime-types": "3.0.2",
     "open": "11.0.4",
@@ -61,5 +61,11 @@
   "engines": {
     "bun": ">=1.2.0",
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "tailorUi": {
+    "id": "tailordb-erd",
+    "title": "ERD",
+    "kind": "module",
+    "entry": "./dist/ui.js"
   }
 }

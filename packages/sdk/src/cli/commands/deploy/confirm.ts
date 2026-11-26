@@ -27,9 +27,9 @@ export interface WorkspaceTakeover extends UnmanagedResource {
   /** `update` for a resource the config has, `delete` for one it no longer has. */
   action: "update" | "delete";
   /** Name of the application that deployed it, when it records one. */
-  currentOwner?: string;
+  currentOwner?: string | undefined;
   /** Id of the application config that deployed it, when it records one. */
-  currentAppId?: string;
+  currentAppId?: string | undefined;
 }
 
 /** Whether a confirmation prompts, is accepted by `--yes`, or is only reported by `--dry-run`. */
@@ -223,9 +223,9 @@ async function confirmNameMismatch(
 /** A resource a workspace config takes over or deletes, with what deleting it deletes too. */
 export interface TakeoverConfirmation extends WorkspaceTakeover {
   /** Whether deleting the resource itself needs confirmation, as for any important deletion. */
-  losesData?: boolean;
+  losesData?: boolean | undefined;
   /** Deletions inside the deleted resource that need confirmation on their own. */
-  nestedDeletions?: ReadonlyArray<ImportantResourceDeletion>;
+  nestedDeletions?: ReadonlyArray<ImportantResourceDeletion> | undefined;
 }
 
 /**
@@ -369,7 +369,7 @@ export interface ImportantResourceDeletion {
   resourceLabel: string;
   resourceName: string;
   /** The service namespace the resource is in, when it is in one. */
-  parent?: { resourceType: ManagedResourceType; resourceName: string };
+  parent?: { resourceType: ManagedResourceType; resourceName: string } | undefined;
 }
 
 const DATA_LOSS_WARNING = "  Deleting these resources will permanently remove all associated data.";
@@ -429,7 +429,7 @@ export interface MissingDependentApp {
   /** Kind of the resource carrying the records. */
   resourceType: ManagedResourceType;
   /** Namespace of the resource, for kinds whose names are only unique within one. */
-  namespace?: string;
+  namespace?: string | undefined;
   /** Name of the resource carrying the records. */
   name: string;
   /** Which of the resource's values the records concern. */

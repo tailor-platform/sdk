@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { tempDir } from "#/cli/shared/test-helpers/temp-dir";
+import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
 import { runMigrationTest } from "./test";
 import {
   remoteType,
@@ -30,11 +32,12 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 interface FixtureOptions {
   auth?: boolean;
   machineUsers?: Record<string, object>;
-  migrationMachineUser?: string;
-  seedMachineUser?: string;
+  migrationMachineUser?: string | undefined;
+  seedMachineUser?: string | undefined;
   seedRows?: boolean;
   migrationScript?: boolean;
   extraSeedNamespace?: boolean;
+  appConfig?: boolean;
 }
 
 function fixture(directory: string, options: FixtureOptions = {}) {
@@ -86,7 +89,7 @@ function fixture(directory: string, options: FixtureOptions = {}) {
   const configPath = path.join(directory, "tailor.config.ts");
   fs.writeFileSync(
     configPath,
-    `export default ${JSON.stringify(config)};
+    `${options.appConfig ? brandedDefault("app-config", JSON.stringify(config)) : `export default ${JSON.stringify(config)};`}
      export const plugins = [{ id: "@tailor-platform/seed", description: "Seed data",
        pluginConfig: ${JSON.stringify({ distPath: path.join(directory, "seed"), machineUserName: options.seedMachineUser })} }];`,
   );
@@ -354,6 +357,40 @@ describe("migration test machine users", () => {
         authNamespace: "auth",
         machineUsers: [{ namespace: "tailordb", machineUser: "typo-user" }],
       },
+    });
+    expect(app.client.createWorkspace).not.toHaveBeenCalled();
+  });
+});
+
+describe("migration test source application", () => {
+  test("looks up a defineConfig() application once in clone mode", async () => {
+    using tmp = tempDir("migration-test-source-application-");
+    const app = fixture(tmp.dir);
+
+    await expect(
+      app.dependencies.prepare({ ...app.options, data: "clone" }),
+    ).resolves.toMatchObject({ sourceApplicationName: "migration-test" });
+    expect(app.client.getApplication).toHaveBeenCalledExactlyOnceWith({
+      workspaceId: "source",
+      applicationName: "migration-test",
+    });
+  });
+
+  test("rejects a defineApp() application missing from the source workspace before creating a workspace in clone mode", async () => {
+    using tmp = tempDir("migration-test-source-application-");
+    const app = fixture(tmp.dir, { appConfig: true });
+    const notFound = new ConnectError(
+      "application not found or can not be accessed: migration-test",
+      Code.NotFound,
+    );
+    app.client.getApplication.mockRejectedValue(notFound);
+
+    await expect(
+      runMigrationTest({ ...app.options, data: "clone" }, app.dependencies),
+    ).rejects.toBe(notFound);
+    expect(app.client.getApplication).toHaveBeenCalledWith({
+      workspaceId: "source",
+      applicationName: "migration-test",
     });
     expect(app.client.createWorkspace).not.toHaveBeenCalled();
   });

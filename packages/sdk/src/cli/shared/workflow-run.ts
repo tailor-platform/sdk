@@ -6,16 +6,27 @@
  * deploy never claims them while a run is going.
  */
 
+import { create } from "@bufbuild/protobuf";
 import { timestampMs } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
+import {
+  Condition_Operator,
+  ConditionSchema,
+  FilterSchema,
+  PageDirection,
+} from "@tailor-platform/tailor-proto/resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { resourceTrn, sdkAppIdLabelKey, sdkNameLabelKey } from "#/cli/commands/deploy/label";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import { fetchPaged, getOrNull, isNotFoundError } from "#/cli/shared/client";
 import { CLIError, formatCommandHint, isCLIError } from "#/cli/shared/errors";
-import { joinFunctionLogMessages } from "#/cli/shared/function-execution";
+import {
+  isFunctionExecutionTerminalStatus,
+  joinFunctionLogMessages,
+} from "#/cli/shared/function-execution";
 import { logger } from "#/cli/shared/logger";
+import { pollUntil } from "#/cli/shared/poll-until";
 import {
   assertMachineUserExists,
   isSuspendedCallRecord,
@@ -34,17 +45,20 @@ import {
   uploadTemporaryFunction,
   type CreatedTemporaryWorkflow,
 } from "#/cli/shared/temporary-workflow";
-import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import {
-  isWorkflowRunResourceName,
+  functionRunResourceName,
+  isFunctionRunResourceName,
+  isTemporaryRunResourceName,
   readWorkflowRunMarker,
   runIdStartedAt,
   workflowRunJobFunctionName,
   workflowRunLabels,
   workflowRunResourceName,
 } from "#/cli/shared/workflow-run-labels";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { ScriptInvoker } from "#/cli/shared/script-executor";
+import type { FunctionExecutionSummary } from "@tailor-platform/tailor-proto/function_resource_pb";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
@@ -59,6 +73,9 @@ const FINISHED_GRACE_MS = 5 * 60_000;
 
 /** Longest time spent reading the result of a run that has already finished. */
 const OUTCOME_READ_TIMEOUT_MS = 60_000;
+
+/** Commands that wait for a run they started. */
+type WaitingCommand = "workflow run" | "function run";
 
 /** Longest poll interval a waiter may use: it must poll again well within {@link FINISHED_GRACE_MS}. */
 const MAX_POLL_INTERVAL_MS = 60_000;
@@ -192,12 +209,14 @@ export async function startWorkflowRun(
       created,
     );
     startSent = true;
-    const { executionId } = await client.startWorkflow({
-      workspaceId,
-      workflowId,
-      authInvoker: params.invoker,
-      arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
-    });
+    const { executionId } = await client.startWorkflow(
+      omitUndefined({
+        workspaceId,
+        workflowId,
+        authInvoker: params.invoker,
+        arg: params.arg === undefined ? undefined : JSON.stringify(params.arg),
+      }),
+    );
     const jobNames = Object.fromEntries(
       params.jobs.map(({ jobName }) => [workflowRunJobFunctionName(runId, jobName), jobName]),
     );
@@ -233,9 +252,9 @@ export interface AwaitWorkflowRunParams {
   /** Longest wait in milliseconds; `Number.POSITIVE_INFINITY` waits until the run ends */
   timeoutMs: number;
   /** Called with each poll that finds the run still going */
-  onActive?: () => void;
+  onActive?: (() => void) | undefined;
   /** Longest time in milliseconds to spend reading the result of a finished run */
-  outcomeTimeoutMs?: number;
+  outcomeTimeoutMs?: number | undefined;
 }
 
 export type WorkflowRunOutcome =
@@ -361,16 +380,17 @@ async function outcomeAfterWorkflowRemoved(
   if (!jobExecutionId) {
     return unavailable("the workflow was removed before the job of the run was seen");
   }
-  // loop exits when the job reaches a terminal status or the deadline passes
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  while (true) {
-    let signal: AbortSignal | undefined;
-    try {
-      if (deadline !== undefined) {
-        const budget = deadline - Date.now();
-        if (budget <= 0) return unavailable("the job was still running when the wait ended");
-        signal = AbortSignal.timeout(budget);
-      }
+  return await pollUntil<WorkflowRunOutcome>({
+    pollInterval,
+    deadline,
+    onTimeout: (stage) =>
+      unavailable(
+        stage === "read"
+          ? "reading the job of the run did not finish in time"
+          : "the job was still running when the wait ended",
+      ),
+    onError: (error) => unavailable(error instanceof Error ? error.message : String(error)),
+    read: async (signal) => {
       const request = { workspaceId, executionId: jobExecutionId };
       const { execution: job } = await (signal
         ? client.getFunctionExecution(request, { signal })
@@ -399,17 +419,9 @@ async function outcomeAfterWorkflowRemoved(
             : "Script execution failed with unknown error");
         return { state: "finished", result: { success: false, logs, result, error } };
       }
-    } catch (error) {
-      // The signal fires on the deadline, but its timer can run a few milliseconds ahead of the clock.
-      if (signal?.aborted) return unavailable("reading the job of the run did not finish in time");
-      if (!isRetryableWaitError(error)) {
-        return unavailable(error instanceof Error ? error.message : String(error));
-      }
-    }
-    const remaining = deadline === undefined ? pollInterval : deadline - Date.now();
-    if (remaining <= 0) return unavailable("the job was still running when the wait ended");
-    await new Promise((resolve) => setTimeout(resolve, Math.min(pollInterval, remaining)));
-  }
+      return undefined;
+    },
+  });
 }
 
 export interface ReclaimWorkflowRunsParams {
@@ -417,11 +429,11 @@ export interface ReclaimWorkflowRunsParams {
   workspaceId: string;
   now: Date;
   /** Also remove a run that finished moments ago (an explicit `workflow prune`) */
-  ignoreFinishedGrace?: boolean;
+  ignoreFinishedGrace?: boolean | undefined;
   /** Also remove resources named like a run's that carry no run label */
-  includeUnlabeled?: boolean;
+  includeUnlabeled?: boolean | undefined;
   /** Send the warning for a failed removal to the debug output only */
-  quiet?: boolean;
+  quiet?: boolean | undefined;
 }
 
 /** Kind of a resource a run registers. */
@@ -446,13 +458,13 @@ interface RunResource {
   kind: RunResourceKind;
   name: string;
   /** Workflow id; only a workflow has one */
-  id?: string;
+  id?: string | undefined;
   createdMs: number | undefined;
   labels: Record<string, string>;
 }
 
 interface RunResources {
-  workflow?: RunResource;
+  workflow?: RunResource | undefined;
   jobFunctions: RunResource[];
   functions: RunResource[];
 }
@@ -510,7 +522,7 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
       name: item.name,
       createdMs: item.createdAt ? timestampMs(item.createdAt) : undefined,
     })),
-  ].filter((item) => isWorkflowRunResourceName(item.name));
+  ].filter((item) => isTemporaryRunResourceName(item.name));
 
   return Promise.all(
     listed.map(async (item): Promise<RunResource> => {
@@ -525,6 +537,7 @@ async function listRunResources(client: OperatorClient, workspaceId: string) {
 function belongsToRun(resource: RunResource, runId: string): boolean {
   const runName = workflowRunResourceName(runId);
   if (resource.kind === "workflow") return resource.name === runName;
+  if (resource.name === functionRunResourceName(runId)) return resource.kind === "function";
   return resource.name === runName || resource.name.startsWith(`${runName}-`);
 }
 
@@ -577,11 +590,21 @@ export async function reclaimWorkflowRuns(
     const name = workflowRunResourceName(runId);
     // The workflow may have lost its label while the functions kept theirs, so ask by name.
     const executions = await listAllTemporaryWorkflowExecutions(client, workspaceId, name);
-    if (executions.some(isExecutionActive)) {
+    const functionExecutions = await listFunctionRunExecutions(
+      client,
+      workspaceId,
+      run.functions
+        .filter((item) => item.name === functionRunResourceName(runId))
+        .map((item) => item.name),
+    );
+    if (
+      executions.some(isExecutionActive) ||
+      functionExecutions.some((execution) => !isFunctionExecutionTerminalStatus(execution.status))
+    ) {
       keep(name);
       continue;
     }
-    if (executions.length === 0) {
+    if (executions.length === 0 && functionExecutions.length === 0) {
       const createdMs = latestCreatedMs([
         ...(run.workflow ? [run.workflow] : []),
         ...run.jobFunctions,
@@ -593,7 +616,10 @@ export async function reclaimWorkflowRuns(
         continue;
       }
     }
-    if (!params.ignoreFinishedGrace && finishedWithin(executions, now, FINISHED_GRACE_MS)) {
+    if (
+      !params.ignoreFinishedGrace &&
+      finishedWithin([...executions, ...functionExecutions], now, FINISHED_GRACE_MS)
+    ) {
       keep(name);
       continue;
     }
@@ -616,7 +642,9 @@ export async function reclaimWorkflowRuns(
       leftoverNote: LEFTOVER_NOTE,
       ...(warn ? { warn } : {}),
     });
-    if (gone) result.removed.push(name);
+    const asyncName = functionRunResourceName(runId);
+    const isAsyncRun = !run.workflow && run.functions.some((item) => item.name === asyncName);
+    if (gone) result.removed.push(isAsyncRun ? asyncName : name);
     if (stray) {
       unlabeled.splice(unlabeled.indexOf(stray), 1);
       if (gone) result.removedUnlabeled.push({ kind: stray.kind, name: stray.name });
@@ -649,6 +677,12 @@ export async function reclaimWorkflowRuns(
         continue;
       }
     }
+    if (resource.kind === "function" && isFunctionRunResourceName(resource.name)) {
+      const executions = await listFunctionRunExecutions(client, workspaceId, [resource.name]);
+      if (executions.some((execution) => !isFunctionExecutionTerminalStatus(execution.status))) {
+        continue;
+      }
+    }
     const listed = { kind: resource.kind, name: resource.name };
     if (!params.includeUnlabeled) {
       result.keptUnlabeled.push(listed);
@@ -675,7 +709,46 @@ function latestCreatedMs(resources: readonly RunResource[]): number | undefined 
   return times.length === 0 ? undefined : Math.max(...times);
 }
 
-function finishedWithin(executions: WorkflowExecution[], now: Date, graceMs: number): boolean {
+/**
+ * List the executions started directly on the functions of a run, which have no workflow to ask.
+ * @param client - Operator client
+ * @param workspaceId - Workspace ID
+ * @param functionNames - Functions the run registered
+ * @returns Every execution of those functions
+ */
+async function listFunctionRunExecutions(
+  client: OperatorClient,
+  workspaceId: string,
+  functionNames: readonly string[],
+): Promise<FunctionExecutionSummary[]> {
+  const lists = await Promise.all(
+    functionNames.map((name) =>
+      fetchPaged(async (pageToken, pageSize) => {
+        const { executions, nextPageToken } = await client.listFunctionExecutions({
+          workspaceId,
+          pageToken,
+          pageSize,
+          pageDirection: PageDirection.DESC,
+          filter: create(FilterSchema, {
+            condition: create(ConditionSchema, {
+              field: "script_name",
+              operator: Condition_Operator.EQ,
+              value: { kind: { case: "stringValue", value: name } },
+            }),
+          }),
+        });
+        return [executions, nextPageToken];
+      }, {}),
+    ),
+  );
+  return lists.flat();
+}
+
+function finishedWithin(
+  executions: readonly { finishedAt?: WorkflowExecution["finishedAt"] }[],
+  now: Date,
+  graceMs: number,
+): boolean {
   return executions.some(
     (execution) =>
       execution.finishedAt && now.getTime() - timestampMs(execution.finishedAt) < graceMs,
@@ -705,8 +778,12 @@ export async function reclaimFinishedWorkflowRuns(
  * Refuse a poll interval so long that a finished run could be removed before
  * its waiter polls again.
  * @param intervalMs - Poll interval in milliseconds
+ * @param command - Command that waits, named in the error
  */
-export function assertPollInterval(intervalMs: number): void {
+export function assertPollInterval(
+  intervalMs: number,
+  command: WaitingCommand = "workflow run",
+): void {
   if (intervalMs <= MAX_POLL_INTERVAL_MS) return;
   throw CLIError({
     code: "WORKFLOW_RUN_INTERVAL_TOO_LONG",
@@ -714,21 +791,25 @@ export function assertPollInterval(intervalMs: number): void {
     suggestion:
       "Use a shorter --interval: a finished run is only kept for a few minutes, " +
       "so a waiter polling less often could lose its result.",
-    command: "workflow run",
+    command,
   });
 }
 
 /**
  * Refuse a wait longer than a timer can count, which would end the wait as soon as the run starts.
  * @param timeoutMs - Longest time to wait in milliseconds, or infinity to wait without a limit
+ * @param command - Command that waits, named in the error
  */
-export function assertWaitTimeout(timeoutMs: number): void {
+export function assertWaitTimeout(
+  timeoutMs: number,
+  command: WaitingCommand = "workflow run",
+): void {
   if (timeoutMs <= MAX_WAIT_TIMEOUT_MS || timeoutMs === Number.POSITIVE_INFINITY) return;
   throw CLIError({
     code: "WORKFLOW_RUN_TIMEOUT_TOO_LONG",
     message: `--timeout must not exceed ${MAX_WAIT_TIMEOUT_MS} ms (about 24 days).`,
     suggestion: "Use a shorter --timeout, or omit it to wait without a limit.",
-    command: "workflow run",
+    command,
   });
 }
 
@@ -780,7 +861,7 @@ interface PruneHintParams {
   workspaceId: string;
   profile: string | undefined;
   /** Remove the resources that carry no run label as well */
-  includeUnlabeled?: boolean;
+  includeUnlabeled?: boolean | undefined;
 }
 
 /**

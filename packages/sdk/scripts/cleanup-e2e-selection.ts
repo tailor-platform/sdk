@@ -26,7 +26,7 @@ export interface CleanupWorkspace {
 
 export interface SelectionOptions {
   /** CI run id the workspaces must belong to. */
-  runId?: string;
+  runId?: string | undefined;
   /** Restrict to workspaces whose name carries no run id. */
   localOrphans?: boolean;
   /** Minimum age in hours, used with `localOrphans`. */

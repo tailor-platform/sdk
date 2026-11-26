@@ -18,6 +18,7 @@ import { internalError, locatedCLIError } from "#/cli/shared/errors";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { configAuthNamespaces } from "./deploy-application";
@@ -366,7 +367,7 @@ type ResolveNamespaceParams = {
   resource: NamespacedResource;
   localNamespaces: ReadonlyArray<string>;
   findLocalNamespace: () => string | undefined;
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>;
+  sameRunNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
 };
 
 function resolveNamespace(params: ResolveNamespaceParams): string {
@@ -576,7 +577,7 @@ function protoExecutor(
   function typedEventTrigger(
     typedConfig: MessageInitShape<typeof ExecutorTriggerEventConfigSchema>["typedConfig"],
   ): MessageInitShape<typeof ExecutorTriggerConfigSchema> {
-    return { config: { case: "event", value: { typedConfig } } };
+    return { config: { case: "event", value: omitUndefined({ typedConfig }) } };
   }
 
   switch (trigger.kind) {
@@ -702,7 +703,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "webhook",
-          value: {
+          value: omitUndefined({
             url: {
               expr: `(${stringifyFunction(target.url)})(${argsExpr})`,
             },
@@ -731,7 +732,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.requestBody)})(${argsExpr})`,
                 }
               : undefined,
-          },
+          }),
         },
       };
       break;
@@ -741,7 +742,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "tailorGraphql",
-          value: {
+          value: omitUndefined({
             appName: target.appName ?? defaultGraphQLAppName(context, definition),
             query: target.query,
             variables: target.variables
@@ -750,7 +751,7 @@ function protoExecutor(
                 }
               : undefined,
             invoker: normalizeInvoker(target.invoker, invokerScope, definition),
-          },
+          }),
         },
       };
       break;
@@ -766,14 +767,14 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "function",
-          value: {
+          value: omitUndefined({
             name: "operation",
             scriptRef: executorFunctionName(executor.name),
             variables: {
               expr: argsExpr,
             },
             invoker: normalizeInvoker(target.invoker, invokerScope, definition),
-          },
+          }),
         },
       };
       break;
@@ -783,7 +784,7 @@ function protoExecutor(
       targetConfig = {
         config: {
           case: "workflow",
-          value: {
+          value: omitUndefined({
             workflowName: target.workflowName,
             variables:
               target.args !== undefined
@@ -792,7 +793,7 @@ function protoExecutor(
                   : { expr: JSON.stringify(target.args) }
                 : undefined,
             invoker: normalizeInvoker(target.invoker, invokerScope, definition),
-          },
+          }),
         },
       };
       break;
@@ -801,7 +802,7 @@ function protoExecutor(
       throw internalError(`Unknown target: ${target satisfies never}`);
   }
 
-  return {
+  return omitUndefined({
     name: executor.name,
     description: executor.description,
     disabled: executor.disabled,
@@ -809,5 +810,5 @@ function protoExecutor(
     triggerConfig,
     targetType,
     targetConfig,
-  };
+  });
 }

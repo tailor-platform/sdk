@@ -18,6 +18,7 @@ import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 import { seedDumpCommand } from "./dump";
 import { seedFillCommand } from "./fill";
+import { seedStudioCommand } from "./studio";
 import { seedValidateCommand } from "./validate";
 
 /**
@@ -43,6 +44,7 @@ const mainCommand = defineCommand({
     dump: seedDumpCommand,
     validate: seedValidateCommand,
     fill: seedFillCommand,
+    studio: seedStudioCommand,
   },
 });
 

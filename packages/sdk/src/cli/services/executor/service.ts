@@ -22,7 +22,7 @@ export interface PluginExecutor {
   /** Plugin ID that generated this executor */
   pluginId: string;
   /** Source table name (for table-attached executors) */
-  sourceTableName?: string;
+  sourceTableName?: string | undefined;
 }
 
 export type ExecutorService = {

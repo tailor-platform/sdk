@@ -8,6 +8,7 @@ import {
   computeSourceScriptHash,
   extractSourceScriptHash,
 } from "#/parser/service/tailordb/type-script";
+import { omitUndefined } from "#/utils/omit-undefined";
 import {
   buildInProgressSnapshot,
   formatRemoteVerificationResults,
@@ -356,15 +357,15 @@ describe("verifyRemoteSchema", () => {
       Item: { name: "Item", pluralForm: "Items", fields: itemFields },
     });
     const item = remoteType("Item", ["name"]);
-    const remoteItem: MessageInitShape<typeof TailorDBTypeSchema> = {
+    const remoteItem: MessageInitShape<typeof TailorDBTypeSchema> = omitUndefined({
       name: item.name,
-      schema: {
+      schema: omitUndefined({
         fields: item.schema?.fields,
         typeHook: {
           create: { expr: `_value // @sdk-source-hash:${computeSourceScriptHash(itemFields)}` },
         },
-      },
-    };
+      }),
+    });
     const client = remoteClient({ labels: {} }, [remoteItem]);
 
     const [result] = await verify(client, dir);
@@ -394,24 +395,24 @@ describe("verifyRemoteSchema", () => {
       const status = remoteType(type.name ?? "", ["status"]).schema?.fields?.status;
       return {
         ...type,
-        schema: {
+        schema: omitUndefined({
           fields: { ...type.schema?.fields, status: { ...status, required } },
           settings: type.schema?.settings,
-        },
+        }),
       };
     }
 
     function inMaintenanceMode(type: RemoteTailorDBType): RemoteTailorDBType {
       return {
         ...type,
-        schema: {
+        schema: omitUndefined({
           fields: type.schema?.fields,
           settings: {
             bulkUpsert: false,
             publishRecordEvents: false,
             disableGqlOperations: { create: true, update: true, delete: true, read: false },
           },
-        },
+        }),
       };
     }
 
@@ -495,10 +496,10 @@ describe("verifyRemoteSchema", () => {
       const fields = type.schema?.fields;
       return {
         ...type,
-        schema: {
+        schema: omitUndefined({
           fields: { ...fields, email: { ...fields?.name, required: false } },
           settings: type.schema?.settings,
-        },
+        }),
       };
     }
 

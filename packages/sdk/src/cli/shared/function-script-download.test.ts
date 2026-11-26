@@ -2,6 +2,7 @@ import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_r
 import { describe, test, expect } from "vitest";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
+import { createRunId, functionRunResourceName } from "./workflow-run-labels";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { DownloadFunctionRegistryScriptResponseSchema } from "@tailor-platform/tailor-proto/function_registry_pb";
@@ -137,6 +138,23 @@ describe("scriptNameToRegistryName", () => {
   test("translates workflow job scriptName (no dots) under JOB type", () => {
     expect(scriptNameToRegistryName("validate-order", FunctionExecution_Type.JOB)).toBe(
       "workflow--validate-order",
+    );
+  });
+
+  test("keeps the name of the temporary function that `function run --async` registers", () => {
+    const name = functionRunResourceName(createRunId(new Date(), "c0a100"));
+    expect(scriptNameToRegistryName(name, FunctionExecution_Type.JOB)).toBe(name);
+  });
+
+  test("still maps a deployed job whose name starts with tmp-fn- to its workflow function", () => {
+    expect(scriptNameToRegistryName("tmp-fn-cleanup", FunctionExecution_Type.JOB)).toBe(
+      "workflow--tmp-fn-cleanup",
+    );
+  });
+
+  test("maps the function a workflow run registers to its workflow function", () => {
+    expect(scriptNameToRegistryName("tmp-run-r1-main", FunctionExecution_Type.JOB)).toBe(
+      "workflow--tmp-run-r1-main",
     );
   });
 

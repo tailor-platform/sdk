@@ -7,6 +7,8 @@
 
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { logger } from "#/cli/shared/logger";
+import { isFunctionRunResourceName } from "#/cli/shared/workflow-run-labels";
+import { omitUndefined } from "#/utils/omit-undefined";
 import type { OperatorClient } from "#/cli/shared/client";
 
 /**
@@ -40,7 +42,8 @@ export function scriptNameToRegistryName(
   // JOB: scriptName IS the workflow job name. Job names are
   // unconstrained, so dots must be preserved.
   if (executionType === FunctionExecution_Type.JOB) {
-    return `workflow--${scriptName}`;
+    // A run registers its temporary function under the name it starts, without the prefix.
+    return isFunctionRunResourceName(scriptName) ? scriptName : `workflow--${scriptName}`;
   }
 
   // Resolver: `<namespace>.<name>.body.js`
@@ -88,7 +91,7 @@ export interface DownloadFunctionScriptOptions {
   /** Function registry name (translated from FunctionExecution.scriptName via scriptNameToRegistryName) */
   name: string;
   /** Optional content hash for a specific version (defaults to current version) */
-  contentHash?: string;
+  contentHash?: string | undefined;
 }
 
 /** Result of a successful function script download */
@@ -113,11 +116,13 @@ export async function downloadFunctionScript(
   const { client, workspaceId, name, contentHash } = options;
   try {
     const chunks: Uint8Array[] = [];
-    for await (const response of client.downloadFunctionRegistryScript({
-      workspaceId,
-      name,
-      contentHash,
-    })) {
+    for await (const response of client.downloadFunctionRegistryScript(
+      omitUndefined({
+        workspaceId,
+        name,
+        contentHash,
+      }),
+    )) {
       if (response.payload.case === "chunk") {
         chunks.push(response.payload.value);
       }

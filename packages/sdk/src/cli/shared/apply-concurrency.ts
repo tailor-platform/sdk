@@ -45,6 +45,10 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
   return pLimit(resolveApplyConcurrency());
 }
 
+interface NamedItem {
+  name: string;
+}
+
 /**
  * Comparator that orders `name`-bearing items by `name`, for a stable,
  * reproducible apply order within the concurrency cap.
@@ -55,7 +59,7 @@ export function createApplyLimiter(): <R>(task: () => Promise<R>) => Promise<R> 
  * @param b - Right item
  * @returns Negative, zero, or positive per code-point ordering of the names
  */
-export function byName(a: { name: string }, b: { name: string }): number {
+export function byName(a: NamedItem, b: NamedItem): number {
   if (a.name < b.name) return -1;
   if (a.name > b.name) return 1;
   return 0;

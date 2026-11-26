@@ -4,6 +4,8 @@ import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import migrateGenerators from "../codemods/v2/define-generators-to-plugins/scripts/transform";
 import normalizePluginExport from "../codemods/v2/plugin-export-name-normalize/scripts/transform";
+import renameBin from "../codemods/v2/rename-bin/scripts/transform";
+import { countChildNodes } from "./test-helpers/sg-node";
 import type { TransformFn } from "./runner";
 
 const CODEMODS_DIR = path.resolve(__dirname, "../codemods");
@@ -548,6 +550,19 @@ export function read(plugins: unknown) { return generators; }
 
   test("v2/rename-bin transforms correctly", async () => {
     await expect(runFixtureCases("v2/rename-bin")).resolves.toBeUndefined();
+  });
+
+  test("v2/rename-bin rewrites a source command beside a long array in linear time", async () => {
+    const visitedNodes = (count: number) =>
+      countChildNodes(() => {
+        const values = Array.from({ length: count }, (_, i) => `"value${i}"`).join(", ");
+        const tail = `export const values = [${values}];\n`;
+        expect(renameBin(`spawn("tailor-sdk", ["deploy"]);\n${tail}`, "commands.ts")).toBe(
+          `spawn("tailor", ["deploy"]);\n${tail}`,
+        );
+      });
+
+    expect(await visitedNodes(400)).toBeLessThan(3 * (await visitedNodes(200)));
   });
 
   test("v2/wait-point-rename transforms correctly", async () => {

@@ -14,7 +14,12 @@ const invoker: TailorPrincipal = {
 };
 const data = {};
 
-function expectParsed<V>(result: { issues?: unknown; value?: V }): V {
+interface ExpectParsedResult<V> {
+  issues?: unknown;
+  value?: V;
+}
+
+function expectParsed<V>(result: ExpectParsedResult<V>): V {
   expect(result.issues).toBeUndefined();
   if (result.issues) {
     throw new Error("Unexpected issues");

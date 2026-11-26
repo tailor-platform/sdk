@@ -1,3 +1,4 @@
+import { omitUndefined } from "#/utils/omit-undefined";
 /**
  * Client for semantic decisions through Tailor AI Gateway.
  *
@@ -32,7 +33,7 @@ export class SystemOneError extends Error {
   readonly code: SystemOneErrorCode;
 
   /** HTTP status returned by AI Gateway, when available. */
-  readonly status?: number;
+  readonly status?: number | undefined;
 
   /**
    * Create a System One error.
@@ -43,7 +44,7 @@ export class SystemOneError extends Error {
   constructor(
     message: string,
     code: SystemOneErrorCode,
-    options: ErrorOptions & { status?: number } = {},
+    options: ErrorOptions & { status?: number | undefined } = {},
   ) {
     super(message, options);
     this.name = "SystemOneError";
@@ -297,12 +298,15 @@ async function evaluate(
     options.timeoutMs === undefined ? undefined : AbortSignal.timeout(options.timeoutMs);
   let response: Response;
   try {
-    response = await fetchImplementation(endpoint(options.baseURL), {
-      method: "POST",
-      headers,
-      body,
-      signal,
-    });
+    response = await fetchImplementation(
+      endpoint(options.baseURL),
+      omitUndefined({
+        method: "POST",
+        headers,
+        body,
+        signal,
+      }),
+    );
   } catch (cause) {
     if (isTimeout(cause)) {
       throw timeoutError(cause);

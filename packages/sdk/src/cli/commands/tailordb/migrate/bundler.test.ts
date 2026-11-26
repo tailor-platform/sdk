@@ -41,10 +41,10 @@ describe("migration-bundler", () => {
     await runTest();
   });
 
-  function writeMigration(
-    body: string,
-    { withContext = false }: { withContext?: boolean } = {},
-  ): string {
+  type WriteMigrationOptions = { withContext?: boolean };
+
+  function writeMigration(body: string, options: WriteMigrationOptions = {}): string {
+    const { withContext = false } = options;
     const scriptPath = path.join(testDir, "migrate.ts");
     const signature = withContext
       ? "main(trx: Transaction, { env }: MigrationContext): Promise<void>"

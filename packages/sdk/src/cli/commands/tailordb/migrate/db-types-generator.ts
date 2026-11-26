@@ -408,7 +408,7 @@ function mapToTsType(
   temporal = false,
 ): {
   type: string;
-  usedUtilityType?: UsedUtilityType;
+  usedUtilityType?: UsedUtilityType | undefined;
 } {
   if (fieldType === "nested") {
     return { type: "Record<string, unknown>" };
@@ -540,7 +540,7 @@ function generateFieldType(
   temporal = false,
 ): {
   type: string;
-  usedUtilityType?: UsedUtilityType;
+  usedUtilityType?: UsedUtilityType | undefined;
   usedColumnType: boolean;
   usedArrayColumnType: boolean;
   usesTemporalNamespace: boolean;

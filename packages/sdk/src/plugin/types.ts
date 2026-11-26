@@ -516,7 +516,7 @@ export interface DeployedContext<PluginConfig = unknown> {
   profile?: string;
   /**
    * Application whose config registers this plugin.
-   * @deprecated since NEXT_RELEASE — use `applications`, or `staticWebsites` to publish, instead. codemod: v3/plugin-context-application
+   * @deprecated since 2.48.0 — use `applications`, or `staticWebsites` to publish, instead. codemod: v3/plugin-context-application
    */
   application: DeployedApplication<PublishableStaticWebsite>;
   /** Every application in this deploy run, including the registering one. */

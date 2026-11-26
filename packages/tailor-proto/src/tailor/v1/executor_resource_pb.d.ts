@@ -586,7 +586,8 @@ export declare type ExecutorJob = Message<"tailor.v1.ExecutorJob"> & {
   data?: JsonObject;
 
   /**
-   * @generated from field: string event_idempotency_key = 6;
+   * @generated from field: string event_idempotency_key = 6 [deprecated = true];
+   * @deprecated
    */
   eventIdempotencyKey: string;
 
@@ -604,6 +605,11 @@ export declare type ExecutorJob = Message<"tailor.v1.ExecutorJob"> & {
    * @generated from field: google.protobuf.Timestamp updated_at = 9;
    */
   updatedAt?: Timestamp;
+
+  /**
+   * @generated from field: string event_id = 10;
+   */
+  eventId: string;
 };
 
 /**

@@ -1,13 +1,19 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { fetchPaged, initOperatorClient, type PlatformClientConfig } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
+import {
+  fetchLatestToken,
+  loadAccessToken,
+  loadPlatformClientConfig,
+  readPlatformConfig,
+} from "#/cli/shared/context";
 import { fetchWithinLimit, reportTruncation, type LimitedItems } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { parseOptions } from "#/cli/shared/parse-options";
 import { profileNameSchema } from "#/cli/shared/profile-name";
+import { omitUndefined } from "#/utils/omit-undefined";
 import { fetchReportedExpiries, type ReportedExpiry } from "./expiry";
 import {
   workspaceInfosWithFolderNames,
@@ -16,9 +22,9 @@ import {
 } from "./transform";
 
 export interface ListWorkspacesOptions {
-  order?: Order;
-  limit?: number;
-  profile?: string;
+  order?: Order | undefined;
+  limit?: number | undefined;
+  profile?: string | undefined;
 }
 
 /** A listed workspace, plus the prune expiry it records. */
@@ -35,6 +41,20 @@ export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<W
   const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   return listWorkspacesWithClient(client, options);
+}
+
+/**
+ * List the workspaces a logged-in user can see, before any profile exists for them.
+ * @param user - User name or email registered by `tailor login`
+ * @param platformConfig - Platform to ask; defaults to `TAILOR_PLATFORM_URL`, then the default platform
+ * @returns Workspaces of the platform
+ */
+export async function listWorkspacesOfUser(
+  user: string,
+  platformConfig?: PlatformClientConfig,
+): Promise<WorkspaceInfo[]> {
+  const { accessToken } = await fetchLatestToken(await readPlatformConfig(), user, platformConfig);
+  return listWorkspacesWithClient(await initOperatorClient(accessToken, platformConfig));
 }
 
 /**
@@ -90,11 +110,13 @@ async function fetchWorkspaces(
   const pageDirection = toPageDirection(options?.order);
   return fetchPaged(
     async (pageToken, pageSize) => {
-      const { workspaces, nextPageToken } = await client.listWorkspaces({
-        pageToken,
-        pageSize,
-        pageDirection,
-      });
+      const { workspaces, nextPageToken } = await client.listWorkspaces(
+        omitUndefined({
+          pageToken,
+          pageSize,
+          pageDirection,
+        }),
+      );
       return [workspaces, nextPageToken];
     },
     { limit: options?.limit },

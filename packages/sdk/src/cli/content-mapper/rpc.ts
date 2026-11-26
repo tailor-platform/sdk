@@ -4,7 +4,7 @@ import type { Readable } from "node:stream";
 export type JsonRpcHandler = (params: unknown) => unknown;
 
 interface JsonRpcMessage {
-  id?: number | string;
+  id?: number | string | undefined;
   method: string;
   params?: unknown;
 }
