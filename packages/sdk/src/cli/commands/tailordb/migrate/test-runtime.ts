@@ -1205,7 +1205,10 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         0,
         state.loaded.config.env ?? {},
         path.dirname(state.loaded.config.path),
-        resolvePluginConfig(state.loaded.plugins, KyselyGeneratorID)?.temporal ?? false,
+        {
+          temporal: resolvePluginConfig(state.loaded.plugins, KyselyGeneratorID)?.temporal,
+          decimal: resolvePluginConfig(state.loaded.plugins, KyselyGeneratorID)?.decimal,
+        },
         effectiveDateDefault(state.loaded.config),
       );
       const execution = await executeScript({

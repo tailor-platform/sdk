@@ -1613,7 +1613,7 @@ describe("tailordb migration validate", () => {
         1,
         {},
         tmpDir,
-        false,
+        {},
         "legacy",
       );
     });

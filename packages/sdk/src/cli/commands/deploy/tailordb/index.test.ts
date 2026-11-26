@@ -1732,7 +1732,7 @@ describe("planTailorDB (service level)", () => {
           1,
           {},
           migrationsDir,
-          false,
+          {},
           "legacy",
         );
       });

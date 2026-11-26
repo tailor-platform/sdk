@@ -186,9 +186,23 @@ export async function main(trx: Transaction): Promise<void> {
 
     test("passes temporal: true to tailordb.Client when requested", async () => {
       const scriptPath = writeMigration("  // Migration");
-      const result = await bundleMigrationScript(scriptPath, "tailordb", 10, {}, undefined, true);
+      const result = await bundleMigrationScript(scriptPath, "tailordb", 10, {}, undefined, {
+        temporal: true,
+      });
 
       expect(result.bundledCode).toContain("temporal: true");
+    });
+
+    test("bundles decimal.js only for a migration recorded as decimal", async () => {
+      const scriptPath = writeMigration("  // Migration");
+
+      const plain = await bundleMigrationScript(scriptPath, "tailordb", 12);
+      const decimal = await bundleMigrationScript(scriptPath, "tailordb", 13, {}, undefined, {
+        decimal: true,
+      });
+
+      expect(plain.bundledCode).not.toContain("DecimalError");
+      expect(decimal.bundledCode).toContain("DecimalError");
     });
 
     test("folds the configured date default into the migration bundle", async () => {
@@ -201,7 +215,7 @@ export async function main(trx: Transaction): Promise<void> {
         11,
         {},
         undefined,
-        false,
+        {},
         "temporal",
       );
 
@@ -242,12 +256,15 @@ describe("bundleMigrationSteps", () => {
    * @param stepsSource - Source of the `steps` object literal
    * @param temporal - Temporal mode to bundle the steps with
    * @param skipSteps - Steps the bundle's runner reports as skipped
+   * @param decimal - Whether to bundle the steps with Decimal values
+   * @param decimal - Whether to bundle the steps with Decimal values
    * @returns The bundle's `main` and what it did against the stand-ins
    */
   async function loadStepsBundle(
     stepsSource: string,
     temporal?: boolean,
     skipSteps?: readonly string[],
+    decimal?: boolean,
   ): Promise<{ main: BundledMain; record: RuntimeRecord }> {
     const scriptPath = path.join(testDir, "migrate.ts");
     fs.writeFileSync(
@@ -264,6 +281,7 @@ describe("bundleMigrationSteps", () => {
       order: ["first", "second"],
       runnerJobFunctionName: "runner-job",
       temporal,
+      decimal,
       skipSteps,
     });
 
@@ -278,7 +296,12 @@ describe("bundleMigrationSteps", () => {
         async end() {}
         async queryObject(sql: string) {
           record.sql.push(sql);
-          return { rows: [], command: "SELECT" };
+          const isSelect = sql.startsWith("select");
+          return {
+            rows: isSelect ? [{ price: "1.50" }] : [],
+            fields: isSelect ? [{ name: "price", typeName: "numeric" }] : [],
+            command: "SELECT",
+          };
         }
       },
     };
@@ -349,6 +372,46 @@ describe("bundleMigrationSteps", () => {
     await main({ step: "second" });
 
     expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: true }]);
+  });
+
+  describe("decimal", () => {
+    const READ_PRICE = `{
+      first: {
+        run: async (trx: Transaction) => {
+          const rows = await trx.selectFrom("User").selectAll().execute();
+          const price = (rows[0] as any).price;
+          (globalThis as any).__migrationEvents.push([price?.constructor?.name, String(price)]);
+        },
+      },
+    }`;
+
+    test("reads numeric columns as Decimal when the migration is recorded as decimal", async () => {
+      const { main } = await loadStepsBundle(READ_PRICE, undefined, undefined, true);
+
+      await main({ step: "first" });
+
+      expect((globalThis as Record<string, unknown>).__migrationEvents).toEqual([
+        ["Decimal", "1.5"],
+      ]);
+    });
+
+    test("leaves numeric columns as strings when the migration is not recorded as decimal", async () => {
+      const { main } = await loadStepsBundle(READ_PRICE);
+
+      await main({ step: "first" });
+
+      expect((globalThis as Record<string, unknown>).__migrationEvents).toEqual([
+        ["String", "1.50"],
+      ]);
+    });
+
+    test("keeps the Temporal setting when both are recorded", async () => {
+      const { main, record } = await loadStepsBundle(READ_PRICE, true, undefined, true);
+
+      await main({ step: "first" });
+
+      expect(record.clientOptions).toEqual([{ namespace: "main-db", temporal: true }]);
+    });
   });
 
   test("folds the recorded date default into the steps bundle", async () => {
