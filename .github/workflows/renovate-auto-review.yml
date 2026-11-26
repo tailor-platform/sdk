@@ -437,10 +437,17 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
           REPO: ${{ github.repository }}
           MARKER: "<!-- dependencies-claude-review -->"
+          WORKFLOW_PATH: .github/workflows/renovate-auto-review.yml
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           if [ ! -s "$REVIEW_BODY_FILE" ]; then
-            echo "No review body was produced; nothing to post."
-            exit 0
+            echo "No review body was produced." >&2
+            merge_blob=$(git rev-parse --verify "$GITHUB_SHA:$WORKFLOW_PATH")
+            default_blob=$(gh api "repos/$REPO/contents/$WORKFLOW_PATH?ref=$DEFAULT_BRANCH" --jq .sha)
+            if [ "$merge_blob" != "$default_blob" ]; then
+              echo "::error::claude-code-action skipped because $WORKFLOW_PATH in this run's merge commit differs from $DEFAULT_BRANCH's (this PR changes it, or the merge commit predates a change to it on $DEFAULT_BRANCH, as on a re-run), so no dependency review can run here. Review the update by hand."
+            fi
+            exit 1
           fi
 
           # Neutralizes @mentions so unrelated contributors quoted from
