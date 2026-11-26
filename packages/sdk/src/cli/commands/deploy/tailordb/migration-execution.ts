@@ -13,6 +13,7 @@ import {
   INITIAL_SCHEMA_NUMBER,
   isMigrationRestricted,
   type SchemaSnapshot,
+  type SnapshotGqlPermission,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
@@ -145,12 +146,46 @@ function entriesOfNamespace<T extends NamespacedEntry>(
 }
 
 /**
+ * List the tables a migration changes that the workspace lacks while the last pending migration
+ * omits them: the tables the migration adds and a later pending migration removes or renames away,
+ * which the migration creates for its script and the migration that removes them deletes again. A
+ * namespace without local definitions is left alone.
+ * @param changeSet - TailorDB change set
+ * @param migration - The migration about to run
+ * @param finalMigration - The last pending migration of the namespace
+ * @param phaseSettings - How this deploy's migration phases write table settings
+ * @returns Names of the tables
+ */
+function missingTableNames(
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+  finalMigration: PendingMigration,
+  phaseSettings: MigrationPhaseSettings,
+): string[] {
+  if (!phaseSettings.tailorDBInputs.some((input) => input.namespace === migration.namespace)) {
+    return [];
+  }
+  const finalTables = migrationSnapshotCache.load(finalMigration).tables;
+  const deleted = new Set(
+    entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
+  );
+  return [...getAffectedTableNames(migration)].filter((tableName) => {
+    const key = namespacedTableKey(migration.namespace, tableName);
+    const workspaceLacks =
+      !processedTables.created.has(key) &&
+      (!deleted.has(tableName) || deletedResources.types.has(key));
+    return workspaceLacks && !Object.hasOwn(finalTables, tableName);
+  });
+}
+
+/**
  * List the tables a migration changes that the deploy plan neither creates nor updates, yet the
  * workspace holds while the migration runs: a table a later migration removes, which this deploy
- * created from the baseline snapshot or which the plan deletes, and a table the plan leaves
- * unchanged because a later migration changes it back. Their schema follows the history like any
- * other table's, so the script sees the shape its migration defines. An unchanged table the
- * migration adds is left out: rolling the migration back deletes the tables it adds.
+ * created, from the baseline snapshot or for the migration that adds it, or which the plan
+ * deletes, and a table the plan leaves unchanged because a later migration changes it back. Their
+ * schema follows the history like any other table's, so the script sees the shape its migration
+ * defines. An unchanged table the migration adds is left out: rolling the migration back deletes
+ * the tables it adds.
  * @param changeSet - TailorDB change set
  * @param migration - The migration about to run
  * @returns Names of the tables
@@ -289,6 +324,35 @@ export function generateMigrationPhaseManifest(
   });
 }
 
+/**
+ * Create the GraphQL permission a snapshot defines for a table this deploy created from that
+ * snapshot, so the namespace holds the schema a later deploy verifies a resumed migration against.
+ * The migration that removes the table deletes the permission first.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Table this deploy created
+ * @param permission - GraphQL permission the snapshot defines for the table, if any
+ */
+export async function createSnapshotGqlPermission(
+  client: OperatorClient,
+  workspaceId: string,
+  namespaceName: string,
+  tableName: string,
+  permission: SnapshotGqlPermission | undefined,
+): Promise<void> {
+  if (!permission) return;
+  const key = namespacedTableKey(namespaceName, tableName);
+  processedTables.gqlPermissionsProcessed.add(key);
+  deletedResources.gqlPermissions.delete(key);
+  await client.createTailorDBGQLPermission({
+    workspaceId,
+    namespaceName,
+    typeName: tableName,
+    permission: protoGqlPermission(permission),
+  });
+}
+
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
   tableName: string,
@@ -333,6 +397,7 @@ export async function awaitAllSettledOrThrow(
  * @param workspaceId - Workspace ID
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
+ * @param finalMigration - The last pending migration of the namespace
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables whose schema this migration attempted to create or update
  * @param gqlPermissionUndo - Records how to undo each GraphQL permission this migration writes
@@ -343,6 +408,7 @@ export async function executeSingleMigrationPrePhase(
   workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  finalMigration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
   gqlPermissionUndo: GqlPermissionUndo,
@@ -358,6 +424,25 @@ export async function executeSingleMigrationPrePhase(
   const typeCreates = entriesOfNamespace(changeSet.type.creates, migration.namespace);
   const typeUpdates = entriesOfNamespace(changeSet.type.updates, migration.namespace);
   const createdBeforeMigration = new Set(processedTables.created);
+  const prePhaseManifest = (tableName: string) => {
+    const typeChanges = preMigrationChanges.get(tableName);
+    const snapshotType = buildSnapshotTypeManifest(
+      migration,
+      tableName,
+      phaseSettings,
+      typeChanges,
+    );
+    if (!snapshotType) return undefined;
+    const manifest = structuredClone(snapshotType);
+    if (typeChanges && typeChanges.size > 0 && manifest.schema?.fields) {
+      applyPreMigrationFieldAdjustments(manifest.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(tableName);
+    if (indexChanges && indexChanges.size > 0 && manifest.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(manifest.schema.indexes, indexChanges);
+    }
+    return manifest;
+  };
 
   for (const create of typeCreates) {
     const tableName = create.request.tailordbType?.name;
@@ -368,29 +453,36 @@ export async function executeSingleMigrationPrePhase(
     ) {
       continue;
     }
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedRequest = structuredClone(create.request);
-    clonedRequest.tailordbType = snapshotType;
-
-    if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.created.add(tableKey(tableName));
     attemptedTables.add(tableName);
+    const clonedRequest = structuredClone(create.request);
+    clonedRequest.tailordbType = tailordbType;
     await client.createTailorDBType(clonedRequest);
+  }
+
+  const planlessBeforeCreates = planlessTableNames(changeSet, migration);
+  for (const tableName of missingTableNames(changeSet, migration, finalMigration, phaseSettings)) {
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
+
+    processedTables.created.add(tableKey(tableName));
+    deletedResources.types.delete(tableKey(tableName));
+    attemptedTables.add(tableName);
+    await client.createTailorDBType({
+      workspaceId,
+      namespaceName: migration.namespace,
+      tailordbType,
+    });
+    await createSnapshotGqlPermission(
+      client,
+      workspaceId,
+      migration.namespace,
+      tableName,
+      migrationSnapshotCache.load(migration).tables[tableName]?.permissions?.gql,
+    );
   }
 
   for (const create of typeCreates) {
@@ -402,23 +494,8 @@ export async function executeSingleMigrationPrePhase(
     ) {
       continue;
     }
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedTypeRequest = structuredClone(snapshotType);
-    if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedTypeRequest.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedTypeRequest.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
@@ -426,7 +503,7 @@ export async function executeSingleMigrationPrePhase(
       omitUndefined({
         workspaceId: create.request.workspaceId,
         namespaceName: create.request.namespaceName,
-        tailordbType: clonedTypeRequest,
+        tailordbType,
       }),
     );
   }
@@ -434,56 +511,26 @@ export async function executeSingleMigrationPrePhase(
   for (const update of typeUpdates) {
     const tableName = update.request.tailordbType?.name;
     if (!tableName || !affectedTables.has(tableName)) continue;
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedRequest = structuredClone(update.request);
-    clonedRequest.tailordbType = snapshotType;
-
-    if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
-    }
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
+    const clonedRequest = structuredClone(update.request);
+    clonedRequest.tailordbType = tailordbType;
     await client.updateTailorDBType(clonedRequest);
   }
 
-  for (const tableName of planlessTableNames(changeSet, migration)) {
-    const typeChanges = preMigrationChanges.get(tableName);
-    const snapshotType = buildSnapshotTypeManifest(
-      migration,
-      tableName,
-      phaseSettings,
-      typeChanges,
-    );
-    if (!snapshotType) continue;
-
-    const clonedType = structuredClone(snapshotType);
-    if (typeChanges && typeChanges.size > 0 && clonedType.schema?.fields) {
-      applyPreMigrationFieldAdjustments(clonedType.schema.fields, typeChanges);
-    }
-    const indexChanges = preMigrationIndexChanges.get(tableName);
-    if (indexChanges && indexChanges.size > 0 && clonedType.schema?.indexes) {
-      applyPreMigrationIndexAdjustments(clonedType.schema.indexes, indexChanges);
-    }
+  for (const tableName of planlessBeforeCreates) {
+    const tailordbType = prePhaseManifest(tableName);
+    if (!tailordbType) continue;
 
     processedTables.updated.add(tableKey(tableName));
     attemptedTables.add(tableName);
     await client.updateTailorDBType({
       workspaceId,
       namespaceName: migration.namespace,
-      tailordbType: clonedType,
+      tailordbType,
     });
   }
 

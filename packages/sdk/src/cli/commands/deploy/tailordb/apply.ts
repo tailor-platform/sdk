@@ -81,6 +81,7 @@ import {
   deletePlannedTables,
   deleteRemovedTables,
   executeSingleMigrationPostPhase,
+  createSnapshotGqlPermission,
   executeSingleMigrationPrePhase,
   generateMigrationPhaseManifest,
   type GqlPermissionUndo,
@@ -410,6 +411,7 @@ export async function preflightTailorDB(
  * @param workspaceId - Workspace ID
  * @param changeSet - TailorDB change set
  * @param migration - Migration whose Post-phase failed
+ * @param finalMigration - The last pending migration of the namespace
  * @param phaseSettings - How this deploy's migration phases write table settings
  * @param attemptedTables - Tables the migration's phases touched
  * @param gqlPermissionUndo - Records how to undo each GraphQL permission the migration wrote
@@ -419,6 +421,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
   workspaceId: string,
   changeSet: TailorDBChangeSet,
   migration: PendingMigration,
+  finalMigration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
   attemptedTables: Set<string>,
   gqlPermissionUndo: GqlPermissionUndo,
@@ -429,6 +432,7 @@ async function reapplyPrePhaseAfterPostPhaseFailure(
       workspaceId,
       changeSet,
       migration,
+      finalMigration,
       phaseSettings,
       attemptedTables,
       gqlPermissionUndo,
@@ -879,6 +883,8 @@ interface MigrationRunLog {
 
 interface MigrationAttempt {
   migration: PendingMigration;
+  /** The last pending migration of the namespace. */
+  finalMigration: PendingMigration;
   attemptedTables: Set<string>;
   inProgress: boolean;
   /** Whether an earlier deploy may have applied this migration's Pre-phase, recorded or not. */
@@ -1143,8 +1149,11 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * its first pending migration — the whole baseline on a fresh-workspace replay, and
  * every table when the pending migration is data-only — are equally dropped by the loop
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
- * than the final schema. Every other planned create and update in a migrating namespace
- * waits until every migration has committed: enforcing the final schema earlier could
+ * than the final schema. One that the first pending migration removes or renames away
+ * also gets the snapshot's GraphQL permission: no Pre-phase writes one before that
+ * migration's checkpoint, and resuming the migration verifies it. Every other planned
+ * create and update in a migrating namespace waits until every migration has
+ * committed: enforcing the final schema earlier could
  * apply a change whose migration has not run. Tables a pending migration removes or
  * renames away have no planned create, so the workspace lacks them on a fresh replay;
  * they are created here from the snapshot too, and the migration that removes them
@@ -1204,6 +1213,16 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
           tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
         }),
       );
+      const firstMigration = pending.firstByNamespace.get(namespaceName);
+      if (firstMigration && getTablesDeletedAfterCheckpoint(firstMigration.diff).has(tableName)) {
+        await createSnapshotGqlPermission(
+          client,
+          migrationContext.workspaceId,
+          namespaceName,
+          tableName,
+          priorTable.permissions?.gql,
+        );
+      }
     }
     for (const [namespaceName, removedTables] of pending.deletedTables) {
       await createRemovedBaselineTables(flow, namespaceName, removedTables);
@@ -1270,6 +1289,13 @@ async function createRemovedBaselineTables(
       namespaceName,
       tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
     });
+    await createSnapshotGqlPermission(
+      client,
+      migrationContext.workspaceId,
+      namespaceName,
+      tableName,
+      priorTable.permissions?.gql,
+    );
   }
 }
 
@@ -1320,6 +1346,10 @@ async function runMigration(
   const runsSteps = usesStepRunner(migration.scriptForm, inProgress);
   const attempt: MigrationAttempt = {
     migration,
+    finalMigration: assertDefined(
+      flow.pending.lastByNamespace.get(migration.namespace),
+      "every pending migration's namespace is indexed",
+    ),
     attemptedTables,
     inProgress,
     resumesPrePhase:
@@ -1344,7 +1374,14 @@ async function runPreMigrationPhase(
   runLog: MigrationRunLog,
 ): Promise<void> {
   const { client, changeSet, phaseSettings, migrationCtx } = flow;
-  const { migration, attemptedTables, inProgress, rollsBackOnFailure, gqlPermissionUndo } = attempt;
+  const {
+    migration,
+    finalMigration,
+    attemptedTables,
+    inProgress,
+    rollsBackOnFailure,
+    gqlPermissionUndo,
+  } = attempt;
   flow.timeline?.enter("preMigration");
   try {
     // Pre-migration phase: Create/update tables with breaking fields as optional
@@ -1354,6 +1391,7 @@ async function runPreMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1409,6 +1447,7 @@ async function runPostMigrationPhase(
   const { client, changeSet, phaseSettings } = flow;
   const {
     migration,
+    finalMigration,
     attemptedTables,
     inProgress,
     runsSteps,
@@ -1435,6 +1474,7 @@ async function runPostMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1448,6 +1488,7 @@ async function runPostMigrationPhase(
         flow.migrationContext.workspaceId,
         changeSet,
         migration,
+        finalMigration,
         phaseSettings,
         attemptedTables,
         gqlPermissionUndo,
@@ -1479,7 +1520,14 @@ async function rollbackMigration(
   recordMayExist: boolean,
 ): Promise<unknown> {
   const { client, migrationContext, phaseSettings } = flow;
-  const { migration, rollsBackOnFailure, runsMain, resumesPrePhase, gqlPermissionUndo } = attempt;
+  const {
+    migration,
+    finalMigration,
+    rollsBackOnFailure,
+    runsMain,
+    resumesPrePhase,
+    gqlPermissionUndo,
+  } = attempt;
   const { workspaceId } = migrationContext;
   const kind = runsMain ? "main" : "steps";
   const clearsRecord = (rollsBackOnFailure || runsMain) && recordMayExist;
@@ -1497,7 +1545,6 @@ async function rollbackMigration(
     );
   }
   const attemptedTables = new Set(attempt.attemptedTables);
-  const finalMigration = flow.pending.lastByNamespace.get(migration.namespace) ?? migration;
   for (const tableName of readRollbackScope(
     migration,
     finalMigration,
