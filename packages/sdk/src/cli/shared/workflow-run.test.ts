@@ -486,8 +486,8 @@ describe("awaitWorkflowRun when removing the resources is slow", () => {
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
     expect(vi.mocked(logger.warn).mock.calls).toEqual([
       [
-        `Could not remove the temporary workflow run job function '${mainFunctionName}', ` +
-          `function '${mainFunctionName}'. ` +
+        `The temporary workflow run job function '${mainFunctionName}' ` +
+          `and function '${mainFunctionName}' may remain. ` +
           "`tailor workflow prune` retries the removal once the run has finished. " +
           `Reason: the removal of the job function '${mainFunctionName}' got no answer within 30 seconds.`,
       ],

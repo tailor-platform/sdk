@@ -143,21 +143,24 @@ const REMOVAL_TIMEOUT_MS = 30_000;
  * Remove the temporary resources created for a run.
  *
  * Teardown is best effort: a failure here must not mask the run's own
- * outcome, so every removal is attempted and an unexpected failure is reported
- * as a warning rather than raised. A removal that gets no answer within 30 seconds
- * is given up on, together with the removals after it.
+ * outcome, so a failed removal does not stop the ones after it and is reported
+ * as a warning rather than raised. A removal that gets no answer within
+ * {@link REMOVAL_TIMEOUT_MS} is given up on, together with the removals after it.
  * @param params - Resources to remove
  * @returns Whether every resource is gone
  */
 export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
 ): Promise<boolean> {
-  return await removeTemporaryResources(params, true);
+  return await removeTemporaryResources(params, "giveUpAfterTimeout");
 }
+
+/** Whether a removal that gets no answer is given up on after {@link REMOVAL_TIMEOUT_MS}. */
+type RemovalWait = "giveUpAfterTimeout" | "waitForAnswer";
 
 async function removeTemporaryResources(
   params: TeardownTemporaryWorkflowParams,
-  limitEachRemoval: boolean,
+  wait: RemovalWait,
 ): Promise<boolean> {
   const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
   const warn = params.warn ?? ((message: string) => logger.warn(message));
@@ -192,9 +195,10 @@ async function removeTemporaryResources(
   let removedAll = true;
   for (const [index, [label, resource, run]] of steps.entries()) {
     const controller = new AbortController();
-    const timer = limitEachRemoval
-      ? setTimeout(() => controller.abort(), REMOVAL_TIMEOUT_MS)
-      : undefined;
+    const timer =
+      wait === "giveUpAfterTimeout"
+        ? setTimeout(() => controller.abort(), REMOVAL_TIMEOUT_MS)
+        : undefined;
     try {
       await run({ signal: controller.signal });
     } catch (error) {
@@ -207,7 +211,7 @@ async function removeTemporaryResources(
           .slice(index)
           .map(([keptLabel, keptResource]) => `${keptLabel} '${keptResource}'`);
         warn(
-          `Could not remove the temporary ${subject} ${kept.join(", ")}. ${leftoverNote} ` +
+          `The temporary ${subject} ${new Intl.ListFormat("en").format(kept)} may remain. ${leftoverNote} ` +
             `Reason: the removal of the ${label} '${resource}' got no answer within ${REMOVAL_TIMEOUT_MS / 1000} seconds.`,
         );
         break;
@@ -303,7 +307,7 @@ export async function reclaimTemporaryWorkflow(
 ): Promise<void> {
   const workflowId = await findTemporaryWorkflowId(params.client, params.workspaceId, params.name);
   // A removal given up on can still land after the create that follows and remove the new resource.
-  await removeTemporaryResources({ ...params, workflowId }, false);
+  await removeTemporaryResources({ ...params, workflowId }, "waitForAnswer");
 }
 
 export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {

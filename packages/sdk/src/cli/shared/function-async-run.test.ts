@@ -263,7 +263,13 @@ describe("awaitFunctionAsyncRun", () => {
         state: "finished",
         result: { success: true, logs: "hello", result: '{"ok":true}' },
       });
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("tailor workflow prune"));
+      expect(vi.mocked(logger.warn).mock.calls).toEqual([
+        [
+          `The temporary function run function '${name}' may remain. ` +
+            "`tailor workflow prune` retries the removal once the run has finished. " +
+            `Reason: the removal of the function '${name}' got no answer within 30 seconds.`,
+        ],
+      ]);
     } finally {
       vi.useRealTimers();
     }
