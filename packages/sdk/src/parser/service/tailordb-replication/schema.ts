@@ -77,3 +77,21 @@ export const TailorDBTypeReplicationSchema = z
   .refine((type) => type.excludeFields === undefined || type.includeFields === undefined, {
     message: "Specify either `excludeFields` or `includeFields`, not both.",
   });
+
+export const TailorDBPluginTableSchema = z.strictObject({
+  replication: z
+    .union([
+      z.literal(false),
+      z
+        .array(TailorDBTypeReplicationSchema)
+        .min(1, "must list at least one entry, or be false to leave the table out"),
+    ])
+    .optional()
+    .describe(
+      "How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out",
+    ),
+});
+
+export const TailorDBPluginTablesSchema = z
+  .record(z.string(), TailorDBPluginTableSchema)
+  .describe("Settings of tables that plugins generate in this namespace, keyed by table name");

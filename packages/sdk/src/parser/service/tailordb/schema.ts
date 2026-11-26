@@ -2,6 +2,7 @@ import { z } from "zod";
 import { functionSchema } from "../common";
 import { TailorFieldTypeSchema } from "../field-types";
 import {
+  TailorDBPluginTablesSchema,
   TailorDBReplicationsSchema,
   TailorDBTypeReplicationSchema,
 } from "../tailordb-replication/schema";
@@ -308,4 +309,5 @@ export const TailorDBServiceConfigSchema = z.strictObject({
     "Default GraphQL operations for all tables in this service",
   ),
   replications: TailorDBReplicationsSchema.optional(),
+  pluginTables: TailorDBPluginTablesSchema.optional(),
 });

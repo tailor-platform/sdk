@@ -1,5 +1,5 @@
 ---
-description: "Replicate TailorDB tables into a BigQuery dataset you own with a namespace's replications config, .replication() on tables, and defineTailorDBReplicationDestination()."
+description: "Replicate TailorDB tables into a BigQuery dataset you own with a namespace's replications config, .replication() on tables, pluginTables for tables that plugins generate, and defineTailorDBReplicationDestination()."
 ---
 
 # TailorDB Replication
@@ -47,7 +47,7 @@ If your Google Cloud organization restricts IAM policy members to its own domain
 
 ## Replications
 
-Declare a namespace's replications in its `replications` config, keyed by replication name, and choose the tables to copy with `.replication()` on each table:
+Declare a namespace's replications in its `replications` config, keyed by replication name, and choose the tables to copy with `.replication()` on each table you define:
 
 ```typescript
 // tailor.config.ts
@@ -82,7 +82,7 @@ export const order = db.table("Order", { total: db.int() }).replication({});
 
 - A replication copies tables of the namespace that declares it. Replication names are unique across the workspace.
 - `destination` is the value `defineTailorDBReplicationDestination()` returned. Two different destinations cannot share a name.
-- A table without `.replication()` is not replicated. An entry without `targets` applies to every replication of the namespace.
+- A table without `.replication()` is not replicated, except a table a plugin generates that `pluginTables` sets (see [Tables that plugins generate](#tables-that-plugins-generate)). An entry without `targets` applies to every replication of the namespace.
 - To copy a table differently per replication, pass one entry per replication and name it in `targets`:
 
   ```typescript
@@ -94,7 +94,6 @@ export const order = db.table("Order", { total: db.int() }).replication({});
   A target the namespace does not declare in `replications`, or a replication set by two entries of one table, fails when the config loads.
 
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.
-- Tables that plugins generate are replicated when the plugin calls `.replication()` on them.
 
 ### Deploying to some environments only
 
@@ -127,6 +126,35 @@ By default every field of a table is replicated. Pass at most one of:
 - `includeFields`: replicate only these fields. Fields added to the table later are not replicated.
 
 Field names are checked against the table's fields, per `.replication()` entry. The `id` field is always replicated.
+
+### Tables that plugins generate
+
+A plugin can generate tables that you do not define yourself, such as an audit log table. A plugin replicates such a table by calling `.replication()` on it; the plugin's documentation says which tables it replicates and which fields it leaves out.
+
+To choose for yourself, set the table's `replication` in the namespace's `pluginTables`, keyed by the table's name. It takes the same entries as `.replication()` and replaces what the plugin sets; `false` leaves the table out:
+
+```typescript
+export default defineConfig({
+  name: "shop",
+  db: {
+    "main-db": {
+      files: ["./tailordb/*.ts"],
+      replications: {
+        analytics: { destination: warehouse, tablePrefix: "shop_" },
+        lake: { destination: warehouse, tablePrefix: "lake_" },
+      },
+      pluginTables: {
+        AuditLog: { replication: [{ targets: ["analytics"], excludeFields: ["ipAddress"] }] },
+        DeletedOrder: { replication: false },
+      },
+    },
+  },
+});
+```
+
+- A key that names no table a plugin generates in the namespace fails when the config loads, and the error lists the tables plugins generate there. Set tables you define with `.replication()` instead.
+- Your entries replace the plugin's as a whole. A field the plugin leaves out is replicated unless your entry leaves it out too, and changes a later version of the plugin makes to its `.replication()` no longer apply to the table.
+- If the plugin runs only in some environments, set its tables in `pluginTables` only where it runs.
 
 ### Table names
 

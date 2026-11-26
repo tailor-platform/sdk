@@ -1184,6 +1184,25 @@ export type TailorDBServiceConfigInput = {
           | undefined;
       }
     | undefined;
+  /** Settings of tables that plugins generate in this namespace, keyed by table name */
+  pluginTables?:
+    | {
+        [x: string]: {
+          /** How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out */
+          replication?:
+            | false
+            | {
+                /** Replications of the namespace that copy this table; every one when omitted */
+                targets?: string[] | undefined;
+                /** Replicate every field but these. Fields added later are replicated. */
+                excludeFields?: string[] | undefined;
+                /** Replicate only these fields. Fields added later are not replicated. */
+                includeFields?: string[] | undefined;
+              }[]
+            | undefined;
+        };
+      }
+    | undefined;
 };
 
 export type TailorDBServiceConfig = {
@@ -1229,6 +1248,25 @@ export type TailorDBServiceConfig = {
               enabled: boolean;
             }
           | undefined;
+      }
+    | undefined;
+  /** Settings of tables that plugins generate in this namespace, keyed by table name */
+  pluginTables?:
+    | {
+        [x: string]: {
+          /** How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out */
+          replication?:
+            | false
+            | {
+                /** Replications of the namespace that copy this table; every one when omitted */
+                targets?: string[] | undefined;
+                /** Replicate every field but these. Fields added later are replicated. */
+                excludeFields?: string[] | undefined;
+                /** Replicate only these fields. Fields added later are not replicated. */
+                includeFields?: string[] | undefined;
+              }[]
+            | undefined;
+        };
       }
     | undefined;
 };

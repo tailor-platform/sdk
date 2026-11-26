@@ -1,4 +1,7 @@
-import type { TailorDBReplicationsConfig } from "#/configure/services/tailordb-replication/types";
+import type {
+  TailorDBPluginTablesConfig,
+  TailorDBReplicationsConfig,
+} from "#/configure/services/tailordb-replication/types";
 // TailorDB structural types and configure-facing config types.
 //
 // This is a pure type module: type declarations only, no zod/schema
@@ -377,14 +380,21 @@ type TailorDBExternalConfig = { external: true };
 
 export type TailorDBOwnServiceConfigInput = Omit<
   TailorDBServiceConfigInput,
-  "ignores" | "replications"
+  "ignores" | "replications" | "pluginTables"
 > & {
   /**
    * Replications of this namespace's tables into BigQuery, keyed by replication name. A table
-   * takes part through `.replication()`. Set a replication to `undefined` to declare it without
-   * deploying it, for example outside production.
+   * takes part through `.replication()`, and a table a plugin generates also through
+   * `pluginTables`. Set a replication to `undefined` to declare it without deploying it, for
+   * example outside production.
    */
   replications?: TailorDBReplicationsConfig;
+  /**
+   * Settings of tables that plugins generate in this namespace, keyed by table name. A table's
+   * `replication` replaces what the plugin sets with `.replication()`, e.g.
+   * `{ AuditLog: { replication: [{ targets: ["analytics"], excludeFields: ["ip"] }] } }`.
+   */
+  pluginTables?: TailorDBPluginTablesConfig;
   /**
    * Glob patterns to exclude from table discovery.
    * @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation
