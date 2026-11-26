@@ -244,6 +244,9 @@ describe("migration test runtime", () => {
     ["leading blank lines", '\n\n{"id":1}\n{"id":2}\n'],
     ["CRLF endings and a blank line", '{"id":1}\r\n\r\n{"id":2}\r\n'],
     ["a byte order mark", '\uFEFF{"id":1}\n{"id":2}\n'],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n'],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n'],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n'],
   ])(
     "reads the baseline seed rows the validator reads from a file with %s",
     async (_label, content) => {
@@ -260,9 +263,6 @@ describe("migration test runtime", () => {
   test.each([
     ["a malformed row", "not-json\n", 1],
     ["a malformed row after blank lines", '\n\n{"id":1}\nnot-json\n', 4],
-    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
-    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
-    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
   ])(
     "rejects a baseline seed file with %s at the line the validator rejects",
     async (_label, content, line) => {

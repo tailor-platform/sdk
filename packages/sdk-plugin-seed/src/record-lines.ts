@@ -1,20 +1,6 @@
 import { readFile } from "node:fs/promises";
+import { jsonlRecordLines } from "lines-db";
 import type { ValidationErrorDetail } from "lines-db";
-
-/**
- * Split JSONL content into the lines that hold records, as the seed validator
- * reads them: a leading byte order mark and each line's trailing carriage
- * return are dropped, and blank or whitespace-only lines are skipped.
- * @param content - Raw JSONL file contents
- * @returns Each record's text with its 1-based physical line
- */
-export function jsonlRecordLines(content: string): { text: string; line: number }[] {
-  const lines = (content.startsWith("\uFEFF") ? content.slice(1) : content).split("\n");
-  return lines.flatMap((raw, index) => {
-    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-    return text.trim().length === 0 ? [] : [{ text, line: index + 1 }];
-  });
-}
 
 /**
  * Resolve the 1-based physical line a JSONL record occupies.

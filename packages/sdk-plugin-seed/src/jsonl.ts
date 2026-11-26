@@ -11,8 +11,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { withSourceLocation } from "@tailor-platform/sdk/cli";
+import { jsonlRecordLines } from "lines-db";
 import * as path from "pathe";
-import { jsonlRecordLines } from "./record-lines";
 import type { ErrorSourceLocation, SeedData } from "@tailor-platform/sdk/cli";
 
 type AssertSeedDataDirectoryOptions = {

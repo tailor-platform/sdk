@@ -1,45 +1,9 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JsonlReader, unwrap } from "lines-db";
 import { describe, test, expect } from "vitest";
-import { firstErrorLocation, jsonlRecordLines, physicalLineOfRecord } from "./record-lines";
+import { firstErrorLocation, physicalLineOfRecord } from "./record-lines";
 import type { ValidationErrorDetail } from "lines-db";
-
-describe("jsonlRecordLines", () => {
-  test.each([
-    ["no blank lines", '{"a":1}\n{"a":2}\n'],
-    ["an interior blank line", '{"a":1}\n\n{"a":2}\n'],
-    ["whitespace-only lines", '  \n{"a":1}\n \t \n{"a":2}\n\n\n'],
-    ["leading blank lines", '\n\n{"a":1}\n{"a":2}\n'],
-    ["CRLF endings and a blank line", '{"a":1}\r\n\r\n{"a":2}\r\n'],
-    ["a byte order mark", '\uFEFF{"a":1}\n{"a":2}\n'],
-  ])("reads the records the validator reads from a file with %s", async (_label, content) => {
-    const dir = mkdtempSync(join(tmpdir(), "seed-loc-"));
-    try {
-      const file = join(dir, "T.jsonl");
-      writeFileSync(file, content);
-      const validatorRows = unwrap(await JsonlReader.read(file));
-      expect(validatorRows).toEqual([{ a: 1 }, { a: 2 }]);
-
-      const records = jsonlRecordLines(content);
-      expect(records.map(({ text }) => JSON.parse(text))).toEqual(validatorRows);
-      const lines = content.split("\n");
-      for (const { text, line } of records) {
-        expect(lines[line - 1]).toContain(text);
-      }
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("drops a leading byte order mark and each line's trailing carriage return", () => {
-    expect(jsonlRecordLines('\uFEFF{"a":1}\r\n\r\n{"a":2}\r\n')).toEqual([
-      { text: '{"a":1}', line: 1 },
-      { text: '{"a":2}', line: 3 },
-    ]);
-  });
-});
 
 describe("physicalLineOfRecord", () => {
   test("maps records to their own lines when the file has no blank lines", () => {
