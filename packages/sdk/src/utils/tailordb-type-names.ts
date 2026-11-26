@@ -1,25 +1,19 @@
-/** A TailorDB namespace and the names of the types it defines. */
-export interface NamespaceTypeNames {
-  namespace: string;
-  typeNames: Iterable<string>;
-}
-
 /**
- * Find the TailorDB type names that more than one namespace defines.
- * @param namespaces - Each namespace with the names of its types
- * @returns The type names two or more namespaces define
+ * Find the names that more than one namespace defines, such as TailorDB table or resolver names.
+ * @param namesPerNamespace - The names each namespace defines
+ * @returns The names two or more namespaces define
  */
-export function sharedTailorDBTypeNames(
-  namespaces: Iterable<NamespaceTypeNames>,
+export function namesSharedAcrossNamespaces(
+  namesPerNamespace: Iterable<Iterable<string>>,
 ): ReadonlySet<string> {
   const seen = new Set<string>();
   const shared = new Set<string>();
-  for (const { typeNames } of namespaces) {
-    for (const typeName of new Set(typeNames)) {
-      if (seen.has(typeName)) {
-        shared.add(typeName);
+  for (const names of namesPerNamespace) {
+    for (const name of new Set(names)) {
+      if (seen.has(name)) {
+        shared.add(name);
       }
-      seen.add(typeName);
+      seen.add(name);
     }
   }
   return shared;

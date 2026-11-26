@@ -68,7 +68,7 @@ export interface AssertUniqueLocalTailorDBTypeNamesArgs extends CollectLocalTail
    * The applications of a workspace config, each of whose namespaces must not share a type name.
    * Undefined for a `defineConfig()` config, whose namespaces all belong to its one application.
    */
-  groups?: ReadonlyArray<TailorDBTypeNameGroup> | undefined;
+  groups: ReadonlyArray<TailorDBTypeNameGroup> | undefined;
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs

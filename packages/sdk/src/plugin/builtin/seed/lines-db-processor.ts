@@ -272,7 +272,7 @@ export interface PluginSchemaParams {
   configImportPath: string;
   /** Relative import path to the original table file (for table-attached plugins) */
   originalImportPath?: string;
-  /** Namespace to generate the table for, when several namespaces have a table of its name */
+  /** Namespace the plugin generated the table for */
   namespace?: string | undefined;
 }
 

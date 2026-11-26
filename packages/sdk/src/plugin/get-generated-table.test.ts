@@ -313,6 +313,24 @@ export default {
       },
     );
 
+    test("rejects a namespace the config does not define", async () => {
+      fs.writeFileSync(
+        configPath,
+        `export const plugins = [{
+  id: "ns-plugin",
+  description: "test",
+  importPath: "@test/ns-plugin",
+  onTailorDBNamespaceLoaded: () => ({ tables: { auditLog: { name: "AuditLog", fields: {} } } }),
+}];
+export default { db: { shop: { files: [] } } };
+`,
+      );
+
+      await expect(
+        getGeneratedTable(configPath, "ns-plugin", null, "auditLog", "crm"),
+      ).rejects.toThrow('TailorDB namespace "crm" is not defined in the config');
+    });
+
     test("returns the table for the namespace it is given", async () => {
       fs.writeFileSync(
         configPath,
@@ -371,6 +389,24 @@ export default { db: ${JSON.stringify(namespaces)} };
       };
       return order;
     };
+
+    test("generates the table for the namespace it is given when several namespaces read the table", async () => {
+      const order = await writeNamespaceFixture(
+        { main: { files: ["./tables/*.ts"] }, archive: { files: ["./tables/*.ts"] } },
+        "order.ts",
+        [],
+      );
+
+      const table = await getGeneratedTable(
+        configPath,
+        "table-plugin",
+        order,
+        "archive",
+        "archive",
+      );
+
+      expect(table.name).toBe("archiveArchive");
+    });
 
     test.each(["a.test.ts", "a.spec.ts"])(
       "does not import excluded %s by default",

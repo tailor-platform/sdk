@@ -198,7 +198,7 @@ export const seedDumpCommand = defineAppCommand({
     }),
     entities: arg(z.array(z.string()).default([]), {
       positional: true,
-      description: "Table names to dump (default: all)",
+      description: "Entity names to dump (default: all)",
     }),
   }),
   run: async (args) => {

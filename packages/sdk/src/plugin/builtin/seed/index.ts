@@ -1,7 +1,10 @@
 import * as path from "pathe";
 import { assertDefined } from "#/utils/assert";
 import { PluginValidationError } from "#/utils/plugin-validation-error";
-import { qualifiedTailorDBTypeName, sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
+import {
+  namesSharedAcrossNamespaces,
+  qualifiedTailorDBTypeName,
+} from "#/utils/tailordb-type-names";
 import {
   processIdpUser,
   generateIdpUserSchemaFile,
@@ -127,8 +130,8 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const idpUser = soleIdpUser(ctx.auths);
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
-      const sharedTypeNames = sharedTailorDBTypeNames(
-        ctx.tailordb.map((ns) => ({ namespace: ns.namespace, typeNames: Object.keys(ns.tables) })),
+      const sharedTypeNames = namesSharedAcrossNamespaces(
+        ctx.tailordb.map((ns) => Object.keys(ns.tables)),
       );
 
       for (const ns of ctx.tailordb) {
@@ -195,7 +198,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
             const params: PluginSchemaParams = {
               configImportPath,
               originalImportPath,
-              namespace: sharedTypeNames.has(tableName) ? ns.namespace : undefined,
+              namespace: ns.namespace,
             };
 
             const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, params);

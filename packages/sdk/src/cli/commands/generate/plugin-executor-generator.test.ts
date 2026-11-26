@@ -74,6 +74,42 @@ describe("generatePluginExecutorFiles", () => {
     );
   });
 
+  test("imports a table of another namespace that only that namespace defines", () => {
+    const dir = outputDir();
+    const executor = auditExecutor("main-db");
+    Object.assign(executor.executor, {
+      context: {
+        ...(executor.executor as { context: object }).context,
+        logTable: { name: "AuditLog", fields: {} },
+      },
+    });
+    const sourceTables = new Map([
+      [
+        "main-db",
+        new Map([
+          ["Customer", { filePath: path.join(dir, "main/customer.ts"), exportName: "customer" }],
+        ]),
+      ],
+      [
+        "audit-db",
+        new Map([
+          ["AuditLog", { filePath: path.join(dir, "audit/audit-log.ts"), exportName: "auditLog" }],
+        ]),
+      ],
+    ]);
+
+    const [file] = generatePluginExecutorFiles(
+      [executor],
+      dir,
+      { tableFilePaths: new Map(), generatedFiles: [] },
+      sourceTables,
+    );
+
+    expect(fs.readFileSync(file!, "utf8")).toContain(
+      'import { auditLog } from "../../audit/audit-log";',
+    );
+  });
+
   test("writes the namespace a legacy executor's record trigger names", () => {
     const dir = outputDir();
     const legacy = {

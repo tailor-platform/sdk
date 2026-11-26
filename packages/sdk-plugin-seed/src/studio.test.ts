@@ -104,6 +104,14 @@ describe("seedStudioCommand", () => {
     );
   });
 
+  test("loads a seed context that accepts tables several namespaces define", async () => {
+    expect((await runStudio([])).exitCode).toBe(0);
+
+    expect(sdk.loadSeedContext).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSharedTableNames: true }),
+    );
+  });
+
   test("opens the given data directory instead", async () => {
     const result = await runStudio([cogs]);
 

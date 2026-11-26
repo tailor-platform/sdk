@@ -789,7 +789,9 @@ describe("planTailorDB (service level)", () => {
             config: mockConfig,
             executorUsedTailorDBTables: namespacedNames([{ namespace: "shop-db", name: "User" }]),
           }),
-        ).rejects.toThrow('TailorDB table "shop-db.User" has "publishEvents: false"');
+        ).rejects.toThrow(
+          'TailorDB table "User" in namespace "shop-db" has "publishEvents: false"',
+        );
       });
 
       test("throws when an opt-out is combined with a subscribing executor", async () => {

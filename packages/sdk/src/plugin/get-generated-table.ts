@@ -327,6 +327,15 @@ export async function getGeneratedTable(
 
   const { plugin, pluginConfig } = pluginEntry;
 
+  if (namespace !== undefined) {
+    const dbConfig = config.db?.[namespace] as DbNamespaceConfig | undefined;
+    if (!dbConfig || dbConfig.external) {
+      throw new Error(
+        `TailorDB namespace "${namespace}" is not defined in the config at "${configPath}".`,
+      );
+    }
+  }
+
   if (sourceTable === null) {
     return getGeneratedTableForNamespacePlugin(config, plugin, kind, pluginConfig, namespace);
   }

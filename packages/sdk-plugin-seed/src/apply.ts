@@ -29,8 +29,8 @@ import {
 } from "./datasets";
 import { selectEntities } from "./entities";
 import {
-  assertNoSharedTableFileUnderItsOwnName,
   entityNameOf,
+  keyedByEntityName,
   namespaceEntityNames,
   selectedTables,
 } from "./entity-names";
@@ -162,14 +162,7 @@ function buildNamespaceSeedPlan(params: NamespaceSeedPlanParams): NamespaceSeedP
     sortedTypes.map((type) => entityNames[type] ?? type),
     {
       requireId: upsert,
-      requiredFieldsByType: upsert
-        ? Object.fromEntries(
-            Object.entries(nsConfig.requiredFields).map(([type, fields]) => [
-              entityNameOf(nsConfig, type),
-              fields,
-            ]),
-          )
-        : {},
+      requiredFieldsByType: upsert ? keyedByEntityName(nsConfig, nsConfig.requiredFields) : {},
     },
   );
   const data = Object.fromEntries(
@@ -676,7 +669,6 @@ export const seedApplyCommand = defineAppCommand({
 
     const dataDir = path.join(context.distPath, "data");
     assertSeedDataDirectory(dataDir);
-    assertNoSharedTableFileUnderItsOwnName(context, dataDir);
     const dataDirs = [...(args["no-base"] ? [] : [dataDir]), ...datasets.dirs];
     if (datasets.names.length > 0) {
       logger.info(
@@ -768,17 +760,28 @@ export const seedApplyCommand = defineAppCommand({
             tables: selectedTables(ns, selection.entitiesToProcess),
           }))
           .filter(({ tables }) => tables.length > 0);
-        for (const { namespace, tables } of tablesToTruncate) {
-          await truncate({
-            configPath: args.config,
-            profile: args.profile,
-            workspaceId: args["workspace-id"],
-            namespace,
-            tables,
-          });
-        }
+        const truncateOptions = {
+          configPath: args.config,
+          profile: args.profile,
+          workspaceId: args["workspace-id"],
+        };
+        const sharesTableName = context.namespaces.some((ns) =>
+          selectedTables(ns, selection.entitiesToProcess).some(
+            (table) => ns.entityNames?.[table] !== undefined,
+          ),
+        );
         if (tablesToTruncate.length === 0) {
           logger.log(styles.dim("No TailorDB tables to truncate (only _User was specified)."));
+        } else if (!sharesTableName) {
+          // One call checks every table before truncating any.
+          await truncate({
+            ...truncateOptions,
+            tables: tablesToTruncate.flatMap(({ tables }) => tables),
+          });
+        } else {
+          for (const { namespace, tables } of tablesToTruncate) {
+            await truncate({ ...truncateOptions, namespace, tables });
+          }
         }
       } else {
         await truncate({

@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import {
@@ -11,10 +12,11 @@ import {
   type SeedNamespaceConfig,
 } from "#/plugin/builtin/seed/seed-type-processor";
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
+import { namesSharedAcrossNamespaces } from "#/utils/tailordb-type-names";
 import { getAuthInput } from "./auth-input";
 import { configOf, machineUserAuths } from "./config-file";
 import { atConfigSource, tailorDBTypeNameGroupsOf } from "./config-loader";
-import { type CLIError, locatedCLIError } from "./errors";
+import { CLIError, locatedCLIError } from "./errors";
 import { resolveMachineUser } from "./machine-user";
 import { loadConfigFileNamespaces } from "./tailordb-namespaces";
 import { configIssuesError } from "./validation-errors";
@@ -100,8 +102,21 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: services.tailorDBServices,
-    groups: options.allowSharedTableNames ? tailorDBTypeNameGroupsOf(config) : undefined,
+    groups: tailorDBTypeNameGroupsOf(config),
   });
+  const sharedTableNames = namesSharedAcrossNamespaces(
+    services.tailorDBServices.map((service) => Object.keys(service.types)),
+  );
+  if (!options.allowSharedTableNames && sharedTableNames.size > 0) {
+    throw locatedCLIError(
+      { file: config.path },
+      {
+        code: "SEED_SHARED_TABLE_NAMES_UNSUPPORTED",
+        message: `Several TailorDB namespaces define tables named ${[...sharedTableNames].join(", ")}, which this seed command cannot tell apart.`,
+        suggestion: "Upgrade @tailor-platform/sdk-plugin-seed.",
+      },
+    );
+  }
 
   const pluginOptions = resolvePluginConfig(loaded.plugins, SeedGeneratorID);
   if (!pluginOptions) {
@@ -149,16 +164,44 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
     : null;
 
   const auths = machineUserAuths(loaded);
+  const distPath = path.resolve(path.dirname(config.path), pluginOptions.distPath);
+  const seedNamespaces = buildSeedNamespaceConfigs(namespaces);
+  assertNoSharedTableFileUnderItsOwnName(seedNamespaces, path.join(distPath, "data"));
   return {
     config: loaded.kind === "config" ? loaded.config : (config as unknown as LoadedConfig),
-    distPath: path.resolve(path.dirname(config.path), pluginOptions.distPath),
+    distPath,
     machineUserName: machineUserValue(pluginOptions.machineUserName),
     datasets: parseDatasets(pluginOptions.datasets, config.path),
-    namespaces: buildSeedNamespaceConfigs(namespaces),
+    namespaces: seedNamespaces,
     idpUser,
     appName: loaded.kind === "config" ? loaded.config.name : undefined,
     resolveMachineUser: (value) => resolveMachineUser({ value, auths }),
   };
+}
+
+// A table several namespaces define goes by `<namespace>.<Table>` in seed data, so seeding would
+// skip rows still in a file named after the table alone.
+function assertNoSharedTableFileUnderItsOwnName(
+  namespaces: ReadonlyArray<SeedNamespaceConfig>,
+  dataDir: string,
+): void {
+  const entitiesByTable = new Map<string, string[]>();
+  for (const ns of namespaces) {
+    for (const [table, entity] of Object.entries(ns.entityNames ?? {})) {
+      entitiesByTable.set(table, [...(entitiesByTable.get(table) ?? []), entity]);
+    }
+  }
+  for (const [table, entities] of entitiesByTable) {
+    const file = path.join(dataDir, `${table}.jsonl`);
+    if (fs.existsSync(file) && fs.readFileSync(file, "utf8").trim() !== "") {
+      throw CLIError({
+        code: "SEED_DATA_FILE_SHARED_TABLE_NAME",
+        message: `${file} holds rows for table "${table}", which several namespaces define.`,
+        suggestion: `Move each row to the data file of its namespace's table: ${entities.map((entity) => `${entity}.jsonl`).join(", ")}.`,
+        context: { file, table, entities },
+      });
+    }
+  }
 }
 
 function machineUserValue(

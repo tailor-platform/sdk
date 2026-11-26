@@ -32,7 +32,7 @@ import {
   publishEventsConflict,
   subscribesToEvents,
 } from "#/cli/shared/publish-events";
-import { qualifiedTailorDBTypeName, sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
+import { namesSharedAcrossNamespaces } from "#/utils/tailordb-type-names";
 import { createChangeSet } from "../change-set";
 import { defineRequestComparison, isRequestUnchanged } from "../compare";
 import { applicationsListing } from "../deploy-application";
@@ -493,11 +493,10 @@ async function planTypes(
   };
 
   // Reject a conflicting opt-out before any request, not partway through.
-  const sharedTableNames = sharedTailorDBTypeNames(
-    tailordbs.map((tailordb) => ({
-      namespace: tailordb.namespace,
-      typeNames: Object.keys(filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types),
-    })),
+  const sharedTableNames = namesSharedAcrossNamespaces(
+    tailordbs.map((tailordb) =>
+      Object.keys(filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types),
+    ),
   );
   for (const tailordb of tailordbs) {
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
@@ -506,7 +505,8 @@ async function planTypes(
         explicit: type.settings?.publishEvents,
         subscribed: executorUsedTables.has(tailordb.namespace, tableName),
         conflict: publishEventsConflict.tailorDBType(
-          qualifiedTailorDBTypeName(tailordb.namespace, tableName, sharedTableNames),
+          tableName,
+          sharedTableNames.has(tableName) ? tailordb.namespace : undefined,
         ),
       });
     }

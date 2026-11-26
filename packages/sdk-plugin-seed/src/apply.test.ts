@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as os from "node:os";
 import { createCommonArgs, errorToJson, runCommand } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -516,7 +514,6 @@ describe("seedApplyCommand", () => {
     expect(sdk.truncate).toHaveBeenCalledWith({
       configPath: undefined,
       profile: undefined,
-      namespace: "tailordb",
       tables: ["User"],
       workspaceId: undefined,
     });
@@ -1385,28 +1382,6 @@ describe("seedApplyCommand with a table name several namespaces define", () => {
     expect(workflow.runScript).toHaveBeenCalledWith(
       expect.objectContaining({ name: "tailor-seed-tailordb--crm-db" }),
     );
-  });
-
-  test("stops when the base data still holds the table's rows under its own name", async () => {
-    const distPath = fs.mkdtempSync(path.join(os.tmpdir(), "seed-apply-"));
-    fs.mkdirSync(path.join(distPath, "data"));
-    fs.writeFileSync(path.join(distPath, "data", "Customer.jsonl"), '{"id":"c1"}\n');
-    const context = await sdk.loadSeedContext();
-    sdk.loadSeedContext.mockResolvedValue({ ...context, distPath });
-
-    try {
-      const result = await runApplyCommand(["--machine-user", "manager"]);
-
-      expect(result.exitCode).toBe(1);
-      expect(logger.error).not.toHaveBeenCalled();
-      expect(result.error?.message).toBe(
-        `${path.join(distPath, "data", "Customer.jsonl")} holds rows for table "Customer", which several namespaces define. ` +
-          "Move each row to the data file of its namespace's table: shop-db.Customer.jsonl, crm-db.Customer.jsonl.",
-      );
-      expect(workflow.runScript).not.toHaveBeenCalled();
-    } finally {
-      fs.rmSync(distPath, { recursive: true, force: true });
-    }
   });
 
   test("truncates the tables of the entities it is given in their own namespaces", async () => {

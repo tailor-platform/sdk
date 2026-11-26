@@ -391,7 +391,7 @@ export function reportDuplicateNames(
       "db",
       TABLE_CALL,
       (name: string, namespaces: readonly string[]) =>
-        `so a record trigger or \`userProfile\` that names ${name} without \`namespace\` stops \`tailor deploy\`, and seedPlugin names its data files ${namespaces.map((namespace) => `${namespace}.${name}.jsonl`).join(" and ")}. Add \`namespace\` where they name ${name}, and move its seed data to those files.`,
+        `so a record trigger or \`userProfile\` that names ${name} without \`namespace\` fails, and seedPlugin names its data files ${namespaces.map((namespace) => `${namespace}.${name}.jsonl`).join(" and ")}. Add \`namespace\` where they name ${name}, and move any seed data to those files.`,
     ],
     ...(subscribesToResolvers(cache)
       ? [
@@ -399,7 +399,7 @@ export function reportDuplicateNames(
             "resolver",
             RESOLVER_NAME,
             (name: string) =>
-              `so a resolverExecutedTrigger() that names ${name} without \`namespace\` stops \`tailor deploy\`. Add \`namespace\` to it.`,
+              `so a resolverExecutedTrigger() that names ${name} without \`namespace\` subscribes to the first of them. Add \`namespace\` to it.`,
           ] as const,
         ]
       : []),

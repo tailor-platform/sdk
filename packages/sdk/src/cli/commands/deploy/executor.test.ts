@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { ExecutorExecutorSchema } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
-import { symbols } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
@@ -1600,6 +1600,29 @@ describe("planExecutor", () => {
         });
       });
 
+      function invoiceTriggerContext(named: string): PlanContext {
+        const application = createMockApplication(
+          [recordTriggerExecutor({ tableName: "Invoice", namespace: named })],
+          { tailorDBNamespaces: sharedTables },
+        );
+        return buildPlanContext(application, {
+          tailorDBTypeNamespaces: new Map([["Invoice", "shared-db"]]),
+        });
+      }
+
+      test("recordCreated subscribes to another config's table in the namespace it names", async () => {
+        const result = await planExecutor(invoiceTriggerContext("shared-db"));
+
+        expect(getEventConfig(result).value.namespaceName).toBe("shared-db");
+      });
+
+      test("recordCreated fails when another config defines the table in another namespace", async () => {
+        expect(await planError(invoiceTriggerContext("other-db"))).toMatchObject({
+          code: "DEPLOY_RESOURCE_NOT_FOUND",
+          context: { resource: "Invoice", namespace: "other-db" },
+        });
+      });
+
       test("resolverExecuted subscribes in the namespace the trigger names", async () => {
         const application = createMockApplication([resolverTriggerExecutor("crm-api")], {
           resolverNamespaces: sharedResolvers,
@@ -1611,17 +1634,18 @@ describe("planExecutor", () => {
         expect(typedConfig.value.namespaceName).toBe("crm-api");
       });
 
-      test("resolverExecuted without a namespace asks the trigger to name one", async () => {
+      test("resolverExecuted without a namespace keeps subscribing to the first and warns", async () => {
+        const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
         const application = createMockApplication([resolverTriggerExecutor()], {
           resolverNamespaces: sharedResolvers,
         });
 
-        const error = await planError(buildPlanContext(application));
+        const result = await planExecutor(buildPlanContext(application));
 
-        expect(error).toMatchObject({
-          code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-          context: { resource: "createLead", namespaces: ["shop-api", "crm-api"] },
-        });
+        expect(getEventConfig(result).value.namespaceName).toBe("shop-api");
+        expect(warn).toHaveBeenCalledWith(
+          'Executor "on-lead-created" triggers on Resolver "createLead", which several namespaces define: shop-api, crm-api. It subscribes to the one in "shop-api"; name another with the trigger\'s `namespace` option.',
+        );
       });
     });
 

@@ -38,6 +38,11 @@ export type PublishEventsConflict = {
   subscribesTo?: string | undefined;
 };
 
+// Named only for a resource whose name several namespaces define.
+function inNamespace(namespace: string | undefined): string {
+  return namespace === undefined ? "" : ` in namespace "${namespace}"`;
+}
+
 /**
  * How each event-publishing resource is named in user-facing messages.
  *
@@ -45,8 +50,9 @@ export type PublishEventsConflict = {
  * confirmation that lists the same resource cannot drift apart.
  */
 export const eventSourceLabel = {
-  tailorDBType: (name: string) => `TailorDB table "${name}"`,
-  resolver: (name: string) => `Resolver "${name}"`,
+  tailorDBType: (name: string, namespace?: string) =>
+    `TailorDB table "${name}"${inNamespace(namespace)}`,
+  resolver: (name: string, namespace?: string) => `Resolver "${name}"${inNamespace(namespace)}`,
   idpService: (name: string) => `IdP service "${name}"`,
   workflow: (name: string) => `Workflow "${name}"`,
   workflowJob: (name: string) => `Job "${name}"`,
@@ -55,12 +61,12 @@ export const eventSourceLabel = {
 
 /** Opt-out conflict details per event-publishing resource. */
 export const publishEventsConflict = {
-  tailorDBType: (name: string): PublishEventsConflict => ({
-    resource: eventSourceLabel.tailorDBType(name),
+  tailorDBType: (name: string, namespace?: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.tailorDBType(name, namespace),
     trigger: "record",
   }),
-  resolver: (name: string): PublishEventsConflict => ({
-    resource: eventSourceLabel.resolver(name),
+  resolver: (name: string, namespace?: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.resolver(name, namespace),
     trigger: "resolverExecuted",
   }),
   idpService: (name: string): PublishEventsConflict => ({

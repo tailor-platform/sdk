@@ -98,7 +98,7 @@ function assertDatasetTables(dirs: readonly string[], tables: Set<string>): void
   if (unknown.length > 0) {
     throw new Error(
       `${unknown.map((file) => `${file} does not match a seeded table.`).join("\n")} ` +
-        "A dataset file is named after the table it seeds, like the files in the seed data directory.",
+        "A dataset file is named after the table it seeds, like the files in the seed data directory: `<namespace>.<Table>` for a table several namespaces define.",
     );
   }
 }

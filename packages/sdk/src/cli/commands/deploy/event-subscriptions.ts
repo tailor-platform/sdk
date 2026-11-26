@@ -628,11 +628,8 @@ function eventSourceLookup(
         trigger,
         namespace,
         declaredBy: (target) =>
-          (namespace === undefined
-            ? target.application.tailorDBServices.some(
-                (service) => service.types[trigger.tableName],
-              )
-            : declaresTailorDBTypeIn(target, namespace, trigger.tableName)) || undefined,
+          target.application.tailorDBServices.some((service) => service.types[trigger.tableName]) ||
+          undefined,
         pinned: (target) =>
           namespace !== undefined && pinsTailorDBTypeIn(target, namespace, trigger.tableName),
         keyIn: () => namespace && eventSourceKey.tailorDBType(namespace, trigger.tableName),

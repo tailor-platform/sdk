@@ -10,7 +10,7 @@ import * as path from "pathe";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
-import { sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
+import { namesSharedAcrossNamespaces } from "#/utils/tailordb-type-names";
 import type { PluginGeneratedTableInfo, PluginTableGenerationResult } from "#/plugin/manager";
 import type { PluginGeneratedTable } from "#/plugin/types";
 
@@ -50,11 +50,10 @@ export function generatePluginTableFiles(
     return { tableFilePaths, generatedFiles };
   }
 
-  const sharedTableNames = sharedTailorDBTypeNames(
-    [...Map.groupBy(tables, (info) => info.namespace)].map(([namespace, infos]) => ({
-      namespace,
-      typeNames: infos.map((info) => info.table.name),
-    })),
+  const sharedTableNames = namesSharedAcrossNamespaces(
+    [...Map.groupBy(tables, (info) => info.namespace).values()].map((infos) =>
+      infos.map((info) => info.table.name),
+    ),
   );
   const seenTables = new Map<string, PluginGeneratedTableInfo>();
 

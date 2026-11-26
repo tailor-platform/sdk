@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "./error-diagnostics";
@@ -105,12 +107,12 @@ describe("loadSeedContext", () => {
   });
 
   describe("a workspace whose applications' namespaces share a table name", () => {
-    function mockSharedWorkspace(): void {
+    function mockSharedWorkspace(configPath = "/proj/tailor.config.ts"): void {
       loadConfigFileNamespaces.mockResolvedValue({
         loaded: {
           kind: "workspace",
           workspace: {
-            path: "/proj/tailor.config.ts",
+            path: configPath,
             auth: {},
             apps: { shop: { db: ["shop-db"] }, crm: { db: ["crm-db"] } },
           },
@@ -154,10 +156,31 @@ describe("loadSeedContext", () => {
       expect(context.namespaces.map((ns) => ns.omitFields?.["Customer"])).toEqual([[], ["code"]]);
     });
 
-    test("rejects the config for a caller that does not read entity names", async () => {
+    test("asks a caller that does not read entity names to upgrade", async () => {
       mockSharedWorkspace();
 
-      await expect(loadSeedContext()).rejects.toMatchObject({ code: "DEFINITION_NAME_DUPLICATE" });
+      await expect(loadSeedContext()).rejects.toMatchObject({
+        code: "SEED_SHARED_TABLE_NAMES_UNSUPPORTED",
+        suggestion: expect.stringContaining("@tailor-platform/sdk-plugin-seed"),
+      });
+    });
+
+    test("stops when the seed data still holds such a table's rows under its own name", async () => {
+      const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "seed-context-"));
+      try {
+        fs.mkdirSync(path.join(projectDir, "seed", "data"), { recursive: true });
+        fs.writeFileSync(path.join(projectDir, "seed", "data", "Customer.jsonl"), '{"id":"c1"}\n');
+        mockSharedWorkspace(path.join(projectDir, "tailor.config.ts"));
+
+        await expect(loadSeedContext({ allowSharedTableNames: true })).rejects.toMatchObject({
+          code: "SEED_DATA_FILE_SHARED_TABLE_NAME",
+          message: `${path.join(projectDir, "seed", "data", "Customer.jsonl")} holds rows for table "Customer", which several namespaces define.`,
+          suggestion:
+            "Move each row to the data file of its namespace's table: shop-db.Customer.jsonl, crm-db.Customer.jsonl.",
+        });
+      } finally {
+        fs.rmSync(projectDir, { recursive: true, force: true });
+      }
     });
   });
 

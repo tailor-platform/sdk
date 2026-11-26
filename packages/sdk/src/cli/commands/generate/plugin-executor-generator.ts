@@ -241,9 +241,13 @@ function collectTableImports(
   for (const [key, value] of Object.entries(context)) {
     if (isTableObject(value)) {
       const tableName = value.name;
-      const sourceInfo = sourceTableInfoMap?.get(namespace)?.get(tableName);
+      const sourceInfo = lookupNamespacedTable(sourceTableInfoMap, namespace, tableName);
       const variableName = sourceInfo?.exportName ?? toCamelCase(tableName);
-      const tableFilePath = tableGenerationResult?.tableFilePaths.get(namespace)?.get(tableName);
+      const tableFilePath = lookupNamespacedTable(
+        tableGenerationResult?.tableFilePaths,
+        namespace,
+        tableName,
+      );
 
       // Check if it's a generated table
       let importPath: string;
@@ -276,6 +280,22 @@ function collectTableImports(
   }
 
   return tableImports;
+}
+
+// A context table is usually one of the executor's own namespace, but a plugin can pass a table
+// that another namespace alone defines.
+function lookupNamespacedTable<T>(
+  tablesByNamespace: ReadonlyMap<string, ReadonlyMap<string, T>> | undefined,
+  namespace: string,
+  tableName: string,
+): T | undefined {
+  const own = tablesByNamespace?.get(namespace)?.get(tableName);
+  if (own !== undefined) return own;
+  const others = [...(tablesByNamespace?.values() ?? [])].flatMap((tables) => {
+    const table = tables.get(tableName);
+    return table === undefined ? [] : [table];
+  });
+  return others.length === 1 ? others[0] : undefined;
 }
 
 /**

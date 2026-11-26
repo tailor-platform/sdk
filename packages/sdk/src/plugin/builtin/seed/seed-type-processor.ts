@@ -1,6 +1,9 @@
 import { assertDefined } from "#/utils/assert";
 import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
-import { qualifiedTailorDBTypeName, sharedTailorDBTypeNames } from "#/utils/tailordb-type-names";
+import {
+  namesSharedAcrossNamespaces,
+  qualifiedTailorDBTypeName,
+} from "#/utils/tailordb-type-names";
 import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
@@ -149,9 +152,7 @@ export function buildSeedNamespaceConfigs(
   tailordb: TailorDBNamespaceData[],
 ): SeedNamespaceConfig[] {
   const relationTargetKeys = collectRelationTargetKeys(tailordb);
-  const sharedTypeNames = sharedTailorDBTypeNames(
-    tailordb.map((ns) => ({ namespace: ns.namespace, typeNames: Object.keys(ns.tables) })),
-  );
+  const sharedTypeNames = namesSharedAcrossNamespaces(tailordb.map((ns) => Object.keys(ns.tables)));
 
   return tailordb.map((ns) => {
     const types: string[] = [];

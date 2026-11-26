@@ -867,6 +867,19 @@ describe("collectEventSubscriptions and a disabled executor", () => {
     ]);
   });
 
+  test("leaves a TailorDB trigger that names a namespace lacking the table to the executor plan", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      types: ["Order"],
+      extraTailorDBNamespace: { namespace: "db-archive", types: ["Customer"] },
+      executors: { "on-order": { kind: "tailordb", tableName: "Order", namespace: "db-archive" } },
+    });
+
+    expect(collectEventSubscriptions([subscriber])).toMatchObject([
+      { executorName: "on-order", owner: subscriber },
+    ]);
+  });
+
   test("a resolver trigger that names its namespace subscribes to the resolver there", () => {
     const subscriber = target({
       configPath: "buyer/tailor.config.ts",

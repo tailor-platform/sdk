@@ -105,6 +105,53 @@ describe("seedPlugin", () => {
     expect(files.get("_User.schema.ts")).toContain('table: "crm-db.Customer"');
   });
 
+  test("asks getGeneratedTable for a plugin table of the namespace the plugin generated it for", async () => {
+    const plugin = seedPlugin({ distPath: "./seed" });
+
+    const result = await assertDefined(
+      plugin.onTailorDBReady,
+      "onTailorDBReady missing",
+    )({
+      tailordb: [
+        {
+          namespace: "crm-db",
+          tables: {
+            AuditLog: {
+              name: "AuditLog",
+              fields: { id: { config: {} } },
+            } as unknown as TailorDBType,
+          },
+          sourceInfo: new Map([
+            [
+              "AuditLog",
+              {
+                exportName: "AuditLog",
+                pluginId: "audit-plugin",
+                pluginImportPath: "@example/audit-plugin",
+                originalFilePath: "",
+                originalExportName: "",
+                generatedTableKind: "auditLog",
+              },
+            ],
+          ]),
+          pluginAttachments: new Map(),
+        },
+      ],
+      auths: {},
+      baseDir: "/proj/.tailor/generated/seed",
+      configPath: "/proj/app/tailor.config.ts",
+      pluginConfig: { distPath: "./seed" },
+    });
+
+    const schema = assertDefined(
+      result.files.find((file) => file.path.endsWith("AuditLog.schema.ts")),
+      "AuditLog schema file missing",
+    );
+    expect(schema.content).toContain(
+      'getGeneratedTable(configPath, "audit-plugin", null, "auditLog", "crm-db")',
+    );
+  });
+
   const builtInIdpAuth = (name: string, idp: string) =>
     ({
       name,

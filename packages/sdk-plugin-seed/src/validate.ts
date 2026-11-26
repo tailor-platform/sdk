@@ -15,7 +15,7 @@ import {
   noBaseArg,
   selectDatasets,
 } from "./datasets";
-import { assertNoSharedTableFileUnderItsOwnName, entityNameOf } from "./entity-names";
+import { entityNameOf, keyedByEntityName } from "./entity-names";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
 
@@ -67,7 +67,6 @@ export const seedValidateCommand = defineAppCommand({
       });
       targetPath = path.join(context.distPath, "data");
       datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
-      assertNoSharedTableFileUnderItsOwnName(context, targetPath);
       if (args.upsert) {
         assertSeedDataDirectory(targetPath);
         const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];
@@ -77,12 +76,7 @@ export const seedValidateCommand = defineAppCommand({
             namespace.types.map((type) => entityNameOf(namespace, type)),
             {
               requireId: true,
-              requiredFieldsByType: Object.fromEntries(
-                Object.entries(namespace.requiredFields).map(([type, fields]) => [
-                  entityNameOf(namespace, type),
-                  fields,
-                ]),
-              ),
+              requiredFieldsByType: keyedByEntityName(namespace, namespace.requiredFields),
               warnAboutStrayWhitespace: false,
             },
           );

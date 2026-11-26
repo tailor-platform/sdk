@@ -28,6 +28,7 @@ import {
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { omitUndefined } from "#/utils/omit-undefined";
+import { namesSharedAcrossNamespaces } from "#/utils/tailordb-type-names";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { applicationsListing } from "./deploy-application";
@@ -441,12 +442,18 @@ async function planResolvers(
   ]);
 
   // Reject a conflicting opt-out before any request, not partway through.
+  const sharedResolverNames = namesSharedAcrossNamespaces(
+    pipelines.map((pipeline) => Object.values(pipeline.resolvers).map((resolver) => resolver.name)),
+  );
   for (const pipeline of pipelines) {
     for (const resolver of Object.values(pipeline.resolvers)) {
       assertNoPublishEventsConflict({
         explicit: resolver.publishEvents,
         subscribed: executorUsedResolvers.has(pipeline.namespace, resolver.name),
-        conflict: publishEventsConflict.resolver(resolver.name),
+        conflict: publishEventsConflict.resolver(
+          resolver.name,
+          sharedResolverNames.has(resolver.name) ? pipeline.namespace : undefined,
+        ),
       });
     }
   }
