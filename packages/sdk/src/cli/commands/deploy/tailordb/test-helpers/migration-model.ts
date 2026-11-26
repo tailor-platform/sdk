@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { assert } from "vitest";
+import { stableStringify } from "#/cli/commands/deploy/compare";
 import {
   generateTailorDBTypeManifestFromSnapshot,
   protoGqlPermission,
@@ -13,6 +14,7 @@ import { assertDefined } from "#/utils/assert";
 import { snapshotTable } from "./migration-apply";
 import type {
   SnapshotFieldConfig,
+  SnapshotGqlPermission,
   TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -31,6 +33,9 @@ interface ModelShape {
 /** Tables of one namespace, each with its shape. */
 type ModelSchema = ReadonlyMap<string, ModelShape>;
 
+/** The values a table's schema exposes: none, or values valid under a shape. */
+type ModelRecords = { tag: "Empty" } | { tag: "Holds"; value: ModelShape };
+
 type Maintenance = "DuringMigrations" | "DuringDeploy" | "Off";
 
 type ModelStep =
@@ -44,6 +49,7 @@ export interface ModelState {
   step: ModelStep;
   tables: ModelSchema;
   restricted: boolean;
+  records: ReadonlyMap<string, ModelRecords>;
 }
 
 export interface ModelTrace {
@@ -93,6 +99,7 @@ function readModelTraces(dir: string): ModelTrace[] {
         step: state.step as ModelStep,
         tables: state.tables as ModelSchema,
         restricted: state.restricted as boolean,
+        records: state.records as ReadonlyMap<string, ModelRecords>,
       })),
     };
     const scenario = describeScenario(trace);
@@ -148,21 +155,18 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
  * @returns The description
  */
 function describeShape(shape: ModelShape): string {
-  return describeFields(
-    shape.f.tag === "Present" ? shape.f.value : undefined,
-    shape.e.tag === "Values" ? [...shape.e.value] : undefined,
-  );
-}
-
-interface StringFieldState {
-  required?: boolean | undefined;
-  unique?: boolean | undefined;
-}
-
-function describeFields(f: StringFieldState | undefined, values: string[] | undefined): string {
-  const fState = f ? `${f.required ? "req" : "opt"}${f.unique ? "+uniq" : ""}` : "-";
-  const eState = values ? values.toSorted().join("") : "-";
+  const { f, e } = shape;
+  const fState =
+    f.tag === "Present"
+      ? `${f.value.required ? "req" : "opt"}${f.value.unique ? "+uniq" : ""}`
+      : "-";
+  const eState = e.tag === "Values" ? [...e.value].toSorted().join("") : "-";
   return `f=${fState} e=${eState}`;
+}
+
+function describeRecords(records: ModelRecords | undefined): string {
+  if (!records) return "absent";
+  return records.tag === "Empty" ? "empty" : `holding ${describeShape(records.value)}`;
 }
 
 /**
@@ -268,8 +272,18 @@ function modelFields(shape: ModelShape): Record<string, SnapshotFieldConfig> {
   return fields;
 }
 
+function modelGqlPermission(name: string): SnapshotGqlPermission {
+  return [
+    {
+      conditions: [],
+      actions: name === "A" ? ["read"] : name === "B" ? ["read", "create"] : ["all"],
+      permit: "allow",
+    },
+  ];
+}
+
 /**
- * The snapshot table of a model table.
+ * The snapshot table of a model table, whose GraphQL permission depends on its name.
  * @param name - Table name
  * @param shape - Model shape
  * @returns Snapshot table
@@ -277,9 +291,12 @@ function modelFields(shape: ModelShape): Record<string, SnapshotFieldConfig> {
 export function modelTable(name: string, shape: ModelShape): TailorDBSnapshotType {
   return {
     ...snapshotTable(name, modelFields(shape)),
-    permissions: { gql: [{ conditions: [], actions: ["read"], permit: "allow" }] },
+    permissions: { gql: modelGqlPermission(name) },
   };
 }
+
+type TableManifest = MessageInitShape<typeof TailorDBTypeSchema>;
+type GqlPermission = MessageInitShape<typeof TailorDBGQLPermissionSchema>;
 
 /**
  * The manifest the planner builds for a model table.
@@ -287,26 +304,55 @@ export function modelTable(name: string, shape: ModelShape): TailorDBSnapshotTyp
  * @param shape - Model shape
  * @returns Table manifest
  */
-function modelManifest(
-  name: string,
-  shape: ModelShape,
-): MessageInitShape<typeof TailorDBTypeSchema> {
+function modelManifest(name: string, shape: ModelShape): TableManifest {
   return generateTailorDBTypeManifestFromSnapshot(modelTable(name, shape), { subscribed: false });
 }
 
-function modelPermission(name: string, shape: ModelShape): GqlPermission {
-  const permission = assertDefined(
-    modelTable(name, shape).permissions?.gql,
-    "every model table has a permission",
-  );
-  return protoGqlPermission(permission);
+function modelPermission(name: string): GqlPermission {
+  return protoGqlPermission(modelGqlPermission(name));
 }
 
-type GqlPermission = MessageInitShape<typeof TailorDBGQLPermissionSchema>;
+function manifestShape(type: TableManifest): ModelShape {
+  const { f, e } = type.schema?.fields ?? {};
+  return {
+    f: f
+      ? { tag: "Present", value: { required: f.required === true, unique: f.unique === true } }
+      : { tag: "Absent" },
+    e: e
+      ? { tag: "Values", value: new Set((e.allowedValues ?? []).map((value) => value.value ?? "")) }
+      : { tag: "NoEnum" },
+  };
+}
+
+// `keepsRecords` and `dropMissing` follow the definitions of the same names in migration-deploy.qnt.
+function keepsRecords(s: ModelShape, d: ModelShape): boolean {
+  const required = (shape: ModelShape) => shape.f.tag === "Present" && shape.f.value.required;
+  const unique = (shape: ModelShape) => shape.f.tag === "Present" && shape.f.value.unique;
+  const sValues = s.e.tag === "Values" ? s.e.value : undefined;
+  const dValues = d.e.tag === "Values" ? d.e.value : undefined;
+  return (
+    (!required(s) || required(d)) &&
+    (!unique(s) || d.f.tag === "Absent" || unique(d)) &&
+    (!sValues || !dValues || [...dValues].every((value) => sValues.has(value)))
+  );
+}
+
+function dropMissing(records: ModelRecords, shape: ModelShape): ModelRecords {
+  if (records.tag === "Empty") return records;
+  const { f, e } = records.value;
+  return {
+    tag: "Holds",
+    value: {
+      f: shape.f.tag === "Present" ? f : { tag: "Absent" },
+      e: shape.e.tag === "Values" ? e : { tag: "NoEnum" },
+    },
+  };
+}
 
 interface FakeTable {
-  type: MessageInitShape<typeof TailorDBTypeSchema>;
+  type: TableManifest;
   permission: GqlPermission | undefined;
+  records: ModelRecords;
 }
 
 /** A table definition the fake namespace accepted. */
@@ -318,20 +364,28 @@ interface FakeWrite {
 /**
  * A namespace on a fake Platform that rejects what the Platform rejects: creating a table or
  * permission that exists fails with `AlreadyExists`, and writing a missing one with `NotFound`.
- * Deleting a table also deletes its permission.
+ * Deleting a table also deletes its permission. Each table holds the values its schema exposes: a
+ * created table has none, a definition without a field hides that field's values, and only
+ * `runScript` writes values. A definition those values violate is accepted and listed in
+ * `violations`.
  * @param namespace - The namespace the fake holds
- * @param start - Tables the namespace starts with, each with the GraphQL permission it declares
- * @returns The client overrides, the tables, every accepted table definition, and every rejected write
+ * @param start - Tables the namespace starts with, each with the GraphQL permission it declares and its records
+ * @returns The client overrides, the tables, every accepted table definition, every rejected write, every definition the records violate, and `runScript`
  */
 export function createFakeNamespace(namespace: string, start: ModelState) {
   const tables = new Map<string, FakeTable>(
     [...start.tables].map(([name, shape]) => [
       name,
-      { type: modelManifest(name, shape), permission: modelPermission(name, shape) },
+      {
+        type: modelManifest(name, shape),
+        permission: modelPermission(name),
+        records: assertDefined(start.records.get(name), `${name} has records`),
+      },
     ]),
   );
   const writes: FakeWrite[] = [];
   const rejections: string[] = [];
+  const violations: string[] = [];
   const reject = (code: Code, message: string): never => {
     rejections.push(message);
     throw new ConnectError(message, code);
@@ -361,6 +415,7 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
       tables.set(name, {
         type: structuredClone(request.tailordbType ?? {}),
         permission: undefined,
+        records: { tag: "Empty" },
       });
       writes.push({ kind: "create", table: name });
       return {};
@@ -369,6 +424,12 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
       const name = tableOf(request.namespaceName, request.tailordbType?.name);
       const table = existing(request.namespaceName, name);
       table.type = structuredClone(request.tailordbType ?? {});
+      const shape = manifestShape(table.type);
+      if (table.records.tag === "Holds" && !keepsRecords(shape, table.records.value)) {
+        const records = describeShape(table.records.value);
+        violations.push(`wrote ${describeShape(shape)} to ${name}, whose records hold ${records}`);
+      }
+      table.records = dropMissing(table.records, shape);
       writes.push({ kind: "update", table: name });
       return {};
     },
@@ -408,22 +469,53 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
       return {};
     },
   };
-  return { overrides, tables, writes, rejections };
+  const runScript = (schema: ModelSchema) => {
+    for (const [name, shape] of schema) {
+      const table = tables.get(name);
+      if (table) table.records = { tag: "Holds", value: shape };
+    }
+  };
+  return { overrides, tables, writes, rejections, violations, runScript };
 }
 
 /** What the fake namespace shows of one table. */
 interface ObservedTable {
-  shape: string;
+  shape: ModelShape;
+  manifest: TableManifest;
   restricted: boolean;
-  permission: boolean;
+  permission: GqlPermission | undefined;
+  records: ModelRecords;
 }
 
-function describeManifest(type: MessageInitShape<typeof TailorDBTypeSchema>): string {
-  const { f, e } = type.schema?.fields ?? {};
-  return describeFields(f, e && (e.allowedValues ?? []).map((value) => value.value ?? ""));
+// The model chooses no indexes and treats enum values as a set; restriction is compared on its own.
+function comparableManifest(type: TableManifest): TableManifest {
+  const manifest = structuredClone(type);
+  delete manifest.schema?.settings?.disableGqlOperations;
+  for (const field of Object.values(manifest.schema?.fields ?? {})) {
+    delete field.index;
+    field.allowedValues = field.allowedValues
+      ?.map(({ value, description }) => (description ? { value, description } : { value }))
+      .toSorted((a, b) => (a.value ?? "").localeCompare(b.value ?? ""));
+  }
+  return manifest;
 }
 
-function isRestricted(type: MessageInitShape<typeof TailorDBTypeSchema>): boolean {
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const canonical = (value: unknown) => (value === undefined ? "absent" : stableStringify(value));
+
+function differences(got: unknown, want: unknown, at: string): string[] {
+  if (canonical(got) === canonical(want)) return [];
+  if (isPlainObject(got) && isPlainObject(want)) {
+    return [...new Set([...Object.keys(got), ...Object.keys(want)])]
+      .toSorted()
+      .flatMap((key) => differences(got[key], want[key], `${at}.${key}`));
+  }
+  return [`${at}: expected ${canonical(want)}, got ${canonical(got)}`];
+}
+
+function isRestricted(type: TableManifest): boolean {
   const ops = type.schema?.settings?.disableGqlOperations;
   return ops?.create === true && ops.update === true && ops.delete === true;
 }
@@ -431,7 +523,7 @@ function isRestricted(type: MessageInitShape<typeof TailorDBTypeSchema>): boolea
 /**
  * Read what the fake namespace shows of each table.
  * @param tables - Tables of the fake namespace
- * @returns Each table's shape, restriction, and permission
+ * @returns Each table's shape, definition, restriction, permission, and records
  */
 export function observeTables(
   tables: ReadonlyMap<string, FakeTable>,
@@ -440,9 +532,11 @@ export function observeTables(
     [...tables].map(([name, table]) => [
       name,
       {
-        shape: describeManifest(table.type),
+        shape: manifestShape(table.type),
+        manifest: comparableManifest(table.type),
         restricted: isRestricted(table.type),
-        permission: table.permission !== undefined,
+        permission: table.permission,
+        records: table.records,
       },
     ]),
   );
@@ -461,16 +555,21 @@ export function compareTables(
   return [...new Set([...actual.keys(), ...expected.tables.keys()])].toSorted().flatMap((name) => {
     const want = expected.tables.get(name);
     const got = actual.get(name);
-    const wantShape = want === undefined ? "absent" : describeShape(want);
-    const gotShape = got?.shape ?? "absent";
-    const lines: string[] = [];
-    if (wantShape !== gotShape) lines.push(`${name}: expected ${wantShape}, got ${gotShape}`);
-    if (got && got.restricted !== expected.restricted) {
+    if (!want || !got) {
+      const wantShape = want ? describeShape(want) : "absent";
+      return [`${name}: expected ${wantShape}, got ${got ? describeShape(got.shape) : "absent"}`];
+    }
+    const lines =
+      describeShape(want) === describeShape(got.shape)
+        ? differences(got.manifest, comparableManifest(modelManifest(name, want)), name)
+        : [`${name}: expected ${describeShape(want)}, got ${describeShape(got.shape)}`];
+    if (got.restricted !== expected.restricted) {
       lines.push(`${name}: expected ${expected.restricted ? "restricted" : "unrestricted"}`);
     }
-    const hasPermission = got?.permission ?? false;
-    if (hasPermission !== expected.tables.has(name)) {
-      lines.push(`${name}: expected ${hasPermission ? "no permission" : "a permission"}`);
+    lines.push(...differences(got.permission, modelPermission(name), `${name} permission`));
+    const wantRecords = describeRecords(expected.records.get(name));
+    if (describeRecords(got.records) !== wantRecords) {
+      lines.push(`${name}: expected records ${wantRecords}, got ${describeRecords(got.records)}`);
     }
     return lines;
   });

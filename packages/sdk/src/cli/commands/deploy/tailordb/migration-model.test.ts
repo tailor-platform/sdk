@@ -112,6 +112,8 @@ async function replay(trace: ModelTrace): Promise<string[]> {
     const label = stepLabel(step);
     visited.push(label);
     if (label === `Commit ${lastNumber}`) writesBeforeLastCommit = fake.writes.length;
+    for (const violation of fake.violations.splice(0))
+      failures.push(`before ${label}: ${violation}`);
     const expected = trace.states.find((state) => stepLabel(state.step) === label);
     if (!expected) {
       failures.push(`${label}: the model has no such step`);
@@ -124,7 +126,10 @@ async function replay(trace: ModelTrace): Promise<string[]> {
 
   const remoteCheckpoint = createRemoteCheckpoint(fresh ? null : checkpoint);
   vi.mocked(migrationModule.executeMigrations).mockImplementation(async (_context, migrations) => {
-    for (const migration of migrations) observe({ tag: "Script", value: migration.number });
+    for (const migration of migrations) {
+      observe({ tag: "Script", value: migration.number });
+      fake.runScript(assertDefined(history[migration.number], "every migration has a schema"));
+    }
   });
   vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(async (...args) => {
     observe({ tag: "Commit", value: args[3] });
@@ -186,6 +191,7 @@ async function replay(trace: ModelTrace): Promise<string[]> {
     failures.push(`deploy failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   failures.push(...fake.rejections.map((rejection) => `rejected: ${rejection}`));
+  failures.push(...fake.violations.map((violation) => `after the last step: ${violation}`));
   // The local definitions equal the last migration, so only the restore writes after it.
   const afterLastCommit = fake.writes.slice(writesBeforeLastCommit ?? fake.writes.length);
   const updates = Map.groupBy(

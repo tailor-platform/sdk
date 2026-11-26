@@ -12,6 +12,12 @@ module migrationDeploy {
     | Values(Set[str])
   type Shape = { f: FieldState, e: EnumState }
   type Schema = Table -> Shape
+  // The values a table's schema exposes: none, or values valid under a shape whose missing fields
+  // expose none. Stored values of a removed field are assumed cleared before its name is reused, as
+  // docs/services/tailordb/migration.md tells users.
+  type Records =
+    | Empty
+    | Holds(Shape)
 
   type Maintenance =
     | DuringMigrations
@@ -43,6 +49,8 @@ module migrationDeploy {
   var tables: Schema
   // Whether every table the namespace holds at `step` is restricted, or none is.
   var restricted: bool
+  // The values each table the namespace holds at `step` exposes; only migration scripts write them.
+  var records: Table -> Records
 
   pure val FIELD_STATES: Set[FieldState] =
     Set(Absent).union(Set(true, false).map(r => Set(true, false).map(u => Present({ required: r, unique: u }))).flatten())
@@ -122,6 +130,18 @@ module migrationDeploy {
   pure def atCommit(prev: Schema, after: Schema): Schema =
     prev.keys().union(after.keys()).mapBy(t => if (after.keys().contains(t)) after.get(t) else prev.get(t))
 
+  pure def dropMissing(r: Records, s: Shape): Records = match r {
+    | Empty => Empty
+    | Holds(d) => Holds({ f: if (isPresent(s.f)) d.f else Absent, e: if (hasEnum(s.e)) d.e else NoEnum })
+  }
+
+  // The records of the tables `shown` holds: those of `prev` keep theirs, and any other table was
+  // deleted or never existed, so it has none.
+  pure def carry(prev: Schema, current: Table -> Records, shown: Schema): Table -> Records =
+    shown.keys().mapBy(t =>
+      if (prev.keys().contains(t) and current.keys().contains(t)) dropMissing(current.get(t), shown.get(t))
+      else Empty)
+
   pure def lastOf(h: List[Schema]): Schema = h[h.length() - 1]
 
   action init = {
@@ -169,6 +189,7 @@ module migrationDeploy {
       step' = Start,
       tables' = start,
       restricted' = false,
+      records' = start.keys().mapBy(t => Holds(start.get(t))),
     }
   }
 
@@ -178,6 +199,7 @@ module migrationDeploy {
       step' = if (scripted.contains(i)) Script(i) else Commit(i),
       tables' = shown,
       restricted' = maintenance != Off,
+      records' = carry(history[i - 1], records, shown),
     }
   }
 
@@ -186,12 +208,14 @@ module migrationDeploy {
     step' = Held,
     tables' = lastOf(history),
     restricted' = true,
+    records' = carry(lastOf(history), records, lastOf(history)),
   }
 
   action finish: bool = all {
     step' = Done,
     tables' = lastOf(history),
     restricted' = false,
+    records' = carry(lastOf(history), records, lastOf(history)),
   }
 
   action advance = all {
@@ -208,6 +232,9 @@ module migrationDeploy {
           step' = Commit(i),
           tables' = shown,
           restricted' = restricted,
+          // The script leaves every record valid under the schema after the migration.
+          records' = shown.keys().mapBy(t =>
+            if (history[i].keys().contains(t)) Holds(history[i].get(t)) else records.get(t)),
         }
       }
       | Commit(i) =>
@@ -220,6 +247,7 @@ module migrationDeploy {
         step' = step,
         tables' = tables,
         restricted' = restricted,
+        records' = records,
       }
     },
   }
@@ -248,4 +276,11 @@ module migrationDeploy {
       tables.keys().contains(t) and takesValues(tables.get(t), history[i].get(t)))
     | _ => true
   }
+
+  // Post-migration enforces the constraints after the script has written values that meet them
+  // (docs/services/tailordb/migration.md), so no step gives a table a shape its records violate.
+  invariant tablesKeepRecords = tables.keys().forall(t => match records.get(t) {
+    | Empty => true
+    | Holds(r) => keepsRecords(tables.get(t), r)
+  })
 }
