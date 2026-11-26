@@ -30,6 +30,10 @@ export function parseDecimal(text: string): Decimal {
     throw new RangeError(error instanceof Error ? error.message : String(error), { cause: error });
   }
   if (!isStorableDecimal(value)) throw new RangeError("Decimal is out of range");
+  // decimal.js turns an exponent below its minimum into zero instead of throwing.
+  if (value.isZero() && /[1-9]/.test(text.split(/e/i, 1)[0] ?? "")) {
+    throw new RangeError("Decimal is out of range");
+  }
   return value;
 }
 

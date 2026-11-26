@@ -78,6 +78,23 @@ describe("as: decimal", () => {
     );
   });
 
+  test("rejects a nonzero input that decimal.js would silently turn into zero", () => {
+    const parse = (price: string) =>
+      parseInputFields({
+        fields: { price: t.decimal({ as: "decimal" }) },
+        value: { price },
+        data: undefined,
+        invoker: null,
+      });
+    expect(parse("1e-9000000000000001")).toEqual({
+      issues: [
+        { message: "Expected a valid decimal: received 1e-9000000000000001", path: ["price"] },
+      ],
+    });
+    expect(parse("0e-9000000000000001")).not.toHaveProperty("issues");
+    expect(parse("0.0")).not.toHaveProperty("issues");
+  });
+
   test("rejects input and output beyond the range the Platform can store", () => {
     const field = t.object({ price: t.decimal({ as: "decimal" }) });
     expect(
