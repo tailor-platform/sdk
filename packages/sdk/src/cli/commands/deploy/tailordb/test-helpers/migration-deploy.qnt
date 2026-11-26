@@ -14,7 +14,7 @@ module migrationDeploy {
   type Schema = Table -> Shape
   // The values a table's schema exposes: none, or values valid under a shape whose missing fields
   // expose none. Stored values of a removed field are assumed cleared before its name is reused, as
-  // docs/services/tailordb/migration.md tells users.
+  // packages/sdk/docs/services/tailordb/migration.md tells users.
   type Records =
     | Empty
     | Holds(Shape)
@@ -252,9 +252,9 @@ module migrationDeploy {
     },
   }
 
-  // What a migration script relies on (docs/services/tailordb/migration.md, `db.ts`): the tables
-  // and fields of the schema before the migration with their records, and the tables and fields of
-  // the schema after it, which take the values the script writes.
+  // What a migration script relies on (packages/sdk/docs/services/tailordb/migration.md, `db.ts`):
+  // the tables and fields of the schema before the migration with their records, and the tables and
+  // fields of the schema after it, which take the values the script writes.
   // Not an `invariant`, which Quint evaluates at every state: the test checks it once.
   pure val relaxServesScripts = SHAPES.forall(b => SHAPES.forall(a => and {
     keepsFields(relax(b, a), b),
@@ -278,7 +278,8 @@ module migrationDeploy {
   }
 
   // Post-migration enforces the constraints after the script has written values that meet them
-  // (docs/services/tailordb/migration.md), so no step gives a table a shape its records violate.
+  // (packages/sdk/docs/services/tailordb/migration.md), so no step gives a table a shape its records
+  // violate.
   invariant tablesKeepRecords = tables.keys().forall(t => match records.get(t) {
     | Empty => true
     | Holds(r) => keepsRecords(tables.get(t), r)
