@@ -339,10 +339,18 @@ function parseAsDecimal(_type: TailorFieldType, text: string): unknown {
   return parseDecimal(text);
 }
 
+// parseDateFields keeps decimal.js out of bundles that only parse dates, so a decimal
+// field reaching it fails loudly instead of staying a string.
+function rejectDecimal(): never {
+  throw new Error(
+    'Parsing fields declared with as: "decimal" needs parseDecimalFields, exported by "@tailor-platform/sdk/runtime".',
+  );
+}
+
 const allDateParsers: DateParsers = {
   date: parseAsDate,
   temporal: parseAsTemporal,
-  decimal: parseAsDecimal,
+  decimal: rejectDecimal,
 };
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
@@ -373,7 +381,7 @@ function deserializeDates(
       const parse = dateParsers[as];
       if (!parse) {
         throw new Error(
-          `Parsing fields declared with as: "${as}" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".`,
+          `Parsing fields declared with as: "${as}" is not included in this bundle. Parse them with ${as === "decimal" ? "parseDecimalFields" : "parseDateFields"}, exported by "@tailor-platform/sdk/runtime".`,
         );
       }
       try {
@@ -454,4 +462,21 @@ export function parseDateFields<Output>(
   args: FieldParseArgs,
 ): StandardSchemaV1.Result<Output> {
   return parseInternal({ ...args, field, pathArray: [] }, allDateParsers);
+}
+
+/**
+ * Parse a value like `field.parse`, converting fields declared with `as: "decimal"`
+ * even in bundles that leave that conversion out of `field.parse`.
+ * @param field - Field defining the value's shape
+ * @param args - Value to parse, with the context data and invoker passed to validators
+ * @returns Validation result with decimal fields converted to Decimal
+ */
+export function parseDecimalFields<Output>(
+  field: ParsableField<Output>,
+  args: FieldParseArgs,
+): StandardSchemaV1.Result<Output> {
+  return parseInternal(
+    { ...args, field, pathArray: [] },
+    { ...bundledDateParsers, decimal: parseAsDecimal },
+  );
 }

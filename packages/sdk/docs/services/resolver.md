@@ -206,7 +206,7 @@ createResolver({
 });
 ```
 
-- Input must be a decimal string (for example `"12.34"` or `"1e-7"`). Output must be a finite `Decimal`; `NaN` and `Infinity` are rejected.
+- Input must be a decimal string (for example `"12.34"` or `"1e-7"`). Output must be a finite `Decimal`; `NaN` and `Infinity` are rejected. Values beyond what the Platform stores (more than 131072 digits before or 16383 digits after the decimal point) are rejected too.
 - Output is written in plain notation without an exponent: `new Decimal("1e-7")` is returned as `"0.0000001"`.
 - `array`, `optional`, and nested objects are supported. Without `as`, or with `as: "string"`, decimal values remain strings.
 - To construct values or name the type, import `Decimal` from the SDK. It is the same class as in decimal.js, and `Decimal.isDecimal()` also recognizes values created by another copy of decimal.js:
@@ -219,7 +219,7 @@ const price: Decimal = new Decimal("12.34");
 
 Arithmetic on `Decimal` rounds results to 20 significant digits by default (decimal.js's default precision), so `new Decimal("12345678901234567890.123456789").plus(1)` becomes `12345678901234567891`. Parsing and output do not round. If your values need more digits, raise the precision before calculating, for example `Decimal.set({ precision: 40 })` at the top of the resolver file.
 
-A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDateFields` as described in [Date and Time Values](#date-and-time-values); it also converts decimal fields.
+A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDecimalFields`, exported by `@tailor-platform/sdk/runtime`. It takes the same arguments and returns the same result as `.parse()`, and converts decimal fields even when the bundle would not. `parseDateFields` does not convert decimal fields; it throws an error that points to `parseDecimalFields`.
 
 ### Custom Type Name (`typeName`)
 

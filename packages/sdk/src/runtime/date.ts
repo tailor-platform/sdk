@@ -1,4 +1,4 @@
-import { Decimal } from "./decimal";
+import { Decimal, isStorableDecimal } from "./decimal";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "./types";
@@ -190,6 +190,11 @@ function serializeAsDecimal(_type: TailorFieldType, value: unknown, path: string
   if (!value.isFinite()) {
     throw new RangeError(
       `Expected a finite Decimal at ${describePathTarget(path)}, but received ${value.toString()}`,
+    );
+  }
+  if (!isStorableDecimal(value)) {
+    throw new RangeError(
+      `Expected a Decimal at ${describePathTarget(path)} within the range the Platform stores, but the value is out of range`,
     );
   }
   return value.toFixed();

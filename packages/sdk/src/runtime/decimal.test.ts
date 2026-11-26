@@ -2,7 +2,7 @@ import { Decimal } from "decimal.js";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { t } from "#/configure/types/type";
 import { serializeDateFields } from "./date";
-import { parseInputFields } from "./field-parse";
+import { parseDateFields, parseDecimalFields, parseInputFields } from "./field-parse";
 import type { DeepReadonly, output, SerializeDates } from "#/types/helpers";
 
 describe("as: decimal", () => {
@@ -76,5 +76,54 @@ describe("as: decimal", () => {
     expect(() => serializeDateFields(field, { price: new Decimal(NaN) })).toThrow(
       /finite Decimal at price/,
     );
+  });
+
+  test("rejects input and output beyond the range the Platform can store", () => {
+    const field = t.object({ price: t.decimal({ as: "decimal" }) });
+    expect(
+      parseInputFields({
+        fields: { price: t.decimal({ as: "decimal" }) },
+        value: { price: "1e999999999" },
+        data: undefined,
+        invoker: null,
+      }),
+    ).toEqual({
+      issues: [{ message: "Expected a valid decimal: received 1e999999999", path: ["price"] }],
+    });
+    expect(() => serializeDateFields(field, { price: new Decimal("1e999999999") })).toThrow(
+      /Decimal at price.*out of range/,
+    );
+    expect(() => serializeDateFields(field, { price: new Decimal("1e-999999999") })).toThrow(
+      /Decimal at price.*out of range/,
+    );
+    expect(serializeDateFields(field, { price: new Decimal("1e1000") })).toEqual({
+      price: `1${"0".repeat(1000)}`,
+    });
+  });
+});
+
+describe("parseDecimalFields and parseDateFields", () => {
+  const payload = t.object({
+    price: t.decimal({ as: "decimal" }),
+    due: t.date({ as: "date" }),
+  });
+
+  test("parseDecimalFields converts decimal fields", () => {
+    const result = parseDecimalFields(payload, {
+      value: { price: "1.5", due: "2026-01-02" },
+      data: undefined,
+      invoker: null,
+    }) as { value: { price: Decimal; due: unknown } };
+    expect(Decimal.isDecimal(result.value.price)).toBe(true);
+  });
+
+  test("parseDateFields points to parseDecimalFields instead of leaving a decimal as a string", () => {
+    expect(() =>
+      parseDateFields(payload, {
+        value: { price: "1.5", due: "2026-01-02" },
+        data: undefined,
+        invoker: null,
+      }),
+    ).toThrow(/parseDecimalFields/);
   });
 });
