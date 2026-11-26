@@ -28,6 +28,7 @@ import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { writeHeldConfigLock } from "./test-helpers/config-lock";
 import { invalidYAMLPlatformConfig, storedTokenMarker } from "./test-helpers/platform-config";
+import { tailorArgv } from "./test-helpers/process-argv";
 import { isKeyringAvailable, resetKeyringState } from "./token-store";
 import type * as ClientModule from "./client";
 
@@ -1792,8 +1793,9 @@ describe("loadAccessToken", () => {
         expectedCode: "AUTH_TOKEN_REFRESH_FAILED",
       },
     ])(
-      "keeps the selected profile in diagnostics when $reason",
+      "keeps the selected profile and env files in diagnostics when $reason",
       async ({ refreshToken, expectedCode }) => {
+        using _argv = tailorArgv(["-e", ".env", "workspace", "list"]);
         writePlatformConfig({
           version: 3,
           min_sdk_version: "2.0.0",
@@ -1818,7 +1820,10 @@ describe("loadAccessToken", () => {
         );
         expect(errorToJson(error).error).toMatchObject({
           code: expectedCode,
-          next: { command: "tailor", args: ["login", "--profile", "selected", "--help"] },
+          next: {
+            command: "tailor",
+            args: ["login", `--env-file=${path.resolve(".env")}`, "--profile=selected", "--help"],
+          },
           suggestion: expect.stringContaining("original login method"),
           context: { profile: "selected" },
         });
@@ -2219,7 +2224,7 @@ describe("saveUserTokens", () => {
 
     expect(errorToJson(error).error).toMatchObject({
       code: "AUTH_TOKEN_NOT_FOUND",
-      next: { command: "tailor", args: ["login", "--profile", "dev", "--help"] },
+      next: { command: "tailor", args: ["login", "--profile=dev", "--help"] },
       context: { profile: "dev" },
     });
   });

@@ -182,7 +182,7 @@ describe("profile update --permission", () => {
       success: false,
       error: {
         code: "AUTH_USER_NOT_FOUND",
-        next: { command: "tailor", args: ["login", "--profile", "rw", "--help"] },
+        next: { command: "tailor", args: ["login", "--profile=rw", "--help"] },
         context: { profile: "rw" },
       },
     });
