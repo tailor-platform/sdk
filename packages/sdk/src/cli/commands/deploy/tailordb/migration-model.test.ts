@@ -22,6 +22,7 @@ import {
   type ModelTrace,
   modelTable,
   observeTables,
+  SIMULATION_TIMEOUT_MS,
   simulateModelTraces,
 } from "./test-helpers/migration-model";
 import { applyTailorDB, type MaintenanceModeRelease, planTailorDB } from "./index";
@@ -218,7 +219,7 @@ describe("migration deploy model", () => {
   let traces: ModelTrace[] = [];
   beforeAll(() => {
     traces = simulateModelTraces(TRACE_COUNT);
-  }, 120_000);
+  }, SIMULATION_TIMEOUT_MS);
 
   test("the simulated deploys reach each case often enough", () => {
     const counts = countModelCases(traces);
@@ -232,7 +233,7 @@ describe("migration deploy model", () => {
 
   test(
     "each simulated deploy holds what migration-deploy.qnt expects at every step",
-    { timeout: 120_000 },
+    { timeout: 180_000 },
     async () => {
       const failed: string[] = [];
       for (const trace of traces) {

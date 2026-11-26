@@ -110,12 +110,19 @@ function readModelTraces(dir: string): ModelTrace[] {
 
 const QUINT_CLI = fileURLToPath(import.meta.resolve("@informalsystems/quint/dist/src/cli.js"));
 const MODEL_SPEC = path.join(import.meta.dirname, "migration-deploy.qnt");
+const QUINT_TIMEOUT_MS = 180_000;
+
+/**
+ * Longer than all of `simulateModelTraces`' Quint runs together, each of which stops at
+ * `QUINT_TIMEOUT_MS`.
+ */
+export const SIMULATION_TIMEOUT_MS = 3 * QUINT_TIMEOUT_MS;
 
 function runQuint(args: readonly string[]) {
   return spawnSync(
     process.execPath,
     [QUINT_CLI, "run", MODEL_SPEC, "--step=advance", "--seed=1", "--backend=typescript", ...args],
-    { encoding: "utf8", timeout: 60_000 },
+    { encoding: "utf8", timeout: QUINT_TIMEOUT_MS },
   );
 }
 
@@ -140,8 +147,9 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
       `--n-traces=${samples}`,
       `--out-itf=${path.join(dir, "t{seq}.itf.json")}`,
     ]);
-    // Asked for many traces, Quint does not name a violated invariant, so a failure runs it again.
-    if (run.status !== 0) assertQuintPassed(runQuint(sampling));
+    // Asked for many traces, Quint does not name a violated invariant, so a run that exits with a
+    // failure runs it again.
+    if (run.status !== 0 && run.error === undefined) assertQuintPassed(runQuint(sampling));
     assertQuintPassed(run);
     return readModelTraces(dir);
   } finally {

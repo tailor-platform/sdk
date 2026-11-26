@@ -50,7 +50,7 @@ The histories are a sample, not every history. Failures and resumes of a migrati
 - A behavior the code does not have yet is a known gap. Reproduce it, then name it as a definition of the tables, or the part of them such as their permissions, the specification leaves unchecked, with a comment saying what the code does instead. Make the test fail when the definition hides no mismatch, so the fix cannot leave it behind, and name that fix in the PR that adds the gap.
 - To show the test catches a bug, temporarily put the bug back (or revert the fix's source change) and confirm the test fails at the step you expect.
 - To reproduce one failing scenario, temporarily replace `init` with the values the failure message prints and run the test.
-- Run Quint with `--backend=typescript`: the Rust backend downloads a binary at run time. Keep `--max-samples` equal to `--n-traces` and `--seed` fixed; try other seeds locally. Asked for many traces, Quint does not name a violated invariant, so `simulateModelTraces` runs it again without `--n-traces` to print the violation.
+- Run Quint with `--backend=typescript`: the Rust backend downloads a binary at run time. Keep `--max-samples` equal to `--n-traces` and `--seed` fixed; try other seeds locally. Asked for many traces, Quint does not name a violated invariant, so `simulateModelTraces` runs it again without `--n-traces` to print the violation, unless the run timed out.
 - In Quint, `next` is a builtin name; every branch of a `match` in an action assigns the same variables; and `Map.get` on a missing key fails, so check `keys().contains` first.
 - When a second specification arrives, move the Quint run and the ITF decoding out of `migration-model.ts` into a shared test helper.
 
