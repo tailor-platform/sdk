@@ -55,6 +55,7 @@ export { context } from "./context";
 export { file } from "./file";
 export { aigateway } from "./aigateway";
 export { logger } from "./logger";
+export { Decimal } from "./decimal";
 export { Temporal } from "./temporal";
 export { serializeDateFields } from "./date";
 export { parseDateFields } from "./field-parse";

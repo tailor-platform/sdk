@@ -1671,8 +1671,8 @@ export type AuthConfigInput =
             scale?: number | undefined;
             /** Default value for the field on create */
             default?: unknown;
-            /** Date value representation; "default" follows defaultDateRepresentation */
-            as?: "date" | "default" | "string" | "temporal" | undefined;
+            /** Value representation; "default" follows defaultDateRepresentation */
+            as?: "date" | "decimal" | "default" | "string" | "temporal" | undefined;
           };
           fields: any;
         };
@@ -3185,8 +3185,8 @@ export type AuthConfig =
             scale?: number | undefined;
             /** Default value for the field on create */
             default?: unknown;
-            /** Date value representation; "default" follows defaultDateRepresentation */
-            as?: "date" | "default" | "string" | "temporal" | undefined;
+            /** Value representation; "default" follows defaultDateRepresentation */
+            as?: "date" | "decimal" | "default" | "string" | "temporal" | undefined;
           };
           fields: any;
         };

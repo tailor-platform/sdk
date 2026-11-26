@@ -97,7 +97,7 @@ export async function bundleResolvers(
       sourceFile: resolver.sourceFile,
       tsconfig,
       dateDefault,
-      dateRepresentations: resolverDateRepresentations(resolver, dateDefault),
+      representations: resolverDateRepresentations(resolver, dateDefault),
       runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
       entry: (absoluteSourcePath) => {
         const validatedInputExpr = buildResolverValidatedInputExpr({

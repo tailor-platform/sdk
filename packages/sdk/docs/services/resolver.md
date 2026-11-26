@@ -192,6 +192,35 @@ const time: Temporal.PlainTime = Temporal.PlainTime.from("12:30:59.999");
 
 This import uses the runtime's Temporal implementation. Deployed resolvers and `tailor function run` use the Tailor Platform's native Temporal. The SDK's [`tailor-runtime` Vitest environment](../testing.md) installs a polyfill when Node.js does not provide Temporal; no Node.js flags or separate polyfill setup are needed. Other local runtimes must provide Temporal to construct or parse Temporal values. Importing the SDK and defining fields does not require it, so CLI configuration loading works on Node.js without Temporal. The SDK does not add ambient global Temporal types or include the polyfill in deployed functions.
 
+### Decimal Values
+
+`t.decimal()` uses numeric strings such as `"12.34"` by default. Use `t.decimal({ as: "decimal" })` to work with [`Decimal`](https://mikemcl.github.io/decimal.js/) values from decimal.js in the resolver body and input validators, so arithmetic keeps its precision:
+
+```typescript
+createResolver({
+  name: "addPrices",
+  operation: "query",
+  input: { a: t.decimal({ as: "decimal" }), b: t.decimal({ as: "decimal" }) },
+  output: t.decimal({ as: "decimal" }),
+  body: ({ input }) => input.a.plus(input.b),
+});
+```
+
+- Input must be a decimal string (for example `"12.34"` or `"1e-7"`). Output must be a finite `Decimal`; `NaN` and `Infinity` are rejected.
+- Output is written in plain notation without an exponent: `new Decimal("1e-7")` is returned as `"0.0000001"`.
+- `array`, `optional`, and nested objects are supported. Without `as`, or with `as: "string"`, decimal values remain strings.
+- To construct values or name the type, import `Decimal` from the SDK. It is the same class as in decimal.js, and `Decimal.isDecimal()` also recognizes values created by another copy of decimal.js:
+
+```typescript
+import { Decimal } from "@tailor-platform/sdk/runtime";
+
+const price: Decimal = new Decimal("12.34");
+```
+
+Arithmetic on `Decimal` rounds results to 20 significant digits by default (decimal.js's default precision), so `new Decimal("12345678901234567890.123456789").plus(1)` becomes `12345678901234567891`. Parsing and output do not round. If your values need more digits, raise the precision before calculating, for example `Decimal.set({ precision: 40 })` at the top of the resolver file.
+
+A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDateFields` as described in [Date and Time Values](#date-and-time-values); it also converts decimal fields.
+
 ### Custom Type Name (`typeName`)
 
 Enum and nested object fields in input/output schemas generate protobuf type names automatically (e.g., `{ResolverName}{FieldName}`). Use `typeName()` to set a custom name:

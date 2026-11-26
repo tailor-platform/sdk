@@ -25,7 +25,7 @@ import {
 import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
 import { hasDateRepresentationFields } from "#/runtime/date";
 import type { ApplicationEnv } from "#/cli/shared/client";
-import type { BundledDateRepresentations } from "#/cli/shared/platform-bundle-plugin";
+import type { BundledRepresentations } from "#/cli/shared/platform-bundle-plugin";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { Trigger } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
@@ -333,7 +333,7 @@ export function buildResolverResultSerialization(
 export type ResolverFields = Pick<Resolver, "input" | "output"> | undefined;
 
 /**
- * Decide which date representations a resolver bundle has to convert. A configured
+ * Decide which value representations a resolver bundle has to convert. A configured
  * default keeps its converter even when no declared field uses it, so a
  * `t.date()` parsed inside `body` resolves the way the config promises.
  * @param resolver - The resolver's input and output fields, or undefined when unknown
@@ -343,8 +343,8 @@ export type ResolverFields = Pick<Resolver, "input" | "output"> | undefined;
 export function resolverDateRepresentations(
   resolver: ResolverFields,
   dateDefault: EffectiveDateDefault = "legacy",
-): BundledDateRepresentations {
-  if (!resolver) return { date: true, temporal: true };
+): BundledRepresentations {
+  if (!resolver) return { date: true, temporal: true, decimal: true };
   const fields = [resolver.output, ...Object.values(resolver.input ?? {})];
   return {
     date:
@@ -353,5 +353,6 @@ export function resolverDateRepresentations(
     temporal:
       dateDefault === "temporal" ||
       fields.some((field) => hasDateRepresentationFields(field, "temporal", dateDefault)),
+    decimal: fields.some((field) => hasDateRepresentationFields(field, "decimal", dateDefault)),
   };
 }

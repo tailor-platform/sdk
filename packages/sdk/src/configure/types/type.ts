@@ -12,6 +12,8 @@ import type {
   FieldOptions,
   DateFieldOptions,
   DateFieldValue,
+  DecimalFieldOptions,
+  DecimalFieldValue,
   DateTimeFieldOptions,
   DateTimeFieldValue,
   TimeFieldOptions,
@@ -375,14 +377,17 @@ function float<const Opt extends FieldOptions>(options?: Opt) {
 }
 
 /**
- * Create a decimal field for resolver input/output (stored as string for precision).
+ * Create a decimal field for resolver input/output (a string unless `as: "decimal"`).
  * @param options - Field configuration options
  * @returns A decimal field
  * @example t.decimal()
  * @example t.decimal({ optional: true })
+ * @example t.decimal({ as: "decimal" })
  */
-function decimal<const Opt extends FieldOptions>(options?: Opt) {
-  return createTailorField("decimal", options);
+function decimal<const Opt extends DecimalFieldOptions = FieldOptions>(options?: Opt) {
+  const field = createTailorField<"decimal", Opt, DecimalFieldValue<Opt["as"]>>("decimal", options);
+  if (options?.as === "decimal") field._metadata.as = "decimal";
+  return field;
 }
 
 /**

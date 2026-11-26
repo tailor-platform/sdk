@@ -143,7 +143,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
         createPlatformBundleDefinePlugin(
           detected.type === "resolver"
             ? resolverDateRepresentations(detected.fields, dateDefault)
-            : { date: true, temporal: true },
+            : { date: true, temporal: true, decimal: false },
           dateDefault,
           kyselyTemporal,
         ),

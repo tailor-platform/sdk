@@ -5,9 +5,9 @@ import { DBFieldMetadataSchema } from "../tailordb/schema";
 // Resolver input/output and machine user attributes also take TailorDB fields.
 const FieldMetadataSchema = DBFieldMetadataSchema.extend({
   as: z
-    .enum(["string", "date", "temporal", "default"])
+    .enum(["string", "date", "temporal", "decimal", "default"])
     .optional()
-    .describe('Date value representation; "default" follows defaultDateRepresentation'),
+    .describe('Value representation; "default" follows defaultDateRepresentation'),
 });
 
 // strip unknown keys

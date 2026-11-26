@@ -17,7 +17,7 @@ import {
 } from "#/cli/shared/function-treeshake";
 import {
   createPlatformBundleDefinePlugin,
-  type BundledDateRepresentations,
+  type BundledRepresentations,
 } from "#/cli/shared/platform-bundle-plugin";
 import {
   createSdkBuilderPurePlugin,
@@ -88,8 +88,8 @@ export interface BuildFunctionBundleOptions extends FunctionBundleSettings {
   createTransformPlugins?:
     | ((hookFailures: HookFailures) => (rolldown.Plugin | undefined)[])
     | undefined;
-  /** Date representations whose conversion code the bundle keeps */
-  dateRepresentations?: BundledDateRepresentations | undefined;
+  /** Value representations whose conversion code the bundle keeps */
+  representations?: BundledRepresentations | undefined;
   /** Expressions replaced with constants while bundling */
   define?: Record<string, string> | undefined;
   /** Rejects Node-only globals in the bundle, or `false` to skip the check */
@@ -111,7 +111,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfig,
     entry,
     createTransformPlugins,
-    dateRepresentations,
+    representations,
     define,
     runtimeGlobals,
     startContext,
@@ -171,7 +171,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           createStartTransformPlugin(startContext, hookFailures),
         ]),
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(dateRepresentations, dateDefault, kyselyTemporal),
+        createPlatformBundleDefinePlugin(representations, dateDefault, kyselyTemporal),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       ];

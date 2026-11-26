@@ -613,6 +613,36 @@ describe("bundleResolvers", () => {
   });
 });
 
+describe("bundleResolvers decimal", () => {
+  const gateResolver = (as: string) =>
+    `export default {\n` +
+    `  operation: "query",\n` +
+    `  name: "price",\n` +
+    `  body: async () => globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL,\n` +
+    `  output: { type: "decimal", metadata: { ${as} }, fields: {} },\n` +
+    `};\n`;
+
+  const bundle = async (source: string) => {
+    using tmp = tempCwd("sdk-bundler-decimal-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(path.join(tmp.dir, "resolver.ts"), source);
+    const result = await bundleResolvers({
+      namespace: "prices",
+      files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
+      baseDir: tmp.dir,
+    });
+    return assertDefined(result.get("price"), "price bundle missing");
+  };
+
+  test("leaves the Decimal converter out of a resolver that keeps decimals as strings", async () => {
+    expect(await bundle(gateResolver(""))).toMatch(/body:async\(\)=>(?:true|!0)\b/);
+  });
+
+  test("keeps the Decimal converter in a resolver that uses as: decimal", async () => {
+    expect(await bundle(gateResolver('as: "decimal"'))).toMatch(/body:async\(\)=>(?:false|!1)\b/);
+  });
+});
+
 describe("bundleResolvers date default", () => {
   const dateOutputResolver =
     `export default {\n` +

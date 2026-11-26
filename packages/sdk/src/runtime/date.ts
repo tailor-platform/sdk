@@ -1,3 +1,4 @@
+import { Decimal } from "./decimal";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "./types";
@@ -95,7 +96,7 @@ function describeReceivedValue(value: unknown): string {
   return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
-type DateRepresentation = "date" | "temporal";
+type DateRepresentation = "date" | "temporal" | "decimal";
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
 
@@ -120,6 +121,7 @@ export function dateRepresentationOf(
   as: FieldMetadata["as"],
   defaultRepresentation: EffectiveDateDefault = bundledDateDefault(),
 ): DateRepresentation | undefined {
+  if (type === "decimal") return as === "decimal" ? "decimal" : undefined;
   if (type !== "date" && type !== "datetime" && type !== "time") return undefined;
   const resolved = as === "default" ? defaultRepresentation : as;
   return resolved === "date" || resolved === "temporal" ? resolved : undefined;
@@ -178,6 +180,21 @@ function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string
   }
 }
 
+// toFixed() prints plain notation, never an exponent, so the Platform receives the digits as written.
+function serializeAsDecimal(_type: TailorFieldType, value: unknown, path: string): string {
+  if (!Decimal.isDecimal(value)) {
+    throw new TypeError(
+      `Expected a Decimal instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+    );
+  }
+  if (!value.isFinite()) {
+    throw new RangeError(
+      `Expected a finite Decimal at ${describePathTarget(path)}, but received ${value.toString()}`,
+    );
+  }
+  return value.toFixed();
+}
+
 const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = {
   date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
     ? undefined
@@ -186,6 +203,9 @@ const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = 
     .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
     ? undefined
     : serializeAsTemporal,
+  decimal: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL
+    ? undefined
+    : serializeAsDecimal,
 };
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {

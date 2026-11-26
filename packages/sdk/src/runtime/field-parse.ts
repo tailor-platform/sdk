@@ -1,4 +1,5 @@
 import { dateRepresentationOf, formatDate } from "./date";
+import { parseDecimal } from "./decimal";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
@@ -298,6 +299,7 @@ type DateParser = (type: TailorFieldType, text: string) => unknown;
 type DateParsers = {
   readonly date: DateParser | undefined;
   readonly temporal: DateParser | undefined;
+  readonly decimal: DateParser | undefined;
 };
 
 function rejectLeapSecond(type: TailorFieldType, text: string): void {
@@ -333,7 +335,15 @@ function parseAsTemporal(type: TailorFieldType, text: string): unknown {
   return Temporal.PlainTime.from(text);
 }
 
-const allDateParsers: DateParsers = { date: parseAsDate, temporal: parseAsTemporal };
+function parseAsDecimal(_type: TailorFieldType, text: string): unknown {
+  return parseDecimal(text);
+}
+
+const allDateParsers: DateParsers = {
+  date: parseAsDate,
+  temporal: parseAsTemporal,
+  decimal: parseAsDecimal,
+};
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
 
@@ -345,6 +355,9 @@ const bundledDateParsers: DateParsers = {
     .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
     ? undefined
     : parseAsTemporal,
+  decimal: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL
+    ? undefined
+    : parseAsDecimal,
 };
 
 function deserializeDates(
