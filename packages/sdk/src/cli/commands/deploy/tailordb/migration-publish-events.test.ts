@@ -50,10 +50,12 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => ({
 }));
 
 // Per-test schema states keyed by migration number, so reconstruction returns
-// the state as of the requested checkpoint like the real replay does.
+// the state as of the requested checkpoint like the real replay does. The
+// workspace lacks the tables the plan creates, so the listing leaves them out.
 const snapshotState = {
   tablesByVersion: {} as SnapshotTablesByVersion,
   historyId: null as string | null,
+  plannedCreates: new Set<string>(),
 };
 
 describe("migration flow: namespace restrictions while migrations run", () => {
@@ -81,7 +83,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     return checkpoint.createMockClient({
       listTailorDBTypes: async () => {
         const tables = snapshotState.tablesByVersion[0];
-        const names = options.existingTableNames ?? Object.keys(tables ?? {});
+        const names =
+          options.existingTableNames ??
+          Object.keys(tables ?? {}).filter((name) => !snapshotState.plannedCreates.has(name));
         const tailordbTypes = names.map((name) => {
           const snapshotSettings = tables?.[name]?.settings;
           const operations = snapshotSettings?.gqlOperations;
@@ -122,6 +126,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   };
 
   function createMockPlanResult(options: CreateMockPlanResultOptions) {
+    snapshotState.plannedCreates = new Set(options.creates);
     return createPlanResult({
       type: {
         creates: options.creates.map((name) => typeEntry(name)),
@@ -177,6 +182,7 @@ describe("migration flow: namespace restrictions while migrations run", () => {
   beforeEach(() => {
     snapshotState.tablesByVersion = {};
     snapshotState.historyId = null;
+    snapshotState.plannedCreates = new Set();
     checkpoint = createRemoteCheckpoint(0);
     vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
     vi.mocked(reconstructSnapshotFromMigrations).mockImplementation(
@@ -569,12 +575,16 @@ describe("migration flow: namespace restrictions while migrations run", () => {
     const client = createMockClient({
       existingSettings: { Order: { publishRecordEvents: true } },
     });
-    const planResult = createMockPlanResult({ creates: ["Order"], subscribedTables: ["Order"] });
+    const planResult = createMockPlanResult({
+      creates: [],
+      updates: ["Order"],
+      subscribedTables: ["Order"],
+    });
     const table = snapshotTable("Order", { status: { type: "string", required: true } });
     snapshotState.tablesByVersion = { 0: { Order: table }, 1: { Order: table } };
     planResult.context.pendingMigrations = checkpoint.mockPending([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any], {
+      mkPendingMigration([{ kind: "table_settings_modified", tableName: "Order" } as any], {
         hasScript: true,
       }),
     ]);
@@ -1825,14 +1835,15 @@ describe("migration flow: namespace restrictions while migrations run", () => {
         existingSettings: { Order: { publishRecordEvents: true } },
       });
       const planResult = createMockPlanResult({
-        creates: ["Order"],
+        creates: [],
+        updates: ["Order"],
         subscribedTables: ["Order"],
         maintenanceMode: "deploy",
       });
       snapshotState.tablesByVersion = { 0: { Order: orderTable() }, 1: { Order: orderTable() } };
       planResult.context.pendingMigrations = checkpoint.mockPending([
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        mkPendingMigration([{ kind: "table_added", tableName: "Order" } as any]),
+        mkPendingMigration([{ kind: "table_settings_modified", tableName: "Order" } as any]),
       ]);
       vi.mocked(migrationModule.updateMigrationLabel).mockRejectedValueOnce(
         new Error("checkpoint update failed"),

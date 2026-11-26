@@ -267,27 +267,25 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     return mockPendingMigrations(migrations, () => ({ ...remoteCheckpoint }));
   }
 
-  function createMockPlanResult() {
-    return buildPlanResult({
-      creates: [
-        {
-          name: "StockReservation",
-          request: {
-            workspaceId: "test-workspace",
-            namespaceName: "test-ns",
-            tailordbType: {
-              name: "StockReservation",
-              schema: {
-                fields: [
-                  { name: "id", type: "uuid", required: true },
-                  { name: "quantity", type: "integer", required: true },
-                ],
-              },
-            },
-          },
+  const stockReservation = {
+    name: "StockReservation",
+    request: {
+      workspaceId: "test-workspace",
+      namespaceName: "test-ns",
+      tailordbType: {
+        name: "StockReservation",
+        schema: {
+          fields: [
+            { name: "id", type: "uuid", required: true },
+            { name: "quantity", type: "integer", required: true },
+          ],
         },
-      ],
-    });
+      },
+    },
+  };
+
+  function createMockPlanResult() {
+    return buildPlanResult({ creates: [stockReservation] });
   }
 
   function createUpdatePlanResult() {
@@ -3313,7 +3311,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("lifts maintenance mode on the tables the resumed migration created", async () => {
       const client = createMockClient();
-      const planResult = withInputs(createMockPlanResult());
+      const planResult = withInputs(buildPlanResult({ updates: [stockReservation] }));
       planResult.context.pendingMigrations = remoteInProgress({
         inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
       });
@@ -3343,7 +3341,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
 
     test("lifts maintenance mode when a resumed migration's checkpoint write cannot be confirmed", async () => {
       const client = createMockClient();
-      const planResult = withInputs(createMockPlanResult());
+      const planResult = withInputs(buildPlanResult({ updates: [stockReservation] }));
       planResult.context.pendingMigrations = remoteInProgress({
         inProgress: { number: 1, executionId: "exec-1", kind: "steps" },
       });

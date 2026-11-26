@@ -57,10 +57,12 @@ type RemoteTableWrite =
  * deleted, and any write to the permission of a table the client deleted, fails with `NotFound`.
  * A table the client creates starts without a permission, and deleting a table also deletes its
  * permission. A write counts from the moment it is sent until it is rejected, so two concurrent
- * writes conflict as they would on the Platform. A name the client has not written is accepted,
- * whether or not `listTailorDBTypes` lists it. The client's current implementations are wrapped,
- * so a method replaced afterwards keeps this only if the replacement calls the implementation
- * `getMockImplementation()` returned before it.
+ * writes conflict as they would on the Platform. Until the client writes a table or permission,
+ * it exists when a settled call of the client's `listTailorDBTypes` or `listTailorDBGQLPermissions`
+ * returned it, however the test mocks those; any other name the client has not written is
+ * accepted. The write methods' current implementations are wrapped, so a write method replaced
+ * afterwards keeps this only if the replacement calls the implementation `getMockImplementation()`
+ * returned before it.
  * @param client - Client whose table and permission writes to wrap
  * @returns The same client
  */
@@ -108,9 +110,42 @@ export function trackRemoteTables<C extends OperatorClientMock<RemoteTableWrite>
   assert(createType && updateType && deleteType);
   assert(createPermission && updatePermission && deletePermission);
 
+  const listed = <M extends "listTailorDBTypes" | "listTailorDBGQLPermissions">(
+    method: M,
+    namesOf: (
+      response: Awaited<ReturnType<OperatorClient[M]>> | undefined,
+    ) => ReadonlyArray<string | undefined>,
+    key: string,
+  ) => {
+    const list: unknown = client[method];
+    if (!vi.isMockFunction(list)) return false;
+    const calls: ReadonlyArray<ReadonlyArray<{ namespaceName?: string } | undefined>> =
+      list.mock.calls;
+    const results: ReadonlyArray<
+      { value: Awaited<ReturnType<OperatorClient[M]>> | undefined } | undefined
+    > = list.mock.settledResults;
+    return calls.some((call, index) =>
+      namesOf(results[index]?.value).some((name) => keyOf(call[0]?.namespaceName, name) === key),
+    );
+  };
+  const tableExists = (key: string) =>
+    tables.get(key) ??
+    listed(
+      "listTailorDBTypes",
+      (response) => (response?.tailordbTypes ?? []).map((type) => type.name),
+      key,
+    );
+  const permissionExists = (key: string) =>
+    permissions.get(key) ??
+    listed(
+      "listTailorDBGQLPermissions",
+      (response) => (response?.permissions ?? []).map((entry) => entry.typeName),
+      key,
+    );
+
   client.createTailorDBType.mockImplementation(async (request, options) => {
     const key = keyOf(request.namespaceName, request.tailordbType?.name);
-    refuseIf(tables.get(key) === true, Code.AlreadyExists, `table ${key} already exists`);
+    refuseIf(tableExists(key), Code.AlreadyExists, `table ${key} already exists`);
     return recordWrite(key, { table: true, permission: false }, () => createType(request, options));
   });
   client.updateTailorDBType.mockImplementation(async (request, options) => {
@@ -126,11 +161,7 @@ export function trackRemoteTables<C extends OperatorClientMock<RemoteTableWrite>
   client.createTailorDBGQLPermission.mockImplementation(async (request, options) => {
     const key = keyOf(request.namespaceName, request.typeName);
     refuseIf(tableMissing(key), Code.NotFound, `table ${key} not found`);
-    refuseIf(
-      permissions.get(key) === true,
-      Code.AlreadyExists,
-      `permission of ${key} already exists`,
-    );
+    refuseIf(permissionExists(key), Code.AlreadyExists, `permission of ${key} already exists`);
     return recordWrite(key, { permission: true }, () => createPermission(request, options));
   });
   client.updateTailorDBGQLPermission.mockImplementation(async (request, options) => {
