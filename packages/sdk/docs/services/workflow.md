@@ -39,6 +39,7 @@ All workflow components must follow these rules:
 | `createWorkflowJob`'s `name`/`body` must be written directly in the call | Not as a reference to a variable or the result of another function — the build cannot see through that indirection and fails instead of silently leaving the job out                           |
 | `.start()` must be called from within the calling job's `body`           | A function defined inside `body` may call it too, but not a function defined outside `body` — the build cannot see through that indirection and fails instead of silently leaving the call out |
 | Call `<job>.start()`, not `execJobFunction` directly                     | Calling `tailor.workflow.execJobFunction(...)` (or the `workflow` value imported from `@tailor-platform/sdk/runtime`) directly is not detected as a dependency and fails the build             |
+| Started jobs must be in a file `files` includes                          | The build fails when code calls `.start()` on a job it imports from, or defines in, a file the workflow service's `files` does not include                                                     |
 
 ## Creating a Workflow Job
 
@@ -524,7 +525,7 @@ You can start a workflow execution from a resolver using `workflow.start()`.
 - In a [`defineWorkspace()` config with several Auth services](../workspace.md#several-auth-services) (Beta), a string literal invoker runs as the machine user of the Auth service that defines it. `deploy` stops with `WORKFLOW_START_INVOKER_AMBIGUOUS` when several define it and with `WORKFLOW_START_INVOKER_NOT_FOUND` when none does. Options or an invoker the build cannot read (a variable, a spread, or a conditional, for example) fail with `WORKFLOW_START_INVOKER_UNRESOLVED`, so write the invoker as a string literal or the object form.
 - Import the workflow from its workflow file with a default import (or a namespace import, calling `wf.default.start(...)`), using a relative path or a `tsconfig.json` `paths` alias. The build replaces the `.start()` call with a platform call, so it has to recognize the workflow: export it as the file's default export — either `createWorkflow({ name: "..." })` itself or the result of a helper function that calls `createWorkflow()`.
 - Call `.start()` directly on the imported name (`orderProcessingWorkflow.start(...)`, or `wf.default.start(...)` for a namespace import). If you first assign the workflow to another variable (`const wf = orderProcessingWorkflow; wf.start(...)`) or pass it to a function, the call is neither rewritten nor checked, and fails at runtime.
-- If a `.start()` call is made on an export of a workflow file that the build cannot recognize as a workflow or job defined that way, the build fails. A `.start()` on a workflow imported from anywhere other than a workflow file (for example re-exported from a shared package) cannot be checked, and fails at runtime.
+- If a `.start()` call is made on an export of a workflow file that the build cannot recognize as a workflow or job defined that way, the build fails. The build also fails when the workflow is defined in a file that the workflow service's `files` does not include; add that file to `files`. A `.start()` on a workflow imported from a package, or through a file outside `files` that re-exports it or creates it with a helper function, cannot be checked, and fails at runtime.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
@@ -566,7 +567,7 @@ workflows/
                              # export default createWorkflow(...)
 ```
 
-All jobs can be in a single file or split across multiple files, as long as they are named exports.
+All jobs can be in a single file or split across multiple files, as long as they are named exports in files that the workflow service's `files` includes.
 
 ## CLI Commands
 

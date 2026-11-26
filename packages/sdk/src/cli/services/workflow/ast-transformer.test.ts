@@ -5,6 +5,7 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { logger } from "#/cli/shared/logger";
 import {
+  buildStartContext,
   normalizeFilePath,
   type StartContext,
   type StartModuleBindings,
@@ -1283,7 +1284,7 @@ const result = await myWorkflow.start({ id: 1 });
     });
   });
 
-  describe("workflow import resolution", () => {
+  describe("start targets reached through imports", () => {
     let tmpDir: string | undefined;
 
     aroundEach(async (runTest) => {
@@ -1294,64 +1295,262 @@ const result = await myWorkflow.start({ id: 1 });
       }
     });
 
-    function createProject(paths: Record<string, string[]>) {
+    const projectFiles: Record<string, string> = {
+      "tsconfig.json": JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
+      "src/workflows/sub.ts": `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const sub = createWorkflowJob({ name: "sub-job", body: async () => "sub" });
+`,
+      "src/workflows/nested/index.ts": `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const nested = createWorkflowJob({ name: "nested-job", body: async () => "nested" });
+`,
+      "src/workflows/sync.ts": `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+export const syncStep = createWorkflowJob({ name: "sync-step", body: async () => "sync" });
+export const syncWorkflow = createWorkflow({ name: "sync-workflow", mainJob: syncStep });
+export default syncWorkflow;
+`,
+      "src/workflows/barrel.ts": `export { sub } from "./sub";\n`,
+      "src/workflows/made.ts": `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+const step = createWorkflowJob({ name: "made-step", body: async () => "made" });
+const make = (name: string) => createWorkflow({ name, mainJob: step });
+export default make("made-workflow");
+`,
+      "src/lib/server.ts": `export const server = { start: () => "started" };\n`,
+    };
+    const workflowFiles = [
+      "src/workflows/sub.ts",
+      "src/workflows/nested/index.ts",
+      "src/workflows/sync.ts",
+    ];
+
+    type ProjectOptions = {
+      /** List the files through a symlink to the project directory. */
+      listedThroughSymlink?: boolean;
+    };
+
+    async function transformInProject(
+      source: string,
+      listedFiles: readonly string[],
+      options: ProjectOptions = {},
+    ) {
       tmpDir = makeTempDir("start-import-test-");
-      fs.writeFileSync(
-        path.join(tmpDir, "tsconfig.json"),
-        JSON.stringify({ compilerOptions: { paths } }),
+      for (const [file, content] of Object.entries(projectFiles)) {
+        fs.mkdirSync(path.dirname(path.join(tmpDir, file)), { recursive: true });
+        fs.writeFileSync(path.join(tmpDir, file), content);
+      }
+      const dir = tmpDir;
+      const listedRoot = options.listedThroughSymlink ? path.join(dir, "link") : dir;
+      if (options.listedThroughSymlink) fs.symlinkSync(dir, listedRoot, "dir");
+      const context = await buildStartContext(
+        { files: listedFiles.map((file) => path.join(listedRoot, file)) },
+        undefined,
+        listedRoot,
       );
-      return tmpDir;
+      const callerFile = path.join(dir, "src/caller.ts");
+      return { callerFile, run: () => transformStartCallsWithContext(source, context, callerFile) };
     }
 
-    const source = `
-import syncWorkflow from "@/workflow/sync";
+    const reachPaths = [
+      {
+        name: "a relative named import",
+        source: `import { sub } from "./workflows/sub";\nawait sub.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("sub-job", { id: 1 })',
+        failure: { callee: "sub.start", importSource: "./workflows/sub", targetName: "sub-job" },
+      },
+      {
+        name: "a renamed named import",
+        source: `import { sub as child } from "./workflows/sub";\nawait child.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("sub-job", { id: 1 })',
+        failure: { callee: "child.start", importedName: "sub", targetName: "sub-job" },
+      },
+      {
+        name: "a .js specifier",
+        source: `import { sub } from "./workflows/sub.js";\nawait sub.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("sub-job", { id: 1 })',
+        failure: { importSource: "./workflows/sub.js", targetName: "sub-job" },
+      },
+      {
+        name: "a tsconfig paths alias",
+        source: `import { sub } from "@/workflows/sub";\nawait sub.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("sub-job", { id: 1 })',
+        failure: { importSource: "@/workflows/sub", targetName: "sub-job" },
+      },
+      {
+        name: "a directory index",
+        source: `import { nested } from "./workflows/nested";\nawait nested.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("nested-job", { id: 1 })',
+        failure: { importSource: "./workflows/nested", targetName: "nested-job" },
+      },
+      {
+        name: "a tsconfig paths alias to a directory index",
+        source: `import { nested } from "@/workflows/nested";\nawait nested.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("nested-job", { id: 1 })',
+        failure: { importSource: "@/workflows/nested", targetName: "nested-job" },
+      },
+      {
+        name: "a namespace import",
+        source: `import * as jobs from "./workflows/sub";\nawait jobs.sub.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.execJobFunction("sub-job", { id: 1 })',
+        failure: {
+          callee: "jobs.sub.start",
+          importSource: "./workflows/sub",
+          importedName: "sub",
+          targetName: "sub-job",
+        },
+      },
+      {
+        name: "a default import of a workflow",
+        source: `import sync from "./workflows/sync";\nawait sync.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.startWorkflow("sync-workflow", { id: 1 })',
+        failure: { importedName: "default", kind: "workflow", targetName: "sync-workflow" },
+      },
+      {
+        name: "a named import of a workflow",
+        source: `import { syncWorkflow } from "@/workflows/sync";\nawait syncWorkflow.start({ id: 1 });`,
+        rewritten: 'tailor.workflow.startWorkflow("sync-workflow", { id: 1 })',
+        failure: { importedName: "syncWorkflow", kind: "workflow", targetName: "sync-workflow" },
+      },
+    ];
 
-export async function run() {
-  return await syncWorkflow.start({ id: 1 });
-}
-`;
+    test.for(reachPaths)(
+      "rewrites .start() reached through $name when the file is in files",
+      async ({ source, rewritten }) => {
+        const { run } = await transformInProject(source, workflowFiles);
 
-    test("transforms workflow.start() on a workflow imported through a tsconfig paths alias", () => {
-      const dir = createProject({ "@/*": ["./src/*"] });
+        const result = run().toString();
 
-      const result = transformStartCalls(
-        source,
-        new Map(),
-        new Map(),
-        new Map([[path.join(dir, "src/workflow/sync.ts"), "sync-gl-balances"]]),
-        path.join(dir, "src/resolvers/run.ts"),
+        expect(result).toContain(rewritten);
+        expect(result).not.toContain(".start(");
+      },
+    );
+
+    test.for(reachPaths)(
+      "fails the build on .start() reached through $name when the file is not in files",
+      async ({ source, failure }) => {
+        const { run } = await transformInProject(source, []);
+
+        expect(run).toThrow(
+          expect.objectContaining({
+            code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+            context: expect.objectContaining(failure),
+          }),
+        );
+      },
+    );
+
+    test("names the call, the target, and its file when the file is not in files", async () => {
+      const { run, callerFile } = await transformInProject(
+        `import { sub } from "./workflows/sub";\nawait sub.start({ id: 1 });`,
+        [],
       );
+      const targetFile = path.join(path.dirname(callerFile), "workflows/sub.ts");
+      const displayFile = path.relative(process.cwd(), targetFile);
 
-      expect(result).toContain('tailor.workflow.startWorkflow("sync-gl-balances", { id: 1 })');
+      let thrown: unknown;
+      try {
+        run();
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toMatchObject({
+        code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+        message: `sub.start() cannot be rewritten: job "sub-job" is defined in ${displayFile}, which the config's workflow "files" do not include.`,
+        suggestion: `Add ${displayFile} to the workflow "files" in the config (add a workflow service if it has none), or remove the "!" pattern or "ignores" entry that leaves it out.`,
+        context: {
+          file: callerFile,
+          callee: "sub.start",
+          importSource: "./workflows/sub",
+          importedName: "sub",
+          kind: "job",
+          targetName: "sub-job",
+          targetFile,
+        },
+      });
+      expect(getErrorDiagnostics(thrown as Error).location).toEqual({ file: callerFile });
     });
 
-    test("transforms workflow.start() when the alias points at a directory index file", () => {
-      const dir = createProject({ "@/*": ["./src/*"] });
-
-      const result = transformStartCalls(
-        source,
-        new Map(),
-        new Map(),
-        new Map([[path.join(dir, "src/workflow/sync/index.ts"), "sync-gl-balances"]]),
-        path.join(dir, "src/resolvers/run.ts"),
+    test("does not report a file in files that the import reaches through another path", async () => {
+      const { run } = await transformInProject(
+        `import { sub } from "./workflows/sub";\nawait sub.start({ id: 1 });`,
+        workflowFiles,
+        { listedThroughSymlink: true },
       );
 
-      expect(result).toContain('tailor.workflow.startWorkflow("sync-gl-balances", { id: 1 })');
+      expect(run).not.toThrow();
     });
 
-    test("leaves workflow.start() untouched when the alias resolves outside the workflow files", () => {
-      const dir = createProject({ "@/*": ["./src/*"] });
-
-      const result = transformStartCalls(
-        source,
-        new Map(),
-        new Map(),
-        new Map([[path.join(dir, "src/other/sync.ts"), "sync-gl-balances"]]),
-        path.join(dir, "src/resolvers/run.ts"),
+    test("fails the build on .start() of a job the calling file defines when that file is not in files", async () => {
+      const { run, callerFile } = await transformInProject(
+        `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const notify = createWorkflowJob({ name: "notify-job", body: async () => "notify" });
+export const run = async () => await notify.start();`,
+        [],
       );
 
-      expect(result).toContain("syncWorkflow.start({ id: 1 })");
+      expect(run).toThrow(
+        expect.objectContaining({
+          code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+          context: expect.objectContaining({
+            file: callerFile,
+            callee: "notify.start",
+            importSource: undefined,
+            kind: "job",
+            targetName: "notify-job",
+            targetFile: callerFile,
+          }),
+        }),
+      );
     });
+
+    test("leaves .start() on a parameter that shadows a job the calling file defines untouched", async () => {
+      const { run } = await transformInProject(
+        `import { createWorkflowJob } from "@tailor-platform/sdk";
+export const notify = createWorkflowJob({ name: "notify-job", body: async () => "notify" });
+export const run = (notify: { start(): void }) => notify.start();`,
+        [],
+      );
+
+      expect(run().toString()).toContain("notify.start()");
+    });
+
+    test.for([
+      {
+        name: "a re-export from another file",
+        source: `import { sub } from "./workflows/barrel";\nawait sub.start({ id: 1 });`,
+        call: "sub.start({ id: 1 })",
+      },
+      {
+        name: "a workflow a helper function creates",
+        source: `import made from "./workflows/made";\nawait made.start({ id: 1 });`,
+        call: "made.start({ id: 1 })",
+      },
+      {
+        name: "an object that is not a workflow or job",
+        source: `import { server } from "./lib/server";\nserver.start();`,
+        call: "server.start()",
+      },
+      {
+        name: "an import that resolves to no file",
+        source: `import missing from "@/workflows/missing";\nawait missing.start({ id: 1 });`,
+        call: "missing.start({ id: 1 })",
+      },
+      {
+        name: "a binding a parameter shadows",
+        source: `import { sub } from "./workflows/sub";\nexport const run = (sub: { start(): void }) => sub.start();`,
+        call: "sub.start()",
+      },
+    ])(
+      "leaves .start() on $name untouched when its file is not in files",
+      async ({ source, call }) => {
+        const { run } = await transformInProject(source, []);
+
+        expect(run().toString()).toContain(call);
+      },
+    );
   });
 
   describe("undetectable workflow-file imports", () => {
@@ -1705,28 +1904,11 @@ describe("AST Transformer - hasStartCall", () => {
 });
 
 describe("AST Transformer - createStartTransformPlugin", () => {
-  test("returns undefined when the start context has no workflow bindings", () => {
-    expect(
-      createStartTransformPlugin({ modules: new Map() }, createHookFailures()),
-    ).toBeUndefined();
+  test("returns a plugin even when the start context has no workflow bindings", () => {
+    expect(createStartTransformPlugin({ modules: new Map() }, createHookFailures())).toBeDefined();
   });
 
   test("returns undefined when no start context is provided", () => {
     expect(createStartTransformPlugin(undefined, createHookFailures())).toBeUndefined();
-  });
-
-  test("returns a plugin when the start context has workflow bindings", () => {
-    const modules = new Map([
-      [
-        normalizeFilePath(path.resolve("test.ts")),
-        {
-          sourceFile: path.resolve("test.ts"),
-          localBindings: new Map(),
-          exports: new Map(),
-        } satisfies StartModuleBindings,
-      ],
-    ]);
-
-    expect(createStartTransformPlugin({ modules }, createHookFailures())).toBeDefined();
   });
 });
