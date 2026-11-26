@@ -64,7 +64,9 @@ export const repairCommand = defineAppCommand({
     }
 
     if (repaired.length === 0) {
-      logger.info(`No table of replication "${args.name}" needed a repair.`);
+      logger.info(
+        `No table of replication "${args.name}" was queued by this call. Check \`tailor tailordb replication status ${args.name}\`.`,
+      );
     } else {
       logger.success(
         `Tables of ${repaired.join(", ")} in replication "${args.name}" are waiting to be rewritten.`,

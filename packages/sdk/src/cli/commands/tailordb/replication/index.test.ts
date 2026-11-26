@@ -247,13 +247,16 @@ describe("tailordb replication repair", () => {
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
-  test("says so when no table needed a repair", async () => {
+  test("says no table was queued and points at status when none is returned", async () => {
     mocks.client = mockOperatorClient({ repairTailorDBReplication: { typeNames: [] } });
     const info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
     const result = await runCommand(repairCommand, ["analytics"]);
 
     expect(result.success).toBe(true);
-    expect(info).toHaveBeenCalledWith(expect.stringContaining("No table"));
+    expect(info).toHaveBeenCalledWith(expect.stringContaining("was queued by this call"));
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining("tailor tailordb replication status analytics"),
+    );
   });
 });
