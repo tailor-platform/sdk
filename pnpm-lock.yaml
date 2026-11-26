@@ -442,7 +442,7 @@ snapshots:
 				"globals": "17.14.0",
 				"inflection": "3.0.2",
 				"kysely": "0.29.9",
-				"lines-db": "0.19.2",
+				"lines-db": "0.19.3",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
 				"oxc-parser": "0.159.0",
@@ -533,7 +533,7 @@ snapshots:
 			"dependencies": {
 				"@lines-db/studio": "0.16.7",
 				"@politty/zod": "0.7.8",
-				"lines-db": "0.19.2",
+				"lines-db": "0.19.3",
 				"open": "11.0.4",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -1450,7 +1450,7 @@ snapshots:
 			"dependencies": {
 				"@eslint/object-schema": "3.0.5",
 				"debug": "4.4.3",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 			},
 		},
 
@@ -1840,7 +1840,7 @@ snapshots:
 			"peerDependencies": {
 				"lines-db": {
 					"specifier": "^0.19.2",
-					"version": "0.19.2",
+					"version": "0.19.3",
 				},
 				"typescript": {
 					"specifier": ">=5 <7 || >=7.1.0-0",
@@ -4683,7 +4683,7 @@ snapshots:
 				"imurmurhash": "0.1.4",
 				"is-glob": "4.0.3",
 				"json-stable-stringify-without-jsonify": "1.0.1",
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"natural-compare": "1.4.0",
 				"optionator": "0.9.4",
 			},
@@ -4965,7 +4965,7 @@ snapshots:
 			"integrity": "sha512-OwXjVP2svY5EyLY75Vek96C8qK43gqrt4xsZ+qSILdnaEiJPXkd62mcfUSNx/TQErQRdu5uM5kF67sfONragKw==",
 			"engines": {"node": "18 || 20 || >=22"},
 			"dependencies": {
-				"minimatch": "11.0.8",
+				"minimatch": "11.0.9",
 				"minipass": "7.1.3",
 				"path-scurry": "3.0.0",
 			},
@@ -5485,8 +5485,8 @@ snapshots:
 			},
 		},
 
-		"lines-db@0.19.2": {
-			"integrity": "sha512-yRCcaXMVFby6HFdMH9aH17czQ4uZUbT9LXA6EDAfT8xqEwbAuaE/7rqbFAYT4OhKrnFGhNfxm/m8J4CRa5gYEg==",
+		"lines-db@0.19.3": {
+			"integrity": "sha512-AgPn5pjalNu0A35eht/uSaHM/hto+uMspujqGtAsqOidM7iG9OQry0zK89HcW5NApn/EQqe7QRfXvRgnAFjuJw==",
 			"engines": {"node": ">=22.18.0"},
 			"hasBin": true,
 			"peerDependencies": {
@@ -5617,15 +5617,6 @@ snapshots:
 		"mimic-fn@2.1.0": {
 			"integrity": "sha512-OqbOk5oEQeAZ8WXWydlu9HJjz9WVdEIvamMCcXmuqUYjTknH/sqsWvhQ3vgwKFRR1HpjvNBKQ37nbJgYzGqGcg==",
 			"engines": {"node": ">=6"},
-		},
-
-		"minimatch@11.0.8": {
-			"integrity": "sha512-nFQuYSTVrGvysVBps5Ih+0BdnYFN/Cj3C816r6+p7yK+FHrVLGE4O4N9AFwykrlNlvM2HYt+Rad1Uiro6h88Ig==",
-			"engines": {"node": "20 || >=22"},
-			"dependencies": {
-				"@isaacs/nonrecursive-glob-match": "1.1.0",
-				"brace-expansion": "5.0.13",
-			},
 		},
 
 		"minimatch@11.0.9": {
