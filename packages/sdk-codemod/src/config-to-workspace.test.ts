@@ -271,7 +271,7 @@ describe("v3/config-to-workspace", () => {
   });
 
   const uncheckedInvoker =
-    "The conversion cannot tell whether several Auth services of the merged workspace define the machine user this invoker names; write it as { namespace, machineUserName } with the Auth service it belongs to.";
+    "The conversion cannot tell whether this invoker names a machine user that several Auth services of the merged workspace define; if it does, write it as { namespace, machineUserName } with the Auth service it belongs to.";
   const executor = (operation: string, ...before: string[]) => [
     ...before,
     "export default createExecutor({",
@@ -280,7 +280,13 @@ describe("v3/config-to-workspace", () => {
     `  operation: { ${operation} },`,
     "});",
   ];
-  test.each([
+  const mayInvoker =
+    'Invoker "admin" names a machine user several Auth services of the merged workspace define; if it sets the machine user something runs as, write it as { namespace, machineUserName } with the Auth service it belongs to.';
+  const namesAuth = [
+    'invoker: "admin"',
+    'invoker: { namespace: "b-auth", machineUserName: "admin" }',
+  ] as const;
+  test.each<[string, string, string, string[], string[], (readonly [string, string])?]>([
     [
       "a literal when an Auth service's machine users cannot be read",
       "users",
@@ -386,9 +392,117 @@ describe("v3/config-to-workspace", () => {
       executor('kind: "function", body: () => {}, invoker: getInvoker()'),
       [],
     ],
+    [
+      "a literal in an operation whose kind a spread sets",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        '...base, invoker: "admin"',
+        'const base = { kind: "function", body: () => {} } as const;',
+      ),
+      [],
+      namesAuth,
+    ],
+    [
+      "a literal in an operation whose kind is written with as const",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function" as const, body: () => {}, invoker: "admin"'),
+      [],
+      namesAuth,
+    ],
+    [
+      "a literal written with as const",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => {}, invoker: "admin" as const'),
+      [],
+      [
+        'invoker: "admin" as const',
+        'invoker: { namespace: "b-auth", machineUserName: "admin" as const }',
+      ],
+    ],
+    [
+      "a literal in the options a const passes to a workflow's .start()",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: () => workflow.start({}, options)',
+        'const options = { invoker: "admin" } as const;',
+      ),
+      [],
+      namesAuth,
+    ],
+    [
+      "a literal in the options of a workflow's .start() written with as const",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => workflow.start({}, { invoker: "admin" } as const)'),
+      [],
+      namesAuth,
+    ],
+    [
+      "a literal workflow input written with as const",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => workflow.start({ invoker: "admin" } as const)'),
+      [],
+    ],
+    [
+      "a value in an object whose kind names no operation with an invoker",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: (args) => log(entry)',
+        'const entry = { kind: "audit" as const, invoker: getInvoker() };',
+      ),
+      [],
+    ],
+    [
+      "null or undefined",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: () => {}',
+        "const context = { invoker: null }, other = { invoker: undefined as never };",
+      ),
+      [],
+    ],
+    [
+      "a literal in a createResolver() config",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      [
+        "export default createResolver({",
+        '  name: "sync",',
+        '  operation: "query",',
+        '  invoker: "admin",',
+        "  body: () => {},",
+        "});",
+      ],
+      [],
+      namesAuth,
+    ],
+    [
+      "a literal in an object a const passes elsewhere",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor(
+        'kind: "function", body: () => workflow.start(input)',
+        'const input = { invoker: "admin" };',
+      ),
+      [mayInvoker],
+    ],
+    [
+      "a literal in an object a function returns",
+      "{ admin: {} }",
+      "{ admin: {} }",
+      executor('kind: "function", body: () => ({ invoker: "admin" })'),
+      [mayInvoker],
+    ],
   ])(
     "checks an invoker written as %s against the merged Auth services",
-    async (_, aUsers, bUsers, source, messages) => {
+    async (_, aUsers, bUsers, source, messages, rewrite) => {
       const sync = lines(
         'import { createExecutor, createResolver, scheduleTrigger } from "@tailor-platform/sdk";',
         ...source,
@@ -411,7 +525,7 @@ describe("v3/config-to-workspace", () => {
 
       const result = await runOnProject(CODEMODS, project);
 
-      expect(project.read("b/executors/sync.ts")).toBe(sync);
+      expect(project.read("b/executors/sync.ts")).toBe(rewrite ? sync.replace(...rewrite) : sync);
       const line = sync.split("\n").findLastIndex((text) => text.includes("invoker")) + 1;
       expect(
         findingsOf(result)
@@ -588,25 +702,26 @@ describe("v3/config-to-workspace", () => {
     );
   });
 
+  const idpConfig = (name: string) =>
+    lines(
+      'import { defineAuth, defineConfig, defineIdp } from "@tailor-platform/sdk";',
+      "",
+      `const ${name}Idp = defineIdp("${name}-idp", { clients: ["web"] });`,
+      `const ${name}Auth = defineAuth("${name}-auth", { idProvider: ${name}Idp.provider("web", "web") });`,
+      "",
+      "export default defineConfig({",
+      `  name: "${name}",`,
+      `  auth: ${name}Auth,`,
+      `  idp: ${name}Idp,`,
+      '  executor: { files: ["./executors/*.ts"] },',
+      "});",
+    );
+
   test("names the IdP, Auth service, and application of a merged config's triggers and GraphQL operations", async () => {
-    const config = (name: string) =>
-      lines(
-        'import { defineAuth, defineConfig, defineIdp } from "@tailor-platform/sdk";',
-        "",
-        `const ${name}Idp = defineIdp("${name}-idp", { clients: ["web"] });`,
-        `const ${name}Auth = defineAuth("${name}-auth", { idProvider: ${name}Idp.provider("web", "web") });`,
-        "",
-        "export default defineConfig({",
-        `  name: "${name}",`,
-        `  auth: ${name}Auth,`,
-        `  idp: ${name}Idp,`,
-        '  executor: { files: ["./executors/*.ts"] },',
-        "});",
-      );
     const project = createProject({
       "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
-      "a/tailor.config.ts": config("a"),
-      "b/tailor.config.ts": config("b"),
+      "a/tailor.config.ts": idpConfig("a"),
+      "b/tailor.config.ts": idpConfig("b"),
       "a/executors/on-user.ts": lines(
         "export default createExecutor({",
         "  trigger: idpUserCreatedTrigger(),",
@@ -640,6 +755,84 @@ describe("v3/config-to-workspace", () => {
       ),
     );
   });
+
+  test.each([
+    [
+      "with as const",
+      'authAccessTokenIssuedTrigger({ auth: "a-auth" } as const)',
+      '{ kind: "graphql" as const, query: "query { x }" }',
+      '{ kind: "graphql" as const, query: "query { x }", appName: "b" }',
+      [],
+    ],
+    [
+      "with a spread",
+      "authAccessTokenIssuedTrigger({ ...options })",
+      '{ kind: "graphql", ...options, query: "query { x }" }',
+      '{ kind: "graphql", ...options, query: "query { x }" }',
+      [
+        {
+          line: 3,
+          message: "The merged workspace has several Auth services; set `auth` on this trigger.",
+        },
+        {
+          line: 4,
+          message:
+            "The merged workspace has several applications; set `appName` on this GraphQL operation.",
+        },
+      ],
+    ],
+    [
+      "with a computed key",
+      'authAccessTokenIssuedTrigger({ [key]: "a-auth" })',
+      '{ kind: "graphql", [key]: "a", query: "query { x }" }',
+      '{ kind: "graphql", [key]: "a", query: "query { x }" }',
+      [
+        {
+          line: 3,
+          message: "The merged workspace has several Auth services; set `auth` on this trigger.",
+        },
+        {
+          line: 4,
+          message:
+            "The merged workspace has several applications; set `appName` on this GraphQL operation.",
+        },
+      ],
+    ],
+    [
+      "with a spread and the service",
+      'authAccessTokenIssuedTrigger({ ...options, auth: "a-auth" })',
+      '{ kind: "graphql", ...options, appName: "a", query: "query { x }" }',
+      '{ kind: "graphql", ...options, appName: "a", query: "query { x }" }',
+      [],
+    ],
+  ])(
+    "reads the trigger options and GraphQL operation of a merged config written %s",
+    async (_, trigger, operation, converted, findings) => {
+      const executor = (operation: string) =>
+        lines(
+          "const options = {};",
+          "export default createExecutor({",
+          `  trigger: ${trigger},`,
+          `  operation: ${operation},`,
+          "});",
+        );
+      const project = createProject({
+        "package.json": deployedTogether("a/tailor.config.ts", "b/tailor.config.ts"),
+        "a/tailor.config.ts": idpConfig("a"),
+        "b/tailor.config.ts": idpConfig("b"),
+        "b/executors/on-token.ts": executor(operation),
+      });
+
+      const result = await runOnProject(CODEMODS, project);
+
+      expect(project.read("b/executors/on-token.ts")).toBe(executor(converted));
+      expect(
+        findingsOf(result)
+          .filter(({ file }) => file === "b/executors/on-token.ts")
+          .map(({ line, message }) => ({ line, message })),
+      ).toEqual(findings);
+    },
+  );
 
   test("merges the plugins and rewrites their output paths", async () => {
     const project = createProject({

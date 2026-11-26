@@ -1,6 +1,12 @@
 import * as path from "pathe";
 import picomatch from "picomatch";
-import { arrayElements, entryKey, objectEntries, pairValue } from "../ast-grep-helpers";
+import {
+  arrayElements,
+  entryKey,
+  hasDynamicKey,
+  objectEntries,
+  pairValue,
+} from "../ast-grep-helpers";
 import { SOURCE_EXTENSIONS } from "../walk-files";
 import {
   callArguments,
@@ -8,9 +14,11 @@ import {
   entryValue,
   resolveString,
   evaluatesToObject,
+  withTypeOperators,
+  withoutTypeOperators,
   type ConfigModule,
 } from "./config-module";
-import { literalText, type ModuleCache, type Report } from "./project";
+import { literalText, type ModuleCache, type Report, type SourceModule } from "./project";
 import { machineUserAmbiguity, type GroupFacts } from "./sections";
 import { addProperty, applyEdits, replaceNode, type TextEdit } from "./text";
 import type { SgNode } from "@ast-grep/napi";
@@ -152,22 +160,55 @@ function functionFiles(cache: ModuleCache, member: ConfigModule): string[] {
   ];
 }
 
-/**
- * Whether an `invoker` entry sets the machine user something runs as: in an executor operation, a
- * `createResolver()` config, or the options of a workflow's `.start()`.
- * @param entry - The entry
- * @returns Whether it does
- */
-function setsMachineUser(entry: SgNode): boolean {
-  const object = entry.parent()!;
-  const kind = objectEntries(object).find((candidate) => entryKey(candidate) === "kind");
-  if (OPERATION_KINDS_WITH_INVOKER.has(literalText(kind && pairValue(kind)) ?? "")) return true;
-  const call = object.parent()!.parent()!;
-  const position = callArguments(call).findIndex(
-    (argument) => argument.range().start.index === object.range().start.index,
-  );
+function objectKind(cache: ModuleCache, module: SourceModule, object: SgNode): string | null {
+  const kind = objectEntries(object).find((entry) => entryKey(entry) === "kind");
+  return kind ? resolveString(cache, module, entryValue(kind)) : null;
+}
+
+function takesInvoker(call: SgNode, position: number): boolean {
   const name = calleeName(call);
   return name === "createResolver" || (name === "start" && position === 1);
+}
+
+/**
+ * Whether an `invoker` entry sets the machine user something runs as: in an object whose `kind`
+ * names an operation with one, under an `operation` key, or in a `createResolver()` config or the
+ * options of a workflow's `.start()`, also through a `const` the module passes to them. It does not
+ * in an object whose `kind` names another operation or in the argument of another call, and may
+ * anywhere else.
+ * @param cache - Module cache of the project
+ * @param module - Module the entry appears in
+ * @param entry - The entry
+ * @returns Whether it does, does not, or may
+ */
+function invokerUse(
+  cache: ModuleCache,
+  module: SourceModule,
+  entry: SgNode,
+): "sets" | "no" | "may" {
+  const object = entry.parent()!;
+  const kind = objectKind(cache, module, object);
+  if (kind !== null) return OPERATION_KINDS_WITH_INVOKER.has(kind) ? "sets" : "no";
+  const written = withTypeOperators(object);
+  const parent = written.parent()!;
+  if (parent.kind() === "pair") return entryKey(parent) === "operation" ? "sets" : "may";
+  if (parent.kind() === "variable_declarator") {
+    const name = parent.children()[0]?.text();
+    const passed = module.root
+      .findAll({ rule: { kind: "call_expression" } })
+      .some((call) =>
+        callArguments(call).some(
+          (argument, position) => argument.text() === name && takesInvoker(call, position),
+        ),
+      );
+    return passed ? "sets" : "may";
+  }
+  if (parent.kind() !== "arguments") return "may";
+  const call = parent.parent()!;
+  const position = callArguments(call).findIndex(
+    (argument) => argument.range().start.index === written.range().start.index,
+  );
+  return takesInvoker(call, position) ? "sets" : "no";
 }
 
 /**
@@ -220,9 +261,12 @@ export function rewriteFunctionFiles(
       for (const pair of module.root.findAll({
         rule: { any: [{ kind: "pair" }, { kind: "shorthand_property_identifier" }] },
       })) {
-        if (entryKey(pair) !== "invoker" || !setsMachineUser(pair)) continue;
+        if (entryKey(pair) !== "invoker") continue;
+        const use = invokerUse(cache, module, pair);
         const value = entryValue(pair);
-        if (!value) continue;
+        const bare = withoutTypeOperators(value);
+        if (use === "no" || !value || bare?.kind() === "null" || bare?.kind() === "undefined")
+          continue;
         const name = resolveString(cache, module, value);
         if (name === null) {
           if (
@@ -231,7 +275,7 @@ export function rewriteFunctionFiles(
           ) {
             report(
               pair,
-              "The conversion cannot tell whether several Auth services of the merged workspace define the machine user this invoker names; write it as { namespace, machineUserName } with the Auth service it belongs to.",
+              "The conversion cannot tell whether this invoker names a machine user that several Auth services of the merged workspace define; if it does, write it as { namespace, machineUserName } with the Auth service it belongs to.",
             );
           }
           continue;
@@ -244,6 +288,13 @@ export function rewriteFunctionFiles(
           );
         }
         if (ambiguity !== "shared") continue;
+        if (use === "may") {
+          report(
+            pair,
+            `Invoker "${name}" names a machine user several Auth services of the merged workspace define; if it sets the machine user something runs as, write it as { namespace, machineUserName } with the Auth service it belongs to.`,
+          );
+          continue;
+        }
         needs(pair, "Auth service", owner?.authName, (auth) =>
           replaceNode(
             value,
@@ -260,16 +311,19 @@ export function rewriteFunctionFiles(
       );
       if (!trigger) continue;
       const args = call.children().find((child) => child.kind() === "arguments");
-      const options = callArguments(call)[0];
-      if (options && options.kind() !== "object") {
+      const options = withoutTypeOperators(callArguments(call)[0] ?? null);
+      if (
+        options?.kind() === "object" &&
+        objectEntries(options).some((entry) => entryKey(entry) === trigger.option)
+      )
+        continue;
+      if (options && (options.kind() !== "object" || hasDynamicKey(options))) {
         report(
           call,
           `The merged workspace has several ${trigger.plural}; set \`${trigger.option}\` on this trigger.`,
         );
         continue;
       }
-      if (options && objectEntries(options).some((entry) => entryKey(entry) === trigger.option))
-        continue;
       const property = (service: string) => `${trigger.option}: ${JSON.stringify(service)}`;
       needs(call, trigger.singular, owner && trigger.service(owner), (service) =>
         options
@@ -280,10 +334,15 @@ export function rewriteFunctionFiles(
 
     if (facts.appCount > 1) {
       for (const object of module.root.findAll({ rule: { kind: "object" } })) {
-        const entries = objectEntries(object);
-        const kind = entries.find((entry) => entryKey(entry) === "kind");
-        if (!kind || literalText(pairValue(kind)) !== "graphql") continue;
-        if (entries.some((entry) => entryKey(entry) === "appName")) continue;
+        if (objectKind(cache, module, object) !== "graphql") continue;
+        if (objectEntries(object).some((entry) => entryKey(entry) === "appName")) continue;
+        if (hasDynamicKey(object)) {
+          report(
+            object,
+            "The merged workspace has several applications; set `appName` on this GraphQL operation.",
+          );
+          continue;
+        }
         needs(object, "application", owner?.member.appName, (app) =>
           addProperty(module.source, object, `appName: ${JSON.stringify(app)}`),
         );

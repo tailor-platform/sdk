@@ -166,10 +166,25 @@ function resolveValue(
 
 const TYPE_OPERATORS: ReadonlySet<string> = new Set(["as_expression", "satisfies_expression"]);
 
-function withoutTypeOperators(node: SgNode | null): SgNode | null {
+/**
+ * A node without the `as` and `satisfies` expressions written around it.
+ * @param node - Node to narrow
+ * @returns The expression inside them, or the node
+ */
+export function withoutTypeOperators(node: SgNode | null): SgNode | null {
   return node && TYPE_OPERATORS.has(String(node.kind()))
     ? withoutTypeOperators(node.children()[0] ?? null)
     : node;
+}
+
+/**
+ * A node with the `as` and `satisfies` expressions written around it.
+ * @param node - Node to widen
+ * @returns The outermost of those expressions, or the node
+ */
+export function withTypeOperators(node: SgNode): SgNode {
+  const parent = node.parent();
+  return parent && TYPE_OPERATORS.has(String(parent.kind())) ? withTypeOperators(parent) : node;
 }
 
 /**
@@ -189,7 +204,8 @@ export function evaluatesToObject(
 }
 
 /**
- * Read a string a node evaluates to: a literal, or a `const` initialized with one.
+ * Read a string a node evaluates to: a literal, or a `const` initialized with one, also through
+ * `as` or `satisfies`.
  * @param cache - Module cache
  * @param module - Module the node appears in
  * @param node - Node to read
@@ -200,7 +216,7 @@ export function resolveString(
   module: SourceModule,
   node: SgNode | null,
 ): string | null {
-  return literalText(resolveValue(cache, module, node));
+  return literalText(withoutTypeOperators(resolveValue(cache, module, node)));
 }
 
 /**
