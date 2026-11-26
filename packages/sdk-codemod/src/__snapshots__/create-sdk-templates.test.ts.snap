@@ -3,7 +3,19 @@
 exports[`next-major codemods on create-sdk templates > content-mapper 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -23,12 +23,12 @@
+    "tailor.config.ts": "@@ -1,9 +1,9 @@
+-import { defineAuth, defineConfig, definePlugins } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, definePlugins } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ import { user } from "./src/db/user";
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "content-mapper",
+   env: {
+     greeting: "Hello",
+     pageSize: 20,
+@@ -23,12 +23,12 @@
          },
        },
      },
@@ -21,14 +33,34 @@ exports[`next-major codemods on create-sdk templates > content-mapper 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > executor 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -37,18 +37,18 @@
+    "tailor.config.ts": "@@ -1,5 +1,5 @@
+-import { defineAuth, defineConfig, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ 
+ const idp = defineIdp("main-idp", {
+   clients: ["default-idp-client"],
+@@ -22,9 +22,9 @@
+     passwordMaxLength: 128,
+   },
+ });
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "executor",
+   auth: defineAuth("main-auth", {
+     machineUserAttributes: {
+       role: t.string(),
+@@ -37,18 +37,18 @@
        },
      },
    }),
@@ -54,14 +86,34 @@ exports[`next-major codemods on create-sdk templates > executor 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > generators 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -30,12 +30,12 @@
+    "tailor.config.ts": "@@ -1,5 +1,5 @@
+-import { defineAuth, defineConfig, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, defineIdp, definePlugins, t } from "@tailor-platform/sdk";
+ import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
+ import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
+@@ -15,9 +15,9 @@
+   },
+   userAuthPolicy: { allowedEmailDomains: ["*"] },
+ });
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "generators",
+   auth: defineAuth("main-auth", {
+     machineUserAttributes: {
+       role: t.string(),
+@@ -30,12 +30,12 @@
        },
      },
    }),
@@ -86,17 +138,22 @@ exports[`next-major codemods on create-sdk templates > generators 1`] = `
       ],
     },
   ],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > hello-world 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -2,12 +2,12 @@
+    "tailor.config.ts": "@@ -1,13 +1,13 @@
+-import { defineConfig, definePlugins } from "@tailor-platform/sdk";
++import { defineApp, definePlugins } from "@tailor-platform/sdk";
  import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
  
- export default defineConfig({
+-export default defineConfig({
++export default defineApp({
    name: "hello-world",
 -  db: { "main-db": { files: [\`./src/db/*.ts\`] } },
 +  db: { "main-db": { files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
@@ -111,17 +168,23 @@ exports[`next-major codemods on create-sdk templates > hello-world 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > inventory-management 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -3,12 +3,12 @@
+    "tailor.config.ts": "@@ -1,14 +1,14 @@
+-import { defineAuth, defineConfig, definePlugins } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, definePlugins } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
  import { user } from "./src/db/user";
  
- export default defineConfig({
+-export default defineConfig({
++export default defineApp({
    name: "inventory-management",
 -  db: { "main-db": { files: [\`./src/db/*.ts\`] } },
 +  db: { "main-db": { files: [\`./src/db/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
@@ -147,42 +210,97 @@ exports[`next-major codemods on create-sdk templates > inventory-management 1`] 
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > multi-application 1`] = `
 {
   "diffs": {
-    "apps/admin/tailor.config.ts": "@@ -4,7 +4,7 @@
- export default defineConfig({
-   name: "admin",
-   db: {
-     [sharedDb]: { external: true },
+    "apps/admin/tailor.config.ts": "@@ -1,10 +0,0 @@
+-import { defineConfig } from "@tailor-platform/sdk";
+-import { sharedDb } from "../user/tailor.config";
+-
+-export default defineConfig({
+-  name: "admin",
+-  db: {
+-    [sharedDb]: { external: true },
 -    "admin-db": { files: [\`./db/**/*.ts\`] },
-+    "admin-db": { files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] },
-   },
- });
+-  },
+-});
 ",
-    "apps/user/tailor.config.ts": "@@ -3,6 +3,6 @@
- export const sharedDb = "shared-db";
- 
- export default defineConfig({
-   name: "user",
+    "apps/user/tailor.config.ts": "@@ -1,8 +0,0 @@
+-import { defineConfig } from "@tailor-platform/sdk";
+-
+-export const sharedDb = "shared-db";
+-
+-export default defineConfig({
+-  name: "user",
 -  db: { [sharedDb]: { files: [\`./db/**/*.ts\`] } },
-+  db: { [sharedDb]: { files: [\`./db/**/*.ts\`, "!**/*.test.ts", "!**/*.spec.ts"] } },
- });
+-});
+",
+    "tailor.config.ts": "@@ -0,0 +1,14 @@
++import { defineWorkspace } from "@tailor-platform/sdk";
++
++export const sharedDb = "shared-db";
++
++export default defineWorkspace({
++  db: {
++    [sharedDb]: { files: [\`./apps/user/db/**/*.ts\`, "!apps/user/**/*.test.ts", "!apps/user/**/*.spec.ts"] },
++    "admin-db": { files: [\`./apps/admin/db/**/*.ts\`, "!apps/admin/**/*.test.ts", "!apps/admin/**/*.spec.ts"] },
++  },
++  apps: {
++    user: { db: [sharedDb] },
++    admin: { db: [sharedDb, "admin-db"] },
++  },
++});
 ",
   },
-  "llmReviews": [],
-  "warnings": [],
+  "llmReviews": [
+    {
+      "codemodId": "v3/config-to-workspace",
+      "files": [
+        "package.json",
+      ],
+      "findings": [
+        {
+          "excerpt": ""deploy:user": "tailor deploy -c apps/user/tailor.config.ts",",
+          "file": "package.json",
+          "line": 7,
+          "message": "This script names apps/user/tailor.config.ts, which the conversion merged into tailor.config.ts.",
+        },
+        {
+          "excerpt": ""deploy:admin": "tailor deploy -c apps/admin/tailor.config.ts",",
+          "file": "package.json",
+          "line": 8,
+          "message": "This script names apps/admin/tailor.config.ts, which the conversion merged into tailor.config.ts.",
+        },
+      ],
+    },
+  ],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > resolver 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -18,12 +18,12 @@
+    "tailor.config.ts": "@@ -1,8 +1,8 @@
+-import { defineAuth, defineConfig, definePlugins, t } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, definePlugins, t } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "resolver",
+   env: {
+     appName: "Resolver Template",
+     version: 1,
+@@ -18,12 +18,12 @@
          },
        },
      },
@@ -200,16 +318,29 @@ exports[`next-major codemods on create-sdk templates > resolver 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > static-web-site 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -54,9 +54,9 @@
+    "tailor.config.ts": "@@ -1,5 +1,5 @@
+-import { defineAuth, defineConfig, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, defineIdp, defineStaticWebSite } from "@tailor-platform/sdk";
+ import { user } from "./src/db/user";
  
- export default defineConfig({
+ const website = defineStaticWebSite("my-frontend", {
+   description: "Frontend application with login",
+@@ -51,12 +51,12 @@
+   },
+   idProvider: idp.provider("web-provider", "default-idp-client"),
+ });
+ 
+-export default defineConfig({
++export default defineApp({
    name: "static-web-site",
    cors: [website.url],
 -  db: { "main-db": { files: ["./src/db/*.ts"] } },
@@ -221,14 +352,27 @@ exports[`next-major codemods on create-sdk templates > static-web-site 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > tailordb 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -19,8 +19,8 @@
+    "tailor.config.ts": "@@ -1,8 +1,8 @@
+-import { defineAuth, defineConfig, definePlugins, t } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, definePlugins, t } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "tailordb",
+   auth: defineAuth("main-auth", {
+     machineUserAttributes: {
+       role: t.string(),
+@@ -19,8 +19,8 @@
          },
        },
      },
@@ -241,14 +385,27 @@ exports[`next-major codemods on create-sdk templates > tailordb 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;
 
 exports[`next-major codemods on create-sdk templates > workflow 1`] = `
 {
   "diffs": {
-    "tailor.config.ts": "@@ -14,17 +14,17 @@
+    "tailor.config.ts": "@@ -1,8 +1,8 @@
+-import { defineAuth, defineConfig, definePlugins, t } from "@tailor-platform/sdk";
++import { defineAuth, defineApp, definePlugins, t } from "@tailor-platform/sdk";
+ import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
+ 
+-export default defineConfig({
++export default defineApp({
+   name: "workflow",
+   auth: defineAuth("main-auth", {
+     machineUserAttributes: {
+       role: t.string(),
+@@ -14,17 +14,17 @@
          },
        },
      },
@@ -272,6 +429,8 @@ exports[`next-major codemods on create-sdk templates > workflow 1`] = `
 ",
   },
   "llmReviews": [],
-  "warnings": [],
+  "warnings": [
+    "tailor.config.ts: the next \`tailor deploy\` asks to take over the resources that defineConfig() deployed. Check its plan with \`tailor deploy --dry-run\` first, then run it where it can prompt, or pass --yes.",
+  ],
 }
 `;

@@ -124,6 +124,21 @@ export function entryKey(entry: SgNode): string | null {
   return stringValue(key);
 }
 
+/** The entries of an object literal whose every key is static, or null for any other node. */
+export function staticEntries(node: SgNode | null | undefined): SgNode[] | null {
+  if (node?.kind() !== "object") return null;
+  const entries = objectEntries(node);
+  return entries.every((entry) => entryKey(entry) !== null) ? entries : null;
+}
+
+/** Whether an object literal has a spread or a computed key, either of which may set any key. */
+export function hasDynamicKey(object: SgNode): boolean {
+  return objectEntries(object).some(
+    (entry) =>
+      entry.kind() === "spread_element" || entry.children()[0]?.kind() === "computed_property_name",
+  );
+}
+
 /** The comma that separates `node` from the next element or entry, skipping comments. */
 export function followingComma(node: SgNode): SgNode | null {
   const end = node.range().end.index;

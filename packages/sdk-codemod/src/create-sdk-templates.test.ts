@@ -52,20 +52,17 @@ describe.skipIf(codemods.length === 0)("next-major codemods on create-sdk templa
 
     const result = await runCodemods(codemods, projectDir, false);
 
+    const read = (dir: string, file: string) =>
+      fs.existsSync(path.join(dir, file)) ? fs.readFileSync(path.join(dir, file), "utf-8") : "";
     const diffs = Object.fromEntries(
-      result.filesModified
+      [...result.filesModified, ...result.filesDeleted]
         .map((file) => path.relative(projectDir, file))
         .toSorted()
         .map((file) => [
           file,
-          createPatch(
-            file,
-            fs.readFileSync(path.join(templateDir, file), "utf-8"),
-            fs.readFileSync(path.join(projectDir, file), "utf-8"),
-            undefined,
-            undefined,
-            { headerOptions: OMIT_HEADERS },
-          ),
+          createPatch(file, read(templateDir, file), read(projectDir, file), undefined, undefined, {
+            headerOptions: OMIT_HEADERS,
+          }),
         ]),
     );
     expect({

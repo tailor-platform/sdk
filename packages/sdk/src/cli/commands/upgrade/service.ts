@@ -10,6 +10,15 @@ interface UpgradeOptions {
   path: string;
 }
 
+function printFiles(heading: string, files: readonly string[]): void {
+  if (files.length === 0) return;
+  logger.log("");
+  logger.info(`${heading} (${files.length}):`);
+  for (const file of files) {
+    logger.log(`  ${styles.path(file)}`);
+  }
+}
+
 /**
  * Print the upgrade summary to the terminal.
  * @param output - The parsed JSON output from sdk-codemod
@@ -26,15 +35,8 @@ function printUpgradeSummary(output: RunOutput, dryRun: boolean): void {
     `Upgrade complete: ${styles.success(`${output.codemodsApplied} applied`)}, ${styles.dim(`${output.codemodsSkipped} skipped`)} (${total} total codemods)`,
   );
 
-  if (output.filesModified.length > 0) {
-    logger.log("");
-    logger.info(
-      `${dryRun ? "Files that would be modified" : "Modified files"} (${output.filesModified.length}):`,
-    );
-    for (const file of output.filesModified) {
-      logger.log(`  ${styles.path(file)}`);
-    }
-  }
+  printFiles(dryRun ? "Files that would be modified" : "Modified files", output.filesModified);
+  printFiles(dryRun ? "Files that would be deleted" : "Deleted files", output.filesDeleted ?? []);
 
   if (output.warnings.length > 0) {
     logger.log("");

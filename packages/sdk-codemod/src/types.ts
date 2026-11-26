@@ -148,6 +148,51 @@ export type ReviewFindingsFn = (
   targetPath: string,
 ) => Promise<LlmReviewFinding[]> | LlmReviewFinding[];
 
+/** The project a project transform reads, as every per-file transform left it. */
+export interface ProjectFiles {
+  /** Absolute project directory. */
+  root: string;
+  /** Project-relative paths of the files the runner walks, posix-separated. */
+  paths: readonly string[];
+  /**
+   * Read a file as every per-file transform and every earlier project transform left it.
+   * @param relativePath - Path relative to the project directory; may leave it with `..`
+   * @returns The file's contents, or undefined when it does not exist or is not a file
+   */
+  read(relativePath: string): string | undefined;
+  /**
+   * Whether a file or directory exists, after the changes of earlier project transforms.
+   * @param relativePath - Path relative to the project directory; may leave it with `..`
+   * @returns Whether it exists
+   */
+  exists(relativePath: string): boolean;
+}
+
+/** What a project transform changes, by paths relative to the project directory. */
+export interface ProjectChanges {
+  /** New contents by path; a missing file is created. */
+  writes?: Record<string, string>;
+  /** Files to delete. */
+  deletes?: string[];
+  /**
+   * Deleted files whose code now lives in a written file, by deleted path: findings on a deleted
+   * file are reported at the line of that file their excerpt moved to.
+   */
+  mergedInto?: Record<string, string>;
+  /** Follow-up steps for the user. */
+  warnings?: string[];
+  /** Code the transform left for a manual migration, reviewed with the codemod's `prompt`. */
+  findings?: LlmReviewFinding[];
+}
+
+/**
+ * Transform exported as `transformProject`, for a migration that reads or changes several
+ * files at once: it runs after every per-file transform, on their results.
+ */
+export type ProjectTransformFn = (
+  project: ProjectFiles,
+) => Promise<ProjectChanges> | ProjectChanges;
+
 /** A batch of files an LLM should review for one codemod, with its prompt. */
 export interface LlmReview {
   /** Codemod id that flagged these files. */
@@ -167,7 +212,10 @@ export interface RunOutput {
   runner: RunnerMetadata;
   codemodsApplied: number;
   codemodsSkipped: number;
+  /** Files a codemod changed or created. */
   filesModified: string[];
+  /** Files a codemod deleted. */
+  filesDeleted: string[];
   warnings: string[];
   errors: Array<{ codemodId: string; message: string }>;
   /** Files flagged for LLM-assisted review, grouped by codemod. */

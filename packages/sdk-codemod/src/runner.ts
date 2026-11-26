@@ -6,6 +6,7 @@ import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { takesSeparateGlobalValue } from "./command-line-pattern";
+import { lineOfIndex, movedIndex, prefixLengths } from "./moved-text";
 import { sourceArrayElements, sourceStaticStringContent } from "./source-strings";
 import { TAILOR_CLI_VALUE_FLAG_SET } from "./tailor-cli-tokens";
 import { shouldSkipDirectory, SOURCE_EXTENSIONS, walkFiles } from "./walk-files";
@@ -15,6 +16,9 @@ import type {
   CodemodPatternGroup,
   LlmReview,
   LlmReviewFinding,
+  ProjectChanges,
+  ProjectFiles,
+  ProjectTransformFn,
   ReviewFindingsFn,
 } from "./types";
 import type { SgNode } from "@ast-grep/napi";
@@ -51,7 +55,10 @@ export type TransformFn = (
 /** Result of running codemods on a project. */
 export interface CodemodRunResult {
   changed: boolean;
+  /** Absolute paths of the files the codemods changed or created. */
   filesModified: string[];
+  /** Absolute paths of the files the codemods deleted. */
+  filesDeleted: string[];
   warnings: string[];
   /** IDs of codemods that actually produced changes in at least one file. */
   appliedCodemodIds: Set<string>;
@@ -94,13 +101,15 @@ function writeDiffLine(line: string, style?: StyleFn): void {
  * @param before - Original content
  * @param after - Transformed content
  */
-function printDiff(filePath: string, before: string, after: string): void {
-  const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
+function printDiff(filePath: string, before: string | null, after: string | null): void {
+  const patch = structuredPatch(filePath, filePath, before ?? "", after ?? "", "", "", {
+    context: 3,
+  });
   if (patch.hunks.length === 0) return;
 
   writeDiffLine("");
-  writeDiffLine(`--- ${filePath}`, color.bold);
-  writeDiffLine(`+++ ${filePath}`, color.bold);
+  writeDiffLine(`--- ${before === null ? "/dev/null" : filePath}`, color.bold);
+  writeDiffLine(`+++ ${after === null ? "/dev/null" : filePath}`, color.bold);
 
   for (const hunk of patch.hunks) {
     writeDiffLine(
@@ -121,21 +130,31 @@ function printDiff(filePath: string, before: string, after: string): void {
 
 /**
  * Load a transform module from a TypeScript file path.
- * Expects the module to have a default export that is a TransformFn.
+ * Expects the module to export a per-file TransformFn as its default export, a
+ * ProjectTransformFn as `transformProject`, or both.
  * @param scriptPath - Absolute path to the transform script
- * @returns The transform function and optional review detectors
+ * @returns The transform functions and optional review detectors
  */
 async function loadTransformModule(scriptPath: string): Promise<{
-  transform: TransformFn;
+  transform?: TransformFn;
+  transformProject?: ProjectTransformFn;
   reviewFindings?: ReviewFindingsFn;
   reviewFindingsBeforeTransform?: ReviewFindingsFn;
 }> {
   const mod = await import(url.pathToFileURL(scriptPath).href);
-  if (typeof mod.default !== "function") {
-    throw new Error(`Transform at ${scriptPath} does not have a default export function`);
+  const transform = typeof mod.default === "function" ? (mod.default as TransformFn) : undefined;
+  const transformProject =
+    typeof mod.transformProject === "function"
+      ? (mod.transformProject as ProjectTransformFn)
+      : undefined;
+  if (!transform && !transformProject) {
+    throw new Error(
+      `Transform at ${scriptPath} exports neither a default transform function nor transformProject`,
+    );
   }
   return {
-    transform: mod.default as TransformFn,
+    transform,
+    transformProject,
     reviewFindings:
       typeof mod.reviewFindings === "function"
         ? (mod.reviewFindings as ReviewFindingsFn)
@@ -152,6 +171,7 @@ interface LoadedTransform {
   id: string;
   /** Undefined for codemod-less ("manual") entries that ship only guidance. */
   transform?: TransformFn;
+  transformProject?: ProjectTransformFn;
   reviewFindings?: ReviewFindingsFn;
   reviewFindingsBeforeTransform?: ReviewFindingsFn;
   matches: (relativePath: string) => boolean;
@@ -504,6 +524,26 @@ function legacyPatternWarnings(
   });
 }
 
+function movedLine(prior: string | null, finding: LlmReviewFinding, content: string): number {
+  const source = prior ?? "";
+  const lines = source.split("\n");
+  const line = lines[finding.line - 1] ?? "";
+  const column =
+    prefixLengths(finding.excerpt)
+      .map((size) => line.indexOf(finding.excerpt.slice(0, size)))
+      .find((index) => index !== -1) ?? -1;
+  const at =
+    column === -1
+      ? content.indexOf(finding.excerpt)
+      : movedIndex(
+          source,
+          lines.slice(0, finding.line - 1).reduce((sum, text) => sum + text.length + 1, column),
+          line.length - column,
+          content,
+        );
+  return at === -1 ? 1 : lineOfIndex(content, at);
+}
+
 function lineRemapper(before: string, after: string): (line: number) => number {
   const hunks = structuredPatch("", "", before, after, "", "", { context: 0 }).hunks;
   const lastLine = Math.max(1, after.split("\n").length - (after.endsWith("\n") ? 1 : 0));
@@ -535,6 +575,116 @@ function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number
   );
 }
 
+function readDiskFile(absolute: string): string | null {
+  try {
+    return fs.statSync(absolute).isFile() ? fs.readFileSync(absolute, "utf-8") : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The project's files as the codemods have changed them so far, before anything is written. */
+class ProjectOverlay {
+  private readonly originals = new Map<string, string | null>();
+  private readonly contents = new Map<string, string | null>();
+
+  constructor(private readonly root: string) {}
+
+  set(absolute: string, original: string | null, content: string | null): void {
+    if (!this.originals.has(absolute)) this.originals.set(absolute, original);
+    this.contents.set(absolute, content);
+  }
+
+  original(absolute: string): string | null {
+    return this.originals.has(absolute) ? this.originals.get(absolute)! : readDiskFile(absolute);
+  }
+
+  current(absolute: string): string | null {
+    return this.contents.has(absolute) ? this.contents.get(absolute)! : readDiskFile(absolute);
+  }
+
+  snapshot(): Map<string, string | null> {
+    return new Map(this.contents);
+  }
+
+  view(paths: ReadonlySet<string>): ProjectFiles {
+    return {
+      root: this.root,
+      paths: [...paths],
+      read: (relativePath) => this.current(path.resolve(this.root, relativePath)) ?? undefined,
+      exists: (relativePath) => {
+        const absolute = path.resolve(this.root, relativePath);
+        if (this.contents.has(absolute)) return this.contents.get(absolute) !== null;
+        const prefix = `${absolute}/`;
+        for (const [file, content] of this.contents) {
+          if (content !== null && file.startsWith(prefix)) return true;
+        }
+        return fs.existsSync(absolute);
+      },
+    };
+  }
+
+  /**
+   * Record a project transform's changes.
+   * @param changes - The transform's changes
+   * @param paths - Project-relative paths of the existing files, kept in step with the changes
+   * @returns Whether anything changed
+   */
+  apply(changes: ProjectChanges, paths: Set<string>): boolean {
+    let changed = false;
+    for (const [relativePath, content] of Object.entries(changes.writes ?? {})) {
+      const absolute = path.resolve(this.root, relativePath);
+      if (this.current(absolute) === content) continue;
+      this.set(absolute, readDiskFile(absolute), content);
+      this.track(absolute, paths, true);
+      changed = true;
+    }
+    for (const relativePath of changes.deletes ?? []) {
+      const absolute = path.resolve(this.root, relativePath);
+      if (this.current(absolute) === null) continue;
+      this.set(absolute, readDiskFile(absolute), null);
+      this.track(absolute, paths, false);
+      changed = true;
+    }
+    return changed;
+  }
+
+  private track(absolute: string, paths: Set<string>, present: boolean): void {
+    const relative = path.relative(this.root, absolute);
+    if (relative.startsWith("../")) return;
+    if (present) paths.add(relative);
+    else paths.delete(relative);
+  }
+
+  /**
+   * Write the changes, every written file before any deletion, or print them as diffs in a dry run.
+   * @param dryRun - Whether to print instead of writing
+   * @returns The absolute paths of the changed or created files and of the deleted files
+   */
+  async commit(dryRun: boolean): Promise<{ filesModified: string[]; filesDeleted: string[] }> {
+    const changed = [...this.contents].filter(
+      ([absolute, content]) => content !== (this.originals.get(absolute) ?? null),
+    );
+    const filesModified = changed.flatMap(([absolute, content]) =>
+      content === null ? [] : [absolute],
+    );
+    const filesDeleted = changed.flatMap(([absolute, content]) =>
+      content === null ? [absolute] : [],
+    );
+    for (const [absolute, content] of changed) {
+      if (dryRun) printDiff(absolute, this.originals.get(absolute) ?? null, content);
+    }
+    if (dryRun) return { filesModified, filesDeleted };
+    for (const [absolute, content] of changed) {
+      if (content === null) continue;
+      await fs.promises.mkdir(path.dirname(absolute), { recursive: true });
+      await fs.promises.writeFile(absolute, content, "utf-8");
+    }
+    for (const absolute of filesDeleted) await fs.promises.rm(absolute, { force: true });
+    return { filesModified, filesDeleted };
+  }
+}
+
 /**
  * Run multiple codemods on a project directory using in-memory chaining.
  * Each file is processed through all transforms whose filePatterns match it.
@@ -542,6 +692,9 @@ function compareReviewFindings(a: LlmReviewFinding, b: LlmReviewFinding): number
  * Review detection (reviewFindings and suspicious patterns) runs against each
  * codemod's own position in the transform chain, so a later codemod's rewrite
  * cannot hide an earlier codemod's findings.
+ *
+ * Transforms exported as `transformProject` then run in order on the results, and may
+ * create and delete files. Nothing is written until every transform has run.
  *
  * In dry-run mode, colorized diffs are printed to stderr.
  * @param codemods - Codemod packages to run (with resolved script paths)
@@ -561,6 +714,7 @@ export async function runCodemods(
     loaded.push({
       id: codemod.id,
       transform: loadedModule?.transform,
+      transformProject: loadedModule?.transformProject,
       reviewFindings: loadedModule?.reviewFindings,
       reviewFindingsBeforeTransform: loadedModule?.reviewFindingsBeforeTransform,
       matches: codemodFileMatcher(codemod),
@@ -578,10 +732,11 @@ export async function runCodemods(
   const needsJsonStrings = loaded.some((lt) => lt.jsonStringSuspiciousPatterns.length > 0);
 
   const absoluteTargetPath = path.resolve(targetPath);
-  const filesModified: string[] = [];
-  const warnings: string[] = [];
+  const overlay = new ProjectOverlay(absoluteTargetPath);
+  const warningsByFile = new Map<string, string[]>();
   const appliedCodemodIds = new Set<string>();
   const seen = new Set<string>();
+  const walked: string[] = [];
   const suspiciousByCodemod = new Map<string, Set<string>>();
   const findingsByCodemod = new Map<string, LlmReviewFinding[]>();
 
@@ -589,6 +744,7 @@ export async function runCodemods(
     const absolute = path.resolve(targetPath, relative);
     if (seen.has(absolute)) continue;
     seen.add(absolute);
+    walked.push(relative);
 
     const matchedTransforms = loaded.filter((lt) => lt.matches(relative));
     if (matchedTransforms.length === 0) continue;
@@ -614,14 +770,7 @@ export async function runCodemods(
       if (lt.prompt) reviewTargets.push({ lt, input, snapshot: current });
     }
 
-    if (current !== original) {
-      filesModified.push(absolute);
-      if (dryRun) {
-        printDiff(absolute, original, current);
-      } else {
-        await fs.promises.writeFile(absolute, current, "utf-8");
-      }
-    }
+    if (current !== original) overlay.set(absolute, original, current);
 
     const residualBySnapshot = new Map<string, ResidualEntry>();
     const residualFor = (content: string): ResidualEntry => {
@@ -641,8 +790,9 @@ export async function runCodemods(
 
     const { residual: residualContent, sourceString: sourceStringContent } = residualFor(current);
     const sourceTextContent = sourceTextContentForResidualMatching(relative, current);
-    warnings.push(
-      ...legacyPatternWarnings(
+    warningsByFile.set(
+      relative,
+      legacyPatternWarnings(
         relative,
         residualContent,
         sourceStringContent,
@@ -710,6 +860,69 @@ export async function runCodemods(
     }
   }
 
+  const projectWarnings: string[] = [];
+  const projectTransforms = loaded.filter((lt) => lt.transformProject);
+  if (projectTransforms.length > 0) {
+    const afterPerFile = overlay.snapshot();
+    const paths = new Set(walked);
+    const mergedInto = new Map<string, string>();
+    const projectFindings = new Map<string, LlmReviewFinding[]>();
+    for (const lt of projectTransforms) {
+      const changes = await lt.transformProject!(overlay.view(paths));
+      if (overlay.apply(changes, paths)) appliedCodemodIds.add(lt.id);
+      projectWarnings.push(...(changes.warnings ?? []));
+      for (const [from, to] of Object.entries(changes.mergedInto ?? {})) mergedInto.set(from, to);
+      if (changes.findings && changes.findings.length > 0) {
+        projectFindings.set(lt.id, [...(projectFindings.get(lt.id) ?? []), ...changes.findings]);
+      }
+    }
+    const isDeleted = (relative: string) =>
+      overlay.current(path.resolve(absoluteTargetPath, relative)) === null;
+    const relocate = (finding: LlmReviewFinding, fromPerFile: boolean): LlmReviewFinding[] => {
+      const absolute = path.resolve(absoluteTargetPath, finding.file);
+      const final = overlay.current(absolute);
+      const prior = afterPerFile.get(absolute) ?? overlay.original(absolute);
+      if (final === null) {
+        const target = mergedInto.get(finding.file);
+        const content = target && overlay.current(path.resolve(absoluteTargetPath, target));
+        if (!target || !content) return [];
+        return [{ ...finding, file: target, line: movedLine(prior, finding, content) }];
+      }
+      if (!fromPerFile || prior === null || prior === final) return [finding];
+      return [{ ...finding, line: lineRemapper(prior, final)(finding.line) }];
+    };
+    for (const [codemodId, findings] of findingsByCodemod) {
+      findingsByCodemod.set(
+        codemodId,
+        findings.flatMap((finding) => relocate(finding, true)),
+      );
+    }
+    for (const [codemodId, findings] of projectFindings) {
+      findingsByCodemod.set(codemodId, [
+        ...(findingsByCodemod.get(codemodId) ?? []),
+        ...findings.flatMap((finding) => relocate(finding, false)),
+      ]);
+      if (!suspiciousByCodemod.has(codemodId)) suspiciousByCodemod.set(codemodId, new Set());
+    }
+    for (const relative of walked) {
+      if (isDeleted(relative) && !mergedInto.has(relative)) warningsByFile.delete(relative);
+    }
+    for (const [codemodId, files] of suspiciousByCodemod) {
+      const relocated = new Set(
+        [...files].flatMap((file) => (!isDeleted(file) ? [file] : (mergedInto.get(file) ?? []))),
+      );
+      for (const finding of findingsByCodemod.get(codemodId) ?? []) relocated.add(finding.file);
+      if (relocated.size === 0) suspiciousByCodemod.delete(codemodId);
+      else suspiciousByCodemod.set(codemodId, relocated);
+    }
+  }
+
+  const { filesModified, filesDeleted } = await overlay.commit(dryRun);
+  const warnings = [
+    ...walked.flatMap((relative) => warningsByFile.get(relative) ?? []),
+    ...projectWarnings,
+  ];
+
   const llmReviews: LlmReview[] = [];
   const loadedIds = new Set(loaded.map((lt) => lt.id));
   for (const lt of loaded) {
@@ -720,7 +933,8 @@ export async function runCodemods(
       lt.sourceStringSuspiciousPatterns.length > 0 ||
       lt.jsonStringSuspiciousPatterns.length > 0 ||
       lt.reviewFindings ||
-      lt.reviewFindingsBeforeTransform
+      lt.reviewFindingsBeforeTransform ||
+      lt.transformProject
     ) {
       // File-scoped: only surface when a suspicious pattern actually matched.
       const files = suspiciousByCodemod.get(lt.id);
@@ -742,8 +956,9 @@ export async function runCodemods(
   }
 
   return {
-    changed: filesModified.length > 0,
+    changed: filesModified.length > 0 || filesDeleted.length > 0,
     filesModified,
+    filesDeleted,
     warnings,
     appliedCodemodIds,
     llmReviews,
