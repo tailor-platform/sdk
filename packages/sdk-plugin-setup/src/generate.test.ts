@@ -470,13 +470,6 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain('echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"');
     expect(baseSetup).toContain("actions/setup-node@");
     expect(baseSetup).toContain("id: tailor-setup-base-yarn");
-    expect(baseSetup).toContain('corepack_dir="$RUNNER_TEMP/tailor-corepack"');
-    expect(baseSetup).toContain('bin_dir="$corepack_dir/bin"');
-    expect(baseSetup).toContain('if [ "$RUNNER_OS" = Windows ]; then bin_dir="$corepack_dir"; fi');
-    expect(baseSetup).toContain('npm install --global --prefix "$corepack_dir" corepack@');
-    expect(baseSetup).toContain('"$bin_dir/corepack" enable --install-directory "$bin_dir" yarn');
-    expect(baseSetup).toContain('echo "$bin_dir" >> "$GITHUB_PATH"');
-    expect(baseSetup).not.toMatch(/^\s*corepack enable/m);
     expect(baseSetup).toContain("oven-sh/setup-bun@");
     expect(baseSetup).toContain("pnpm install --frozen-lockfile");
     expect(baseSetup).toContain("npm ci");
@@ -1051,6 +1044,61 @@ describe("ERD preview steps", () => {
       );
 
       expect(outputs["package-manager"]).toBe(expected);
+    },
+  );
+
+  const FAKE_NPM = `#!/usr/bin/env bash
+set -euo pipefail
+[ "$1 $2 $3" = "install --global --prefix" ]
+[[ $5 == corepack@* ]]
+bin_dir=$4/bin
+if [ "$RUNNER_OS" = Windows ]; then bin_dir=$4; fi
+mkdir -p "$bin_dir"
+for bin in pnpm pnpx yarn yarnpkg; do : > "$bin_dir/$bin"; done
+cat > "$bin_dir/corepack" <<'COREPACK'
+#!/usr/bin/env bash
+set -euo pipefail
+[ "$1 $2 $4" = "enable --install-directory yarn" ]
+: > "$3/yarn"
+: > "$3/yarnpkg"
+COREPACK
+chmod +x "$bin_dir/corepack"
+`;
+
+  test.each(["Linux", "Windows"])(
+    "puts only Corepack's yarn shims on PATH for a yarn base on %s",
+    (runnerOs) => {
+      const fakeBin = path.join(workDir, "fake-bin");
+      const runnerTemp = path.join(workDir, "runner-temp");
+      const githubPath = path.join(workDir, "github-path");
+      fs.mkdirSync(fakeBin);
+      fs.mkdirSync(runnerTemp);
+      fs.mkdirSync(path.join(workDir, ".tailor-erd-base"));
+      fs.writeFileSync(githubPath, "");
+      fs.writeFileSync(path.join(fakeBin, "npm"), FAKE_NPM, { mode: 0o755 });
+      fs.writeFileSync(path.join(fakeBin, "corepack"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+      const { content } = renderBranchWorkflow({
+        ...branchBase,
+        erdPreview: { namespaces: ["main"] },
+      });
+      const step = (parseYAML(content) as GeneratedWorkflow).jobs["tailor-erd-preview"]?.steps.find(
+        (candidate) => candidate.id === "tailor-setup-base-yarn",
+      );
+
+      execFileSync("bash", ["-c", String(step?.run)], {
+        cwd: path.join(workDir, ".tailor-erd-base"),
+        env: {
+          PATH: `${fakeBin}:/usr/bin:/bin`,
+          RUNNER_OS: runnerOs,
+          RUNNER_TEMP: runnerTemp,
+          GITHUB_PATH: githubPath,
+        },
+        stdio: "pipe",
+      });
+
+      const pathDirs = fs.readFileSync(githubPath, "utf-8").trim().split("\n");
+      expect(pathDirs).toEqual([path.join(runnerTemp, "tailor-corepack/shims")]);
+      expect(fs.readdirSync(pathDirs[0]!).toSorted()).toEqual(["yarn", "yarnpkg"]);
     },
   );
 });
