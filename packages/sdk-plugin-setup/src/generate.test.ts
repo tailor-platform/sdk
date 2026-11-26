@@ -43,6 +43,15 @@ const BRANCH_TEMPLATE = fs.readFileSync(
 const [, UPLOAD_ARTIFACT_GITHUB_COM, UPLOAD_ARTIFACT_GITHUB_COM_VERSION] =
   /uses: (actions\/upload-artifact@[0-9a-f]{40}) # (v\S+)/.exec(BRANCH_TEMPLATE) ?? [];
 const UPLOAD_ARTIFACT_V3 = "actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf";
+const RENOVATE_MANAGERS = (
+  JSON.parse(fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8")) as {
+    customManagers: {
+      managerFilePatterns: string[];
+      matchStrings: string[];
+      depNameTemplate?: string;
+    }[];
+  }
+).customManagers;
 
 const branchBase: RenderBranchParams = {
   workspaceName: "my-app",
@@ -461,7 +470,13 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain('echo "pnpm-version=$base_pnpm_version" >> "$GITHUB_OUTPUT"');
     expect(baseSetup).toContain("actions/setup-node@");
     expect(baseSetup).toContain("id: tailor-setup-base-yarn");
-    expect(baseSetup).toContain("corepack enable");
+    expect(baseSetup).toContain('corepack_dir="$RUNNER_TEMP/tailor-corepack"');
+    expect(baseSetup).toContain('bin_dir="$corepack_dir/bin"');
+    expect(baseSetup).toContain('if [ "$RUNNER_OS" = Windows ]; then bin_dir="$corepack_dir"; fi');
+    expect(baseSetup).toContain('npm install --global --prefix "$corepack_dir" corepack@');
+    expect(baseSetup).toContain('"$bin_dir/corepack" enable --install-directory "$bin_dir" yarn');
+    expect(baseSetup).toContain('echo "$bin_dir" >> "$GITHUB_PATH"');
+    expect(baseSetup).not.toMatch(/^\s*corepack enable/m);
     expect(baseSetup).toContain("oven-sh/setup-bun@");
     expect(baseSetup).toContain("pnpm install --frozen-lockfile");
     expect(baseSetup).toContain("npm ci");
@@ -469,6 +484,21 @@ describe("renderBranchWorkflow", () => {
     expect(baseSetup).toContain("yarn install --immutable");
     expect(baseSetup).toContain("yarn install --frozen-lockfile");
     expect(baseSetup).toContain("bun install --frozen-lockfile");
+  });
+
+  test("Renovate's custom manager regex matches the Corepack pin in the ERD base setup", () => {
+    const manager = RENOVATE_MANAGERS.find((m) => m.depNameTemplate === "corepack");
+    const filePattern = manager?.managerFilePatterns[0]?.slice(1, -1);
+
+    expect(filePattern).toBeDefined();
+    expect(new RegExp(filePattern!).test("packages/sdk-plugin-setup/src/branch.workflow.yml")).toBe(
+      true,
+    );
+    expect(
+      [...BRANCH_TEMPLATE.matchAll(new RegExp(manager!.matchStrings[0]!, "g"))].map(
+        (match) => match.groups?.currentValue,
+      ),
+    ).toEqual([expect.stringMatching(/^\d+\.\d+\.\d+$/)]);
   });
 
   test("restores the head setup after installing ERD base dependencies", () => {
@@ -789,10 +819,7 @@ esac
   });
 
   test("keeps the GitHub Enterprise Server upload-artifact pin out of Renovate's updates", () => {
-    const renovateConfig = JSON.parse(
-      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
-    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
-    const manager = renovateConfig.customManagers.find((m) =>
+    const manager = RENOVATE_MANAGERS.find((m) =>
       m.managerFilePatterns.some((p) => p.includes("ya?ml")),
     );
     const updatable = (source: string) =>
@@ -1943,11 +1970,7 @@ describe("Tailor Platform action pins", () => {
   });
 
   test("Renovate's custom manager regex actually matches this file's ACTIONS_SHA/ACTIONS_VERSION declarations", () => {
-    const renovateConfig = JSON.parse(
-      fs.readFileSync(path.join(import.meta.dirname, "../../../renovate.json"), "utf8"),
-    ) as { customManagers: { managerFilePatterns: string[]; matchStrings: string[] }[] };
-
-    const manager = renovateConfig.customManagers.find((m) =>
+    const manager = RENOVATE_MANAGERS.find((m) =>
       m.managerFilePatterns.some((p) => p.includes("templates")),
     );
     expect(manager).toBeDefined();
