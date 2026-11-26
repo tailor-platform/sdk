@@ -80,16 +80,6 @@ export function convertDecimalRows<O>(
   });
 }
 
-function toDecimalRows<O>(result: TailordbQueryResult<O>, decimal: DecimalClass): O[] {
-  const { fields } = result;
-  if (!fields) {
-    throw new Error(
-      "The Tailor Platform runtime did not report column types for this query, so decimal columns cannot be converted to Decimal. Use a Platform version that returns them, or turn the decimal option off.",
-    );
-  }
-  return convertDecimalRows(result.rows, fields, decimal);
-}
-
 /**
  * Wrap a `tailordb.Client` so Kysely sends and receives `Decimal` values. Parameters that are
  * `Decimal` are sent as plain-notation text, and `numeric` result columns, found by the column
@@ -105,7 +95,7 @@ export function withDecimal<C extends TailordbClientInstance>(client: C, decimal
     args?: readonly unknown[],
   ): Promise<TailordbQueryResult<O>> => {
     const result = await client.queryObject<O>(sql, serializeDecimalParams(args, decimal));
-    return { ...result, rows: toDecimalRows(result, decimal) };
+    return { ...result, rows: convertDecimalRows(result.rows, result.fields, decimal) };
   };
   return new Proxy(client, {
     get(target, property) {

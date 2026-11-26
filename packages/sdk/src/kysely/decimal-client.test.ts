@@ -21,6 +21,7 @@ function stubClient(
         command: "SELECT",
         rowCount: 0,
         rows: [],
+        fields: [],
         ...respond(call),
       } as TailordbQueryResult<O>;
     },
@@ -89,17 +90,6 @@ describe("withDecimal reading", () => {
     );
 
     expect((await client.queryObject("q")).rows).toEqual([]);
-  });
-
-  test("fails loudly when the runtime reports no column types, instead of returning strings typed as Decimal", async () => {
-    const client = withDecimal(
-      stubClient(() => ({ rows: [{ price: "1.5" }] })),
-      Decimal,
-    );
-
-    await expect(client.queryObject("q")).rejects.toThrow(
-      "The Tailor Platform runtime did not report column types for this query",
-    );
   });
 });
 

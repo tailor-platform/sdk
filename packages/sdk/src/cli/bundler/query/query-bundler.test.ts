@@ -136,22 +136,22 @@ describe("query-bundler", () => {
     test.each<[string, QueryObjectResult, unknown]>([
       [
         "write without RETURNING",
-        { rows: [], command: "UPDATE", rowCount: 3 },
+        { fields: [], rows: [], command: "UPDATE", rowCount: 3 },
         { rows: [], rowCount: 3, affectedRows: 3 },
       ],
       [
         "write with RETURNING",
-        { rows: [{ id: "1" }], command: "DELETE", rowCount: 1 },
+        { fields: [], rows: [{ id: "1" }], command: "DELETE", rowCount: 1 },
         { rows: [{ id: "1" }], rowCount: 1, affectedRows: 1 },
       ],
       [
         "write matching no rows",
-        { rows: [], command: "INSERT", rowCount: 0 },
+        { fields: [], rows: [], command: "INSERT", rowCount: 0 },
         { rows: [], rowCount: 0, affectedRows: 0 },
       ],
       [
         "read",
-        { rows: [{ id: "1" }, { id: "2" }], command: "SELECT", rowCount: 2 },
+        { fields: [], rows: [{ id: "1" }, { id: "2" }], command: "SELECT", rowCount: 2 },
         { rows: [{ id: "1" }, { id: "2" }], rowCount: 2 },
       ],
     ])("reports the row count of a %s", async (_label, queryResult, expected) => {

@@ -14,7 +14,7 @@ function installStubClient() {
     async connect(): Promise<void> {}
     async end(): Promise<void> {}
     async queryObject<O>(): Promise<tailordb.QueryResult<O>> {
-      return { rows: [], command: "SELECT", rowCount: 0 };
+      return { rows: [], fields: [], command: "SELECT", rowCount: 0 };
     }
   }
   vi.stubGlobal("tailordb", { Client: StubClient });

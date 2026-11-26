@@ -82,8 +82,8 @@ export interface TailordbQueryField {
 /** Result of a single `queryObject` call against the TailorDB driver. */
 export interface TailordbQueryResult<T> {
   rows: T[];
-  /** Column types of the result, present even when no row matches. Absent on runtimes that do not report them. */
-  fields?: readonly TailordbQueryField[];
+  /** Column types of the result, present even when no row matches. */
+  fields: readonly TailordbQueryField[];
   command: TailordbCommandType;
   rowCount: number;
 }
