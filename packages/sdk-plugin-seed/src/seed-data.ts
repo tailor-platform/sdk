@@ -77,7 +77,7 @@ type FillSeedDataResult = {
   filled: FilledSeedFile[];
 };
 
-async function hasSchemaFiles(dir: string): Promise<boolean> {
+export async function hasSchemaFiles(dir: string): Promise<boolean> {
   try {
     return (await readdir(dir)).some((entry) => isSchemaFile(entry));
   } catch {
@@ -165,6 +165,23 @@ async function findFilesWithoutSchema(
 
 const MISSING_REFERENCED_TABLE =
   /^Foreign key reference to non-existent table '(.+)' in table '(.+)'$/;
+
+/**
+ * Explain a lines-db failure for a row that references a table none of the opened datasets holds.
+ * @param error - Failure raised while initializing the data
+ * @param withBase - What to do instead, to complete "Add the file to one of them, even an empty one, or ..."
+ * @returns The error naming the table and the file to add, or none for any other failure
+ */
+export function missingReferencedTableError(error: Error, withBase: string): Error | undefined {
+  const missingTable = MISSING_REFERENCED_TABLE.exec(error.message);
+  if (!missingTable) return undefined;
+  const [, referencedTable, table] = missingTable;
+  return new Error(
+    `${table} has a foreign key to ${referencedTable}, but none of the selected datasets has ${referencedTable}.jsonl. ` +
+      `Add the file to one of them, even an empty one, or ${withBase}.`,
+    { cause: error },
+  );
+}
 
 async function listSeedTables(dataDir: string): Promise<string[]> {
   const entries = await readdir(dataDir);
@@ -269,15 +286,11 @@ export async function validateSeedData(
     };
   }
   if (excludeBase && !initialized.ok) {
-    const missingTable = MISSING_REFERENCED_TABLE.exec(initialized.error.message);
-    if (missingTable) {
-      const [, referencedTable, table] = missingTable;
-      throw new Error(
-        `${table} has a foreign key to ${referencedTable}, but none of the selected datasets has ${referencedTable}.jsonl. ` +
-          "Add the file to one of them, even an empty one, or validate them on top of the base seed data.",
-        { cause: initialized.error },
-      );
-    }
+    const missingTable = missingReferencedTableError(
+      initialized.error,
+      "validate them on top of the base seed data",
+    );
+    if (missingTable) throw missingTable;
   }
   const result = unwrap(initialized);
 
