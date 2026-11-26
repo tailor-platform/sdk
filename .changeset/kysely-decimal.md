@@ -1,0 +1,9 @@
+---
+"@tailor-platform/sdk": minor
+---
+
+Add a `decimal` option to `kyselyTypePlugin`. With `decimal: true`, the generated table types give decimal columns the type `Decimal` from decimal.js on read and `Decimal | string` on write, and the generated `getDB` returns `Decimal` values and accepts `Decimal` as a query parameter, sent without an exponent. Columns are found by the column types the query result reports, so an alias such as `select price as p` and an aggregate such as `sum(price)` are converted too, and float and integer columns are not. A decimal field inside an object stays a string. The option needs a Platform that reports column types with query results; on one that does not, every query through that `getDB` fails with an error instead of returning strings typed as `Decimal`. It works with `distPath` only, and combining it with `contentMapper: true` is rejected.
+
+`createGetDB` takes a `decimal` option (the `Decimal` class), and `TailorDBInsertable`, `TailorDBSelectable`, and `TailorDBUpdateable` take a third `IsDecimal` type parameter that follows the same mapping. `TailordbQueryResult` has an optional `fields` listing each column's name and PostgreSQL type name.
+
+A migration generated with `decimal: true` types its `db.ts` with `Decimal` columns, records `decimal` in `diff.json`, and runs its script with `Decimal` values on deploy; its generated `migrate.test.ts` passes the `Decimal` class to `createKyselyPGlite`. Only such a migration is written as format version 9, which older SDK versions refuse to read; other migrations keep format version 8. `mockTailordbWithPGlite` returns the column names and PostgreSQL type names next to the rows, and `createKyselyPGlite` accepts a `decimal` option.

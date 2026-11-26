@@ -608,6 +608,16 @@ export const plugins = definePlugins(
 
 Relative output paths in the options of the built-in plugins, such as `distPath`, are resolved against the directory of `tailor.config.ts`, so `tailor generate` writes to the same place from any directory.
 
+Set `decimal: true` to read TailorDB decimal fields as [`Decimal`](https://mikemcl.github.io/decimal.js/) values from decimal.js instead of strings:
+
+```typescript
+kyselyTypePlugin({ distPath: "./generated/tailordb.ts", decimal: true });
+```
+
+The generated table types then give each decimal column the type `Decimal` when you read it, and accept `Decimal` or a string when you write it. The columns come back as `Decimal` whatever name the query gives them, so `select price as p` and `sum(price)` are covered; a decimal field inside an object stays a string. `Decimal` parameters are sent without an exponent (`new Decimal("1e-7")` is sent as `"0.0000001"`). The generated `getDB()` imports `Decimal` from `@tailor-platform/sdk/runtime`, which also exports the class for your own code. A function that uses this `getDB()` bundles decimal.js; a function that does not use the option does not.
+
+Reading decimals as `Decimal` needs a Tailor Platform that reports column types with query results. On one that does not, every query through that `getDB()` fails with an error saying so, rather than returning strings typed as `Decimal`. The option works with `distPath` only; combining it with `contentMapper: true` is rejected.
+
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
 
 ```typescript
