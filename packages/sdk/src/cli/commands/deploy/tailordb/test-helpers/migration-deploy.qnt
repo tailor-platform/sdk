@@ -66,7 +66,7 @@ module migrationDeploy {
   pure def valuesOf(e: EnumState): Set[str] = match e { | NoEnum => Set() | Values(vs) => vs }
 
   // The changes existing records can refuse, which `migration generate` scaffolds a script for.
-  // A history can skip such a script, but a scripted one gives the model a step to check.
+  // The model always runs that script, which gives it a step to check, though a user can skip it.
   pure def breaks(before: Shape, after: Shape): bool = or {
     not(isPresent(before.f)) and isRequired(after.f),
     isPresent(before.f) and isPresent(after.f) and not(isRequired(before.f)) and isRequired(after.f),
@@ -179,7 +179,8 @@ module migrationDeploy {
     val start = if (isFresh) Map() else h[cp]
     all {
       history' = h,
-      scripted' = optionalScripts.union(1.to(n).filter(i => breaking(h[i - 1], h[i]))),
+      // A migration without a schema change comes from `--data-only`, which always has a script.
+      scripted' = optionalScripts.union(1.to(n).filter(i => h[i] == h[i - 1] or breaking(h[i - 1], h[i]))),
       fresh' = isFresh,
       checkpoint' = cp,
       maintenance' = mode,
