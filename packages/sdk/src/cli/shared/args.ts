@@ -563,12 +563,14 @@ export interface RecoveryContext {
 export function recoveryContextArgs(context: RecoveryContext): readonly string[] {
   const { envFiles, envFilesIfExists } = readEnvFileArgs(process.argv.slice(2));
   const absolute = (file: string) => path.resolve(process.cwd(), file);
+  // oxlint-disable local/no-hand-built-context-args -- the helper the rule points to
   return [
     ...envFiles.map((file) => `--env-file=${absolute(file)}`),
     ...envFilesIfExists.map((file) => `--env-file-if-exists=${absolute(file)}`),
     ...(context.workspaceId ? [`--workspace-id=${context.workspaceId}`] : []),
     ...(context.profile ? [`--profile=${context.profile}`] : []),
   ];
+  // oxlint-enable local/no-hand-built-context-args
 }
 
 /**

@@ -37,6 +37,7 @@ const LOCAL_ONLY_EXCEPT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 
 // Global flags (shared/args.ts createCommonArgs and workspaceArgs) that take a value in the
 // next token when written without `=`.
+// oxlint-disable local/no-hand-built-context-args -- flags to parse, not to suggest
 const VALUE_FLAGS = new Set([
   "--profile",
   "-p",
@@ -46,6 +47,7 @@ const VALUE_FLAGS = new Set([
   "-e",
   "--env-file-if-exists",
 ]);
+// oxlint-enable local/no-hand-built-context-args
 
 const HELP_FLAGS = new Set(["--help", "-h", "--help-all", "-H", "--help-json", "--version", "-v"]);
 

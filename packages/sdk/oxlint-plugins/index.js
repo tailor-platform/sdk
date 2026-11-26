@@ -666,5 +666,42 @@ export default {
         };
       },
     },
+
+    "no-hand-built-context-args": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Ban writing the --profile, --workspace-id, and env-file flags of a suggested command by hand in CLI modules.",
+        },
+        messages: {
+          handBuilt:
+            "Append the run's env files, workspace, and profile with recoveryContextArgs() from #/cli/shared/args, so a suggested command keeps all of them.",
+        },
+        schema: [],
+      },
+      create(context) {
+        const flags = ["--profile", "--workspace-id", "--env-file", "--env-file-if-exists"];
+        const flagEnd = new RegExp(`(^|\\s)(${flags.join("|")})[ =]$`);
+        const startsWithFlagValue = (text) => flags.some((flag) => text.startsWith(`${flag}=`));
+        return {
+          Literal(node) {
+            if (typeof node.value !== "string") return;
+            if (flags.includes(node.value) || startsWithFlagValue(node.value)) {
+              context.report({ node, messageId: "handBuilt" });
+            }
+          },
+          TemplateLiteral(node) {
+            const texts = node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);
+            if (
+              startsWithFlagValue(texts[0]) ||
+              texts.slice(0, -1).some((text) => flagEnd.test(text))
+            ) {
+              context.report({ node, messageId: "handBuilt" });
+            }
+          },
+        };
+      },
+    },
   },
 };

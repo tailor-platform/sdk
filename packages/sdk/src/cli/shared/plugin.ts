@@ -385,6 +385,7 @@ function buildSpawnTarget(
  */
 export function explicitProfileFromArgs(args: readonly string[]): string | undefined {
   let profile: string | undefined;
+  // oxlint-disable local/no-hand-built-context-args -- parses the profile flag, not a suggested command
   for (let i = 0; i < args.length; i++) {
     const token = args[i];
     if (token === undefined || token === "--") break;
@@ -402,6 +403,7 @@ export function explicitProfileFromArgs(args: readonly string[]): string | undef
       profile = token.slice("-p=".length);
     }
   }
+  // oxlint-enable local/no-hand-built-context-args
   return profile || undefined;
 }
 
