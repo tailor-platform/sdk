@@ -41,9 +41,12 @@ interface WatchOptions {
 }
 
 interface FreshErdExportOptions {
+  cliEntry?: string;
   configPath?: string;
   namespace?: string;
   outputDir: string;
+  /** Stops the export child when it aborts. */
+  signal?: AbortSignal;
 }
 
 interface ErdExportJsonResult {
@@ -288,7 +291,7 @@ export function freshErdExportFailureMessage(stderr: string): string | undefined
 }
 
 function freshErdExportArgs(options: FreshErdExportOptions): string[] {
-  const cliEntry = process.argv[1];
+  const cliEntry = options.cliEntry ?? process.argv[1];
   if (!cliEntry) {
     throw new Error("Cannot rebuild ERD schema in a fresh process: CLI entrypoint is unavailable.");
   }
@@ -303,12 +306,13 @@ function freshErdExportArgs(options: FreshErdExportOptions): string[] {
   return args;
 }
 
-async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBuildResult[]> {
+export async function runFreshErdExport(options: FreshErdExportOptions): Promise<ErdBuildResult[]> {
   return await new Promise<ErdBuildResult[]>((resolve, reject) => {
     const child = spawn(process.execPath, freshErdExportArgs(options), {
       cwd: process.cwd(),
       env: process.env,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(options.signal ? { signal: options.signal } : {}),
     });
     let stdout = "";
     let stderr = "";

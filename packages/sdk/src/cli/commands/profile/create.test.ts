@@ -7,7 +7,7 @@ import { writeHeldConfigLock } from "#/cli/shared/test-helpers/config-lock";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { createCommand } from "./create";
+import { createCommand, createProfile } from "./create";
 import type * as ClientModule from "#/cli/shared/client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-create-${Date.now()}-${Math.random()}`);
@@ -180,5 +180,133 @@ describe("profile create while another process updates the config", () => {
     expect(result).toMatchObject({ success: false, error: { code: "PROFILE_EXISTS" } });
     expect((await readPlatformConfig()).profiles.myprofile).toEqual(otherProfile);
     expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("keeps a profile another process created while the workspaces were listed", async () => {
+    using _logger = silenceLogger("out", "success");
+    clientMocks.initOperatorClient.mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
+    const otherProfile = { user: "platform-user-sub", workspace_id: otherUUID };
+    clientMocks.fetchAll.mockImplementation(async () => {
+      const config = await readPlatformConfig();
+      config.profiles.other = otherProfile;
+      writePlatformConfig(config);
+      return [{ id: validUUID }];
+    });
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "platform-user-sub": {
+          storage: "file",
+          access_token: "valid-access-token",
+          refresh_token: "refresh",
+          token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+      },
+      profiles: {},
+      current_user: "platform-user-sub",
+    });
+
+    await runCommand(createCommand, [
+      "myprofile",
+      "--user",
+      "platform-user-sub",
+      "--workspace-id",
+      validUUID,
+    ]);
+
+    const { profiles } = await readPlatformConfig();
+    expect([profiles.other, profiles.myprofile?.workspace_id]).toEqual([otherProfile, validUUID]);
+  });
+
+  test("rejects a console URL that is not a URL before it reads or writes anything", async () => {
+    clientMocks.initOperatorClient.mockClear();
+    await expect(
+      createProfile({
+        name: "myprofile",
+        user: "platform-user-sub",
+        workspaceId: validUUID,
+        consoleUrl: "not-a-url",
+      }),
+    ).rejects.toThrow('console URL "not-a-url" is not a URL');
+    expect(clientMocks.initOperatorClient).not.toHaveBeenCalled();
+    expect((await readPlatformConfig()).profiles.myprofile).toBeUndefined();
+  });
+});
+
+describe("createProfile with the platform taken from the environment", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    keyringPasswords.clear();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    clientMocks.initOperatorClient.mockResolvedValue(mockOperatorClient({ listWorkspaces: {} }));
+    clientMocks.fetchAll.mockResolvedValue([{ id: validUUID }]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  function loginOn(userKey: string) {
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        [userKey]: {
+          storage: "file",
+          access_token: "valid-access-token",
+          refresh_token: "refresh",
+          token_expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
+        },
+      },
+      profiles: {},
+      current_user: userKey,
+    });
+  }
+
+  test("saves the platform a custom TAILOR_PLATFORM_URL names, so the profile does not fall back to the default platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    loginOn("https://api.dev.tailor.tech|platform-user-sub");
+
+    const created = await createProfile({
+      name: "myprofile",
+      user: "platform-user-sub",
+      workspaceId: validUUID,
+    });
+
+    expect(created.platformUrl).toBe("https://api.dev.tailor.tech");
+    expect((await readPlatformConfig()).profiles.myprofile?.platform_url).toBe(
+      "https://api.dev.tailor.tech",
+    );
+  });
+
+  test("saves no platform when the environment names the default one, as a plugin the CLI starts always does", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.tailor.tech");
+    loginOn("platform-user-sub");
+
+    const created = await createProfile({
+      name: "myprofile",
+      user: "platform-user-sub",
+      workspaceId: validUUID,
+    });
+
+    expect(created.platformUrl).toBeUndefined();
+    expect((await readPlatformConfig()).profiles.myprofile?.platform_url).toBeUndefined();
+  });
+
+  test("keeps the platform given in the options over the environment", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    loginOn("https://api.stg.tailor.tech|platform-user-sub");
+
+    const created = await createProfile({
+      name: "myprofile",
+      user: "platform-user-sub",
+      workspaceId: validUUID,
+      platformUrl: "https://api.stg.tailor.tech",
+    });
+
+    expect(created.platformUrl).toBe("https://api.stg.tailor.tech");
   });
 });
