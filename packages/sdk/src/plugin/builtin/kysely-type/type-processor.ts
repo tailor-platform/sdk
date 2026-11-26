@@ -368,11 +368,7 @@ export function generateUnifiedKyselyTypes(
     utilityTypeImports.push("type Serial");
   }
 
-  const decimalImport = options.decimal
-    ? '\nimport { Decimal } from "@tailor-platform/sdk/runtime";'
-    : "";
-
-  const importsSection = multiline /* ts */ `
+  const kyselyImports = multiline /* ts */ `
     import {
       createGetDB,
       ${utilityTypeImports.join(",\n")},
@@ -383,8 +379,11 @@ export function generateUnifiedKyselyTypes(
       type NamespaceTableName,
       type NamespaceTransaction,
       type NamespaceUpdateable,
-    } from "@tailor-platform/sdk/kysely";${decimalImport}
+    } from "@tailor-platform/sdk/kysely";
   `;
+  const importsSection = options.decimal
+    ? `${kyselyImports}\nimport { Decimal } from "@tailor-platform/sdk/runtime";`
+    : kyselyImports;
 
   // Generate Namespace interface with multiple namespaces
   const namespaceInterfaces = namespaceData

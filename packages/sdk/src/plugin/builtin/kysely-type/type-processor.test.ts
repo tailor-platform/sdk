@@ -263,7 +263,9 @@ describe("Kysely TypeProcessor", () => {
       );
 
       expect(source).toContain("type DecimalValue,");
-      expect(source).toContain('import { Decimal } from "@tailor-platform/sdk/runtime";');
+      expect(source).toContain(
+        '} from "@tailor-platform/sdk/kysely";\nimport { Decimal } from "@tailor-platform/sdk/runtime";\n\nexport interface Namespace',
+      );
       expect(source).toContain(
         "export const getDB = createGetDB<Namespace>({ decimal: Decimal });",
       );
