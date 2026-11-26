@@ -60,14 +60,29 @@ module migrationDeploy {
   pure def hasEnum(e: EnumState): bool = match e { | NoEnum => false | Values(_) => true }
   pure def valuesOf(e: EnumState): Set[str] = match e { | NoEnum => Set() | Values(vs) => vs }
 
+  // Whether every record valid under shape `d` stays valid under shape `s`, which may drop a field.
+  pure def keepsRecords(s: Shape, d: Shape): bool = and {
+    isRequired(s.f) implies isRequired(d.f),
+    (isUnique(s.f) and isPresent(d.f)) implies isUnique(d.f),
+    (hasEnum(s.e) and hasEnum(d.e)) implies valuesOf(d.e).subseteq(valuesOf(s.e)),
+  }
+
+  pure def keepsFields(s: Shape, d: Shape): bool =
+    (isPresent(d.f) implies isPresent(s.f)) and (hasEnum(d.e) implies hasEnum(s.e))
+
+  // Whether shape `s` takes every value that a record valid under shape `d` holds in the fields of `d`.
+  pure def takesValues(s: Shape, d: Shape): bool = and {
+    isPresent(d.f) implies and {
+      isPresent(s.f),
+      isRequired(s.f) implies isRequired(d.f),
+      isUnique(s.f) implies isUnique(d.f),
+    },
+    hasEnum(d.e) implies (hasEnum(s.e) and valuesOf(d.e).subseteq(valuesOf(s.e))),
+  }
+
   // The changes existing records can refuse, which `migration generate` scaffolds a script for.
   // The model always runs that script, which gives it a step to check, though a user can skip it.
-  pure def breaks(before: Shape, after: Shape): bool = or {
-    not(isPresent(before.f)) and isRequired(after.f),
-    isPresent(before.f) and isPresent(after.f) and not(isRequired(before.f)) and isRequired(after.f),
-    isPresent(before.f) and isPresent(after.f) and not(isUnique(before.f)) and isUnique(after.f),
-    hasEnum(before.e) and hasEnum(after.e) and not(valuesOf(before.e).subseteq(valuesOf(after.e))),
-  }
+  pure def breaks(before: Shape, after: Shape): bool = not(keepsRecords(after, before))
 
   pure def breaking(prev: Schema, after: Schema): bool =
     prev.keys().intersect(after.keys()).exists(t => breaks(prev.get(t), after.get(t)))
@@ -207,5 +222,30 @@ module migrationDeploy {
         restricted' = restricted,
       }
     },
+  }
+
+  // What a migration script relies on (docs/services/tailordb/migration.md, `db.ts`): the tables
+  // and fields of the schema before the migration with their records, and the tables and fields of
+  // the schema after it, which take the values the script writes.
+  // Not an `invariant`, which Quint evaluates at every state: the test checks it once.
+  pure val relaxServesScripts = SHAPES.forall(b => SHAPES.forall(a => and {
+    keepsFields(relax(b, a), b),
+    keepsRecords(relax(b, a), b),
+    takesValues(relax(b, a), a),
+  }))
+
+  invariant scriptReadsPreviousRecords = match step {
+    | Script(i) => history[i - 1].keys().forall(t => and {
+      tables.keys().contains(t),
+      keepsFields(tables.get(t), history[i - 1].get(t)),
+      keepsRecords(tables.get(t), history[i - 1].get(t)),
+    })
+    | _ => true
+  }
+
+  invariant scriptWritesTargetRecords = match step {
+    | Script(i) => history[i].keys().forall(t =>
+      tables.keys().contains(t) and takesValues(tables.get(t), history[i].get(t)))
+    | _ => true
   }
 }

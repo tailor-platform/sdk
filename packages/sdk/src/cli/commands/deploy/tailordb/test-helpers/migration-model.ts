@@ -1,11 +1,15 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { assert } from "vitest";
-import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import {
+  generateTailorDBTypeManifestFromSnapshot,
+  protoGqlPermission,
+} from "#/cli/commands/tailordb/migrate/snapshot-manifest";
+import { assertDefined } from "#/utils/assert";
 import { snapshotTable } from "./migration-apply";
 import type {
   SnapshotFieldConfig,
@@ -13,10 +17,13 @@ import type {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBGQLPermissionSchema,
+  TailorDBTypeSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /** A table's string field `f` and enum field `e`, each of which a table may lack. */
-export interface ModelShape {
+interface ModelShape {
   f: { tag: "Absent" } | { tag: "Present"; value: { required: boolean; unique: boolean } };
   e: { tag: "NoEnum" } | { tag: "Values"; value: ReadonlySet<string> };
 }
@@ -97,30 +104,38 @@ function readModelTraces(dir: string): ModelTrace[] {
 const QUINT_CLI = fileURLToPath(import.meta.resolve("@informalsystems/quint/dist/src/cli.js"));
 const MODEL_SPEC = path.join(import.meta.dirname, "migration-deploy.qnt");
 
+function runQuint(args: readonly string[]) {
+  return spawnSync(
+    process.execPath,
+    [QUINT_CLI, "run", MODEL_SPEC, "--step=advance", "--seed=1", "--backend=typescript", ...args],
+    { encoding: "utf8", timeout: 60_000 },
+  );
+}
+
+function assertQuintPassed(run: ReturnType<typeof runQuint>): void {
+  assert(run.status === 0, `quint run failed:\n${run.stdout}${run.stderr}${run.error ?? ""}`);
+}
+
 /**
- * Simulate `migration-deploy.qnt` with Quint and read the traces.
+ * Check the invariants of `migration-deploy.qnt` with Quint, simulate it, and read the traces.
  * @param samples - Number of traces to simulate
  * @returns One trace per distinct starting scenario, up to the first `Done` state
  */
 export function simulateModelTraces(samples: number): ModelTrace[] {
+  assertQuintPassed(
+    runQuint(["--max-steps=0", "--max-samples=1", "--invariant=relaxServesScripts"]),
+  );
+  const sampling = ["--max-steps=12", `--max-samples=${samples}`];
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-model-"));
   try {
-    execFileSync(
-      process.execPath,
-      [
-        QUINT_CLI,
-        "run",
-        MODEL_SPEC,
-        "--step=advance",
-        "--max-steps=12",
-        `--max-samples=${samples}`,
-        `--n-traces=${samples}`,
-        "--seed=1",
-        "--backend=typescript",
-        `--out-itf=${path.join(dir, "t{seq}.itf.json")}`,
-      ],
-      { stdio: "pipe", timeout: 60_000 },
-    );
+    const run = runQuint([
+      ...sampling,
+      `--n-traces=${samples}`,
+      `--out-itf=${path.join(dir, "t{seq}.itf.json")}`,
+    ]);
+    // Asked for many traces, Quint does not name a violated invariant, so a failure runs it again.
+    if (run.status !== 0) assertQuintPassed(runQuint(sampling));
+    assertQuintPassed(run);
     return readModelTraces(dir);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -132,7 +147,7 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
  * @param shape - Model shape
  * @returns The description
  */
-export function describeShape(shape: ModelShape): string {
+function describeShape(shape: ModelShape): string {
   return describeFields(
     shape.f.tag === "Present" ? shape.f.value : undefined,
     shape.e.tag === "Values" ? [...shape.e.value] : undefined,
@@ -157,16 +172,84 @@ function describeFields(f: StringFieldState | undefined, values: string[] | unde
  */
 export function describeScenario(trace: ModelTrace): string {
   const schemas = trace.history
-    .map((schema, i) => {
-      const tables = [...schema]
-        .toSorted(([a], [b]) => a.localeCompare(b))
-        .map(([name, shape]) => `${name}[${describeShape(shape)}]`)
-        .join(",");
-      return `${i}${trace.scripted.has(i) ? "*" : ""}:{${tables}}`;
-    })
+    .map((schema, i) => `${i}${trace.scripted.has(i) ? "*" : ""}:{${describeSchema(schema)}}`)
     .join(" ");
   const start = trace.fresh ? "fresh" : `checkpoint ${trace.checkpoint}`;
   return `${start}, maintenance ${trace.maintenance}, ${schemas}`;
+}
+
+function describeSchema(schema: ModelSchema): string {
+  return [...schema]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([name, shape]) => `${name}[${describeShape(shape)}]`)
+    .join(",");
+}
+
+function shapeChanges(before: ModelShape, after: ModelShape): string[] {
+  const changes: string[] = [];
+  const f = { before: before.f, after: after.f };
+  if (f.before.tag === "Absent" && f.after.tag === "Present") changes.push("field added");
+  if (f.before.tag === "Present" && f.after.tag === "Absent") changes.push("field removed");
+  if (f.before.tag === "Present" && f.after.tag === "Present") {
+    const [b, a] = [f.before.value, f.after.value];
+    if (!b.required && a.required) changes.push("field made required");
+    if (b.required && !a.required) changes.push("field made optional");
+    if (!b.unique && a.unique) changes.push("field made unique");
+    if (b.unique && !a.unique) changes.push("field made non-unique");
+  }
+  const e = { before: before.e, after: after.e };
+  if (e.before.tag === "NoEnum" && e.after.tag === "Values") changes.push("enum added");
+  if (e.before.tag === "Values" && e.after.tag === "NoEnum") changes.push("enum removed");
+  if (e.before.tag === "Values" && e.after.tag === "Values") {
+    const [b, a] = [e.before.value, e.after.value];
+    if (![...b].every((value) => a.has(value))) changes.push("enum values removed");
+    if (![...a].every((value) => b.has(value))) changes.push("enum values added");
+  }
+  return changes;
+}
+
+/**
+ * Count how often the traces reach each case of a deploy, so a change to what the specification's
+ * `init` chooses cannot make a case rare unnoticed.
+ * @param traces - Model traces
+ * @returns How many traces, pending migrations, or tables reach each case
+ */
+export function countModelCases(traces: readonly ModelTrace[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  const count = (name: string) => counts.set(name, (counts.get(name) ?? 0) + 1);
+  for (const trace of traces) {
+    const { history, scripted, checkpoint, fresh } = trace;
+    const last = assertDefined(history.at(-1), "every history has a last schema");
+    count(`maintenance ${trace.maintenance}, ${fresh ? "fresh workspace" : "checkpoint"}`);
+    const removedTables = new Set<string>();
+    for (let i = checkpoint + 1; i < history.length; i++) {
+      const before = assertDefined(history[i - 1], "every pending migration has a schema before");
+      const after = assertDefined(history[i], "every pending migration has a schema after");
+      const kind = scripted.has(i) ? "scripted" : "unscripted";
+      if (describeSchema(before) === describeSchema(after)) count("data-only migration");
+      for (const name of after.keys()) {
+        if (before.has(name)) continue;
+        count(`${kind} migration adds a table`);
+        if (!last.has(name)) count("table only pending migrations define");
+      }
+      for (const name of before.keys()) {
+        if (after.has(name)) continue;
+        count(`${kind} migration removes a table`);
+        if (last.has(name)) count("table a pending migration removes and a later one adds again");
+        removedTables.add(name);
+      }
+      for (const [name, shape] of after) {
+        const previous = before.get(name);
+        if (!previous) continue;
+        for (const change of shapeChanges(previous, shape)) count(`${kind} migration: ${change}`);
+      }
+    }
+    for (const name of assertDefined(history[checkpoint], "the checkpoint has a schema").keys()) {
+      if (!removedTables.has(name)) continue;
+      count(`${fresh ? "fresh workspace" : "workspace"} table a pending migration removes`);
+    }
+  }
+  return counts;
 }
 
 function modelFields(shape: ModelShape): Record<string, SnapshotFieldConfig> {
@@ -204,16 +287,32 @@ export function modelTable(name: string, shape: ModelShape): TailorDBSnapshotTyp
  * @param shape - Model shape
  * @returns Table manifest
  */
-export function modelManifest(
+function modelManifest(
   name: string,
   shape: ModelShape,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
   return generateTailorDBTypeManifestFromSnapshot(modelTable(name, shape), { subscribed: false });
 }
 
+function modelPermission(name: string, shape: ModelShape): GqlPermission {
+  const permission = assertDefined(
+    modelTable(name, shape).permissions?.gql,
+    "every model table has a permission",
+  );
+  return protoGqlPermission(permission);
+}
+
+type GqlPermission = MessageInitShape<typeof TailorDBGQLPermissionSchema>;
+
 interface FakeTable {
   type: MessageInitShape<typeof TailorDBTypeSchema>;
-  permission: boolean;
+  permission: GqlPermission | undefined;
+}
+
+/** A table definition the fake namespace accepted. */
+interface FakeWrite {
+  kind: "create" | "update";
+  table: string;
 }
 
 /**
@@ -221,16 +320,17 @@ interface FakeTable {
  * permission that exists fails with `AlreadyExists`, and writing a missing one with `NotFound`.
  * Deleting a table also deletes its permission.
  * @param namespace - The namespace the fake holds
- * @param start - Tables the namespace starts with, each with a GraphQL permission
- * @returns The client overrides, the tables, and every rejected write
+ * @param start - Tables the namespace starts with, each with the GraphQL permission it declares
+ * @returns The client overrides, the tables, every accepted table definition, and every rejected write
  */
 export function createFakeNamespace(namespace: string, start: ModelState) {
   const tables = new Map<string, FakeTable>(
     [...start.tables].map(([name, shape]) => [
       name,
-      { type: modelManifest(name, shape), permission: true },
+      { type: modelManifest(name, shape), permission: modelPermission(name, shape) },
     ]),
   );
+  const writes: FakeWrite[] = [];
   const rejections: string[] = [];
   const reject = (code: Code, message: string): never => {
     rejections.push(message);
@@ -247,6 +347,10 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
     return tables.get(tableName) ?? reject(Code.NotFound, `table ${tableName} not found`);
   };
   const overrides = {
+    listTailorDBServices: async () => ({
+      tailordbServices: [{ namespace: { name: namespace } }],
+      nextPageToken: "",
+    }),
     listTailorDBTypes: async () => ({
       tailordbTypes: [...tables.values()].map((table) => structuredClone(table.type)),
       nextPageToken: "",
@@ -254,12 +358,18 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
     createTailorDBType: async (request: Parameters<OperatorClient["createTailorDBType"]>[0]) => {
       const name = tableOf(request.namespaceName, request.tailordbType?.name);
       if (tables.has(name)) reject(Code.AlreadyExists, `table ${name} already exists`);
-      tables.set(name, { type: structuredClone(request.tailordbType ?? {}), permission: false });
+      tables.set(name, {
+        type: structuredClone(request.tailordbType ?? {}),
+        permission: undefined,
+      });
+      writes.push({ kind: "create", table: name });
       return {};
     },
     updateTailorDBType: async (request: Parameters<OperatorClient["updateTailorDBType"]>[0]) => {
-      const table = existing(request.namespaceName, request.tailordbType?.name);
+      const name = tableOf(request.namespaceName, request.tailordbType?.name);
+      const table = existing(request.namespaceName, name);
       table.type = structuredClone(request.tailordbType ?? {});
+      writes.push({ kind: "update", table: name });
       return {};
     },
     deleteTailorDBType: async (request: Parameters<OperatorClient["deleteTailorDBType"]>[0]) => {
@@ -267,12 +377,18 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
       tables.delete(tableOf(request.namespaceName, request.tailordbTypeName));
       return {};
     },
+    listTailorDBGQLPermissions: async () => ({
+      permissions: [...tables].flatMap(([typeName, table]) =>
+        table.permission ? [{ typeName, permission: structuredClone(table.permission) }] : [],
+      ),
+      nextPageToken: "",
+    }),
     createTailorDBGQLPermission: async (
       request: Parameters<OperatorClient["createTailorDBGQLPermission"]>[0],
     ) => {
       const table = existing(request.namespaceName, request.typeName);
       if (table.permission) reject(Code.AlreadyExists, `permission of ${request.typeName} exists`);
-      table.permission = true;
+      table.permission = structuredClone(request.permission ?? {});
       return {};
     },
     updateTailorDBGQLPermission: async (
@@ -280,6 +396,7 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
     ) => {
       const table = existing(request.namespaceName, request.typeName);
       if (!table.permission) reject(Code.NotFound, `permission of ${request.typeName} not found`);
+      table.permission = structuredClone(request.permission ?? {});
       return {};
     },
     deleteTailorDBGQLPermission: async (
@@ -287,11 +404,11 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
     ) => {
       const table = existing(request.namespaceName, request.typeName);
       if (!table.permission) reject(Code.NotFound, `permission of ${request.typeName} not found`);
-      table.permission = false;
+      table.permission = undefined;
       return {};
     },
   };
-  return { overrides, tables, rejections };
+  return { overrides, tables, writes, rejections };
 }
 
 /** What the fake namespace shows of one table. */
@@ -325,7 +442,7 @@ export function observeTables(
       {
         shape: describeManifest(table.type),
         restricted: isRestricted(table.type),
-        permission: table.permission,
+        permission: table.permission !== undefined,
       },
     ]),
   );
