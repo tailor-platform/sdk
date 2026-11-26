@@ -85,7 +85,7 @@ recordUpdatedTrigger({
 });
 ```
 
-A trigger subscribes to the table in the TailorDB namespace that defines it. When several namespaces define a table with the same name, which namespaces of different applications in a `defineWorkspace()` config (Beta) can, name the namespace with `namespace`; without it, `deploy` stops with `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS`. `recordTrigger()` takes `namespace` too:
+A trigger subscribes to the table in the TailorDB namespace that defines it. When several namespaces define a table with the same name, which namespaces of different applications in a [`defineWorkspace()` config](../workspace.md#services-and-applications) (Beta) can, name the namespace with `namespace`; without it, `deploy` stops with `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS`. `recordTrigger()` takes `namespace` too:
 
 ```typescript
 recordCreatedTrigger({ type: crmCustomer, namespace: "crm-db" });

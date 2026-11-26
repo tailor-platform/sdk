@@ -65,7 +65,7 @@ Each entry of `apps` is one application, keyed by its name. `db`, `resolver`, `a
 - An application lists at least one TailorDB namespace, resolver namespace, IdP, or Auth service.
 - Several applications can list the same service.
 - A TailorDB namespace that no application lists is in no GraphQL API. Functions still read and write it with `getDB()`, and `tailor generate` writes its types; see [Typed SQL Access](#typed-sql-access).
-- TailorDB table names must be unique across all TailorDB namespaces of the workspace.
+- TailorDB table names must be unique across the TailorDB namespaces each application lists. Two namespaces that no application lists together, such as those of different applications, can define a table with the same name. Record triggers and `userProfile` then name the namespace of that table (see [Record Triggers](./services/executor.md#record-triggers) and [User Profile](./services/auth.md#user-profile)), and the built-in plugins name it `<namespace>.<Table>` (see [Plugins](./configuration.md#plugins-beta)).
 
 ## Environment Variables
 
