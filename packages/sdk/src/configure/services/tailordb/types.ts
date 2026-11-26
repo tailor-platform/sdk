@@ -178,8 +178,8 @@ export type UpdateHookFn<TValue, TReturn> = (args: {
 }) => TReturn;
 
 export type Hook<TReturn, TCreateReturn = TReturn> = {
-  create?: CreateHookFn<TReturn | null, TCreateReturn>;
-  update?: UpdateHookFn<TReturn | null, TReturn>;
+  create?: CreateHookFn<TReturn | null | undefined, TCreateReturn>;
+  update?: UpdateHookFn<TReturn | null | undefined, TReturn>;
 };
 
 type DotJoin<A extends string, B extends string> = A extends "" ? B : `${A}.${B}`;
@@ -217,9 +217,35 @@ export type TypeValidateFn<
 type TypeCreateHookFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
-> = (args: { input: DeepReadonly<TData>; invoker: TailorPrincipal | null; now: Date }) => {
+> = (args: { input: TypeCreateHookInput<F>; invoker: TailorPrincipal | null; now: Date }) => {
   [K in Exclude<keyof TData & string, "id">]?: TData[K] | null;
 };
+
+type CreateHookInputKey<K, F extends TailorAnyDBField> = K extends "id"
+  ? "id"
+  : IsReadOnlyDBField<F> extends true
+    ? "absent"
+    : IsAutoFilledDBField<F> extends true
+      ? "present"
+      : null extends output<F>
+        ? "optional"
+        : "present";
+
+type TypeCreateHookInput<F extends Record<string, TailorAnyDBField>> = Prettify<
+  {
+    readonly [
+      K in keyof F as CreateHookInputKey<K, F[K]> extends "present" ? K : never
+    ]: DeepReadonly<output<F[K]>>;
+  } & {
+    readonly [
+      K in keyof F as CreateHookInputKey<K, F[K]> extends "optional" ? K : never
+    ]?: DeepReadonly<output<F[K]>>;
+  } & {
+    readonly [K in keyof F as CreateHookInputKey<K, F[K]> extends "id" ? K : never]?: output<
+      F[K]
+    > | null;
+  }
+>;
 
 type TypeUpdateHookFn<
   F extends Record<string, TailorAnyDBField>,

@@ -338,7 +338,7 @@ Set hooks directly on individual fields.
 
 Create hooks receive:
 
-- `input`: The field value from the input (null when not provided)
+- `input`: The field value from the input: `undefined` when the input leaves the field out, `null` when it sets the field to null
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
@@ -361,12 +361,13 @@ Set hooks across multiple fields using `db.table().hooks()`. The hook returns an
 
 Create hooks receive:
 
-- `input`: The submitted record data. When field-level hooks or defaults exist, `input` reflects their applied results
+- `input`: The submitted record data, with the results of field-level hooks and defaults applied. It has `id` only when the input includes it (a string, or `null`), and an optional field only when the input sets it or a field-level hook or default fills it. `.serial()` fields are not in it
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
-Update hooks receive the same arguments plus:
+Update hooks receive `invoker` and `now` as above, plus:
 
+- `input`: Only the fields the update input sets, with the results of field-level update hooks applied
 - `oldRecord`: The existing record (non-null)
 
 ```typescript

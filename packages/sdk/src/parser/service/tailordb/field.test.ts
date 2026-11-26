@@ -149,7 +149,7 @@ describe("parseFieldConfig script expression validation", () => {
   test("throws a clear error when a hook cannot be converted to valid JavaScript", () => {
     const key = "create";
     const hooks = {
-      [key]({ input }: InputArgs<string | null>) {
+      [key]({ input }: InputArgs<string | null | undefined>) {
         return input ?? "generated";
       },
     };

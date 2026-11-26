@@ -233,7 +233,7 @@ describe("precompileTailorDBTypeScripts", () => {
     const sourceFile = join(tempDir, "type.ts");
     writeFileSync(sourceFile, "");
     const pinnedHook = db.fields.timestamps().updatedAt.metadata.hooks?.update as
-      | UpdateHookFn<string | Date | null, string | Date>
+      | UpdateHookFn<string | Date | null | undefined, string | Date>
       | undefined;
     expect(pinnedHook).toBeDefined();
     const pinnedUpdateExpr = getPrecompiledScriptExpr(pinnedHook!, "hooks.update");
