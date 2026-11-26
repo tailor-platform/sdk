@@ -772,6 +772,26 @@ describe("planTailorDB (service level)", () => {
         expect(published).toEqual({ "shop-db": false, "crm-db": true });
       });
 
+      test("names the namespace of a same-named table whose opt-out an executor conflicts with", async () => {
+        const shop = createMockTailorDBService("shop-db");
+        const crm = createMockTailorDBService("crm-db");
+        Object.defineProperty(shop, "types", { value: { User: createTypeWith(false) } });
+        Object.defineProperty(crm, "types", { value: { User: createTypeWith(undefined) } });
+
+        await expect(
+          planTailorDB({
+            client: createMockClient([]),
+            workspaceId,
+            application: createMockApplication([shop, crm]),
+            applications: [],
+            owner: appOwner,
+            forRemoval: false,
+            config: mockConfig,
+            executorUsedTailorDBTables: namespacedNames([{ namespace: "shop-db", name: "User" }]),
+          }),
+        ).rejects.toThrow('TailorDB table "shop-db.User" has "publishEvents: false"');
+      });
+
       test("throws when an opt-out is combined with a subscribing executor", async () => {
         await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
           'TailorDB table "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
