@@ -9,8 +9,9 @@ import type { IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { SecretsDefinition } from "#/configure/services/secrets/types";
 import type {
-  TailorDBReplicationDefinition,
+  TailorDBReplicationConfig,
   TailorDBReplicationDestinationServiceInput,
+  TailorDBTableReplication,
 } from "#/configure/services/tailordb-replication/types";
 import type {
   DBFieldMetadata,
@@ -38,7 +39,8 @@ import type { ResolverInput } from "#/types/resolver.generated";
 import type { SecretsInput } from "#/types/secrets.generated";
 import type {
   TailorDBReplicationDestinationInput,
-  TailorDBReplicationInput,
+  TailorDBReplicationSettingsInput,
+  TailorDBTypeReplicationInput,
 } from "#/types/tailordb-replication.generated";
 import type {
   DBFieldMetadataInput,
@@ -182,12 +184,20 @@ describe("configure input types are accepted by the schema that parses them", ()
     >().toEqualTypeOf<never>();
   });
 
-  test("defineTailorDBReplication", () => {
-    type Input = Omit<TailorDBReplicationDefinition, "add" | "destination"> & {
-      destination: string;
+  test("db namespace replications", () => {
+    type Settings = Omit<TailorDBReplicationConfig, "destination"> & {
+      destination: TailorDBReplicationDestinationInput;
     };
-    expectTypeOf<Input>().toExtend<TailorDBReplicationInput>();
-    expectTypeOf<ExtraKeyPaths<Input, TailorDBReplicationInput>>().toEqualTypeOf<never>();
+    expectTypeOf<Settings>().toExtend<TailorDBReplicationSettingsInput>();
+    expectTypeOf<
+      ExtraKeyPaths<Settings, TailorDBReplicationSettingsInput>
+    >().toEqualTypeOf<never>();
+  });
+
+  test("db.table().replication()", () => {
+    type Entry = TailorDBTableReplication<{ name: unknown }>;
+    expectTypeOf<Entry>().toExtend<TailorDBTypeReplicationInput>();
+    expectTypeOf<ExtraKeyPaths<Entry, TailorDBTypeReplicationInput>>().toEqualTypeOf<never>();
   });
 
   test("defineSecretManager", () => {

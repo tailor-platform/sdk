@@ -1,5 +1,5 @@
 ---
-description: "Replicate TailorDB tables into a BigQuery dataset you own with defineTailorDBReplicationDestination() and defineTailorDBReplication()."
+description: "Replicate TailorDB tables into a BigQuery dataset you own with a namespace's replications config, .replication() on tables, and defineTailorDBReplicationDestination()."
 ---
 
 # TailorDB Replication
@@ -46,41 +46,77 @@ If your Google Cloud organization restricts IAM policy members to its own domain
 
 ## Replications
 
-Define a replication with `defineTailorDBReplication()`, add each table with `.add()`, and list it in `dbReplications`:
+Declare a namespace's replications in its `replications` config, keyed by replication name, and choose the tables to copy with `.replication()` on each table:
 
 ```typescript
-import {
-  defineConfig,
-  defineTailorDBReplication,
-  defineTailorDBReplicationDestination,
-} from "@tailor-platform/sdk";
-import { order } from "./tailordb/order";
-import { user } from "./tailordb/user";
+// tailor.config.ts
+import { defineConfig, defineTailorDBReplicationDestination } from "@tailor-platform/sdk";
 
 const warehouse = defineTailorDBReplicationDestination("warehouse", {
   bigquery: { project: "acme-analytics", dataset: "tailor" },
 });
 
-const analytics = defineTailorDBReplication("analytics", {
-  source: { namespace: "main-db" },
-  destination: warehouse,
-  tablePrefix: "shop_",
-})
-  .add(user, { excludeFields: ["email", "phone"] })
-  .add(order);
-
 export default defineConfig({
   name: "shop",
-  db: { "main-db": { files: ["./tailordb/*.ts"] } },
-  dbReplications: [analytics],
+  db: {
+    "main-db": {
+      files: ["./tailordb/*.ts"],
+      replications: {
+        analytics: { destination: warehouse, tablePrefix: "shop_" },
+      },
+    },
+  },
 });
 ```
 
-- `source.namespace` must be a namespace this config defines in `db`; an external namespace is replicated from the config that defines it.
+```typescript
+// tailordb/user.ts
+export const user = db
+  .table("User", { name: db.string(), email: db.string(), phone: db.string() })
+  .replication({ excludeFields: ["email", "phone"] });
+
+// tailordb/order.ts
+export const order = db.table("Order", { total: db.int() }).replication({});
+```
+
+- A replication copies tables of the namespace that declares it. Replication names are unique across the workspace.
 - `destination` is the value `defineTailorDBReplicationDestination()` returned. Two different destinations cannot share a name.
-- Each table passed to `.add()` must be loaded by the namespace's `files`, and can be added once.
-- `.add()` returns a new replication and leaves the one it was called on unchanged.
+- A table without `.replication()` is not replicated. An entry without `targets` applies to every replication of the namespace.
+- To copy a table differently per replication, pass one entry per replication and name it in `targets`:
+
+  ```typescript
+  export const order = db
+    .table("Order", { total: db.int(), note: db.string() })
+    .replication({ targets: ["analytics"], excludeFields: ["note"] }, { targets: ["lake"] });
+  ```
+
+  A target the namespace does not declare in `replications`, or a replication set by two entries of one table, fails when the config loads.
+
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.
+- Tables that plugins generate cannot call `.replication()`, so they are not replicated.
+
+### Deploying to some environments only
+
+Set a replication to `undefined` to declare it without deploying it. Tables can still name it in `targets`, so table files stay the same in every environment, and a workspace without the replication needs no BigQuery dataset:
+
+```typescript
+const appEnv = process.env.APP_ENV;
+if (!appEnv) throw new Error("Set APP_ENV to the environment to deploy to.");
+
+export default defineConfig({
+  name: "shop",
+  db: {
+    "main-db": {
+      files: ["./tailordb/*.ts"],
+      replications: {
+        analytics: appEnv === "production" ? { destination: warehouse } : undefined,
+      },
+    },
+  },
+});
+```
+
+When a deployed replication becomes `undefined`, `deploy` deletes it, and deploying it again copies every table in full. Fail when the value that selects the environment is missing, as above, so that a deploy run without it does not delete the replication; `deploy --yes` skips the confirmation that would otherwise catch it. See [Multi-Environment Configuration](../../multi-environment.md) for loading per-environment values.
 
 ### Choosing fields
 
@@ -89,7 +125,7 @@ By default every field of a table is replicated. Pass at most one of:
 - `excludeFields`: replicate every field but these. Fields added to the table later are replicated.
 - `includeFields`: replicate only these fields. Fields added to the table later are not replicated.
 
-Field names are checked against the table's fields. The `id` field is always replicated.
+Field names are checked against the table's fields, per `.replication()` entry. The `id` field is always replicated.
 
 ### Table names
 
@@ -105,7 +141,7 @@ Each table is written to the BigQuery table `<tablePrefix><TableName>`, for exam
 `tailor deploy` creates, updates, and deletes destinations and replications along with the TailorDB tables they read, in an order the platform accepts: a table is removed from the replications that list it before it is deleted, and a replication moves off a destination before the destination is deleted.
 
 - Removing a table from a replication stops writing its BigQuery table; the data already there is kept. Adding a table copies its existing records first.
-- Changing a replication's `source.namespace` deletes the replication and creates it again, which rewrites all its tables. `deploy` asks for confirmation before it does this, and before it deletes a replication.
+- Moving a replication to another namespace deletes the replication and creates it again, which rewrites all its tables. `deploy` asks for confirmation before it does this, and before it deletes a replication.
 - Deleting a replication or a destination leaves the data already in BigQuery as it is.
 - If one deploy would have two replications exchange their tables, for example by swapping their `tablePrefix`, `deploy` stops before changing anything and asks you to make the change in two deploys.
 - If the platform disables a replication, for example while its workspace is deleted, the next `deploy` enables it again and its tables are rewritten.

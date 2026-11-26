@@ -10,6 +10,7 @@ import {
 } from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
 import { cloneDeep } from "./clone-deep";
+import type { TailorDBTableReplication } from "#/configure/services/tailordb-replication/types";
 import type {
   FieldOptions,
   FieldOutput,
@@ -30,6 +31,7 @@ import type {
   TypeLevelError,
   UnionToIntersection,
 } from "#/types/helpers";
+import type { TailorDBTypeReplicationInput } from "#/types/tailordb-replication.generated";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
 import type {
@@ -173,6 +175,7 @@ type DefinedDBTypeMetadata = {
   permission?: true;
   gqlPermission?: true;
   description?: true;
+  replication?: true;
 };
 type WithDBTypeMetadata<
   Defined extends DefinedDBTypeMetadata,
@@ -662,6 +665,25 @@ export interface TailorDBType<
       ".indexes() has already been set"
     >
   ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">, FileKeys>;
+  /**
+   * Copy the table into BigQuery through replications of its namespace, declared in the
+   * namespace's `replications` config. Pass one entry per set of fields; an entry without
+   * `targets` applies to every replication of the namespace.
+   * @param replications - How each replication copies the table
+   * @returns The table with replication set
+   * @example
+   * export const user = db
+   *   .table("User", { name: db.string(), email: db.string() })
+   *   .replication({ excludeFields: ["email"] });
+   */
+  replication(
+    ...replications: DBTypeDuplicateRestGuard<
+      Defined,
+      "replication",
+      [TailorDBTableReplication<Fields>, ...TailorDBTableReplication<Fields>[]],
+      ".replication() has already been set"
+    >
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "replication">, FileKeys>;
   files<const F extends string>(
     files: DBTypeDuplicateInputGuard<
       Defined,
@@ -1200,6 +1222,7 @@ function createTailorDBType<
   let _typeHook: { create?: Function; update?: Function } | undefined;
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   let _typeValidate: Function | undefined;
+  let _replication: TailorDBTypeReplicationInput[] | undefined;
   const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
   if (options.description !== undefined) {
     _definedMethods.add("description");
@@ -1264,6 +1287,7 @@ function createTailorDBType<
         ...(Object.keys(indexes).length > 0 && { indexes }),
         ...(_typeHook && { typeHook: _typeHook }),
         ...(_typeValidate && { typeValidate: _typeValidate }),
+        ...(_replication && { replication: _replication }),
       };
     },
 
@@ -1288,6 +1312,17 @@ function createTailorDBType<
           ...features,
         };
         return this as TypeAfter<"features">;
+      });
+    },
+
+    replication(...replications: TailorDBTableReplication<Fields>[]): TypeAfter<"replication"> {
+      return runMethodOnce("replication", () => {
+        _replication = replications.map((entry) => ({
+          ...(entry.targets && { targets: [...entry.targets] }),
+          ...(entry.excludeFields && { excludeFields: [...entry.excludeFields] }),
+          ...(entry.includeFields && { includeFields: [...entry.includeFields] }),
+        }));
+        return this as TypeAfter<"replication">;
       });
     },
 

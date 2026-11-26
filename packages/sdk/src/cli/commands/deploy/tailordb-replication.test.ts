@@ -15,10 +15,8 @@ import { applicationOwner } from "./label";
 import { applyTailorDBReplication, planTailorDBReplication } from "./tailordb-replication";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
-import type {
-  TailorDBReplication,
-  TailorDBReplicationDestination,
-} from "#/types/tailordb-replication.generated";
+import type { TailorDBReplication } from "#/parser/service/tailordb-replication/types";
+import type { TailorDBReplicationDestination } from "#/types/tailordb-replication.generated";
 import type { PlanContext } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 

@@ -155,8 +155,6 @@ const DUPLICATE_NAME_LABELS = {
   idp: "IdP",
   staticwebsite: "static website",
   aigateway: "AI Gateway",
-  "tailordb-replication-destination": "TailorDB replication destination",
-  "tailordb-replication": "TailorDB replication",
 } as const;
 
 interface NamedDefinition {

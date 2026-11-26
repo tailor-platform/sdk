@@ -7,6 +7,7 @@ import type { ValueOperand } from "#/configure/services/auth/types";
 // references, importable type-only from any layer.
 import type { RawRelationConfig, TailorDBTypeMetadata } from "#/configure/services/tailordb/types";
 import type { EnumValue } from "#/configure/types/field.types";
+import type { TailorDBTypeReplication } from "#/types/tailordb-replication.generated";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   RawRelationConfig as RawRelationConfigGenerated,
@@ -193,6 +194,8 @@ export interface TailorDBType {
   files?: TailorDBTypeMetadata["files"] | undefined;
   typeHookExpr?: { create?: string | undefined; update?: string | undefined } | undefined;
   typeValidateExpr?: string | undefined;
+  /** How replications of the namespace copy the table, from `.replication()`. */
+  replication?: TailorDBTypeReplication[] | undefined;
 }
 
 export type ScriptExprKind =

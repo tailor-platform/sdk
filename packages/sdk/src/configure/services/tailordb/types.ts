@@ -1,3 +1,4 @@
+import type { TailorDBReplicationsConfig } from "#/configure/services/tailordb-replication/types";
 // TailorDB structural types and configure-facing config types.
 //
 // This is a pure type module: type declarations only, no zod/schema
@@ -10,6 +11,7 @@ import type {
 } from "#/configure/types/field.types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { DeepReadonly, InferFieldsOutput, output, Prettify } from "#/types/helpers";
+import type { TailorDBTypeReplicationInput } from "#/types/tailordb-replication.generated";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   GqlOperationsInput,
@@ -98,6 +100,7 @@ export interface TailorDBTypeMetadata {
   typeHook?: { create?: Function; update?: Function };
   // oxlint-disable-next-line typescript/no-unsafe-function-type
   typeValidate?: Function;
+  replication?: TailorDBTypeReplicationInput[];
 }
 
 /**
@@ -346,7 +349,16 @@ export type RelationType = "1-1" | "oneToOne" | "n-1" | "manyToOne" | "N-1" | "k
 
 type TailorDBExternalConfig = { external: true };
 
-export type TailorDBOwnServiceConfigInput = Omit<TailorDBServiceConfigInput, "ignores"> & {
+export type TailorDBOwnServiceConfigInput = Omit<
+  TailorDBServiceConfigInput,
+  "ignores" | "replications"
+> & {
+  /**
+   * Replications of this namespace's tables into BigQuery, keyed by replication name. A table
+   * takes part through `.replication()`. Set a replication to `undefined` to declare it without
+   * deploying it, for example outside production.
+   */
+  replications?: TailorDBReplicationsConfig;
   /**
    * Glob patterns to exclude from table discovery.
    * @deprecated since 2.40.0 — write `!`-prefixed patterns in `files` instead. codemod: v3/files-ignores-to-negation

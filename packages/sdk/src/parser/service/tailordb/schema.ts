@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 import { TailorFieldTypeSchema } from "../field-types";
+import {
+  TailorDBReplicationsSchema,
+  TailorDBTypeReplicationSchema,
+} from "../tailordb-replication/schema";
 import { relationTypesKeys } from "./relation";
 import type { TailorDBFieldOutput } from "#/parser/service/tailordb/types";
 
@@ -276,6 +280,7 @@ export const TailorDBTypeSchema = z.strictObject({
         })
         .optional(),
       typeValidate: functionSchema.optional(),
+      replication: z.array(TailorDBTypeReplicationSchema).optional(),
     })
     .strict(),
 });
@@ -302,4 +307,5 @@ export const TailorDBServiceConfigSchema = z.strictObject({
   gqlOperations: GqlOperationsSchema.optional().describe(
     "Default GraphQL operations for all tables in this service",
   ),
+  replications: TailorDBReplicationsSchema.optional(),
 });

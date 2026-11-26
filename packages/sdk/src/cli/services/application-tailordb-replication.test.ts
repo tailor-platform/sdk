@@ -1,12 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
-import {
-  defineTailorDBReplication,
-  defineTailorDBReplicationDestination,
-} from "#/configure/services/tailordb-replication/index";
-import { db } from "#/configure/services/tailordb/schema";
+import { defineTailorDBReplicationDestination } from "#/configure/services/tailordb-replication/index";
 import { defineApplication, loadApplication } from "./application";
 import type { AppConfig } from "#/configure/config/types";
 
@@ -14,16 +10,9 @@ const warehouse = defineTailorDBReplicationDestination("warehouse", {
   bigquery: { project: "acme-analytics", dataset: "tailor" },
 });
 
-const user = db.table("User", {
-  name: db.string(),
-  email: db.string(),
-  embedding: db.string().vector(),
-});
+type ConfigOverrides = Partial<Pick<AppConfig, "db" | "dbReplicationDestinations">>;
 
-function configOf(
-  overrides: Partial<Pick<AppConfig, "db" | "dbReplicationDestinations" | "dbReplications">>,
-  dir = "/project",
-) {
+function configOf(overrides: ConfigOverrides, dir = "/project") {
   return {
     ...defineConfig({ name: "shop", ...overrides }),
     path: path.join(dir, "tailor.config.ts"),
@@ -31,17 +20,18 @@ function configOf(
 }
 
 describe("defineApplication TailorDB replications", () => {
-  test("parses destinations and replications, enabling a replication by default", () => {
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: warehouse,
-      tablePrefix: "shop_",
-    }).add(user, { excludeFields: ["email"] });
-
+  test("collects each namespace's replications and the destinations they use", () => {
     const application = defineApplication({
       config: configOf({
-        dbReplicationDestinations: [warehouse],
-        dbReplications: [replication],
+        db: {
+          "main-db": {
+            files: [],
+            replications: {
+              analytics: { destination: warehouse, tablePrefix: "shop_" },
+              lake: undefined,
+            },
+          },
+        },
       }),
     });
 
@@ -55,21 +45,8 @@ describe("defineApplication TailorDB replications", () => {
         destination: "warehouse",
         tablePrefix: "shop_",
         enabled: true,
-        types: [{ name: "User", excludeFields: ["email"] }],
+        types: [],
       },
-    ]);
-  });
-
-  test("deploys a destination a replication references without listing it", () => {
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: warehouse,
-    });
-
-    const application = defineApplication({ config: configOf({ dbReplications: [replication] }) });
-
-    expect(application.dbReplicationDestinations).toEqual([
-      { name: "warehouse", bigquery: { project: "acme-analytics", dataset: "tailor" } },
     ]);
   });
 
@@ -85,37 +62,18 @@ describe("defineApplication TailorDB replications", () => {
     const other = defineTailorDBReplicationDestination("warehouse", {
       bigquery: { project: "acme-analytics", dataset: "lake" },
     });
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: other,
-    });
 
     expect(() =>
       defineApplication({
-        config: configOf({ dbReplicationDestinations: [warehouse], dbReplications: [replication] }),
+        config: configOf({
+          dbReplicationDestinations: [warehouse],
+          db: { "main-db": { files: [], replications: { analytics: { destination: other } } } },
+        }),
       }),
     ).toThrow(
       expect.objectContaining({
         message: expect.stringContaining(
-          'dbReplications.0.destination: Two different destinations are named "warehouse"',
-        ),
-      }),
-    );
-  });
-
-  test("rejects a destination given by a name it cannot resolve", () => {
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: "lake" as never,
-    });
-
-    expect(() =>
-      defineApplication({ config: configOf({ dbReplications: [replication] }) }),
-    ).toThrow(
-      expect.objectContaining({
-        code: "CONFIG_INVALID",
-        message: expect.stringContaining(
-          'dbReplications.0.destination: Destination "lake" is not defined',
+          'db.main-db.replications.analytics.destination: Two different destinations are named "warehouse"',
         ),
       }),
     );
@@ -127,9 +85,7 @@ describe("defineApplication TailorDB replications", () => {
     });
 
     expect(() =>
-      defineApplication({
-        config: configOf({ dbReplicationDestinations: [warehouse, copy] }),
-      }),
+      defineApplication({ config: configOf({ dbReplicationDestinations: [warehouse, copy] }) }),
     ).toThrow(
       expect.objectContaining({
         message: expect.stringContaining(
@@ -139,50 +95,35 @@ describe("defineApplication TailorDB replications", () => {
     );
   });
 
-  test("rejects two replications with the same name", () => {
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: warehouse,
-    });
-
+  test("rejects one replication name in two namespaces", () => {
     expect(() =>
       defineApplication({
         config: configOf({
-          dbReplicationDestinations: [warehouse],
-          dbReplications: [replication, replication],
-        }),
-      }),
-    ).toThrow(expect.objectContaining({ code: "DEFINITION_NAME_DUPLICATE" }));
-  });
-
-  test("rejects a type listing both excludeFields and includeFields", () => {
-    const replication = defineTailorDBReplication("analytics", {
-      source: { namespace: "main-db" },
-      destination: warehouse,
-    }).add(user, { excludeFields: ["email"], includeFields: ["name"] } as never);
-
-    expect(() =>
-      defineApplication({
-        config: configOf({
-          dbReplicationDestinations: [warehouse],
-          dbReplications: [replication],
+          db: {
+            "main-db": { files: [], replications: { analytics: { destination: warehouse } } },
+            "order-db": { files: [], replications: { analytics: { destination: warehouse } } },
+          },
         }),
       }),
     ).toThrow(
       expect.objectContaining({
-        code: "CONFIG_INVALID",
         message: expect.stringContaining(
-          "Specify either `excludeFields` or `includeFields`, not both.",
+          'db.order-db.replications.analytics: Replication "analytics" is also declared by TailorDB namespace "main-db"',
         ),
       }),
     );
   });
 });
 
-describe("loadApplication TailorDB replication sources", () => {
-  let tmpDir: string;
+describe("loadApplication TailorDB replication tables", () => {
+  let tmpDir: string | undefined;
 
-  beforeAll(() => {
+  afterEach(() => {
+    if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    tmpDir = undefined;
+  });
+
+  function load(replication: string, replications: NonNullable<AppConfig["db"]>[string]) {
     // Inside the SDK package, so the table file resolves `@tailor-platform/sdk`.
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".replication-")));
     fs.writeFileSync(
@@ -197,87 +138,93 @@ export const user = db
     embedding: db.string().vector(),
   })
   .permission(unsafeAllowAllTypePermission)
-  .gqlPermission(unsafeAllowAllGqlPermission);
+  .gqlPermission(unsafeAllowAllGqlPermission)
+  ${replication};
 `,
     );
-  });
-
-  afterAll(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  function load(replication: ReturnType<typeof defineTailorDBReplication>) {
     return loadApplication({
       config: configOf(
-        {
-          db: {
-            "main-db": { files: [path.join(tmpDir, "user.ts")] },
-            "shared-db": { external: true },
-          },
-          dbReplicationDestinations: [warehouse],
-          dbReplications: [replication],
-        },
+        { db: { "main-db": { ...replications, files: [path.join(tmpDir, "user.ts")] } } },
         tmpDir,
       ),
     });
   }
 
-  const base = (namespace = "main-db") =>
-    defineTailorDBReplication("analytics", { source: { namespace }, destination: warehouse });
+  const both = {
+    files: [],
+    replications: {
+      analytics: { destination: warehouse },
+      lake: { destination: warehouse, tablePrefix: "lake_" },
+    },
+  };
 
-  test("accepts types the namespace loads, with their fields", async () => {
-    const { application } = await load(base().add(user, { includeFields: ["name", "email"] }));
+  test("adds a table without targets to every replication of the namespace", async () => {
+    const { application } = await load('.replication({ excludeFields: ["email"] })', both);
 
-    expect(application.dbReplications[0]?.types).toEqual([
-      { name: "User", includeFields: ["name", "email"] },
+    expect(application.dbReplications.map(({ name, types }) => ({ name, types }))).toEqual([
+      { name: "analytics", types: [{ name: "User", excludeFields: ["email"] }] },
+      { name: "lake", types: [{ name: "User", excludeFields: ["email"] }] },
     ]);
+  });
+
+  test("adds a table to the replications it targets, with their fields", async () => {
+    const { application } = await load(
+      '.replication({ targets: ["analytics"], includeFields: ["name"] }, { targets: ["lake"] })',
+      both,
+    );
+
+    expect(application.dbReplications.map(({ name, types }) => ({ name, types }))).toEqual([
+      { name: "analytics", types: [{ name: "User", includeFields: ["name"] }] },
+      { name: "lake", types: [{ name: "User" }] },
+    ]);
+  });
+
+  test("accepts a target the namespace declares but does not deploy", async () => {
+    const { application } = await load('.replication({ targets: ["lake"] })', {
+      files: [],
+      replications: { analytics: { destination: warehouse }, lake: undefined },
+    });
+
+    expect(application.dbReplications.map(({ name, types }) => ({ name, types }))).toEqual([
+      { name: "analytics", types: [] },
+    ]);
+  });
+
+  test("leaves a table without .replication() out", async () => {
+    const { application } = await load("", both);
+
+    expect(application.dbReplications.every(({ types }) => types.length === 0)).toBe(true);
   });
 
   test.each([
     {
-      title: "a namespace not in db",
-      replication: base("other-db"),
+      title: "a target the namespace does not declare",
+      replication: '.replication({ targets: ["archive"] })',
       issue:
-        'dbReplications.0.source.namespace: TailorDB namespace "other-db" is not configured in db',
+        'db.main-db.tables.User.replication.0.targets: Table "User" names replication "archive", which TailorDB namespace "main-db" does not declare in replications',
     },
     {
-      title: "an external namespace",
-      replication: base("shared-db"),
+      title: "one replication set twice",
+      replication: '.replication({}, { targets: ["lake"] })',
       issue:
-        'dbReplications.0.source.namespace: TailorDB namespace "shared-db" is external; replicate it from the config that defines it',
+        'db.main-db.tables.User.replication.1: Table "User" sets replication "lake" more than once',
     },
     {
-      title: "a type the namespace does not load",
-      replication: base().add(db.table("Order", { total: db.int() })),
+      title: "a field the table does not have",
+      replication: '.replication({ excludeFields: ["phone"] })',
       issue:
-        'dbReplications.0.types.0.name: Type "Order" is not loaded by the files of TailorDB namespace "main-db"',
-    },
-    {
-      title: "a type added twice",
-      replication: base().add(user).add(user),
-      issue:
-        'dbReplications.0.types.1.name: Type "User" is added to the replication more than once',
-    },
-    {
-      title: "a field the type does not have",
-      replication: base().add(user, { excludeFields: ["phone"] } as never),
-      issue:
-        'dbReplications.0.types.0.excludeFields.0: Type "User" has no field "phone" to replicate',
+        'db.main-db.tables.User.replication.0.excludeFields.0: Table "User" has no field "phone" to replicate',
     },
     {
       title: "a vector field in includeFields",
-      replication: base().add(user, { includeFields: ["embedding"] } as never),
+      replication: '.replication({ includeFields: ["embedding"] })',
       issue:
-        'dbReplications.0.types.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
+        'db.main-db.tables.User.replication.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
     },
   ])("rejects $title", async ({ replication, issue }) => {
-    await expect(load(replication)).rejects.toMatchObject({
+    await expect(load(replication, both)).rejects.toMatchObject({
       code: "CONFIG_INVALID",
       message: expect.stringContaining(issue),
     });
-  });
-
-  test("accepts a vector field in excludeFields", async () => {
-    await expect(load(base().add(user, { excludeFields: ["embedding"] }))).resolves.toBeDefined();
   });
 });

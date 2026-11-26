@@ -66,7 +66,6 @@ export type AppConfigParsed = {
   staticWebsites?: unknown;
   aiGateways?: unknown;
   dbReplicationDestinations?: unknown;
-  dbReplications?: unknown;
   secrets?: unknown;
 };
 export type AppConfigParsedInput = AppConfigParsed;
@@ -129,7 +128,6 @@ export type AppDefinitionParsed = {
   staticWebsites?: unknown;
   aiGateways?: unknown;
   dbReplicationDestinations?: unknown;
-  dbReplications?: unknown;
   secrets?: unknown;
   db?:
     | {

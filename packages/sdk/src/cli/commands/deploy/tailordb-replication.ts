@@ -27,10 +27,8 @@ import {
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
-import type {
-  TailorDBReplication,
-  TailorDBReplicationDestination,
-} from "#/types/tailordb-replication.generated";
+import type { TailorDBReplication } from "#/parser/service/tailordb-replication/types";
+import type { TailorDBReplicationDestination } from "#/types/tailordb-replication.generated";
 import type { TailorDBPlanResult } from "./tailordb/plan";
 
 type ReplicationRequest = MessageInitShape<typeof CreateTailorDBReplicationRequestSchema>;

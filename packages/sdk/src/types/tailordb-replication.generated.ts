@@ -13,62 +13,79 @@ export type TailorDBReplicationDestination = {
 };
 export type TailorDBReplicationDestinationInput = TailorDBReplicationDestination;
 
-export type TailorDBReplicationType = {
-  /** TailorDB type to replicate */
-  name: string;
+export type TailorDBReplicationSettingsInput = {
+  /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+  destination: TailorDBReplicationDestination;
+  /** Prefix prepended to each destination table name */
+  tablePrefix?: string | undefined;
+  /** Whether the replication runs */
+  enabled?: boolean | undefined;
+};
+
+export type TailorDBReplicationSettings = {
+  /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+  destination: TailorDBReplicationDestination;
+  /** Prefix prepended to each destination table name */
+  tablePrefix?: string | undefined;
+  /** Whether the replication runs */
+  enabled: boolean;
+};
+
+/**
+ * Replications of this namespace's tables, keyed by replication name. A replication whose value is `undefined` is declared but not deployed.
+ */
+export type TailorDBReplicationsInput = {
+  [x: string]:
+    | {
+        /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+        destination: {
+          /** Replication destination name */
+          name: string;
+          /** BigQuery dataset to replicate into */
+          bigquery: {
+            /** Google Cloud project ID hosting the dataset. Cannot be changed after the destination is created. */
+            project: string;
+            /** BigQuery dataset ID. Cannot be changed after the destination is created. */
+            dataset: string;
+          };
+        };
+        /** Prefix prepended to each destination table name */
+        tablePrefix?: string | undefined;
+        /** Whether the replication runs */
+        enabled?: boolean | undefined;
+      }
+    | undefined;
+};
+
+export type TailorDBReplications = {
+  [x: string]:
+    | {
+        /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+        destination: {
+          /** Replication destination name */
+          name: string;
+          /** BigQuery dataset to replicate into */
+          bigquery: {
+            /** Google Cloud project ID hosting the dataset. Cannot be changed after the destination is created. */
+            project: string;
+            /** BigQuery dataset ID. Cannot be changed after the destination is created. */
+            dataset: string;
+          };
+        };
+        /** Prefix prepended to each destination table name */
+        tablePrefix?: string | undefined;
+        /** Whether the replication runs */
+        enabled: boolean;
+      }
+    | undefined;
+};
+
+export type TailorDBTypeReplication = {
+  /** Replications of the namespace that copy this table; every one when omitted */
+  targets?: string[] | undefined;
   /** Replicate every field but these. Fields added later are replicated. */
   excludeFields?: string[] | undefined;
   /** Replicate only these fields. Fields added later are not replicated. */
   includeFields?: string[] | undefined;
 };
-export type TailorDBReplicationTypeInput = TailorDBReplicationType;
-
-export type TailorDBReplicationInput = {
-  /** Replication name */
-  name: string;
-  /** Where the replicated types come from */
-  source: {
-    /** TailorDB namespace to replicate from. Cannot be changed after the replication is created. */
-    namespace: string;
-  };
-  /** Name of the replication destination to write into */
-  destination: string;
-  /** Prefix prepended to each destination table name */
-  tablePrefix?: string | undefined;
-  /** Whether the replication runs */
-  enabled?: boolean | undefined;
-  /** Types to replicate */
-  types: {
-    /** TailorDB type to replicate */
-    name: string;
-    /** Replicate every field but these. Fields added later are replicated. */
-    excludeFields?: string[] | undefined;
-    /** Replicate only these fields. Fields added later are not replicated. */
-    includeFields?: string[] | undefined;
-  }[];
-};
-
-export type TailorDBReplication = {
-  /** Replication name */
-  name: string;
-  /** Where the replicated types come from */
-  source: {
-    /** TailorDB namespace to replicate from. Cannot be changed after the replication is created. */
-    namespace: string;
-  };
-  /** Name of the replication destination to write into */
-  destination: string;
-  /** Prefix prepended to each destination table name */
-  tablePrefix?: string | undefined;
-  /** Whether the replication runs */
-  enabled: boolean;
-  /** Types to replicate */
-  types: {
-    /** TailorDB type to replicate */
-    name: string;
-    /** Replicate every field but these. Fields added later are replicated. */
-    excludeFields?: string[] | undefined;
-    /** Replicate only these fields. Fields added later are not replicated. */
-    includeFields?: string[] | undefined;
-  }[];
-};
+export type TailorDBTypeReplicationInput = TailorDBTypeReplication;
