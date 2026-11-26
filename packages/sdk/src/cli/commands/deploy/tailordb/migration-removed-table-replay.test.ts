@@ -97,7 +97,7 @@ describe("migration flow: replaying a history that removes tables", () => {
 
   function scriptOrder(number: number) {
     const mock = vi.mocked(migrationModule.executeMigrations).mock;
-    const index = mock.calls.findIndex((call) => call[1][0]?.number === number);
+    const index = mock.calls.findIndex((call) => call[1].some((m) => m.number === number));
     return mock.invocationCallOrder[index]!;
   }
 
@@ -588,8 +588,7 @@ describe("migration flow: replaying a history that removes tables", () => {
         ],
       },
     });
-    checkpoint = createRemoteCheckpoint(0);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    startAtCheckpoint(0);
     planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([
         {
@@ -689,12 +688,7 @@ describe("migration flow: replaying a history that removes tables", () => {
 
     await applyTailorDB(client, planResult, "create-update");
 
-    const permissionCreates = vi
-      .mocked(client.createTailorDBGQLPermission)
-      .mock.invocationCallOrder.filter(
-        (_order, index) =>
-          vi.mocked(client.createTailorDBGQLPermission).mock.calls[index]?.[0].typeName === "Draft",
-      );
+    const permissionCreates = permissionCreateOrdersOf(client, "Draft");
     expect(permissionCreates).toHaveLength(2);
     const { table, permission } = deleteOrders(client, NAMESPACE, "Draft");
     expect(permission).toHaveLength(1);
@@ -726,10 +720,7 @@ describe("migration flow: replaying a history that removes tables", () => {
 
     await applyTailorDB(client, planResult, "create-update");
 
-    const mock = vi.mocked(client.createTailorDBGQLPermission).mock;
-    const permissionCreates = mock.invocationCallOrder.filter(
-      (_order, index) => mock.calls[index]?.[0].typeName === "Draft",
-    );
+    const permissionCreates = permissionCreateOrdersOf(client, "Draft");
     const { table } = deleteOrders(client, NAMESPACE, "Draft");
     expect(table).toHaveLength(1);
     expect(permissionCreates).toHaveLength(2);
@@ -753,8 +744,7 @@ describe("migration flow: replaying a history that removes tables", () => {
         ],
       },
     });
-    checkpoint = createRemoteCheckpoint(0);
-    vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+    startAtCheckpoint(0);
     planResult.context.pendingMigrations = checkpoint.mockPending([
       mkPendingMigration([]),
       mkPendingMigration(
@@ -777,19 +767,6 @@ describe("migration flow: replaying a history that removes tables", () => {
     const tableA = snapshotTable("A", nameField);
     const withF2 = snapshotTable("A", { ...nameField, f2: { type: "string", required: false } });
 
-    function scriptOrder(number: number) {
-      const mock = vi.mocked(migrationModule.executeMigrations).mock;
-      const index = mock.calls.findIndex((call) => call[1].some((m) => m.number === number));
-      return mock.invocationCallOrder[index]!;
-    }
-
-    function permissionCreateOrders(client: OperatorClient, tableName: string) {
-      const mock = vi.mocked(client.createTailorDBGQLPermission).mock;
-      return mock.invocationCallOrder.filter(
-        (_order, index) => mock.calls[index]?.[0].typeName === tableName,
-      );
-    }
-
     function recreatePlan() {
       return createPlanResult({
         type: { creates: [typeEntry("A")], deletes: [typeDeletion("A")] },
@@ -802,8 +779,7 @@ describe("migration flow: replaying a history that removes tables", () => {
     }
 
     function workspaceAtCheckpoint(number: number) {
-      checkpoint = createRemoteCheckpoint(number);
-      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+      startAtCheckpoint(number);
       return checkpoint.createMockClient({
         listTailorDBTypes: { tailordbTypes: [{ name: "A" }] },
       });
@@ -854,7 +830,7 @@ describe("migration flow: replaying a history that removes tables", () => {
       const created = createOrdersOf(client, "A");
       expect(created).toHaveLength(1);
       expect(created[0]).toBeGreaterThan(table[0]!);
-      const permissionCreates = permissionCreateOrders(client, "A");
+      const permissionCreates = permissionCreateOrdersOf(client, "A");
       expect(permissionCreates).toHaveLength(1);
       expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
     });
@@ -879,8 +855,7 @@ describe("migration flow: replaying a history that removes tables", () => {
         },
         local: [tableA, keepWithKey],
       });
-      checkpoint = createRemoteCheckpoint(0);
-      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+      startAtCheckpoint(0);
       const client = checkpoint.createMockClient({
         listTailorDBTypes: { tailordbTypes: [{ name: "A" }, { name: "Keep" }] },
       });
@@ -963,8 +938,7 @@ describe("migration flow: replaying a history that removes tables", () => {
           type: { unchanged: [typeUnchanged("T")] },
           local: [tableT],
         });
-        checkpoint = createRemoteCheckpoint(0);
-        vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+        startAtCheckpoint(0);
         const client = checkpoint.createMockClient({
           listTailorDBTypes: { tailordbTypes: [{ name: "T" }] },
         });
@@ -1011,7 +985,7 @@ describe("migration flow: replaying a history that removes tables", () => {
       await applyTailorDB(client, planResult, "create-update");
 
       const { permission } = deleteOrders(client, NAMESPACE, "A");
-      const permissionCreates = permissionCreateOrders(client, "A");
+      const permissionCreates = permissionCreateOrdersOf(client, "A");
       expect(permission).toHaveLength(1);
       expect(permissionCreates).toHaveLength(2);
       expect(permissionCreates[0]).toBeLessThan(permission[0]!);
