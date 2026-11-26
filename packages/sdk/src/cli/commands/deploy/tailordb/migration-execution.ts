@@ -146,11 +146,10 @@ function entriesOfNamespace<T extends NamespacedEntry>(
 }
 
 /**
- * List the tables a migration changes that the workspace lacks while the local definitions and the
- * last pending migration omit them: the tables the migration adds and a later pending migration
- * removes or renames away. The plan does not create them, so the migration creates them for its
- * script, and the migration that removes them deletes them again. A namespace without local
- * definitions is left alone.
+ * List the tables a migration changes that the workspace lacks while the last pending migration
+ * omits them: the tables the migration adds and a later pending migration removes or renames away,
+ * which the migration creates for its script and the migration that removes them deletes again. A
+ * namespace without local definitions is left alone.
  * @param changeSet - TailorDB change set
  * @param migration - The migration about to run
  * @param finalMigration - The last pending migration of the namespace
@@ -163,10 +162,9 @@ function missingTableNames(
   finalMigration: PendingMigration,
   phaseSettings: MigrationPhaseSettings,
 ): string[] {
-  const localTables = phaseSettings.tailorDBInputs.find(
-    (input) => input.namespace === migration.namespace,
-  )?.types;
-  if (!localTables) return [];
+  if (!phaseSettings.tailorDBInputs.some((input) => input.namespace === migration.namespace)) {
+    return [];
+  }
   const finalTables = migrationSnapshotCache.load(finalMigration).tables;
   const deleted = new Set(
     entriesOfNamespace(changeSet.type.deletes, migration.namespace).map((entry) => entry.name),
@@ -176,11 +174,7 @@ function missingTableNames(
     const workspaceLacks =
       !processedTables.created.has(key) &&
       (!deleted.has(tableName) || deletedResources.types.has(key));
-    return (
-      workspaceLacks &&
-      !Object.hasOwn(localTables, tableName) &&
-      !Object.hasOwn(finalTables, tableName)
-    );
+    return workspaceLacks && !Object.hasOwn(finalTables, tableName);
   });
 }
 
