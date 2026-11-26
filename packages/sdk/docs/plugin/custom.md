@@ -451,7 +451,7 @@ import type {
 
 ## Replicating Generated Tables
 
-A table that a plugin generates is [replicated](../services/tailordb/replication.md) when the plugin calls `.replication()` on it, as for any table. What the plugin sets is the default: users replace it for a table in their namespace's `pluginTables`, keyed by the table's name.
+A table that a plugin generates is [replicated](../services/tailordb/replication.md#tables-that-plugins-generate) when the plugin calls `.replication()` on it, as for any table. What the plugin sets is the default: users replace it for a table in their namespace's `pluginTables`, keyed by the table's name.
 
 - Omit `targets`, so that the entry applies to every replication of the namespace. Replication names come from each user's config, and a target the namespace does not declare fails when the config loads.
 - To leave a table out unless users choose to replicate it, do not call `.replication()` on it.

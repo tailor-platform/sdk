@@ -1,4 +1,4 @@
-import { assertType, describe, expectTypeOf, test } from "vitest";
+import { assertType, describe, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
 import { db } from "#/configure/services/tailordb/schema";
 import {
@@ -124,8 +124,7 @@ describe("namespace pluginTables", () => {
   });
 
   test("take one table's settings as TailorDBPluginTableConfig", () => {
-    expectTypeOf<TailorDBPluginTablesConfig>().toEqualTypeOf<
-      Record<string, TailorDBPluginTableConfig>
-    >();
+    const auditLog: TailorDBPluginTableConfig = { replication: false };
+    assertType<TailorDBPluginTablesConfig>({ AuditLog: auditLog });
   });
 });

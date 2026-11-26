@@ -129,7 +129,7 @@ Field names are checked against the table's fields, per `.replication()` entry. 
 
 ### Tables that plugins generate
 
-A plugin can generate tables that you do not define yourself, such as an audit log table. A plugin replicates such a table by calling `.replication()` on it; the plugin's documentation says which tables it replicates and which fields it leaves out.
+A plugin can generate tables that you do not define yourself, such as an audit log table. A plugin replicates such a table by calling `.replication()` on it; check the plugin's documentation for which tables it replicates and which fields it leaves out.
 
 To choose for yourself, set the table's `replication` in the namespace's `pluginTables`, keyed by the table's name. It takes the same entries as `.replication()` and replaces what the plugin sets; `false` leaves the table out:
 
