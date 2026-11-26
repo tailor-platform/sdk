@@ -119,6 +119,17 @@ describe("KyselyTypePlugin integration tests", () => {
       );
     });
 
+    test("rejects decimal with contentMapper, whose getDB does not read Decimal values", () => {
+      // @ts-expect-error decimal is only available together with distPath
+      expect(() => kyselyTypePlugin({ contentMapper: true, decimal: true })).toThrow(
+        "kyselyTypePlugin does not support decimal with contentMapper: true; set distPath instead.",
+      );
+    });
+
+    test("accepts decimal with distPath", () => {
+      expect(() => kyselyTypePlugin({ distPath: "./db.ts", decimal: true })).not.toThrow();
+    });
+
     test("rejects an empty distPath, which would generate no types and enable no content mapper", () => {
       expect(() => kyselyTypePlugin({ distPath: "" })).toThrow(/distPath must not be empty/);
     });
