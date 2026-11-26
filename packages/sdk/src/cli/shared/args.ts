@@ -554,9 +554,9 @@ export interface RecoveryContext {
  * Arguments that make a hinted follow-up command load the same env files and
  * select the same profile and workspace as the current run. The env files come
  * from `process.argv`, since parsed values drop the occurrences given before
- * the subcommand name, and are made absolute so the hint runs from any
- * directory. The `--option=<value>` form keeps a leading-hyphen value bound as
- * the option value.
+ * the subcommand name, and are made absolute so they load from any directory.
+ * The `--option=<value>` form keeps a leading-hyphen value bound as the option
+ * value.
  * @param {RecoveryContext} context - Profile and workspace id the current run used
  * @returns {readonly string[]} Arguments to append to the hinted command
  */

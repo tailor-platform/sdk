@@ -95,7 +95,7 @@ Authentication failures distinguish missing credentials (`AUTH_TOKEN_NOT_FOUND`)
 user (`AUTH_USER_NOT_FOUND`), an expired token (`AUTH_TOKEN_EXPIRED`), and a failed token refresh
 (`AUTH_TOKEN_REFRESH_FAILED`). `CONFIG_LOCK_TIMEOUT` means another `tailor` command kept the saved
 credentials locked for too long; `error.context.lockPath` names the lock file to delete if no other
-command is running. Login recovery preserves the selected profile. For saved identities,
+command is running. Login recovery preserves the selected profile and env files. For saved identities,
 the next step opens login help so you can reuse the original browser or machine-user login method. Permission and
 connection failures include guidance in `error.suggestion`; API failures also identify the operation
 and affected resources in `error.context`.
@@ -402,6 +402,7 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 - Later files override earlier files
 - `--env-file` files are loaded first, then `--env-file-if-exists` files
 - Loaded values fill options backed by an environment variable, such as `--config` from `TAILOR_CONFIG_PATH`
+- Commands the CLI suggests with the run's workspace or profile, and next-step hints, repeat these options with each file's absolute path
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)

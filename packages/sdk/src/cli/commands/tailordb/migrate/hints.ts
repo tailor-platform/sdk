@@ -95,16 +95,22 @@ export interface NamespaceMigrationCommandOptions extends MigrationCommandContex
 }
 
 /**
+ * Workspace, profile, and env-file arguments that make a suggested command select what the current run selected.
+ * @param {MigrationCommandContext} context - Invocation context of the current run
+ * @returns {readonly string[]} The context arguments, or the run's env files alone when the context has none
+ */
+export function migrationSelectionArgs(context: MigrationCommandContext): readonly string[] {
+  return context.contextArgs ?? recoveryContextArgs({});
+}
+
+/**
  * Arguments that make a suggested command target what the current run targeted.
  * @param {MigrationCommandContext} context - Invocation context of the current run
  * @returns {string[]} The config argument, followed by the context arguments
  */
 export function migrationContextArgs(context: MigrationCommandContext): string[] {
   const configArg = formatConfigArg(context.configPath);
-  return [
-    ...(configArg === undefined ? [] : [configArg]),
-    ...(context.contextArgs ?? recoveryContextArgs({})),
-  ];
+  return [...(configArg === undefined ? [] : [configArg]), ...migrationSelectionArgs(context)];
 }
 
 /**

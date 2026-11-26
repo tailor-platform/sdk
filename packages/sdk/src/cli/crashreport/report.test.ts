@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterAll, afterEach, describe, test, expect, vi } from "vitest";
 import { logger, resetSecretRegistry } from "#/cli/shared/logger";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { buildCrashReport, type ErrorType } from "./report";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-crashreport-test-${Date.now()}-${Math.random()}`);
@@ -115,18 +116,14 @@ describe("buildCrashReport", () => {
 
   test("redacts a registered secret that appears in the command or argv", () => {
     logger.registerSecret("cmd-argv-secret-value");
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "cmd-argv-secret-value"];
-    try {
-      const report = makeReport(new Error("boom"));
+    using _argv = tailorArgv(["cmd-argv-secret-value"]);
 
-      expect(report.command).not.toContain("cmd-argv-secret-value");
-      expect(report.command).toContain("<redacted>");
-      expect(report.argv).not.toContain("cmd-argv-secret-value");
-      expect(report.argv.join(" ")).toContain("<redacted>");
-    } finally {
-      process.argv = originalArgv;
-    }
+    const report = makeReport(new Error("boom"));
+
+    expect(report.command).not.toContain("cmd-argv-secret-value");
+    expect(report.command).toContain("<redacted>");
+    expect(report.argv).not.toContain("cmd-argv-secret-value");
+    expect(report.argv.join(" ")).toContain("<redacted>");
   });
 
   test("redacts a registered secret embedded in a filesystem path before the path sanitizer strips it to a basename", () => {
