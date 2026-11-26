@@ -2,7 +2,11 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
-import { awaitFunctionAsyncRun, startFunctionAsyncRun } from "./function-async-run";
+import {
+  awaitFunctionAsyncRun,
+  type FunctionAsyncRunOutcome,
+  startFunctionAsyncRun,
+} from "./function-async-run";
 import { logger } from "./logger";
 import { mockOperatorClient } from "./test-helpers/operator-client";
 import { createRunId, workflowRunLabels } from "./workflow-run-labels";
@@ -143,7 +147,10 @@ describe("startFunctionAsyncRun", () => {
         arg: undefined,
       }),
     ).rejects.toThrow(/bad/);
-    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({ workspaceId: "ws", name });
+    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith(
+      { workspaceId: "ws", name },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   test("keeps the function when it cannot tell whether the start was accepted", async () => {
@@ -201,7 +208,10 @@ describe("awaitFunctionAsyncRun", () => {
       state: "finished",
       result: { success: true, logs: "hello", result: '{"ok":true}' },
     });
-    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({ workspaceId: "ws", name });
+    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith(
+      { workspaceId: "ws", name },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   test("reports a failed execution with its error message, and still removes the function", async () => {
@@ -223,6 +233,46 @@ describe("awaitFunctionAsyncRun", () => {
       result: { success: false, error: "Error: boom" },
     });
     expect(client.deleteFunctionRegistry).toHaveBeenCalledOnce();
+  });
+
+  test("reports the result and the logs, and warns that the function was kept, when its removal gets no answer within 30 seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = createClient();
+      client.deleteFunctionRegistry.mockImplementation(
+        (_request, options) =>
+          new Promise<never>((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () =>
+              reject(new ConnectError("canceled", Code.Canceled)),
+            );
+          }),
+      );
+      let outcome: FunctionAsyncRunOutcome | undefined;
+      void awaitFunctionAsyncRun({
+        client,
+        workspaceId: "ws",
+        started,
+        pollInterval: 1,
+        timeoutMs: 60_000,
+      }).then((settled) => {
+        outcome = settled;
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(outcome).toEqual({
+        state: "finished",
+        result: { success: true, logs: "hello", result: '{"ok":true}' },
+      });
+      expect(vi.mocked(logger.warn).mock.calls).toEqual([
+        [
+          `The temporary function run function '${name}' may remain. ` +
+            "`tailor workflow prune` retries the removal once the run has finished. " +
+            `Reason: the removal of the function '${name}' got no answer within 30 seconds.`,
+        ],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("keeps the name and the stack trace of the error, which `function logs` shows and the source map needs", async () => {

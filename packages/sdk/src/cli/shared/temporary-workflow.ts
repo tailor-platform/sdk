@@ -27,6 +27,7 @@ import { logger } from "#/cli/shared/logger";
 import { isRetryableWaitError } from "#/cli/shared/wait-error";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { CallOptions } from "@connectrpc/connect";
 import type {
   CreateFunctionRegistryRequestSchema,
   UpdateFunctionRegistryRequestSchema,
@@ -135,53 +136,92 @@ export interface TeardownTemporaryWorkflowParams {
   warn?: ((message: string) => void) | undefined;
 }
 
+/** Longest wait for one removal in {@link teardownTemporaryWorkflow}. */
+const REMOVAL_TIMEOUT_MS = 30_000;
+
 /**
  * Remove the temporary resources created for a run.
  *
  * Teardown is best effort: a failure here must not mask the run's own
- * outcome, so every removal is attempted and an unexpected failure is reported
- * as a warning rather than raised.
+ * outcome, so a failed removal does not stop the ones after it and is reported
+ * as a warning rather than raised. A removal that gets no answer within
+ * {@link REMOVAL_TIMEOUT_MS} is given up on, together with the removals after it.
  * @param params - Resources to remove
  * @returns Whether every resource is gone
  */
 export async function teardownTemporaryWorkflow(
   params: TeardownTemporaryWorkflowParams,
 ): Promise<boolean> {
+  return await removeTemporaryResources(params, "giveUpAfterTimeout");
+}
+
+/** Whether a removal that gets no answer is given up on after {@link REMOVAL_TIMEOUT_MS}. */
+type RemovalWait = "giveUpAfterTimeout" | "waitForAnswer";
+
+async function removeTemporaryResources(
+  params: TeardownTemporaryWorkflowParams,
+  wait: RemovalWait,
+): Promise<boolean> {
   const { client, workspaceId, name, workflowId, subject, leftoverNote } = params;
   const warn = params.warn ?? ((message: string) => logger.warn(message));
   const jobFunctionNames = params.jobFunctionNames ?? [name];
-  const steps: [label: string, resource: string, run: () => Promise<unknown>][] = [];
+  const steps: [
+    label: string,
+    resource: string,
+    run: (options: CallOptions) => Promise<unknown>,
+  ][] = [];
   if (workflowId) {
-    steps.push(["workflow", name, () => client.deleteWorkflow({ workspaceId, workflowId })]);
+    steps.push([
+      "workflow",
+      name,
+      (options) => client.deleteWorkflow({ workspaceId, workflowId }, options),
+    ]);
   }
   for (const jobFunctionName of jobFunctionNames) {
     steps.push([
       "job function",
       jobFunctionName,
-      () => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }),
+      (options) => client.deleteWorkflowJobFunction({ workspaceId, jobFunctionName }, options),
     ]);
   }
   for (const functionName of params.functionNames ?? [name]) {
     steps.push([
       "function",
       functionName,
-      () => client.deleteFunctionRegistry({ workspaceId, name: functionName }),
+      (options) => client.deleteFunctionRegistry({ workspaceId, name: functionName }, options),
     ]);
   }
 
   let removedAll = true;
-  for (const [label, resource, run] of steps) {
+  for (const [index, [label, resource, run]] of steps.entries()) {
+    const controller = new AbortController();
+    const timer =
+      wait === "giveUpAfterTimeout"
+        ? setTimeout(() => controller.abort(), REMOVAL_TIMEOUT_MS)
+        : undefined;
     try {
-      await run();
+      await run({ signal: controller.signal });
     } catch (error) {
       // An already-absent resource means teardown's goal is met; anything else
       // leaves a resource behind and has to stay diagnosable.
       if (isNotFoundError(error)) continue;
       removedAll = false;
+      if (controller.signal.aborted) {
+        const kept = steps
+          .slice(index)
+          .map(([keptLabel, keptResource]) => `${keptLabel} '${keptResource}'`);
+        warn(
+          `The temporary ${subject} ${new Intl.ListFormat("en").format(kept)} may remain. ${leftoverNote} ` +
+            `Reason: the removal of the ${label} '${resource}' got no answer within ${REMOVAL_TIMEOUT_MS / 1000} seconds.`,
+        );
+        break;
+      }
       warn(
         `Could not remove the temporary ${subject} ${label} '${resource}'. ${leftoverNote} ` +
           `Reason: ${error instanceof Error ? error.message : String(error)}`,
       );
+    } finally {
+      clearTimeout(timer);
     }
   }
   return removedAll;
@@ -266,7 +306,8 @@ export async function reclaimTemporaryWorkflow(
   params: Omit<TeardownTemporaryWorkflowParams, "workflowId">,
 ): Promise<void> {
   const workflowId = await findTemporaryWorkflowId(params.client, params.workspaceId, params.name);
-  await teardownTemporaryWorkflow({ ...params, workflowId });
+  // A removal given up on can still land after the create that follows and remove the new resource.
+  await removeTemporaryResources({ ...params, workflowId }, "waitForAnswer");
 }
 
 export interface CreateTemporaryWorkflowParams extends TemporaryResourceOwner {

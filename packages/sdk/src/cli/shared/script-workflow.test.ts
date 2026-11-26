@@ -212,7 +212,10 @@ describe("withScriptWorkflow", () => {
       }),
     ).rejects.toThrow("boom");
 
-    expect(client.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-1" });
+    expect(client.deleteWorkflow).toHaveBeenCalledWith(
+      { workspaceId: "ws", workflowId: "wf-1" },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(calls.at(-1)).toBe("deleteFunctionRegistry");
   });
 
@@ -333,7 +336,10 @@ describe("withScriptWorkflow", () => {
 
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
-    expect(client.deleteWorkflow).toHaveBeenCalledWith({ workspaceId: "ws", workflowId: "wf-old" });
+    expect(client.deleteWorkflow).toHaveBeenCalledWith(
+      { workspaceId: "ws", workflowId: "wf-old" },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   test("reclaims the leftovers of an interrupted run before registering the script", async () => {
@@ -342,6 +348,33 @@ describe("withScriptWorkflow", () => {
     await withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
 
     expect(calls.indexOf("deleteWorkflow")).toBeLessThan(calls.indexOf("createFunctionRegistry"));
+  });
+
+  test("waits for the leftovers of an earlier run to be removed however long it takes, before registering the script", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(logger.warn).mockClear();
+      const { client, calls } = createMockClient({ leftoverWorkflowId: "wf-old" });
+      client.deleteWorkflow.mockImplementationOnce(
+        (_request, options) =>
+          new Promise((resolve, reject) => {
+            setTimeout(() => resolve({}), 40_000);
+            options?.signal?.addEventListener("abort", () =>
+              reject(new ConnectError("canceled", Code.Canceled)),
+            );
+          }),
+      );
+      const done = withScriptWorkflow({ ...baseOptions, client }, (run) => run({}));
+      await vi.advanceTimersByTimeAsync(40_000);
+      await done;
+
+      expect(logger.warn).not.toHaveBeenCalled();
+      expect(calls.indexOf("deleteWorkflowJobFunction")).toBeLessThan(
+        calls.indexOf("createFunctionRegistry"),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

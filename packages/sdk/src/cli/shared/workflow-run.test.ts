@@ -5,7 +5,7 @@ import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { writeMetadataLabelsDirect } from "#/cli/commands/deploy/label";
 import { logger } from "./logger";
 import { createConcurrencyProbe } from "./test-helpers/concurrency-probe";
@@ -19,6 +19,7 @@ import {
   reclaimWorkflowRuns,
   startWorkflowRun,
   pruneHint,
+  type WorkflowRunOutcome,
   workflowRunHints,
 } from "./workflow-run";
 import { createRunId, workflowRunJobFunctionName, workflowRunLabels } from "./workflow-run-labels";
@@ -323,7 +324,7 @@ describe("startWorkflowRun when a later name is already taken", () => {
     await expect(jobRun(client)).rejects.toThrow("exists");
 
     expect(client.deleteFunctionRegistry.mock.calls).toEqual([
-      [{ workspaceId: "ws", name: parent }],
+      [{ workspaceId: "ws", name: parent }, { signal: expect.any(AbortSignal) }],
     ]);
     expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
@@ -338,7 +339,7 @@ describe("startWorkflowRun when a later name is already taken", () => {
     await expect(jobRun(client)).rejects.toThrow("exists");
 
     expect(client.deleteWorkflowJobFunction.mock.calls).toEqual([
-      [{ workspaceId: "ws", jobFunctionName: parent }],
+      [{ workspaceId: "ws", jobFunctionName: parent }, { signal: expect.any(AbortSignal) }],
     ]);
     expect(
       client.deleteFunctionRegistry.mock.calls.map(([request]) => request.name).toSorted(),
@@ -441,6 +442,79 @@ describe("awaitWorkflowRun", () => {
     expect(outcome).toEqual({ state: "timedOut" });
     expect(client.deleteWorkflow).not.toHaveBeenCalled();
     expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+  });
+});
+
+describe("awaitWorkflowRun when removing the resources is slow", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.mocked(logger.warn).mockClear();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function startWaiting(client: ReturnType<typeof createClient>) {
+    let outcome: WorkflowRunOutcome | undefined;
+    void awaitWorkflowRun({
+      client,
+      workspaceId: "ws",
+      started,
+      pollInterval: 1,
+      timeoutMs: 60_000,
+    }).then((settled) => {
+      outcome = settled;
+    });
+    return () => outcome;
+  }
+
+  test("reports the result once a removal gets no answer within 30 seconds, and warns once about it and the removals it skipped", async () => {
+    const client = createClient();
+    client.deleteWorkflowJobFunction.mockImplementation(
+      (_request, options) =>
+        new Promise<never>((_resolve, reject) => {
+          options?.signal?.addEventListener("abort", () =>
+            reject(new ConnectError("canceled", Code.Canceled)),
+          );
+        }),
+    );
+    const outcome = startWaiting(client);
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(outcome()).toMatchObject({ state: "finished", result: { success: true } });
+    expect(client.deleteWorkflow).toHaveBeenCalledOnce();
+    expect(client.deleteFunctionRegistry).not.toHaveBeenCalled();
+    expect(vi.mocked(logger.warn).mock.calls).toEqual([
+      [
+        `The temporary workflow run job function '${mainFunctionName}' ` +
+          `and function '${mainFunctionName}' may remain. ` +
+          "`tailor workflow prune` retries the removal once the run has finished. " +
+          `Reason: the removal of the job function '${mainFunctionName}' got no answer within 30 seconds.`,
+      ],
+    ]);
+  });
+
+  test("leaves no timer running once the removals answer, so the process can exit", async () => {
+    const outcome = startWaiting(createClient());
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(outcome()).toMatchObject({ state: "finished" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("removes every resource when each removal answers within 30 seconds, however long they take together", async () => {
+    const client = createClient();
+    const answerAfter20Seconds = () =>
+      new Promise<Record<string, never>>((resolve) => setTimeout(() => resolve({}), 20_000));
+    client.deleteWorkflow.mockImplementation(answerAfter20Seconds);
+    client.deleteWorkflowJobFunction.mockImplementation(answerAfter20Seconds);
+    client.deleteFunctionRegistry.mockImplementation(answerAfter20Seconds);
+    const outcome = startWaiting(client);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(outcome()).toMatchObject({ state: "finished", result: { success: true } });
+    expect(client.deleteFunctionRegistry).toHaveBeenCalledOnce();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
 
@@ -939,10 +1013,10 @@ describe("reclaimWorkflowRuns", () => {
     await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
 
     expect(client.deleteWorkflow.mock.calls[0]?.[0].workflowId).toBe("wf-0");
-    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
-      workspaceId: "ws",
-      name: `tmp-run-${runId}-main`,
-    });
+    expect(client.deleteFunctionRegistry).toHaveBeenCalledWith(
+      { workspaceId: "ws", name: `tmp-run-${runId}-main` },
+      { signal: expect.any(AbortSignal) },
+    );
   });
 
   test("keeps a run that is still executing", async () => {
@@ -1053,10 +1127,10 @@ describe("reclaimWorkflowRuns", () => {
       const client = directFunction([FunctionExecution_Status.FAILED], now);
       await reclaimWorkflowRuns({ client, workspaceId: "ws", now: old });
 
-      expect(client.deleteFunctionRegistry).toHaveBeenCalledWith({
-        workspaceId: "ws",
-        name: `tmp-fn-${runId}`,
-      });
+      expect(client.deleteFunctionRegistry).toHaveBeenCalledWith(
+        { workspaceId: "ws", name: `tmp-fn-${runId}` },
+        { signal: expect.any(AbortSignal) },
+      );
     });
 
     test("reports the removed run by the name of its function", async () => {
@@ -1645,7 +1719,7 @@ describe("reclaimWorkflowRuns for a workflow that is still running", () => {
 
     expect(client.deleteWorkflowJobFunction).not.toHaveBeenCalled();
     expect(client.deleteFunctionRegistry.mock.calls).toEqual([
-      [{ workspaceId: "ws", name: "tmp-run-r00aaa-other" }],
+      [{ workspaceId: "ws", name: "tmp-run-r00aaa-other" }, { signal: expect.any(AbortSignal) }],
     ]);
     expect(result.removedUnlabeled).toEqual([{ kind: "function", name: "tmp-run-r00aaa-other" }]);
   });

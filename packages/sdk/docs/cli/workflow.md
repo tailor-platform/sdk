@@ -174,7 +174,7 @@ $ tailor workflow run workflows/jobs.ts --job process-order --arg-file ./order.j
 
 **Notes**
 
-The workflow job runs as a temporary workflow, so the job you are editing runs the way it does once deployed, without a deploy. The job is the first job of the temporary workflow, and every job it starts with `.start()` is registered with it. A job that calls `.start()` is suspended until the started job finishes and then continues with its result, so work that does not fit in one job is split into jobs and carried across them. The command waits for the whole run, prints the logs of every job and the result of the first job, and removes the temporary resources afterwards.
+The workflow job runs as a temporary workflow, so the job you are editing runs the way it does once deployed, without a deploy. The job is the first job of the temporary workflow, and every job it starts with `.start()` is registered with it. A job that calls `.start()` is suspended until the started job finishes and then continues with its result, so work that does not fit in one job is split into jobs and carried across them. The command waits for the whole run, prints the logs of every job and the result of the first job, and removes the temporary resources afterwards. A removal that gets no answer from the Platform within 30 seconds is given up on, together with the removals after it, and the command warns which resources may remain.
 
 A single job is ended by the Platform after 5 minutes, and the run is reported as failed with a timeout error. The command waits until the run ends; `--timeout` limits how long it waits, not how long the jobs may run.
 

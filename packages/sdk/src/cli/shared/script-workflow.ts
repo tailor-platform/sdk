@@ -84,7 +84,8 @@ export type RunScript = (arg: Jsonifiable) => Promise<ScriptExecutionResult>;
 /**
  * Register the script as a temporary workflow, hand `use` a function that runs
  * it once per argument, and remove the resources afterwards, whether or not
- * `use` threw.
+ * `use` threw. A removal that gets no answer within 30 seconds is given up on,
+ * together with the removals after it, with a warning naming the resources that may remain.
  * @param options - Script and where to register it
  * @param use - Receives the function that starts the script
  * @returns What `use` returned

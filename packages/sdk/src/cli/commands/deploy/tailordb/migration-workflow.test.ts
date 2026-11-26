@@ -717,10 +717,11 @@ describe("executeMigrationAsWorkflow", () => {
     expect(result.success).toBe(true);
     // The stale workflow is deleted by id before the create path runs, so
     // `createFunctionRegistry` cannot fail on a name collision.
-    expect(client.deleteWorkflow).toHaveBeenNthCalledWith(1, {
-      workspaceId: "ws-1",
-      workflowId: "stale-wf",
-    });
+    expect(client.deleteWorkflow).toHaveBeenNthCalledWith(
+      1,
+      { workspaceId: "ws-1", workflowId: "stale-wf" },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(calls.indexOf("deleteFunctionRegistry")).toBeLessThan(
       calls.indexOf("createFunctionRegistry"),
     );
