@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { Decimal } from "decimal.js";
 import { sql } from "kysely";
 import { describe, expect, test } from "vitest";
 import { Temporal } from "#/runtime/temporal";
@@ -256,6 +257,87 @@ describe("createKyselyPGlite Temporal support", () => {
       null,
       "2026-03-15",
     ]);
+  });
+});
+
+describe("createKyselyPGlite with decimal", () => {
+  interface PriceDatabase {
+    Item: { id: string; price: string; history: string[] };
+  }
+  const numericFields = [
+    { name: "price", dataTypeID: 1700 },
+    { name: "history", dataTypeID: 1231 },
+    { name: "id", dataTypeID: 25 },
+  ];
+
+  test("reads numeric columns back as Decimal, whatever the SQL called them", async () => {
+    const { client } = createStubClient(
+      [{ price: "9.990000", history: ["1.5", "2"], id: "a" }],
+      undefined,
+      numericFields,
+    );
+    const db = createKyselyPGlite<PriceDatabase>(client, { decimal: Decimal });
+
+    const row = await db.selectFrom("Item").selectAll().executeTakeFirstOrThrow();
+
+    expect(Decimal.isDecimal(row.price)).toBe(true);
+    expect(String(row.price)).toBe("9.99");
+    expect(row.history.map(String)).toEqual(["1.5", "2"]);
+    expect(row.id).toBe("a");
+  });
+
+  test("sends a Decimal parameter as plain-notation text", async () => {
+    const { client, queries } = createStubClient();
+    const db = createKyselyPGlite<PriceDatabase>(client, { decimal: Decimal });
+
+    await db
+      .insertInto("Item")
+      .values({ id: "a", price: new Decimal("1e-7") as never, history: [] })
+      .execute();
+
+    expect(queries[0]?.params).toContain("0.0000001");
+  });
+
+  test(
+    "round-trips Decimal through a real numeric column, an aggregate and a numeric array",
+    { timeout: 30_000 },
+    async () => {
+      const pglite = new PGlite();
+      await pglite.exec(
+        'create table "Item" (id text primary key, price numeric(20, 6) not null, history numeric[] not null)',
+      );
+      const db = createKyselyPGlite<PriceDatabase>(pglite, { decimal: Decimal });
+
+      await db
+        .insertInto("Item")
+        .values([
+          { id: "a", price: new Decimal("1.5") as never, history: [new Decimal("0.1")] as never },
+          { id: "b", price: new Decimal("2.25") as never, history: [] },
+        ])
+        .execute();
+      const rows = await db
+        .selectFrom("Item")
+        .select(["price as p", "history"])
+        .orderBy("id")
+        .execute();
+      const total = await db
+        .selectFrom("Item")
+        .select(sql<string>`sum(price)`.as("total"))
+        .executeTakeFirstOrThrow();
+
+      expect(rows.map((r) => String((r as { p: unknown }).p))).toEqual(["1.5", "2.25"]);
+      expect(Decimal.isDecimal(total.total)).toBe(true);
+      expect(String(total.total)).toBe("3.75");
+      expect(rows[0]?.history.map(String)).toEqual(["0.1"]);
+      await db.destroy();
+    },
+  );
+
+  test("keeps the strings PGlite returns when decimal is not enabled", async () => {
+    const { client } = createStubClient([{ price: "9.990000" }], undefined, numericFields);
+    const db = createKyselyPGlite<PriceDatabase>(client);
+
+    expect(await db.selectFrom("Item").select("price").execute()).toEqual([{ price: "9.990000" }]);
   });
 });
 

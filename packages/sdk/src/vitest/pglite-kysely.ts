@@ -18,11 +18,13 @@ import {
   type QueryResult,
   type TransactionSettings,
 } from "kysely";
+import { deserializeDecimalRows, serializeDecimalQueryParams } from "./pglite-decimal";
 import {
   deserializeTemporalRows,
   serializeTemporalParams,
   type PGliteField,
 } from "./pglite-temporal";
+import type { DecimalClass } from "#/kysely/decimal-client";
 
 /**
  * Result of a {@link PGliteClient.query} call.
@@ -59,21 +61,22 @@ export interface PGliteClient {
 class PGliteConnection implements DatabaseConnection {
   readonly #client: PGliteClient;
   readonly #temporal: boolean;
+  readonly #decimal: DecimalClass | undefined;
 
-  constructor(client: PGliteClient, temporal: boolean) {
+  constructor(client: PGliteClient, temporal: boolean, decimal: DecimalClass | undefined) {
     this.#client = client;
     this.#temporal = temporal;
+    this.#decimal = decimal;
   }
 
   async executeQuery<R>(compiledQuery: CompiledQuery): Promise<QueryResult<R>> {
     const result = await this.#client.query(
       compiledQuery.sql,
-      serializeTemporalParams(compiledQuery.parameters),
+      serializeDecimalQueryParams(serializeTemporalParams(compiledQuery.parameters), this.#decimal),
     );
+    const rows = this.#temporal ? deserializeTemporalRows(result.rows, result.fields) : result.rows;
     return {
-      rows: (this.#temporal
-        ? deserializeTemporalRows(result.rows, result.fields)
-        : result.rows) as R[],
+      rows: deserializeDecimalRows(rows, result.fields, this.#decimal) as R[],
       numAffectedRows: BigInt(result.affectedRows ?? 0),
     };
   }
@@ -86,16 +89,18 @@ class PGliteConnection implements DatabaseConnection {
 class PGliteDriver implements Driver {
   readonly #client: PGliteClient;
   readonly #temporal: boolean;
+  readonly #decimal: DecimalClass | undefined;
 
-  constructor(client: PGliteClient, temporal: boolean) {
+  constructor(client: PGliteClient, temporal: boolean, decimal: DecimalClass | undefined) {
     this.#client = client;
     this.#temporal = temporal;
+    this.#decimal = decimal;
   }
 
   async init(): Promise<void> {}
 
   async acquireConnection(): Promise<DatabaseConnection> {
-    return new PGliteConnection(this.#client, this.#temporal);
+    return new PGliteConnection(this.#client, this.#temporal, this.#decimal);
   }
 
   async beginTransaction(
@@ -168,6 +173,13 @@ export interface CreateKyselyPGliteOptions {
    * them on the platform. Defaults to `false`.
    */
   temporal?: boolean;
+  /**
+   * The `Decimal` class to read numeric columns as, such as the one exported by
+   * `@tailor-platform/sdk/runtime`, as a migration whose `db.ts` uses `Decimal` column types
+   * sees them on the platform. `Decimal` values are also accepted as query parameters.
+   * Defaults to the strings PGlite returns.
+   */
+  decimal?: DecimalClass;
 }
 
 /**
@@ -208,9 +220,10 @@ export function createKyselyPGlite<DB = Record<string, never>>(
   options: CreateKyselyPGliteOptions = {},
 ): Kysely<DB> {
   const temporal = options.temporal ?? false;
+  const { decimal } = options;
   const dialect: Dialect = {
     createAdapter: () => new PGliteAdapter(),
-    createDriver: () => new PGliteDriver(client, temporal),
+    createDriver: () => new PGliteDriver(client, temporal, decimal),
     createIntrospector: (db) => new PostgresIntrospector(db),
     createQueryCompiler: () => new PostgresQueryCompiler(),
   };
