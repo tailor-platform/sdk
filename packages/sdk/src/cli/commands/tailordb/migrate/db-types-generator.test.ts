@@ -86,7 +86,9 @@ describe("db-types-generator", () => {
     temporal = false,
   ): Promise<{ filePath: string; content: string }> {
     createMigrationDir(testDir, migrationNumber);
-    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff, [], temporal);
+    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff, [], {
+      temporal,
+    });
     const content = fs.readFileSync(filePath, "utf-8");
     return { filePath, content };
   }
@@ -326,7 +328,7 @@ describe("db-types-generator", () => {
             after: { type: "string", required: false },
           },
         ],
-        true,
+        { temporal: true },
       );
       const content = fs.readFileSync(filePath, "utf-8");
 

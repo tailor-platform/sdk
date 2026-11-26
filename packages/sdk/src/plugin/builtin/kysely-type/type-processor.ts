@@ -1,5 +1,6 @@
 import {
   COLUMN_TYPE_ALIASES,
+  type ColumnTypeOptions,
   isFilledOnCreate,
   mapFieldTypeToColumnType,
 } from "#/utils/field-column-type";
@@ -78,11 +79,14 @@ function getEnumType(fieldConfig: KyselyFieldConfig): string {
 /**
  * Get the nested object type definition.
  * @param fieldConfig - The field configuration
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults.
  * @returns The nested type with used utility types
  */
-function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): FieldTypeResult {
+function getNestedType(
+  fieldConfig: KyselyFieldConfig,
+  options: ColumnTypeOptions,
+): FieldTypeResult {
   const fields = fieldConfig.fields;
   if (!fields || typeof fields !== "object") {
     return {
@@ -92,7 +96,7 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
   }
 
   const fieldResults = Object.entries(fields).map(([fieldName, config]) => {
-    const result = generateFieldType(config, temporal, true);
+    const result = generateFieldType(config, options, true);
     const optional = config.required !== true ? "?" : "";
     return {
       fieldType: `${fieldName}${optional}: ${result.type}`,
@@ -121,14 +125,14 @@ function getNestedType(fieldConfig: KyselyFieldConfig, temporal: boolean): Field
 /**
  * Get the base Kysely type for a field (without array/null modifiers).
  * @param fieldConfig - The field configuration
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults.
  * @param nested - Whether the field is inside an object
  * @returns The base type with used utility types
  */
 function getBaseType(
   fieldConfig: KyselyFieldConfig,
-  temporal: boolean,
+  options: ColumnTypeOptions,
   nested: boolean,
 ): FieldTypeResult {
   const fieldType = fieldConfig.type;
@@ -138,10 +142,13 @@ function getBaseType(
     return { type: getEnumType(fieldConfig), usedUtilityTypes };
   }
   if (fieldType === "nested") {
-    return getNestedType(fieldConfig, temporal);
+    return getNestedType(fieldConfig, options);
   }
 
-  const type = mapFieldTypeToColumnType(fieldType, temporal && !(nested && fieldType === "time"));
+  const type = mapFieldTypeToColumnType(fieldType, {
+    ...options,
+    temporal: options.temporal === true && !(nested && fieldType === "time"),
+  });
   switch (type) {
     case "Timestamp":
       usedUtilityTypes.Timestamp = true;
@@ -167,17 +174,17 @@ function getBaseType(
 /**
  * Generate the complete field type including array and null modifiers.
  * @param fieldConfig - The field configuration
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults.
  * @param nested - Whether the field is inside an object
  * @returns The complete field type with used utility types
  */
 function generateFieldType(
   fieldConfig: KyselyFieldConfig,
-  temporal: boolean,
+  options: ColumnTypeOptions,
   nested = false,
 ): FieldTypeResult {
-  const baseTypeResult = getBaseType(fieldConfig, temporal, nested);
+  const baseTypeResult = getBaseType(fieldConfig, options, nested);
   const usedUtilityTypes = { ...baseTypeResult.usedUtilityTypes };
 
   const isArray = fieldConfig.array === true;
@@ -217,14 +224,14 @@ function generateFieldType(
  * Generate the table interface.
  * @param name - Table name
  * @param fields - Field configurations keyed by field name
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults.
  * @returns The type definition and used utility types
  */
 function generateTableInterface(
   name: string,
   fields: Record<string, KyselyFieldConfig>,
-  temporal: boolean,
+  options: ColumnTypeOptions,
 ): {
   typeDef: string;
   usedUtilityTypes: UsedUtilityTypes;
@@ -233,7 +240,7 @@ function generateTableInterface(
 
   const fieldResults = fieldEntries.map(([fieldName, fieldConfig]) => ({
     fieldName,
-    ...generateFieldType(fieldConfig, temporal),
+    ...generateFieldType(fieldConfig, options),
   }));
 
   const fieldLines = [
@@ -259,16 +266,16 @@ function generateTableInterface(
  * Generate KyselyTypeMetadata from field configurations.
  * @param name - Table name
  * @param fields - Field configurations keyed by field name
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults. Defaults to none.
  * @returns Generated Kysely type metadata
  */
 export function processKyselyFields(
   name: string,
   fields: Record<string, KyselyFieldConfig>,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): KyselyTypeMetadata {
-  const result = generateTableInterface(name, fields, temporal);
+  const result = generateTableInterface(name, fields, options);
 
   return {
     name,
@@ -280,13 +287,13 @@ export function processKyselyFields(
 /**
  * Convert a TailorDBType into KyselyTypeMetadata.
  * @param type - Parsed TailorDB table
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults. Defaults to none.
  * @returns Generated Kysely type metadata
  */
 export async function processKyselyType(
   type: TailorDBType,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): Promise<KyselyTypeMetadata> {
   return processKyselyFields(
     type.name,
@@ -296,21 +303,21 @@ export async function processKyselyType(
         parsedField.config,
       ]),
     ),
-    temporal,
+    options,
   );
 }
 
 /**
  * Generate unified types file from multiple namespaces.
  * @param namespaceData - Namespace metadata
- * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`;
- * passed to `createGetDB` so the generated `getDB` always reads back the Temporal values
- * the tables above are typed with. Defaults to `false`.
+ * @param options - The `kyselyTypePlugin` options that change column types; `temporal` is passed to
+ * `createGetDB` so the generated `getDB` always reads back the Temporal values the tables above
+ * are typed with. Defaults to none.
  * @returns Generated types file contents
  */
 export function generateUnifiedKyselyTypes(
   namespaceData: KyselyNamespaceMetadata[],
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): string {
   // Aggregate used utility types from all namespaces
   const globalUsedUtilityTypes = namespaceData
@@ -379,7 +386,7 @@ export function generateUnifiedKyselyTypes(
       : `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
   const getDBFunction = multiline /* ts */ `
-    export const getDB = createGetDB<Namespace>(${temporal ? "{ temporal: true }" : ""});
+    export const getDB = createGetDB<Namespace>(${options.temporal ? "{ temporal: true }" : ""});
 
     export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
   `;
@@ -404,21 +411,21 @@ export function generateUnifiedKyselyTypes(
 /**
  * Generate the contents of the unified types file from loaded TailorDB namespaces.
  * @param namespaces - Each namespace's loaded tables
- * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @param options - The `kyselyTypePlugin` options that change column types, such as `temporal`
  * @returns Generated types file contents
  */
 export async function generateKyselyTypesSource(
   namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
-  temporal: boolean,
+  options: ColumnTypeOptions,
 ): Promise<string> {
   const namespaceData: KyselyNamespaceMetadata[] = [];
   for (const { namespace, tables } of namespaces) {
     const types = await Promise.all(
-      Object.values(tables).map((table) => processKyselyType(table, temporal)),
+      Object.values(tables).map((table) => processKyselyType(table, options)),
     );
     if (types.length > 0) namespaceData.push({ namespace, types });
   }
-  return generateUnifiedKyselyTypes(namespaceData, temporal);
+  return generateUnifiedKyselyTypes(namespaceData, options);
 }
 
 const CREATE_SCOPED_GET_DB_SOURCE = multiline /* ts */ `
@@ -439,12 +446,12 @@ const CREATE_SCOPED_GET_DB_SOURCE = multiline /* ts */ `
  * Generate the Kysely types the content mapper gives `@tailor-platform/sdk/plugin/kysely-type/db`:
  * the unified types file plus `createScopedGetDB`, which narrows `getDB` to some namespaces.
  * @param namespaces - Each namespace's loaded tables
- * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @param options - The `kyselyTypePlugin` options that change column types, such as `temporal`
  * @returns Contents of the content-mapped module
  */
 export async function generateContentMappedKyselyTypes(
   namespaces: readonly Pick<TailorDBNamespaceData, "namespace" | "tables">[],
-  temporal: boolean,
+  options: ColumnTypeOptions,
 ): Promise<string> {
-  return `${await generateKyselyTypesSource(namespaces, temporal)}\n${CREATE_SCOPED_GET_DB_SOURCE}\n`;
+  return `${await generateKyselyTypesSource(namespaces, options)}\n${CREATE_SCOPED_GET_DB_SOURCE}\n`;
 }

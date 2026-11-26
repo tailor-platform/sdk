@@ -8,12 +8,18 @@ export type FieldColumnType =
   | "TemporalInstant"
   | "TemporalTime";
 
+/** The opt-in column representations generated code uses instead of the defaults. */
+export type ColumnTypeOptions = {
+  /** Resolve date/datetime/time fields to their Temporal column types. */
+  temporal?: boolean | undefined;
+};
+
 /**
  * Map a scalar TailorDB field type to the column type generated code uses for it.
  *
- * With `temporal: false` (the default), `date`/`datetime` resolve to `Timestamp` and
+ * Without `options.temporal` (the default), `date`/`datetime` resolve to `Timestamp` and
  * `time` to `string`, because that's what the function runtime hands back for them by
- * default. With `temporal: true`, `date`/`datetime`/`time` resolve to their
+ * default. With `options.temporal`, `date`/`datetime`/`time` resolve to their
  * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts instead,
  * matching a `getDB` created with `createGetDB({ temporal: true })`.
  *
@@ -21,12 +27,16 @@ export type FieldColumnType =
  * before reaching here; passing either is a caller bug rather than a `string`
  * column.
  * @param fieldType - TailorDB scalar field type name
- * @param temporal - Whether to map date/datetime/time fields to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - Which opt-in representations to map to, such as Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns The column type for the field, defaulting to `string`
  * @throws If given `enum` or `nested`
  */
-export function mapFieldTypeToColumnType(fieldType: string, temporal = false): FieldColumnType {
+export function mapFieldTypeToColumnType(
+  fieldType: string,
+  options: ColumnTypeOptions = {},
+): FieldColumnType {
+  const temporal = options.temporal === true;
   switch (fieldType) {
     case "uuid":
     case "string":

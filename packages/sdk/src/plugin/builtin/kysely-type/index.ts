@@ -97,7 +97,7 @@ export function kyselyTypePlugin(
         const typeMetadataList: KyselyTypeMetadata[] = [];
 
         for (const type of Object.values(ns.tables)) {
-          const metadata = await processKyselyType(type, temporal);
+          const metadata = await processKyselyType(type, { temporal });
           typeMetadataList.push(metadata);
         }
 
@@ -114,7 +114,7 @@ export function kyselyTypePlugin(
         if (distPath) {
           files.push({
             path: distPath,
-            content: generateUnifiedKyselyTypes(allNamespaceData, temporal),
+            content: generateUnifiedKyselyTypes(allNamespaceData, { temporal }),
           });
         }
         if (ctx.pluginConfig.pgliteSchemaPath) {

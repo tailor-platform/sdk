@@ -9,6 +9,7 @@ import * as fs from "node:fs/promises";
 import { assertDefined } from "#/utils/assert";
 import {
   COLUMN_TYPE_ALIASES,
+  type ColumnTypeOptions,
   isFilledOnCreate,
   mapFieldTypeToColumnType,
 } from "#/utils/field-column-type";
@@ -143,15 +144,15 @@ function extractBreakingChangeFields(
  * @param {MigrationDiff} [diff] - The migration's diff; without one, the types follow
  * `previousSnapshot`
  * @param expandPlans - Field changes carried through temporary fields
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns {string} Generated db.ts file contents
  */
 function generateDbTypesFromSnapshot(
   previousSnapshot: SchemaSnapshot,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): string {
   const preMigration = diff ? buildPreMigrationSnapshot(previousSnapshot, diff) : previousSnapshot;
   const breakingChangeFields = diff
@@ -185,7 +186,7 @@ function generateDbTypesFromSnapshot(
   // Generate type definitions
   const typeDefinitions: string[] = [];
   for (const type of tables) {
-    const result = generateTableType(type, breakingChangeFields, temporal);
+    const result = generateTableType(type, breakingChangeFields, options);
     for (const usedType of result.usedUtilityTypes) usedUtilityTypes.add(usedType);
     usedColumnType = usedColumnType || result.usedColumnType;
     usedArrayColumnType = usedArrayColumnType || result.usedArrayColumnType;
@@ -305,14 +306,14 @@ function generateEmptyDbTypes(namespace: string): string {
  * Generate table type definition from a snapshot type
  * @param {TailorDBSnapshotType} type - Table snapshot
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns {{ typeDef: string; usedUtilityTypes: ReadonlySet<UsedUtilityType>; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
   breakingChangeFields: BreakingChangeFieldInfo,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): {
   typeDef: string;
   usedUtilityTypes: ReadonlySet<UsedUtilityType>;
@@ -348,12 +349,12 @@ function generateTableType(
 
     const isOptionalToRequired = optionalToRequiredFields.has(fieldName);
     const enumValueChange = enumValueChangesForType.get(fieldName);
-    const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange, temporal);
+    const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange, options);
     // A conversion script clears its source field, and Kysely reads the third
     // ColumnType slot for updates.
     const clearable = clearedFieldsForType.has(fieldName);
     const clearableResult = clearable
-      ? generateClearableFieldType(fieldConfig, temporal)
+      ? generateClearableFieldType(fieldConfig, options)
       : undefined;
     const rewritesExisting = isOptionalToRequired || madeUniqueFieldsForType.has(fieldName);
     const column = wrapPlatformFilledColumn(
@@ -405,7 +406,7 @@ type UsedUtilityType = "Timestamp" | "Serial" | "TemporalDate" | "TemporalInstan
 function mapToTsType(
   fieldType: string,
   allowedValues?: SnapshotFieldConfig["allowedValues"],
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): {
   type: string;
   usedUtilityType?: UsedUtilityType | undefined;
@@ -419,7 +420,7 @@ function mapToTsType(
   if (fieldType === "enum") {
     return { type: "string" };
   }
-  const type = mapFieldTypeToColumnType(fieldType, temporal);
+  const type = mapFieldTypeToColumnType(fieldType, options);
   const usedUtilityType = COLUMN_TYPE_ALIASES.has(type) ? (type as UsedUtilityType) : undefined;
   return { type, usedUtilityType };
 }
@@ -469,17 +470,18 @@ const TEMPORAL_COLUMN_TYPES = new Set(["TemporalDate", "TemporalInstant", "Tempo
  * Kysely takes the select, insert, and update types from the three slots in
  * turn, so the update slot has to accept the null the script writes.
  * @param config - Field configuration in the pre-migration snapshot
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column types
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns {string} Generated column type
  */
 function generateClearableFieldType(
   config: SnapshotFieldConfig,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): {
   type: string;
   usesTemporalNamespace: boolean;
 } {
-  const { type } = mapToTsType(config.type, config.allowedValues, temporal);
+  const { type } = mapToTsType(config.type, config.allowedValues, options);
   // A ColumnType cannot nest, so an alias contributes its own select and write
   // types to the slots rather than the alias itself. That inlines the
   // `Temporal.PlainDate`-style expansion as literal text, so this file needs its
@@ -503,7 +505,7 @@ function generateClearableFieldType(
 
 function generateOptionalToRequiredDateColumnType(
   config: SnapshotFieldConfig,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): { type: string; usesTemporalNamespace: boolean } | null {
   if (config.type !== "date" && config.type !== "datetime" && config.type !== "time") return null;
 
@@ -512,7 +514,7 @@ function generateOptionalToRequiredDateColumnType(
   // That inlines the `Temporal.PlainDate`-style expansion as literal text, so
   // this file needs its own `Temporal` import wherever the alias itself would
   // otherwise have carried it.
-  const columnType = mapFieldTypeToColumnType(config.type, temporal);
+  const columnType = mapFieldTypeToColumnType(config.type, options);
   const alias = COLUMN_TYPE_ALIASES.get(columnType);
   if (!alias) return null;
   const select = config.array ? `${alias.select}[]` : alias.select;
@@ -529,15 +531,15 @@ function generateOptionalToRequiredDateColumnType(
  * @param {SnapshotFieldConfig} config - Field configuration
  * @param {boolean} isOptionalToRequired - Whether this field is changing from optional to required
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns {{ type: string; usedUtilityType?: UsedUtilityType; usedColumnType: boolean; usedArrayColumnType: boolean; usesTemporalNamespace: boolean }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
   isOptionalToRequired: boolean,
   enumValueChange?: EnumValueChange,
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): {
   type: string;
   usedUtilityType?: UsedUtilityType | undefined;
@@ -563,13 +565,13 @@ function generateFieldType(
     const enumValues = config.allowedValues?.map((v) => v.value) ?? [];
     baseType = enumValues.length > 0 ? formatEnumUnion(enumValues) : "string";
   } else {
-    const mapped = mapToTsType(config.type, undefined, temporal);
+    const mapped = mapToTsType(config.type, undefined, options);
     baseType = mapped.type;
     usedUtilityType = mapped.usedUtilityType;
   }
 
   if (isOptionalToRequired) {
-    const dateColumnType = generateOptionalToRequiredDateColumnType(config, temporal);
+    const dateColumnType = generateOptionalToRequiredDateColumnType(config, options);
     if (dateColumnType) {
       return {
         type: dateColumnType.type,
@@ -635,8 +637,8 @@ function generateFieldType(
  * @param {MigrationDiff} [diff] - The migration's diff; without one, the types follow
  * `previousSnapshot`
  * @param expandPlans - Field changes carried through temporary fields
- * @param temporal - Whether date/datetime/time fields resolve to their Temporal column
- * types instead of their `Date`/`string` defaults. Defaults to `false`.
+ * @param options - The column type options, such as `temporal` for Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns {Promise<string>} Path to the written file
  */
 export async function writeDbTypesFile(
@@ -645,9 +647,9 @@ export async function writeDbTypesFile(
   migrationNumber: number,
   diff?: MigrationDiff,
   expandPlans: readonly ExpandContractPlan[] = [],
-  temporal = false,
+  options: ColumnTypeOptions = {},
 ): Promise<string> {
-  const content = generateDbTypesFromSnapshot(previousSnapshot, diff, expandPlans, temporal);
+  const content = generateDbTypesFromSnapshot(previousSnapshot, diff, expandPlans, options);
   const filePath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
   await fs.writeFile(filePath, content);
   return filePath;

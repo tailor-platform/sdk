@@ -17,13 +17,15 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
 }
 
 async function getTypeDef(type: TailorAnyDBType, temporal = false) {
-  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), temporal);
+  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), { temporal });
   return result.typeDef;
 }
 
 describe("generateKyselyTypesSource", () => {
   test("exports getDB over no namespaces when no table is defined, so importing it still type-checks", async () => {
-    const source = await generateKyselyTypesSource([{ namespace: "main", tables: {} }], false);
+    const source = await generateKyselyTypesSource([{ namespace: "main", tables: {} }], {
+      temporal: false,
+    });
 
     expect(source).toContain("export interface Namespace {}");
     expect(source).toContain("export const getDB = createGetDB<Namespace>();");
@@ -195,7 +197,7 @@ describe("Kysely TypeProcessor", () => {
             }),
           ),
         ),
-        true,
+        { temporal: true },
       );
 
       expect(result.usedUtilityTypes).toEqual({

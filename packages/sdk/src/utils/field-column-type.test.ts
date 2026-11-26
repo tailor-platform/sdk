@@ -27,13 +27,15 @@ describe("mapFieldTypeToColumnType", () => {
     ["datetime", "TemporalInstant"],
     ["time", "TemporalTime"],
   ] as const)("maps %s to %s when temporal is true", (fieldType, expected) => {
-    expect(mapFieldTypeToColumnType(fieldType, true)).toBe(expected);
+    expect(mapFieldTypeToColumnType(fieldType, { temporal: true })).toBe(expected);
   });
 
   test.each(["uuid", "string", "decimal", "integer", "float", "bool", "boolean"])(
     "leaves %s unaffected when temporal is true",
     (fieldType) => {
-      expect(mapFieldTypeToColumnType(fieldType, true)).toBe(mapFieldTypeToColumnType(fieldType));
+      expect(mapFieldTypeToColumnType(fieldType, { temporal: true })).toBe(
+        mapFieldTypeToColumnType(fieldType),
+      );
     },
   );
 });

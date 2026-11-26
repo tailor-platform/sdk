@@ -40,7 +40,7 @@ async function diagnosticsFor(usage: string): Promise<string[]> {
           tables: tablesOf("order-db", db.table("Order", { total: db.int() })),
         },
       ],
-      false,
+      { temporal: false },
     ),
   );
   const fileName = join(dir, "case.ts");

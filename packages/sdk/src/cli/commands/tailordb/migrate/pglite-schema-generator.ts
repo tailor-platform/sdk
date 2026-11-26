@@ -203,7 +203,7 @@ export async function writeMigrationTypeFiles(
     migrationNumber,
     diff,
     expandPlans,
-    temporal,
+    { temporal },
   );
   await recordRuntimeModes(
     getMigrationFilePath(migrationsDir, migrationNumber, "diff"),
