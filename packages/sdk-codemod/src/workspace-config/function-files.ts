@@ -170,45 +170,51 @@ function takesInvoker(call: SgNode, position: number): boolean {
   return name === "createResolver" || (name === "start" && position === 1);
 }
 
+function argumentUse(expression: SgNode): "sets" | "passed" | null {
+  const written = withTypeOperators(expression);
+  const parent = written.parent();
+  if (parent?.kind() !== "arguments") return null;
+  const call = parent.parent()!;
+  const position = callArguments(call).findIndex(
+    (argument) => argument.range().start.index === written.range().start.index,
+  );
+  return takesInvoker(call, position) ? "sets" : "passed";
+}
+
 /**
  * Whether an `invoker` entry sets the machine user something runs as: in an object whose `kind`
  * names an operation with one, under an `operation` key, or in a `createResolver()` config or the
  * options of a workflow's `.start()`, also through a `const` the module passes to them. It does not
- * in an object whose `kind` names another operation or in the argument of another call, and may
- * anywhere else.
+ * in an object whose `kind` names another operation, is passed on in an object the module only
+ * passes to other calls, and may anywhere else.
  * @param cache - Module cache of the project
  * @param module - Module the entry appears in
  * @param entry - The entry
- * @returns Whether it does, does not, or may
+ * @returns Whether it does, does not, is passed to another call, or may
  */
 function invokerUse(
   cache: ModuleCache,
   module: SourceModule,
   entry: SgNode,
-): "sets" | "no" | "may" {
+): "sets" | "no" | "passed" | "may" {
   const object = entry.parent()!;
   const kind = objectKind(cache, module, object);
   if (kind !== null) return OPERATION_KINDS_WITH_INVOKER.has(kind) ? "sets" : "no";
   const written = withTypeOperators(object);
   const parent = written.parent()!;
   if (parent.kind() === "pair") return entryKey(parent) === "operation" ? "sets" : "may";
-  if (parent.kind() === "variable_declarator") {
-    const name = parent.children()[0]?.text();
-    const passed = module.root
-      .findAll({ rule: { kind: "call_expression" } })
-      .some((call) =>
-        callArguments(call).some(
-          (argument, position) => argument.text() === name && takesInvoker(call, position),
-        ),
-      );
-    return passed ? "sets" : "may";
-  }
-  if (parent.kind() !== "arguments") return "may";
-  const call = parent.parent()!;
-  const position = callArguments(call).findIndex(
-    (argument) => argument.range().start.index === written.range().start.index,
-  );
-  return takesInvoker(call, position) ? "sets" : "no";
+  if (parent.kind() !== "variable_declarator") return argumentUse(written) ?? "may";
+  const declared = parent.children()[0]!;
+  const uses = module.root
+    .findAll({ rule: { any: [{ kind: "identifier" }, { kind: "shorthand_property_identifier" }] } })
+    .filter(
+      (reference) =>
+        reference.text() === declared.text() &&
+        reference.range().start.index !== declared.range().start.index,
+    )
+    .map((reference) => argumentUse(reference));
+  if (uses.includes("sets")) return "sets";
+  return uses.length > 0 && uses.every((use) => use === "passed") ? "passed" : "may";
 }
 
 /**
@@ -270,6 +276,7 @@ export function rewriteFunctionFiles(
         const name = resolveString(cache, module, value);
         if (name === null) {
           if (
+            use !== "passed" &&
             !evaluatesToObject(cache, module, value) &&
             machineUserAmbiguity(facts, null) === "unknown"
           ) {
@@ -288,7 +295,7 @@ export function rewriteFunctionFiles(
           );
         }
         if (ambiguity !== "shared") continue;
-        if (use === "may") {
+        if (use !== "sets") {
           report(
             pair,
             `Invoker "${name}" names a machine user several Auth services of the merged workspace define; if it sets the machine user something runs as, write it as { namespace, machineUserName } with the Auth service it belongs to.`,
