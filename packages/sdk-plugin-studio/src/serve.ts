@@ -11,6 +11,7 @@ import { z } from "zod";
 import { createAccounts } from "./accounts";
 import { discoverTab, type TabSpec } from "./discover-tab";
 import { createFunctionRunTab } from "./function-run/tab";
+import { onlyTab } from "./only-tab";
 import { openBrowser } from "./open-browser";
 import { createSelectionStore, projectDirectory } from "./selection-store";
 import { startServer } from "./server";
@@ -36,6 +37,10 @@ export const uiCommand = defineAppCommand({
     }),
     open: arg(z.boolean().default(false), {
       description: "Open the UI in the default browser",
+    }),
+    only: arg(z.string().optional(), {
+      description:
+        'Serve just one tab, by id (for example "function-run" to use the Function run tab on its own)',
     }),
     "function-file": arg(z.string().optional(), {
       description:
@@ -74,10 +79,13 @@ export const uiCommand = defineAppCommand({
       onSelectionChange: (listener) => workspace.subscribe(listener),
       pageFile: path.join(clientDir, "function-run.html"),
     });
-    const tabs = [
-      ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
-      functionRun.tab,
-    ];
+    const tabs = onlyTab(
+      [
+        ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
+        functionRun.tab,
+      ],
+      args.only,
+    );
     const server = await startServer({
       port: args.port,
       createHandler: (port) =>
