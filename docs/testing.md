@@ -33,11 +33,24 @@ When changing the migration reader or script compiler, verify execution results 
 
 Before raising the minimum supported migration format, identify a released bridge SDK that reads the complete old history and writes a baseline accepted by the target SDK. Test that transition with frozen fixtures before dropping a reader. A new format number alone cannot establish the script contract: historical writers reused format numbers across script changes.
 
-## Migration Deploy Model Test
+## Model-Based Tests (Quint)
 
-`packages/sdk/src/cli/commands/deploy/tailordb/migration-model.test.ts` checks the migration deploy flow against a [Quint](https://quint-lang.org/) specification, `test-helpers/migration-deploy.qnt`. Quint simulates thousands of migration histories with a fixed seed; the test deploys each one with `applyTailorDB` against an in-memory namespace that, like the Platform, rejects creating a table or GraphQL permission that exists and writing one that is missing, and compares the tables and their shapes at every script, every checkpoint commit, and the end with what the specification expects.
+`packages/sdk/src/cli/commands/deploy/tailordb/migration-model.test.ts` checks the migration deploy flow against a [Quint](https://quint-lang.org/) specification, `test-helpers/migration-deploy.qnt`. The specification states what one namespace must hold at each migration script, each checkpoint commit, a held maintenance mode, and the end: its tables, their shapes, whether they are restricted, and their GraphQL permissions. Quint simulates thousands of migration histories with a fixed seed. The test deploys each one with `applyTailorDB` against an in-memory namespace that, like the Platform, rejects creating a table or GraphQL permission that exists and writing one that is missing, and compares what the namespace shows at each step, and the steps the deploy reaches, with the specification.
 
-The specification states the intended behavior. A known gap is listed as a definition whose tables `uncheckedAt` leaves out; a fix for the gap removes the definition, so the test pins the fix. Check a specification change with `pnpm exec quint typecheck <file>` in `packages/sdk`.
+### Writing Model-Based Tests
+
+- Put the `.qnt` file under `test-helpers/` beside its test, which keeps it out of the changeset check's package sources. Check it with `pnpm exec quint typecheck <file>` in `packages/sdk`.
+- Write the specification as the intended behavior, observed where the test can stop the code: a mocked call, or the end of the command. The test replays each trace against the real code, compares at those points, and compares the steps it reached with the trace's steps.
+- Generate only scenarios a user can reach through the CLI, by constraining `init`, and build each value valid by construction: a guard in `init` that fails makes `quint run` hang.
+- After changing what `init` chooses, check coverage: the number of distinct traces, how often the cases that matter appear, and that known bugs still fail the test. Choosing among a few outcomes first (which tables exist, then their shapes) keeps rare branches common.
+- A behavior the code does not have yet is a known gap. Reproduce it, then name it as a definition whose tables the specification leaves unchecked, with a comment saying what the code does instead, and track the fix. The fix removes the definition, so the test pins it.
+- To show the test catches a bug, temporarily put the bug back (or revert the fix's source change) and confirm the test fails at the step you expect.
+- To reproduce one failing scenario, temporarily replace `init` with the values the failure message prints and run the test.
+- Run Quint with `--backend=typescript`: the Rust backend downloads a binary at run time. Keep `--max-samples` equal to `--n-traces` and `--seed` fixed; try other seeds locally.
+- Resolve Quint's CLI with `import.meta.resolve`, which knip traces.
+- In Quint, `next` is a builtin name; every branch of a `match` in an action assigns the same variables; and `Map.get` on a missing key fails, so check `keys().contains` first. ITF traces encode integers as `#bigint`, maps as `#map`, sets as `#set`, tuples as `#tup`, and variants as `{ tag, value }`.
+- When a second specification arrives, move the Quint run and the ITF decoding out of `migration-model.ts` into a shared test helper.
+- When upgrading Quint, check whether `trustPolicyExclude` in `pnpm-workspace.yaml` still needs its `@octokit/endpoint` entry.
 
 ## E2E Tests
 

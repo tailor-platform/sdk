@@ -62,6 +62,15 @@
       "file": ".agents/rules/jsdoc.md"
     },
     {
+      "name": "model-based-tests",
+      "paths": [
+        "packages/sdk/src/**/*.qnt",
+        "packages/sdk/src/**/*-model.test.ts",
+        "packages/sdk/src/**/test-helpers/*-model.ts"
+      ],
+      "file": ".agents/rules/model-based-tests.md"
+    },
+    {
       "name": "schema-types",
       "paths": [
         "packages/sdk/src/types/**/*.ts",
