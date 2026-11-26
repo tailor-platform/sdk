@@ -1,4 +1,5 @@
 import { logger } from "#/cli/shared/logger";
+import { bigQueryDatasetKey } from "#/parser/service/tailordb-replication/index";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
 import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
@@ -46,13 +47,20 @@ export function computeRenamedAppDeletions(params: {
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  assertNoDuplicateResourceNames(
-    targets,
-    GLOBAL_RESOURCE_NAMES.map((check) => ({
+  assertNoDuplicateResourceNames(targets, [
+    ...GLOBAL_RESOURCE_NAMES.map((check) => ({
       ...check,
       resourceLabel: MANAGED_RESOURCE_LABELS[check.resourceType],
     })),
-  );
+    {
+      resourceType: "tailordb.replication_destination",
+      resourceLabel: "BigQuery dataset of TailorDB replication destinations",
+      namesOf: (target) =>
+        target.application.dbReplicationDestinations.map(({ bigquery }) =>
+          bigQueryDatasetKey(bigquery),
+        ),
+    },
+  ]);
 }
 
 /**
@@ -351,7 +359,7 @@ export function collectImportantResourceDeletions(
     ...deletesNeedingConfirmation(results, "tailordb.replication"),
     ...results.tailorDBReplication.changeSet.replication.replaces.map((replace) => ({
       resourceType: "tailordb.replication" as const,
-      resourceLabel: `${MANAGED_RESOURCE_LABELS["tailordb.replication"]} (source namespace change rewrites all its tables)`,
+      resourceLabel: `${MANAGED_RESOURCE_LABELS["tailordb.replication"]} (replaced, which rewrites all its tables)`,
       resourceName: replace.name,
     })),
     ...deletesNeedingConfirmation(results, "auth.connection"),

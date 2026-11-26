@@ -1891,6 +1891,7 @@ type FakeBundledScripts = {
   vaultNames?: string[];
   workflowNames?: string[];
   executionPolicyNames?: string[];
+  replicationDestinations?: Array<{ name: string; bigquery: { project: string; dataset: string } }>;
 };
 
 let fakeTargetSequence = 0;
@@ -1929,7 +1930,7 @@ function fakeTarget(
         ),
       },
       staticWebsiteServices: (bundles.staticWebsiteNames ?? []).map((name) => ({ name })),
-      dbReplicationDestinations: [],
+      dbReplicationDestinations: bundles.replicationDestinations ?? [],
       dbReplications: [],
       tailorDBServices: (bundles.tailorDBNamespaces ?? []).map((namespace) => ({ namespace })),
       authServices: bundles.authNamespace
@@ -2426,6 +2427,32 @@ describe("assertUniqueGlobalResourceNames", () => {
             { resourceType: "idp.service", name: "default", configPaths },
           ],
         },
+      }),
+    );
+  });
+
+  test("reports two configs' replication destinations on one dataset", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({
+          configDir: "apps/a",
+          replicationDestinations: [
+            { name: "warehouse", bigquery: { project: "acme-analytics", dataset: "tailor" } },
+          ],
+        }),
+        fakeTarget({
+          configDir: "apps/b",
+          replicationDestinations: [
+            { name: "lake", bigquery: { project: "acme-analytics", dataset: "TAILOR" } },
+          ],
+        }),
+      ]),
+    ).toThrow(
+      expect.objectContaining({
+        message: [
+          "Duplicate resource names in this deploy:",
+          '  - BigQuery dataset of TailorDB replication destinations "acme-analytics.tailor": apps/a/tailor.config.ts, apps/b/tailor.config.ts',
+        ].join("\n"),
       }),
     );
   });

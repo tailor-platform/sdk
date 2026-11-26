@@ -95,6 +95,22 @@ describe("defineApplication TailorDB replications", () => {
     );
   });
 
+  test("compares datasets case-insensitively", () => {
+    const upper = defineTailorDBReplicationDestination("warehouse-upper", {
+      bigquery: { project: "acme-analytics", dataset: "TAILOR" },
+    });
+
+    expect(() =>
+      defineApplication({ config: configOf({ dbReplicationDestinations: [warehouse, upper] }) }),
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Destination "warehouse-upper" writes to the same dataset as destination "warehouse"',
+        ),
+      }),
+    );
+  });
+
   test("rejects one replication name in two namespaces", () => {
     expect(() =>
       defineApplication({
@@ -221,8 +237,21 @@ export const user = db
       issue:
         'db.main-db.tables.User.replication.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
     },
-  ])("rejects $title", async ({ replication, issue }) => {
-    await expect(load(replication, both)).rejects.toMatchObject({
+    {
+      title: "two replications writing one table of a destination",
+      replication: ".replication({})",
+      replications: {
+        files: [],
+        replications: {
+          analytics: { destination: warehouse, tablePrefix: "shop_" },
+          lake: { destination: warehouse, tablePrefix: "SHOP_" },
+        },
+      },
+      issue:
+        'db.main-db.replications.lake: Replications "analytics" and "lake" both write table "shop_user" of destination "warehouse"',
+    },
+  ])("rejects $title", async ({ replication, replications, issue }) => {
+    await expect(load(replication, replications ?? both)).rejects.toMatchObject({
       code: "CONFIG_INVALID",
       message: expect.stringContaining(issue),
     });

@@ -365,7 +365,7 @@ describe("planTailorDBReplication", () => {
     expect(plan.writeOrder).toEqual(["first", "second"]);
   });
 
-  test("asks for two deploys when two replications swap their tables", async () => {
+  test("replaces one of two replications that swap their tables", async () => {
     const client = createClient({
       destinations: [existingWarehouse()],
       replications: [
@@ -373,20 +373,99 @@ describe("planTailorDBReplication", () => {
         existingReplicationOf({ name: "second", tablePrefix: "b_" }),
       ],
     });
+    const plan = await planTailorDBReplication(
+      contextOf(client, {
+        replications: [
+          replicationOf({ name: "first", tablePrefix: "B_" }),
+          replicationOf({ name: "second", tablePrefix: "a_" }),
+        ],
+      }),
+      noTailorDBDeletes,
+    );
+
+    expect(plan.changeSet.replication.replaces.map(({ name }) => name)).toEqual(["second"]);
+    expect(plan.changeSet.replication.updates.map(({ name }) => name)).toEqual(["first"]);
+    expect(plan.writeOrder).toEqual(["first", "second"]);
+  });
+
+  test("rejects writing a table a replication this deploy does not change writes", async () => {
+    const client = createClient({
+      destinations: [existingWarehouse()],
+      replications: [
+        existingReplicationOf({ name: "billing", owner: "billing-app", tablePrefix: "a_" }),
+      ],
+    });
+
+    await expect(
+      planTailorDBReplication(
+        contextOf(client, { replications: [replicationOf({ tablePrefix: "A_" })] }),
+        noTailorDBDeletes,
+      ),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_REPLICATION_TABLE_CONFLICT",
+      message: expect.stringContaining(
+        '"analytics" would write table "a_user", which "billing" writes',
+      ),
+    });
+  });
+
+  test("rejects deleting a destination another application's replication writes to", async () => {
+    const client = createClient({
+      destinations: [
+        existingWarehouse(),
+        existingWarehouse({
+          name: "old",
+          kind: { case: "bigquery", value: { project: "acme-analytics", dataset: "old" } },
+        }),
+      ],
+      replications: [
+        existingReplicationOf({ name: "billing", owner: "billing-app", destination: "old" }),
+      ],
+    });
+
+    await expect(
+      planTailorDBReplication(contextOf(client), noTailorDBDeletes),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_REPLICATION_IN_USE",
+      message: expect.stringContaining(
+        '"billing" writes to destination "old", which would be deleted',
+      ),
+    });
+  });
+
+  test("rejects deleting a type another application's replication lists", async () => {
+    const client = createClient({
+      destinations: [existingWarehouse()],
+      replications: [existingReplicationOf({ name: "billing", owner: "billing-app" })],
+    });
+
+    await expect(
+      planTailorDBReplication(contextOf(client), tailorDBDeleting(["main-db", "User"])),
+    ).rejects.toMatchObject({
+      code: "TAILORDB_REPLICATION_IN_USE",
+      message: expect.stringContaining(
+        '"billing" replicates type "main-db/User", which would be deleted',
+      ),
+    });
+  });
+
+  test("rejects a new destination on a dataset another destination uses", async () => {
+    const client = createClient({ destinations: [existingWarehouse()] });
 
     await expect(
       planTailorDBReplication(
         contextOf(client, {
-          replications: [
-            replicationOf({ name: "first", tablePrefix: "B_" }),
-            replicationOf({ name: "second", tablePrefix: "a_" }),
+          destinations: [
+            { name: "warehouse2", bigquery: { project: "acme-analytics", dataset: "TAILOR" } },
           ],
         }),
         noTailorDBDeletes,
       ),
     ).rejects.toMatchObject({
-      code: "TAILORDB_REPLICATION_TABLE_CONFLICT",
-      suggestion: expect.stringContaining("Deploy in two steps"),
+      code: "TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE",
+      message: expect.stringContaining(
+        '"warehouse2" writes to acme-analytics.tailor, which destination "warehouse" still uses until this deploy deletes it',
+      ),
     });
   });
 
@@ -447,6 +526,70 @@ describe("applyTailorDBReplication", () => {
     );
   });
 
+  test("prepares in an order the platform accepts", async () => {
+    const calls: string[] = [];
+    const lake = existingWarehouse({
+      name: "lake",
+      kind: { case: "bigquery", value: { project: "acme-analytics", dataset: "lake" } },
+    });
+    const client = createClient(
+      {
+        destinations: [
+          existingWarehouse(),
+          existingWarehouse({
+            name: "old",
+            kind: { case: "bigquery", value: { project: "acme-analytics", dataset: "old" } },
+          }),
+        ],
+        replications: [
+          existingReplicationOf({ name: "gone", destination: "old" }),
+          existingReplicationOf(),
+        ],
+      },
+      {
+        deleteTailorDBReplication: (request) => {
+          calls.push(`delete replication ${request.name}`);
+          return {};
+        },
+        deleteTailorDBReplicationDestination: (request) => {
+          calls.push(`delete destination ${request.name}`);
+          return {};
+        },
+        createTailorDBReplicationDestination: (request) => {
+          calls.push(`create destination ${request.destination?.name}`);
+          return {};
+        },
+        getTailorDBReplicationDestination: {
+          destination: create(TailorDBReplicationDestinationSchema, lake),
+        },
+        updateTailorDBReplication: (request) => {
+          calls.push(`update replication ${request.replication?.name}`);
+          return {};
+        },
+      },
+    );
+    vi.spyOn(logger, "success").mockImplementation(() => {});
+    const plan = await planTailorDBReplication(
+      contextOf(client, {
+        destinations: [
+          warehouse,
+          { name: "lake", bigquery: { project: "acme-analytics", dataset: "lake" } },
+        ],
+        replications: [replicationOf({ types: [{ name: "Order" }] })],
+      }),
+      tailorDBDeleting(["main-db", "User"]),
+    );
+
+    await applyTailorDBReplication(client, plan, "prepare");
+
+    expect(calls).toEqual([
+      "delete replication gone",
+      "delete destination old",
+      "create destination lake",
+      "update replication analytics",
+    ]);
+  });
+
   test("checks the grant of a destination still waiting for it", async () => {
     const client = createClient(
       {
@@ -458,12 +601,16 @@ describe("applyTailorDBReplication", () => {
         verifyTailorDBReplicationDestination: { destination: existingWarehouse() },
       },
     );
+    const success = vi.spyOn(logger, "success").mockImplementation(() => {});
     const plan = await planTailorDBReplication(contextOf(client), noTailorDBDeletes);
 
     await applyTailorDBReplication(client, plan, "prepare");
 
     expect(client.verifyTailorDBReplicationDestination).toHaveBeenCalledWith(
       expect.objectContaining({ workspaceId, name: "warehouse" }),
+    );
+    expect(success).toHaveBeenCalledWith(
+      'Replication destination "warehouse" can write to acme-analytics.tailor.',
     );
   });
 

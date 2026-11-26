@@ -15,6 +15,10 @@ import {
 import { type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
+import {
+  bigQueryDatasetKey,
+  replicationTableKey,
+} from "#/parser/service/tailordb-replication/index";
 import { createChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { diffKeyed, labeledResourceChecks } from "./keyed-diff";
@@ -88,7 +92,7 @@ type DeleteReplication = {
   request: MessageInitShape<typeof DeleteTailorDBReplicationRequestSchema>;
 };
 
-/** A replication whose source namespace changed, so it is deleted and created again. */
+/** A replication deleted and created again: its source namespace changed, or it takes tables another replication gives up in this deploy. */
 type ReplaceReplication = {
   name: string;
   deleteRequest: MessageInitShape<typeof DeleteTailorDBReplicationRequestSchema>;
@@ -198,16 +202,6 @@ function assertDestinationsUnmoved(
   });
 }
 
-/**
- * Lowercase a destination table name, as the platform compares them.
- * @param tablePrefix - Table prefix of the replication
- * @param typeName - Replicated type
- * @returns The table name, lowercased
- */
-function replicationTableKey(tablePrefix: string | undefined, typeName: string): string {
-  return `${tablePrefix ?? ""}${typeName}`.toLowerCase();
-}
-
 type TableClaim = { destination: string; tables: ReadonlySet<string> };
 
 function claimOf(replication: ReplicationInit): TableClaim {
@@ -231,16 +225,25 @@ type OrderReplicationWritesParams = {
   /** Replications detached before any write, with the types they keep. */
   detached: ReadonlyMap<string, ReplicationInit>;
   writes: ReadonlyArray<ReplicationWrite>;
+  /** Writes that update a replication, which can be replaced to free its current tables first. */
+  replaceable: ReadonlySet<string>;
+};
+
+type OrderedReplicationWrites = {
+  order: string[];
+  /** Updates turned into replaces, deleted before any write. */
+  replaced: Set<string>;
 };
 
 /**
  * Order the replication creates and updates so that none writes a table another
- * replication of the same destination still writes when it runs.
+ * replication of the same destination still writes when it runs. When the updates
+ * swap tables, one of them is replaced instead, so it frees its tables first.
  * @param params - Workspace replications and the writes this deploy makes
- * @returns The writes in an order the platform accepts
- * @throws CLIError coded `TAILORDB_REPLICATION_TABLE_CONFLICT` when no order avoids a conflict
+ * @returns The writes in an order the platform accepts, and the updates to replace
+ * @throws CLIError coded `TAILORDB_REPLICATION_TABLE_CONFLICT` when a replication this deploy does not change keeps a table a write needs
  */
-function orderReplicationWrites(params: OrderReplicationWritesParams): ReplicationWrite[] {
+function orderReplicationWrites(params: OrderReplicationWritesParams): OrderedReplicationWrites {
   const claims = new Map<string, TableClaim>();
   for (const [name, replication] of params.existing) {
     if (params.deleted.has(name)) continue;
@@ -257,11 +260,23 @@ function orderReplicationWrites(params: OrderReplicationWritesParams): Replicati
     );
   };
   const ordered: ReplicationWrite[] = [];
+  const replaced = new Set<string>();
   const pending = [...params.writes];
   while (pending.length > 0) {
     const next = pending.findIndex((write) => conflictsOf(write).length === 0);
     if (next < 0) {
       const conflicts = pending.flatMap(conflictsOf);
+      const blocker = conflicts.find(
+        ({ writtenBy }) =>
+          params.replaceable.has(writtenBy) &&
+          !replaced.has(writtenBy) &&
+          pending.some((write) => write.name === writtenBy),
+      )?.writtenBy;
+      if (blocker !== undefined) {
+        replaced.add(blocker);
+        claims.delete(blocker);
+        continue;
+      }
       throw CLIError({
         code: "TAILORDB_REPLICATION_TABLE_CONFLICT",
         message: `Replications would write tables another replication still writes:\n${conflicts
@@ -271,7 +286,7 @@ function orderReplicationWrites(params: OrderReplicationWritesParams): Replicati
           )
           .join("\n")}`,
         suggestion:
-          "Deploy in two steps: first move one of these replications to tables no other replication writes and deploy, then make the rest of the change and deploy again.",
+          "Remove these tables from the replications that write them first, or give the replications different table prefixes.",
         context: { conflicts },
       });
     }
@@ -281,7 +296,7 @@ function orderReplicationWrites(params: OrderReplicationWritesParams): Replicati
       claims.set(write.name, claimOf(write.replication));
     }
   }
-  return ordered;
+  return { order: ordered.map(({ name }) => name), replaced };
 }
 
 function assertNoTableCollisionsWithin(desired: ReadonlyArray<DesiredReplication>): void {
@@ -305,15 +320,104 @@ function assertNoTableCollisionsWithin(desired: ReadonlyArray<DesiredReplication
   });
 }
 
+function deletedTypeKeys(tailorDB: Pick<TailorDBPlanResult, "changeSet">): Set<string> {
+  return new Set(
+    tailorDB.changeSet.type.deletes.map((del) => `${del.request.namespaceName}/${del.name}`),
+  );
+}
+
+type AssertUntouchedReplicationsUnaffectedParams = {
+  existing: ReadonlyMap<string, ReplicationInit>;
+  /** Replications this deploy creates, updates, replaces, deletes or leaves as configured. */
+  managed: ReadonlySet<string>;
+  deletedDestinations: ReadonlySet<string>;
+  tailorDB: Pick<TailorDBPlanResult, "changeSet">;
+};
+
+/**
+ * Stop before a change that a replication this deploy does not manage still depends on:
+ * deleting its destination, or deleting a table it lists.
+ * @param params - Workspace replications and what this deploy deletes
+ * @throws CLIError coded `TAILORDB_REPLICATION_IN_USE` naming the replications
+ */
+function assertUntouchedReplicationsUnaffected(
+  params: AssertUntouchedReplicationsUnaffectedParams,
+): void {
+  const deletedTypes = deletedTypeKeys(params.tailorDB);
+  const blocked = [...params.existing].flatMap(([name, replication]) => {
+    if (params.managed.has(name)) return [];
+    const { namespace, types } = replication.source;
+    return [
+      ...(params.deletedDestinations.has(replication.destination)
+        ? [`"${name}" writes to destination "${replication.destination}", which would be deleted`]
+        : []),
+      ...types
+        .filter((type) => deletedTypes.has(`${namespace}/${type.name}`))
+        .map(
+          (type) => `"${name}" replicates type "${namespace}/${type.name}", which would be deleted`,
+        ),
+    ];
+  });
+  if (blocked.length === 0) return;
+  throw CLIError({
+    code: "TAILORDB_REPLICATION_IN_USE",
+    message: `Replications this deploy does not manage still use what it would delete:\n${blocked.map((line) => `  - ${line}`).join("\n")}`,
+    suggestion:
+      "Change or delete these replications first, from the config that deploys them or by hand, then deploy again.",
+    context: { blocked },
+  });
+}
+
+type DestinationDataset = { name: string; dataset: string };
+
+/**
+ * Stop before creating a destination on a dataset another destination of the workspace uses.
+ * @param creates - Destinations this deploy creates
+ * @param existing - Destinations of the workspace
+ * @param deleted - Destinations this deploy deletes
+ * @throws CLIError coded `TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE`
+ */
+function assertDatasetsFree(
+  creates: ReadonlyArray<CreateDestination>,
+  existing: Readonly<Record<string, { resource: ProtoDestination } | undefined>>,
+  deleted: ReadonlySet<string>,
+): void {
+  const used = Object.values(existing).flatMap((entry): DestinationDataset[] => {
+    const bigquery = entry && bigQueryOf(entry.resource);
+    return bigquery ? [{ name: entry.resource.name, dataset: bigQueryDatasetKey(bigquery) }] : [];
+  });
+  const taken = creates.flatMap((create) => {
+    const kind = create.request.destination?.kind;
+    if (kind?.case !== "bigquery") return [];
+    const dataset = bigQueryDatasetKey({
+      project: kind.value.project ?? "",
+      dataset: kind.value.dataset ?? "",
+    });
+    const other = used.find((item) => item.dataset === dataset);
+    if (!other) return [];
+    return [
+      deleted.has(other.name)
+        ? `"${create.name}" writes to ${dataset}, which destination "${other.name}" still uses until this deploy deletes it`
+        : `"${create.name}" writes to ${dataset}, which destination "${other.name}" uses`,
+    ];
+  });
+  if (taken.length === 0) return;
+  throw CLIError({
+    code: "TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE",
+    message: `A dataset can have one replication destination:\n${taken.map((line) => `  - ${line}`).join("\n")}`,
+    suggestion:
+      "To rename a destination, remove the old one and the replications that use it in an earlier deploy.",
+    context: { taken },
+  });
+}
+
 function detachesOf(
   existing: ReadonlyMap<string, ReplicationInit>,
   kept: ReadonlySet<string>,
   tailorDB: Pick<TailorDBPlanResult, "changeSet">,
   workspaceId: string,
 ): DetachReplication[] {
-  const deletedTypes = new Set(
-    tailorDB.changeSet.type.deletes.map((del) => `${del.request.namespaceName}/${del.name}`),
-  );
+  const deletedTypes = deletedTypeKeys(tailorDB);
   return [...existing].flatMap(([name, replication]) => {
     if (!kept.has(name)) return [];
     const { namespace, types } = replication.source;
@@ -493,21 +597,52 @@ export async function planTailorDBReplication(
       entry ? [[name, existingReplicationInit(entry.resource)] as const] : [],
     ),
   );
+  const deletedDestinations = new Set(destination.deletes.map(({ name }) => name));
+  assertDatasetsFree(destination.creates, existingDestinations, deletedDestinations);
+  assertUntouchedReplicationsUnaffected({
+    existing: existingInits,
+    managed: new Set([
+      ...desired.map(({ name }) => name),
+      ...replication.deletes.map(({ name }) => name),
+    ]),
+    deletedDestinations,
+    tailorDB,
+  });
+
+  const kept = new Set([...replication.updates, ...replication.unchanged].map(({ name }) => name));
+  const allDetaches = detachesOf(existingInits, kept, tailorDB, workspaceId);
+  const { order: writeOrder, replaced } = orderReplicationWrites({
+    existing: existingInits,
+    deleted: new Set([
+      ...replication.deletes.map(({ name }) => name),
+      ...replication.replaces.map(({ name }) => name),
+    ]),
+    detached: new Map(allDetaches.map((detach) => [detach.name, detach.request.replication])),
+    writes: [...replication.creates, ...replication.replaces, ...replication.updates].map(
+      (item) => ({ name: item.name, replication: item.replication }),
+    ),
+    replaceable: new Set(replication.updates.map(({ name }) => name)),
+  });
+  for (const update of replication.updates.filter(({ name }) => replaced.has(name))) {
+    replication.replaces.push({
+      name: update.name,
+      deleteRequest: { workspaceId, name: update.name },
+      replication: update.replication,
+      request: { workspaceId, replication: update.replication },
+      metaRequest: update.metaRequest,
+    });
+  }
+  replication.updates.splice(
+    0,
+    replication.updates.length,
+    ...replication.updates.filter(({ name }) => !replaced.has(name)),
+  );
+  const detaches = allDetaches.filter(({ name }) => !replaced.has(name));
+
   const deleted = new Set([
     ...replication.deletes.map(({ name }) => name),
     ...replication.replaces.map(({ name }) => name),
   ]);
-  const kept = new Set([...replication.updates, ...replication.unchanged].map(({ name }) => name));
-  const detaches = detachesOf(existingInits, kept, tailorDB, workspaceId);
-  const writeOrder = orderReplicationWrites({
-    existing: existingInits,
-    deleted,
-    detached: new Map(detaches.map((detach) => [detach.name, detach.request.replication])),
-    writes: [...replication.creates, ...replication.replaces, ...replication.updates].map(
-      (item) => ({ name: item.name, replication: item.replication }),
-    ),
-  }).map(({ name }) => name);
-
   const referenced = new Set(
     [...existingInits]
       .filter(([name]) => !deleted.has(name))
@@ -544,15 +679,14 @@ function grantInstructions(email: string, dataset: string): string {
   return `Grant ${styles.bold(email)} the BigQuery Data Editor role on dataset ${styles.bold(dataset)} and the BigQuery Job User role on its project; the next deploy checks the grant again.`;
 }
 
-function reportDestination(destination: ProtoDestination | undefined, created: boolean): void {
+function reportDestination(destination: ProtoDestination | undefined): void {
   if (!destination) return;
   const bigquery = bigQueryOf(destination);
   const dataset = bigquery ? `${bigquery.project}.${bigquery.dataset}` : destination.name;
   const email = bigquery?.serviceAccountEmail ?? "";
   const state = destination.status?.state;
   if (state === DestinationState.ACTIVE) {
-    if (created)
-      logger.success(`Replication destination "${destination.name}" can write to ${dataset}.`);
+    logger.success(`Replication destination "${destination.name}" can write to ${dataset}.`);
     return;
   }
   const reason = destination.status?.message ? ` ${destination.status.message}` : "";
@@ -593,7 +727,7 @@ export async function applyTailorDBReplication(
         workspaceId: result.workspaceId,
         name: create.name,
       });
-      reportDestination(created, true);
+      reportDestination(created);
     }
     await Promise.all([
       ...destination.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
@@ -604,7 +738,7 @@ export async function applyTailorDBReplication(
         workspaceId: result.workspaceId,
         name: pending.name,
       });
-      reportDestination(response.destination, false);
+      reportDestination(response.destination);
     }
     await Promise.all(
       result.detaches.map((detach) => client.updateTailorDBReplication(detach.request)),

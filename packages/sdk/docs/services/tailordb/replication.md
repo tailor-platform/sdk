@@ -29,8 +29,9 @@ export default defineConfig({
 });
 ```
 
-- Destination names are unique across the workspace, and each destination writes to a different dataset.
+- Destination names are unique across the workspace, and each destination writes to a different dataset. Project and dataset names are compared case-insensitively.
 - A destination's project and dataset cannot be changed. To write to another dataset, define a destination with a new name and point the replications at it.
+- To rename a destination but keep its dataset, first remove the old destination and the replications that use it in one deploy, then add the new one in a later deploy.
 - A destination that is neither used by a replication nor listed in `dbReplicationDestinations` is deleted.
 
 ### Granting access
@@ -93,7 +94,7 @@ export const order = db.table("Order", { total: db.int() }).replication({});
   A target the namespace does not declare in `replications`, or a replication set by two entries of one table, fails when the config loads.
 
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.
-- Tables that plugins generate cannot call `.replication()`, so they are not replicated.
+- Tables that plugins generate are replicated when the plugin calls `.replication()` on them.
 
 ### Deploying to some environments only
 
@@ -143,5 +144,5 @@ Each table is written to the BigQuery table `<tablePrefix><TableName>`, for exam
 - Removing a table from a replication stops writing its BigQuery table; the data already there is kept. Adding a table copies its existing records first.
 - Moving a replication to another namespace deletes the replication and creates it again, which rewrites all its tables. `deploy` asks for confirmation before it does this, and before it deletes a replication.
 - Deleting a replication or a destination leaves the data already in BigQuery as it is.
-- If one deploy would have two replications exchange their tables, for example by swapping their `tablePrefix`, `deploy` stops before changing anything and asks you to make the change in two deploys.
+- If one deploy would have two replications exchange their tables, for example by swapping their `tablePrefix`, `deploy` deletes one of them and creates it again, which rewrites all its tables. `deploy` asks for confirmation first.
 - If the platform disables a replication, for example while its workspace is deleted, the next `deploy` enables it again and its tables are rewritten.

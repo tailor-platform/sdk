@@ -80,7 +80,11 @@ import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
 import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
-import { TailorDBReplicationDestinationSchema } from "#/parser/service/tailordb-replication/index";
+import {
+  bigQueryDatasetKey,
+  replicationTableKey,
+  TailorDBReplicationDestinationSchema,
+} from "#/parser/service/tailordb-replication/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
@@ -620,10 +624,6 @@ type DefineTailorDBReplicationsResult = {
   dbReplications: TailorDBReplication[];
 };
 
-function datasetKey(destination: TailorDBReplicationDestination): string {
-  return `${destination.bigquery.project}.${destination.bigquery.dataset}`;
-}
-
 function replicationsPath(namespace: string): FlatIssue["path"] {
   return ["db", namespace, "replications"];
 }
@@ -703,20 +703,22 @@ function defineTailorDBReplications(
     const known = destinationsByName.get(destination.name);
     if (!known) {
       destinationsByName.set(destination.name, { destination, path });
-    } else if (datasetKey(known.destination) !== datasetKey(destination)) {
+    } else if (
+      bigQueryDatasetKey(known.destination.bigquery) !== bigQueryDatasetKey(destination.bigquery)
+    ) {
       issues.push({ path, message: `Two different destinations are named "${destination.name}"` });
     }
   }
   const destinationByDataset = new Map<string, string>();
   destinationsByName.forEach(({ destination, path }) => {
-    const other = destinationByDataset.get(datasetKey(destination));
+    const other = destinationByDataset.get(bigQueryDatasetKey(destination.bigquery));
     if (other !== undefined) {
       issues.push({
         path: [...path, "bigquery"],
         message: `Destination "${destination.name}" writes to the same dataset as destination "${other}"`,
       });
     }
-    destinationByDataset.set(datasetKey(destination), destination.name);
+    destinationByDataset.set(bigQueryDatasetKey(destination.bigquery), destination.name);
   });
   throwReplicationIssues(configPath, issues);
   return {
@@ -815,13 +817,36 @@ function resolveTailorDBReplicationTypes(
     }
   }
   throwReplicationIssues(configPath, issues);
+  const dbReplications = replications.dbReplications.map((replication) => ({
+    ...replication,
+    types: typesByReplication.get(replication.name) ?? [],
+  }));
+  throwReplicationIssues(configPath, sharedReplicationTableIssues(dbReplications));
   return {
     dbReplicationDestinations: replications.dbReplicationDestinations,
-    dbReplications: replications.dbReplications.map((replication) => ({
-      ...replication,
-      types: typesByReplication.get(replication.name) ?? [],
-    })),
+    dbReplications,
   };
+}
+
+function sharedReplicationTableIssues(
+  dbReplications: ReadonlyArray<TailorDBReplication>,
+): FlatIssue[] {
+  const writers = new Map<string, string>();
+  return dbReplications.flatMap((replication) =>
+    replication.types.flatMap((type) => {
+      const table = replicationTableKey(replication.tablePrefix, type.name);
+      const key = `${replication.destination}/${table}`;
+      const other = writers.get(key);
+      writers.set(key, replication.name);
+      if (other === undefined || other === replication.name) return [];
+      return [
+        {
+          path: [...replicationsPath(replication.source.namespace), replication.name],
+          message: `Replications "${other}" and "${replication.name}" both write table "${table}" of destination "${replication.destination}"; give one of them a different tablePrefix`,
+        },
+      ];
+    }),
+  );
 }
 
 function parseSecretManager(
