@@ -1756,7 +1756,7 @@ export default createResolver({
     );
   });
 
-  test("asks for table names unique across the workspace", async () => {
+  test("asks for table names unique across the namespaces of an application", async () => {
     tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
     for (const namespace of ["customer", "ledger"]) {
       fs.mkdirSync(path.join(tmpDir, namespace));
@@ -1776,14 +1776,14 @@ export const customer = db
           "customer-db": { files: ["./customer/*.ts"] },
           "ledger-db": { files: ["./ledger/*.ts"] },
         },
-        apps: {},
+        apps: { shop: { db: ["customer-db", "ledger-db"] } },
       }),
       path.join(tmpDir, "tailor.config.ts"),
     );
 
     await expect(loadWorkspace({ workspace })).rejects.toMatchObject({
       suggestion:
-        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+        'Give each TailorDB type a name that is unique across all TailorDB namespaces of application "shop".',
     });
   });
 

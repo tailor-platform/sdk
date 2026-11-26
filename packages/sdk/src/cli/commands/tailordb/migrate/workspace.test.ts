@@ -236,15 +236,15 @@ describe("tailordb migration commands with a workspace config", () => {
     ]);
   });
 
-  test("validate asks for table names unique across the workspace when two namespaces share one", async () => {
+  test("validate asks for table names unique across the namespaces of an application", async () => {
     fs.writeFileSync(
-      path.join(dir, "db", "ledger", "other.ts"),
+      path.join(dir, "db", "customer", "other.ts"),
       fs.readFileSync(path.join(dir, "db", "order", "table.ts"), "utf8"),
     );
 
     await expect(run(validateCommand, [])).rejects.toMatchObject({
       suggestion:
-        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+        'Give each TailorDB type a name that is unique across all TailorDB namespaces of application "shop".',
     });
   });
 

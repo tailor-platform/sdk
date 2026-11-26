@@ -10,7 +10,7 @@ import {
   staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
-import { type LoadedConfigFile } from "#/cli/shared/config-loader";
+import { type LoadedConfigFile, tailorDBTypeNameGroupsOf } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -537,6 +537,10 @@ async function planDeploymentTarget(
         tailorDBServices: migrationTestServices,
         externalTailorDBNamespaces: application.externalTailorDBNamespaces,
         plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
+        groups:
+          target.source.kind === "workspace"
+            ? tailorDBTypeNameGroupsOf(target.source.workspace)
+            : undefined,
       }),
     );
   }

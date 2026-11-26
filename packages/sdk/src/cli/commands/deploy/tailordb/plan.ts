@@ -201,19 +201,6 @@ export async function planTailorDB(context: PlanContext) {
         });
       }
     }
-    const namespaceByType = new Map<string, string>();
-    for (const tailordb of tailordbs) {
-      for (const tableName of Object.keys(tailordb.types)) {
-        const existingNamespace = namespaceByType.get(tableName);
-        if (existingNamespace) {
-          throw CLIError({
-            code: "MIGRATION_TEST_SNAPSHOT_INVALID",
-            message: `Migration test snapshot has duplicate TailorDB table name "${tableName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
-          });
-        }
-        namespaceByType.set(tableName, tailordb.namespace);
-      }
-    }
   }
   const migrationConfig = forRemoval
     ? []

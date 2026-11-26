@@ -23,7 +23,7 @@ import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { configOf, defineConfigFileServices } from "#/cli/shared/config-file";
-import { loadConfigFile, tailorDBTypeNameScopeOf } from "#/cli/shared/config-loader";
+import { loadConfigFile, tailorDBTypeNameGroupsOf } from "#/cli/shared/config-loader";
 import { serializeError, type errorToJson } from "#/cli/shared/error-json";
 import { CLIError, errorSummary, isCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
@@ -660,7 +660,7 @@ async function collectValidationReports(
   }
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: application.tailorDBServices,
-    scope: tailorDBTypeNameScopeOf(config),
+    groups: tailorDBTypeNameGroupsOf(config),
   });
   for (const { namespace } of targetNamespaces) {
     if (!application.tailorDBServices.some((s) => s.namespace === namespace)) {

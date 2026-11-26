@@ -60,14 +60,19 @@ export function isLoadedWorkspaceConfig(
 }
 
 /**
- * Decide where the TailorDB type names of a config must be unique.
+ * Decide which TailorDB namespaces of a config must not share a type name.
  * @param config - Loaded config of either kind
- * @returns `"workspace"` for a workspace config, `"application"` otherwise
+ * @returns The namespaces each application of a workspace config lists, or undefined for a
+ * `defineConfig()` config, whose namespaces all belong to its one application
  */
-export function tailorDBTypeNameScopeOf(
+export function tailorDBTypeNameGroupsOf(
   config: LoadedConfig | LoadedWorkspaceConfig,
-): NonNullable<AssertUniqueLocalTailorDBTypeNamesArgs["scope"]> {
-  return isLoadedWorkspaceConfig(config) ? "workspace" : "application";
+): AssertUniqueLocalTailorDBTypeNamesArgs["groups"] {
+  if (!isLoadedWorkspaceConfig(config)) return undefined;
+  return Object.entries(config.apps).map(([application, app]) => ({
+    application,
+    namespaces: app.db,
+  }));
 }
 
 /**

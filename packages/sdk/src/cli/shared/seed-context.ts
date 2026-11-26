@@ -13,7 +13,7 @@ import {
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
 import { configOf, machineUserAuths } from "./config-file";
-import { atConfigSource, tailorDBTypeNameScopeOf } from "./config-loader";
+import { atConfigSource } from "./config-loader";
 import { type CLIError, locatedCLIError } from "./errors";
 import { resolveMachineUser } from "./machine-user";
 import { loadConfigFileNamespaces } from "./tailordb-namespaces";
@@ -95,10 +95,7 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   // Seed files and type filters identify types by bare name, so enforce the
   // same cross-namespace uniqueness that generation and deploy enforce.
-  assertUniqueLocalTailorDBTypeNames({
-    tailorDBServices: services.tailorDBServices,
-    scope: tailorDBTypeNameScopeOf(config),
-  });
+  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: services.tailorDBServices });
 
   const pluginOptions = resolvePluginConfig(loaded.plugins, SeedGeneratorID);
   if (!pluginOptions) {

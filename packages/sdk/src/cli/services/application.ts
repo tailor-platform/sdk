@@ -36,7 +36,7 @@ import {
 } from "#/cli/shared/client";
 import {
   isLoadedWorkspaceConfig,
-  tailorDBTypeNameScopeOf,
+  tailorDBTypeNameGroupsOf,
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
@@ -1449,7 +1449,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   }
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
-    scope: tailorDBTypeNameScopeOf(config),
+    groups: tailorDBTypeNameGroupsOf(config),
   });
   const resolvedReplications = resolveTailorDBReplicationTypes({
     configPath: settings.path,
