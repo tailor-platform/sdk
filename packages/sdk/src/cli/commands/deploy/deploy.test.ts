@@ -621,7 +621,10 @@ describe("dropCrossDeploymentManagedDeletes", () => {
 
     const nextOwner = emptyPlanResults();
     nextOwner.tailorDB.changeSet.service.unchanged.push({ name: "shared" });
-    nextOwner.tailorDB.changeSet.type.unchanged.push({ name: "User" });
+    nextOwner.tailorDB.changeSet.type.unchanged.push({
+      name: "User",
+      request: { namespaceName: "shared" },
+    });
 
     dropCrossDeploymentManagedDeletes([
       plannedDeployment("previous", previousOwner),

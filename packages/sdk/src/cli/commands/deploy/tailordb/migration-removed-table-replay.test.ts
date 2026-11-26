@@ -13,15 +13,20 @@ import {
   createPlanResult,
   createRemoteCheckpoint,
   deleteOrders,
+  gqlPermissionDeletion,
   gqlPermissionEntry,
   mkPendingMigration,
   type RemoteCheckpoint,
   snapshotAt,
   snapshotTable,
   type SnapshotTablesByVersion,
+  tailordbTypeWrites,
+  typeDeletion,
   typeEntry,
+  typeUnchanged,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB } from "./index";
+import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { OperatorClient } from "#/cli/shared/client";
 
 vi.mock("./migration", async (importOriginal) => ({
@@ -497,5 +502,300 @@ describe("migration flow: replaying a history that removes tables into a fresh w
 
     expect(createOrdersOf(client, "A")).toHaveLength(0);
     expect(deleteOrders(client, NAMESPACE, "A").table).toHaveLength(1);
+  });
+
+  describe("a table the workspace has and the local definitions keep, which a pending migration removes", () => {
+    const tableA = snapshotTable("A", nameField);
+    const withF2 = snapshotTable("A", { ...nameField, f2: { type: "string", required: false } });
+
+    function scriptOrder(number: number) {
+      const mock = vi.mocked(migrationModule.executeMigrations).mock;
+      const index = mock.calls.findIndex((call) => call[1].some((m) => m.number === number));
+      return mock.invocationCallOrder[index]!;
+    }
+
+    function permissionCreateOrders(client: OperatorClient, tableName: string) {
+      const mock = vi.mocked(client.createTailorDBGQLPermission).mock;
+      return mock.invocationCallOrder.filter(
+        (_order, index) => mock.calls[index]?.[0].typeName === tableName,
+      );
+    }
+
+    function recreatePlan() {
+      return createPlanResult({
+        type: { creates: [typeEntry("A")], deletes: [typeDeletion("A")] },
+        gqlPermission: {
+          creates: [gqlPermissionEntry("A")],
+          deletes: [gqlPermissionDeletion("A")],
+        },
+        local: [tableA],
+      });
+    }
+
+    function workspaceAtCheckpoint(number: number) {
+      checkpoint = createRemoteCheckpoint(number);
+      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+      return checkpoint.createMockClient({
+        listTailorDBTypes: { tailordbTypes: [{ name: "A" }] },
+      });
+    }
+
+    test("keeps the table with its records until the removing migration's checkpoint, then deletes it and creates it again at the re-add", async () => {
+      snapshotState.tablesByVersion = {
+        0: { A: tableA },
+        1: { A: withF2 },
+        2: {},
+        3: {},
+        4: { A: tableA },
+      };
+      const planResult = recreatePlan();
+      const client = workspaceAtCheckpoint(0);
+      planResult.context.pendingMigrations = checkpoint.mockPending([
+        mkPendingMigration([
+          {
+            kind: "field_added",
+            tableName: "A",
+            fieldName: "f2",
+            after: { type: "string", required: false },
+          },
+        ]),
+        mkPendingMigration([{ kind: "table_removed", tableName: "A", before: withF2 }], {
+          number: 2,
+          hasScript: false,
+        }),
+        mkPendingMigration([], { number: 3 }),
+        mkPendingMigration([{ kind: "table_added", tableName: "A", after: tableA }], {
+          number: 4,
+          hasScript: false,
+        }),
+      ]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const withF2Writes = tailordbTypeWrites(client).filter(
+        (write) => write.name === "A" && write.tailordbType.schema?.fields?.f2 !== undefined,
+      );
+      expect(withF2Writes[0]?.order).toBeLessThan(scriptOrder(1));
+      const { table, permission } = deleteOrders(client, NAMESPACE, "A");
+      expect(table).toHaveLength(1);
+      expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+      expect(table[0]).toBeLessThan(scriptOrder(3));
+      expect(permission).toHaveLength(1);
+      expect(permission[0]).toBeLessThan(table[0]!);
+      const created = createOrdersOf(client, "A");
+      expect(created).toHaveLength(1);
+      expect(created[0]).toBeGreaterThan(table[0]!);
+      const permissionCreates = permissionCreateOrders(client, "A");
+      expect(permissionCreates).toHaveLength(1);
+      expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
+    });
+
+    test("drops the foreign key of a table the plan leaves unchanged before the removal deletes its target, and adds it back after the re-add", async () => {
+      const toA = { type: "uuid", required: false } as const;
+      const keepWithKey = snapshotTable("Keep", {
+        aId: { ...toA, foreignKey: true, foreignKeyType: "A", foreignKeyField: "id" },
+      });
+      const keepWithoutKey = snapshotTable("Keep", { aId: toA });
+      snapshotState.tablesByVersion = {
+        0: { A: tableA, Keep: keepWithKey },
+        1: { Keep: keepWithoutKey },
+        2: { Keep: keepWithoutKey },
+        3: { A: tableA, Keep: keepWithKey },
+      };
+      const planResult = createPlanResult({
+        type: {
+          creates: [typeEntry("A")],
+          deletes: [typeDeletion("A")],
+          unchanged: [typeUnchanged("Keep")],
+        },
+        local: [tableA, keepWithKey],
+      });
+      checkpoint = createRemoteCheckpoint(0);
+      vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+      const client = checkpoint.createMockClient({
+        listTailorDBTypes: { tailordbTypes: [{ name: "A" }, { name: "Keep" }] },
+      });
+      planResult.context.pendingMigrations = checkpoint.mockPending([
+        mkPendingMigration(
+          [
+            { kind: "table_removed", tableName: "A", before: tableA },
+            {
+              kind: "field_modified",
+              tableName: "Keep",
+              fieldName: "aId",
+              before: keepWithKey.fields.aId!,
+              after: toA,
+            },
+          ],
+          { hasScript: false },
+        ),
+        mkPendingMigration([], { number: 2 }),
+        mkPendingMigration(
+          [
+            { kind: "table_added", tableName: "A", after: tableA },
+            {
+              kind: "field_modified",
+              tableName: "Keep",
+              fieldName: "aId",
+              before: toA,
+              after: keepWithKey.fields.aId!,
+            },
+          ],
+          { number: 3, hasScript: false },
+        ),
+      ]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const keepWrites = tailordbTypeWrites(client).filter((write) => write.name === "Keep");
+      const hasKey = (write: (typeof keepWrites)[number]) =>
+        write.tailordbType.schema?.fields?.aId?.foreignKey === true;
+      const { table } = deleteOrders(client, NAMESPACE, "A");
+      expect(table).toHaveLength(1);
+      const beforeDeletion = keepWrites.filter((write) => write.order < table[0]!);
+      expect(beforeDeletion.length).toBeGreaterThan(0);
+      expect(hasKey(beforeDeletion.at(-1)!)).toBe(false);
+      const last = keepWrites.at(-1)!;
+      expect(last.order).toBeGreaterThan(createOrdersOf(client, "A")[0]!);
+      expect(hasKey(last)).toBe(true);
+    });
+
+    const tableT = snapshotTable("T", nameField);
+    const oldT = snapshotTable("OldT", nameField);
+
+    type AddingCase = {
+      adding: string;
+      checkpoint: SnapshotTablesByVersion[number];
+      change: DiffChange;
+    };
+
+    test.each<AddingCase>([
+      {
+        adding: "adds",
+        checkpoint: {},
+        change: { kind: "table_added", tableName: "T", after: tableT },
+      },
+      {
+        adding: "renames another table to",
+        checkpoint: { OldT: oldT },
+        change: {
+          kind: "table_renamed",
+          tableName: "T",
+          previousTableName: "OldT",
+          before: oldT,
+          after: tableT,
+        },
+      },
+    ])(
+      "keeps a table the plan leaves unchanged when a failed migration that $adding it rolls back",
+      async ({ checkpoint: checkpointTables, change }) => {
+        snapshotState.tablesByVersion = { 0: checkpointTables, 1: { T: tableT } };
+        const planResult = createPlanResult({
+          type: { unchanged: [typeUnchanged("T")] },
+          local: [tableT],
+        });
+        checkpoint = createRemoteCheckpoint(0);
+        vi.mocked(migrationModule.updateMigrationLabel).mockImplementation(checkpoint.record);
+        const client = checkpoint.createMockClient({
+          listTailorDBTypes: { tailordbTypes: [{ name: "T" }] },
+        });
+        planResult.context.pendingMigrations = checkpoint.mockPending([
+          mkPendingMigration([change]),
+        ]);
+        vi.mocked(migrationModule.executeMigrations).mockRejectedValueOnce(
+          new Error("script failed"),
+        );
+
+        await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+          "script failed",
+        );
+
+        expect(deleteOrders(client, NAMESPACE, "T").table).toHaveLength(0);
+      },
+    );
+
+    test("deletes the GraphQL permission at the removal only after a migration applied it, when the workspace's table has none", async () => {
+      snapshotState.tablesByVersion = {
+        0: { A: tableA },
+        1: { A: tableA },
+        2: {},
+        3: { A: tableA },
+      };
+      const planResult = createPlanResult({
+        type: { creates: [typeEntry("A")], deletes: [typeDeletion("A")] },
+        gqlPermission: { creates: [gqlPermissionEntry("A")] },
+        local: [tableA],
+      });
+      const client = workspaceAtCheckpoint(0);
+      planResult.context.pendingMigrations = checkpoint.mockPending([
+        mkPendingMigration([], { hasScript: false }),
+        mkPendingMigration([{ kind: "table_removed", tableName: "A", before: tableA }], {
+          number: 2,
+          hasScript: false,
+        }),
+        mkPendingMigration([{ kind: "table_added", tableName: "A", after: tableA }], {
+          number: 3,
+          hasScript: false,
+        }),
+      ]);
+
+      await applyTailorDB(client, planResult, "create-update");
+
+      const { permission } = deleteOrders(client, NAMESPACE, "A");
+      const permissionCreates = permissionCreateOrders(client, "A");
+      expect(permission).toHaveLength(1);
+      expect(permissionCreates).toHaveLength(2);
+      expect(permissionCreates[0]).toBeLessThan(permission[0]!);
+      expect(permissionCreates[1]).toBeGreaterThan(permission[0]!);
+    });
+
+    const removeA = () =>
+      mkPendingMigration([{ kind: "table_removed", tableName: "A", before: tableA }], {
+        number: 2,
+        hasScript: false,
+      });
+
+    type RemovalCase = {
+      name: string;
+      tablesByVersion: SnapshotTablesByVersion;
+      pending: () => ReturnType<typeof mkPendingMigration>[];
+    };
+
+    test.each<RemovalCase>([
+      {
+        name: "a table the checkpoint lacks, until the migration that removes it",
+        tablesByVersion: { 0: {}, 1: { A: tableA }, 2: {}, 3: { A: tableA } },
+        pending: () => [
+          mkPendingMigration([{ kind: "table_added", tableName: "A", after: tableA }]),
+          removeA(),
+          mkPendingMigration([{ kind: "table_added", tableName: "A", after: tableA }], {
+            number: 3,
+            hasScript: false,
+          }),
+        ],
+      },
+      {
+        name: "a table no later migration adds back, then creates it from the local definitions",
+        tablesByVersion: { 0: { A: tableA }, 1: { A: tableA }, 2: {} },
+        pending: () => [mkPendingMigration([]), removeA()],
+      },
+    ])(
+      "keeps $name, deletes it at the removal, and creates it once after",
+      async ({ tablesByVersion, pending }) => {
+        snapshotState.tablesByVersion = tablesByVersion;
+        const planResult = recreatePlan();
+        const client = workspaceAtCheckpoint(0);
+        planResult.context.pendingMigrations = checkpoint.mockPending(pending());
+
+        await applyTailorDB(client, planResult, "create-update");
+
+        const { table } = deleteOrders(client, NAMESPACE, "A");
+        expect(table).toHaveLength(1);
+        expect(table[0]).toBeGreaterThan(checkpointOrder(2));
+        const created = createOrdersOf(client, "A");
+        expect(created).toHaveLength(1);
+        expect(created[0]).toBeGreaterThan(table[0]!);
+      },
+    );
   });
 });

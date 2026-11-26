@@ -12,6 +12,7 @@ import {
 import * as path from "pathe";
 import { getNamespacesWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
+import { getTablesDeletedAfterCheckpoint } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   toTailorDBDeployInput,
   type TailorDBDeployInput,
@@ -47,7 +48,11 @@ import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "../own
 import { tailordbTypeComparison } from "./compare";
 import { assertPendingMigrationsRunnable } from "./migration";
 import { selectSkipStepsOfNamespaces } from "./migration-skip-steps";
-import { logMigrationPlanNotices, validateAndDetectMigrations } from "./migration-validation";
+import {
+  logMigrationPlanNotices,
+  type ValidateAndDetectResult,
+  validateAndDetectMigrations,
+} from "./migration-validation";
 import type { ListingApplication } from "../deploy-application";
 import type { PlanContext } from "../types";
 
@@ -59,17 +64,73 @@ export type TailorDBChangeSet = TailorDBPlanResult["changeSet"];
 export type NamespacedEntry = { name: string; request: { namespaceName?: string | undefined } };
 
 /**
- * Whether the plan deletes a table and creates it again: the deletion runs before the
- * migrations, so the closing deletions leave the table the migrations created.
- * @param changeSet - TailorDB change set
- * @param del - A planned deletion
- * @returns Whether the plan also creates a table of that name in the namespace
+ * Whether change-set entries name a table.
+ * @param entries - Change-set entries
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Name of the table
+ * @returns Whether an entry names the table in the namespace
  */
-export function isRecreated(changeSet: TailorDBChangeSet, del: NamespacedEntry): boolean {
-  return changeSet.type.creates.some(
-    (create) =>
-      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+export function plansTable(
+  entries: readonly NamespacedEntry[],
+  namespaceName: string,
+  tableName: string,
+): boolean {
+  return entries.some(
+    (entry) => entry.name === tableName && (entry.request.namespaceName ?? "") === namespaceName,
   );
+}
+
+/**
+ * Whether the plan deletes a table and creates it again: the deletion runs before the
+ * migrations or once the migration that removes the table commits, so the closing deletions
+ * leave the table the deploy created again.
+ * @param changeSet - TailorDB change set
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Name of the table
+ * @returns Whether the plan both deletes and creates a table of that name in the namespace
+ */
+export function isRecreated(
+  changeSet: TailorDBChangeSet,
+  namespaceName: string,
+  tableName: string,
+): boolean {
+  return (
+    plansTable(changeSet.type.deletes, namespaceName, tableName) &&
+    plansTable(changeSet.type.creates, namespaceName, tableName)
+  );
+}
+
+/**
+ * Name the tables that the local definitions keep but whose remote table, if any, the deploy
+ * deletes and creates again, so they start without the records they had: those whose deletion an
+ * earlier deploy left unfinished, and those a pending migration removes or renames away.
+ * @param detected - Validated migration state
+ * @param tailordbs - TailorDB deploy inputs
+ * @returns Table names by namespace
+ */
+export function recreatedTablesOf(
+  detected: Pick<ValidateAndDetectResult, "unfinishedRemovals" | "pendingMigrations">,
+  tailordbs: ReadonlyArray<TailorDBDeployInput>,
+): Map<string, ReadonlySet<string>> {
+  const removedTables = new Map<string, Set<string>>();
+  const addRemoved = (namespace: string, tableNames: Iterable<string>) => {
+    const removed = removedTables.get(namespace) ?? new Set<string>();
+    for (const tableName of tableNames) removed.add(tableName);
+    removedTables.set(namespace, removed);
+  };
+  for (const [namespace, { tableNames }] of detected.unfinishedRemovals) {
+    addRemoved(namespace, tableNames);
+  }
+  for (const migration of detected.pendingMigrations) {
+    addRemoved(migration.namespace, getTablesDeletedAfterCheckpoint(migration.diff));
+  }
+  const recreatedTables = new Map<string, ReadonlySet<string>>();
+  for (const [namespace, tableNames] of removedTables) {
+    const localTypes = tailordbs.find((tailordb) => tailordb.namespace === namespace)?.types ?? {};
+    const kept = [...tableNames].filter((tableName) => Object.hasOwn(localTypes, tableName));
+    if (kept.length > 0) recreatedTables.set(namespace, new Set(kept));
+  }
+  return recreatedTables;
 }
 
 /**
@@ -179,14 +240,9 @@ export async function planTailorDB(context: PlanContext) {
     });
     logMigrationPlanNotices(detected);
   }
-  // A table whose deletion an earlier deploy left unfinished, and that the final schema keeps,
-  // starts over: the remote leftover is deleted and the table is created again.
-  const recreatedTables = new Map<string, ReadonlySet<string>>();
-  for (const [namespace, { tableNames }] of detected?.unfinishedRemovals ?? []) {
-    const localTypes = tailordbs.find((tailordb) => tailordb.namespace === namespace)?.types ?? {};
-    const kept = tableNames.filter((tableName) => Object.hasOwn(localTypes, tableName));
-    if (kept.length > 0) recreatedTables.set(namespace, new Set(kept));
-  }
+  const recreatedTables = detected
+    ? recreatedTablesOf(detected, tailordbs)
+    : new Map<string, ReadonlySet<string>>();
   const { namespacesWithMigrations, migrationFileState, checkpointRepairs, pendingMigrations } =
     detected ?? {
       namespacesWithMigrations: migrationConfig,
@@ -370,6 +426,7 @@ type UpdateType = {
  */
 type UnchangedType = {
   name: string;
+  request: { namespaceName: string };
   metaRequest?: MetadataLabelWrite | undefined;
 };
 
@@ -502,7 +559,7 @@ async function planTypes(
       create: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
       update: ({ name, request, metaRequest }) => ({ name, request, metaRequest }),
       // The schema matches, but the records may not, so the labels still go.
-      unchanged: ({ name, metaRequest }) => ({ name, metaRequest }),
+      unchanged: ({ name, metaRequest }) => ({ name, request: { namespaceName }, metaRequest }),
       delete: (tailordbTypeName) => ({
         name: tailordbTypeName,
         request: { workspaceId, namespaceName, tailordbTypeName },

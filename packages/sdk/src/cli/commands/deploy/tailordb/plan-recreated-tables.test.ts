@@ -1,7 +1,8 @@
 /**
- * A table whose deletion an earlier deploy left unfinished, and that a later migration adds
- * again, is planned as a deletion of the remote table plus a creation, so the table starts over
- * instead of the plan updating the leftover.
+ * A table that the local definitions keep but whose current records must not survive the deploy is
+ * planned as a deletion of the remote table plus a creation, instead of an update: one whose
+ * deletion an earlier deploy left unfinished, and one that a pending migration removes or renames
+ * away.
  */
 
 import { describe, test, expect, vi } from "vitest";
@@ -10,7 +11,10 @@ import { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-
 import { normalizeSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { validateAndDetectMigrations } from "./migration-validation";
+import { mkPendingMigration } from "./test-helpers/migration-apply";
 import { planTailorDB } from "./index";
+import type { DiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
@@ -47,16 +51,34 @@ function postTable(withPermission: boolean) {
   };
 }
 
-type PlanOptions = { withPermission: boolean };
+const removePost: DiffChange = {
+  kind: "table_removed",
+  tableName: "Post",
+  before: postTable(false),
+};
+const addPost: DiffChange = { kind: "table_added", tableName: "Post", after: postTable(false) };
+
+function pending(number: number, changes: DiffChange[]): PendingMigration {
+  return mkPendingMigration(changes, { namespace: NAMESPACE, number, hasScript: false });
+}
+
+type PlanOptions = {
+  withPermission?: boolean;
+  pendingMigrations?: PendingMigration[];
+  unfinishedRemovals?: string[];
+};
 
 function plan(options: PlanOptions) {
+  const { withPermission = false } = options;
   vi.mocked(validateAndDetectMigrations).mockResolvedValue({
     namespacesWithMigrations: [],
     migrationFileState: captureMigrationFileState([]),
     checkpointRepairs: [],
-    pendingMigrations: [],
+    pendingMigrations: options.pendingMigrations ?? [],
     inProgressMigrations: {},
-    unfinishedRemovals: new Map([[NAMESPACE, { migrationNumber: 1, tableNames: ["Post"] }]]),
+    unfinishedRemovals: options.unfinishedRemovals
+      ? new Map([[NAMESPACE, { migrationNumber: 1, tableNames: options.unfinishedRemovals }]])
+      : new Map(),
   } as unknown as Awaited<ReturnType<typeof validateAndDetectMigrations>>);
   const client = mockOperatorClient({
     listTailorDBServices: {
@@ -98,7 +120,7 @@ function plan(options: PlanOptions) {
           version: SCHEMA_SNAPSHOT_VERSION,
           namespace: NAMESPACE,
           createdAt: "2026-01-01T00:00:00.000Z",
-          tables: { Post: postTable(options.withPermission) },
+          tables: { Post: postTable(withPermission) },
         }),
       ],
     ]),
@@ -107,7 +129,7 @@ function plan(options: PlanOptions) {
 
 describe("planTailorDB: a table whose deletion is unfinished and that a later migration adds again", () => {
   test("plans a deletion and a creation of the table, not an update", async () => {
-    const result = await plan({ withPermission: false });
+    const result = await plan({ unfinishedRemovals: ["Post"] });
 
     expect(result.changeSet.type.deletes.map((entry) => entry.name)).toEqual(["Post"]);
     expect(result.changeSet.type.creates.map((entry) => entry.name)).toEqual(["Post"]);
@@ -116,10 +138,47 @@ describe("planTailorDB: a table whose deletion is unfinished and that a later mi
   });
 
   test("plans a deletion and a creation of its GraphQL permission", async () => {
-    const result = await plan({ withPermission: true });
+    const result = await plan({ withPermission: true, unfinishedRemovals: ["Post"] });
 
     expect(result.changeSet.gqlPermission.deletes.map((entry) => entry.name)).toEqual(["Post"]);
     expect(result.changeSet.gqlPermission.creates.map((entry) => entry.name)).toEqual(["Post"]);
     expect(result.changeSet.gqlPermission.updates).toEqual([]);
+  });
+});
+
+describe("planTailorDB: a table the local definitions keep that a pending migration removes", () => {
+  test.each([
+    { removal: "a removal", removing: removePost },
+    {
+      removal: "a rename",
+      removing: {
+        kind: "table_renamed",
+        tableName: "Archive",
+        previousTableName: "Post",
+        before: postTable(false),
+        after: { ...postTable(false), name: "Archive", pluralForm: "Archives" },
+      } satisfies DiffChange,
+    },
+  ])(
+    "plans a deletion and a creation of the table and its permission after $removal",
+    async ({ removing }) => {
+      const result = await plan({
+        withPermission: true,
+        pendingMigrations: [pending(2, [removing]), pending(3, [addPost])],
+      });
+
+      expect(result.changeSet.type.deletes.map((entry) => entry.name)).toEqual(["Post"]);
+      expect(result.changeSet.type.creates.map((entry) => entry.name)).toEqual(["Post"]);
+      expect(result.changeSet.type.updates).toEqual([]);
+      expect(result.changeSet.gqlPermission.deletes.map((entry) => entry.name)).toEqual(["Post"]);
+      expect(result.changeSet.gqlPermission.creates.map((entry) => entry.name)).toEqual(["Post"]);
+    },
+  );
+
+  test("plans an update when no pending migration removes the table", async () => {
+    const result = await plan({ pendingMigrations: [pending(2, [])] });
+
+    expect(result.changeSet.type.deletes).toEqual([]);
+    expect(result.changeSet.type.updates.map((entry) => entry.name)).toEqual(["Post"]);
   });
 });

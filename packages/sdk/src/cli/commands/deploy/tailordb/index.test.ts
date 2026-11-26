@@ -964,7 +964,9 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
+      expect(
+        result.changeSet.type.unchanged.map(({ name, request }) => [request.namespaceName, name]),
+      ).toEqual([["test-tailordb", "Invoice"]]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 

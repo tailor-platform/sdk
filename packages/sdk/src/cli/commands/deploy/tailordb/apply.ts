@@ -120,7 +120,9 @@ import {
 import {
   isRecreated,
   type NamespacedEntry,
+  plansTable,
   type planTailorDB,
+  recreatedTablesOf,
   type TailorDBChangeSet,
   type TailorDBPlanResult,
 } from "./plan";
@@ -342,10 +344,7 @@ async function validateTailorDBMigrationState(
   }
   for (const [namespace, { tableNames }] of validation.unfinishedRemovals) {
     const unplanned = tableNames.filter(
-      (tableName) =>
-        !result.changeSet.type.deletes.some(
-          (del) => del.request.namespaceName === namespace && del.name === tableName,
-        ),
+      (tableName) => !plansTable(result.changeSet.type.deletes, namespace, tableName),
     );
     if (unplanned.length > 0) {
       throw CLIError({
@@ -355,26 +354,6 @@ async function validateTailorDBMigrationState(
       });
     }
   }
-  const unfinishedByNamespace = new Map(
-    [...validation.unfinishedRemovals].map(([namespace, { tableNames }]) => [
-      namespace,
-      new Set(tableNames),
-    ]),
-  );
-  const recreatedWithoutUnfinishedRemoval = result.changeSet.type.deletes.filter(
-    (del) =>
-      result.changeSet.type.creates.some(
-        (create) =>
-          create.name === del.name && create.request.namespaceName === del.request.namespaceName,
-      ) && !unfinishedByNamespace.get(del.request.namespaceName ?? "")?.has(del.name),
-  );
-  if (recreatedWithoutUnfinishedRemoval.length > 0) {
-    throw CLIError({
-      code: "DEPLOY_PLAN_STALE",
-      message: `Tables to delete and create again changed after deployment planning: ${recreatedWithoutUnfinishedRemoval.map((del) => del.name).join(", ")}.`,
-      suggestion: "Run the deployment again to review the deletion.",
-    });
-  }
   if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
     throw CLIError({
       code: "DEPLOY_PLAN_STALE",
@@ -383,6 +362,19 @@ async function validateTailorDBMigrationState(
     });
   }
   assertPendingMigrationsUnchanged(context.pendingMigrations, validation.pendingMigrations);
+  const recreatedTables = recreatedTablesOf(validation, context.tailorDBInputs);
+  const unexpectedlyRecreated = result.changeSet.type.deletes.filter(
+    (del) =>
+      isRecreated(result.changeSet, del.request.namespaceName ?? "", del.name) &&
+      !recreatedTables.get(del.request.namespaceName ?? "")?.has(del.name),
+  );
+  if (unexpectedlyRecreated.length > 0) {
+    throw CLIError({
+      code: "DEPLOY_PLAN_STALE",
+      message: `Tables to delete and create again changed after deployment planning: ${unexpectedlyRecreated.map((del) => del.name).join(", ")}.`,
+      suggestion: "Run the deployment again to review the deletion.",
+    });
+  }
   await assertMigrationSkipSteps({
     client,
     workspaceId: context.workspaceId,
@@ -1156,12 +1148,16 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * apply a change whose migration has not run. Tables a pending migration removes or
  * renames away have no planned create, so the workspace lacks them on a fresh replay;
  * they are created here from the snapshot too, and the migration that removes them
- * deletes them again. Planned deletes are irreversible and stay last.
+ * deletes them again. A planned create that the plan also deletes, other than an
+ * unfinished removal, names a table the workspace has and a pending migration removes:
+ * the workspace's table is recorded as created instead, so the migrations write it until
+ * that migration deletes it, and a later migration that adds it back creates it again.
+ * Planned deletes are irreversible and stay last.
  * @param flow - Migration flow
  * @returns `<namespace>/<table>` of the GraphQL permissions to apply once migrations settle
  */
 async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<string>> {
-  const { client, changeSet, migrationContext, phaseSettings, pending } = flow;
+  const { client, changeSet, migrationContext, phaseSettings, pending, validation } = flow;
   const deferredGqlPermissionKeys = new Set(
     [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
       .filter((permission) => {
@@ -1185,11 +1181,22 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       }
       const tableName = create.request.tailordbType?.name;
       if (!namespaceName || !tableName) continue;
+      const tableKey = namespacedTableKey(namespaceName, tableName);
+      if (
+        isRecreated(changeSet, namespaceName, tableName) &&
+        !validation.unfinishedRemovals.get(namespaceName)?.tableNames.includes(tableName)
+      ) {
+        processedTables.created.add(tableKey);
+        if (plansTable(changeSet.gqlPermission.deletes, namespaceName, tableName)) {
+          processedTables.gqlPermissionsProcessed.add(tableKey);
+        }
+        continue;
+      }
       const priorTable = flow.preMigrationSnapshots.get(namespaceName)?.tables[tableName];
       if (!priorTable) continue;
       // Recorded so the pre-phase GQL-permission fallback does not create
       // the type a second time.
-      processedTables.created.add(namespacedTableKey(namespaceName, tableName));
+      processedTables.created.add(tableKey);
       await client.createTailorDBType(
         omitUndefined({
           workspaceId: create.request.workspaceId,
@@ -2343,13 +2350,13 @@ async function applyRemainingDeletions(
   await Promise.all(
     changeSet.gqlPermission.deletes
       .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
-      .filter((del) => !isRecreated(changeSet, del))
+      .filter((del) => !isRecreated(changeSet, del.request.namespaceName ?? "", del.name))
       .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
   await awaitAllSettledOrThrow(
     changeSet.type.deletes
       .filter((del) => !isDeleted(deletedResources.types, del))
-      .filter((del) => !isRecreated(changeSet, del))
+      .filter((del) => !isRecreated(changeSet, del.request.namespaceName ?? "", del.name))
       .map(async (del) => {
         await client.deleteTailorDBType(del.request);
         onTableDeleted(del);
