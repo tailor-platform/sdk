@@ -1058,6 +1058,7 @@ for bin in pnpm pnpx yarn yarnpkg; do : > "$bin_dir/$bin"; done
 cat > "$bin_dir/corepack" <<'COREPACK'
 #!/usr/bin/env bash
 set -euo pipefail
+[ "$#" -eq 4 ]
 [ "$1 $2 $4" = "enable --install-directory yarn" ]
 : > "$3/yarn"
 : > "$3/yarnpkg"
