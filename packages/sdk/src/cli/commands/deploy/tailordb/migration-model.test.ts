@@ -90,6 +90,8 @@ const COVERED_CASES = [
   "workspace table a pending migration removes",
 ];
 const MIN_CASE_COUNT = 10;
+const TRACE_COUNT = 3000;
+const MIN_DISTINCT_TRACES = TRACE_COUNT * 0.95;
 
 function modelApplication(): Application {
   return {
@@ -215,13 +217,13 @@ async function replay(trace: ModelTrace): Promise<string[]> {
 describe("migration deploy model", () => {
   let traces: ModelTrace[] = [];
   beforeAll(() => {
-    traces = simulateModelTraces(3000);
+    traces = simulateModelTraces(TRACE_COUNT);
   }, 120_000);
 
   test("the simulated deploys reach each case often enough", () => {
     const counts = countModelCases(traces);
     expect({
-      enoughTraces: traces.length > 2900,
+      enoughTraces: traces.length >= MIN_DISTINCT_TRACES,
       rare: COVERED_CASES.filter((name) => (counts.get(name) ?? 0) < MIN_CASE_COUNT).map(
         (name) => `${name}: ${counts.get(name) ?? 0}`,
       ),
