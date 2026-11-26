@@ -75,7 +75,7 @@ db.table("User", "User in the system", {
 | `db.float()`                      | Float    | number         |
 | [`db.decimal()`](#decimal-fields) | Decimal  | string         |
 | `db.bool()`                       | Boolean  | boolean        |
-| `db.date()`                       | Date     | Date \| string |
+| `db.date()`                       | Date     | string         |
 | `db.datetime()`                   | DateTime | Date \| string |
 | `db.time()`                       | Time     | string         |
 | `db.uuid()`                       | UUID     | string         |
@@ -455,10 +455,11 @@ db.int().default(0);
 db.string().default("pending");
 ```
 
-For datetime/date/time fields, pass `"now"` to use the operation timestamp:
+For datetime/date/time fields, pass `"now"` to use the operation timestamp. A date field gets its UTC date (`YYYY-MM-DD`), and a time field its UTC time (`HH:mm`):
 
 ```typescript
 db.datetime().default("now");
+db.date().default("now");
 ```
 
 **Note:** `.validate()` can only be called once on a table. Duplicate table-level calls fail at compile time and throw at runtime.

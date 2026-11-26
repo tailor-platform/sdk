@@ -159,20 +159,34 @@ describe("buildTypeScripts", () => {
     expect(typeHook?.update).toBeUndefined();
   });
 
-  test("uses _now for datetime/date/time defaults with 'now'", () => {
-    const fields: Record<string, ScriptFieldConfig> = {
-      createdAt: { type: "datetime", default: "now" },
-      startDate: { type: "date", default: "now" },
-      startTime: { type: "time", default: "now" },
-      label: { type: "string", default: "now" },
-    };
+  test("fills 'now' defaults with the operation's datetime and its UTC date and time", () => {
+    const now = new Date("2026-04-15T23:30:45.678Z");
+    vi.stubEnv("TZ", "Asia/Tokyo");
+    vi.useFakeTimers({ toFake: ["Date"], now });
+    try {
+      const fields: Record<string, ScriptFieldConfig> = {
+        createdAt: { type: "datetime", default: "now" },
+        startDate: { type: "date", default: "now" },
+        startTime: { type: "time", default: "now" },
+        label: { type: "string", default: "now" },
+      };
 
-    const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
-    expect(createExpr).toContain('"createdAt": _input["createdAt"] ?? _now');
-    expect(createExpr).toContain('"startDate": _input["startDate"] ?? _now');
-    expect(createExpr).toContain('"startTime": _input["startTime"] ?? _now');
-    // "now" on a string field is just a literal string, not _now
-    expect(createExpr).toContain('"label": _input["label"] ?? "now"');
+      const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
+      const created = new Function("_input", "_oldRecord", "user", `return ${createExpr}`)(
+        {},
+        null,
+        null,
+      );
+      expect(created).toEqual({
+        createdAt: now,
+        startDate: "2026-04-15",
+        startTime: "23:30",
+        label: "now",
+      });
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
   });
 
   test("builds a validate script that runs all validators and collects all errors", () => {

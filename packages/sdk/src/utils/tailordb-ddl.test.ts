@@ -140,20 +140,29 @@ describe("generateTableDDL", () => {
       );
     });
 
-    test('"now" on a time type is the current time, not the literal string', () => {
-      expect(columnLine({ t: { type: "datetime", required: true, default: "now" } }, "t")).toBe(
-        '"t" timestamptz NOT NULL DEFAULT now()',
-      );
-      expect(columnLine({ d: { type: "date", required: true, default: "now" } }, "d")).toBe(
-        '"d" date NOT NULL DEFAULT CURRENT_DATE',
-      );
-      expect(columnLine({ h: { type: "time", required: true, default: "now" } }, "h")).toBe(
-        '"h" time NOT NULL DEFAULT LOCALTIME',
-      );
-      expect(columnLine({ s: { type: "string", required: true, default: "now" } }, "s")).toBe(
-        "\"s\" text NOT NULL DEFAULT 'now'",
-      );
-    });
+    test(
+      '"now" on a time type is the current time, to the minute on a time field, not the literal string',
+      {
+        timeout: 30_000,
+      },
+      async () => {
+        const db = newPglite();
+        await db.exec(
+          generateSchemaDDL([
+            table({
+              t: { type: "datetime", required: true, default: "now" },
+              d: { type: "date", required: true, default: "now" },
+              h: { type: "time", required: true, default: "now" },
+              s: { type: "string", required: true, default: "now" },
+            }),
+          ]),
+        );
+        const { rows } = await db.query(
+          `INSERT INTO "Item" DEFAULT VALUES RETURNING "t" = now() AS "t", "d" = CURRENT_DATE AS "d", "h" = date_trunc('minute', LOCALTIMESTAMP)::time AS "h", "s"`,
+        );
+        expect(rows).toEqual([{ t: true, d: true, h: true, s: "now" }]);
+      },
+    );
 
     test("Date instances and date strings are cast to the column type", () => {
       const at = new Date("2024-01-02T03:04:05.000Z");

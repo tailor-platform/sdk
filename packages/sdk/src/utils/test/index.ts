@@ -1,3 +1,4 @@
+import { formatDate, formatTime } from "#/runtime/date";
 import { isNestedObject } from "#/runtime/field-parse";
 import type { output } from "#/configure/index";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
@@ -16,15 +17,39 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
   });
 }
 
+const nowDefaults = new Map<string, (now: Date) => Date | string>([
+  ["datetime", (now) => now],
+  ["date", formatDate],
+  ["time", formatTime],
+]);
+
+function withIsoDates(value: unknown): unknown {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(withIsoDates);
+  if (isNestedObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, v]) => [key, withIsoDates(v)]));
+  }
+  return value;
+}
+
+// The deployed script embeds a fixed default as JSON, except a whole Date, which it rebuilds.
+function fixedDefault(value: unknown): unknown {
+  return value instanceof Date ? value : withIsoDates(value);
+}
+
 /**
  * Creates a hook function that processes TailorDB table fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
- * - Returns dates from field hooks and `"now"` defaults as ISO strings
+ * - Fills a `"now"` default with the operation timestamp (`now`) on a datetime
+ *   field, and with its UTC date (`YYYY-MM-DD`) or time (`HH:mm`) on a date or
+ *   time field
+ * - Returns Dates from field hooks, defaults, and the table's create hook as ISO
+ *   strings, including those inside arrays and objects
  * - Calls the table's create hook with the input it receives once deployed: the
  *   data's own properties plus the values field hooks and defaults produce, with
- *   dates kept as `Date` objects
+ *   Dates from field hooks and whole-Date defaults kept as `Date` objects
  * - Takes each field from the data's own properties, so a field named after a
  *   member of `Object` such as `toString` is read from the record rather than
  *   from the prototype
@@ -48,7 +73,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         // such as `toString` would otherwise read the inherited value.
         const input = obj && Object.hasOwn(obj, key) ? obj[key] : undefined;
         let hookedValue: unknown;
-        let fromHookOrNow = false;
+        let fromHookOrDefault = false;
         if (key === "id") {
           hookedValue = input ?? crypto.randomUUID();
         } else if (field.type === "nested") {
@@ -63,15 +88,15 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           }
         } else if (field.metadata.hooks?.create) {
           hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
-          fromHookOrNow = true;
+          fromHookOrDefault = true;
         } else {
           hookedValue = input;
         }
         if (hookedValue == null && field.metadata.default !== undefined) {
-          const isTimeType =
-            field.type === "datetime" || field.type === "date" || field.type === "time";
-          fromHookOrNow = field.metadata.default === "now" && isTimeType;
-          hookedValue = fromHookOrNow ? now : field.metadata.default;
+          const nowDefault =
+            field.metadata.default === "now" ? nowDefaults.get(field.type) : undefined;
+          hookedValue = nowDefault ? nowDefault(now) : fixedDefault(field.metadata.default);
+          fromHookOrDefault = true;
         }
         if (
           field.type !== "nested" &&
@@ -82,11 +107,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         // Set even when there is no value: the key carrying `undefined` is what
         // tells a schema inferred from the record that the column is nullable,
         // and it shadows a same-named member of `Object.prototype`.
-        setField(
-          hooked,
-          key,
-          fromHookOrNow && hookedValue instanceof Date ? hookedValue.toISOString() : hookedValue,
-        );
+        setField(hooked, key, fromHookOrDefault ? withIsoDates(hookedValue) : hookedValue);
         return hooked;
       },
       {} as Record<string, unknown>,
@@ -102,7 +123,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
       });
       if (overrides && typeof overrides === "object") {
         for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
-          setField(hooked, key, value instanceof Date ? value.toISOString() : value);
+          setField(hooked, key, withIsoDates(value));
         }
       }
     }

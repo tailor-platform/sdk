@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/index";
 import { createStandardSchema, createTailorDBHook } from "./index";
@@ -102,20 +102,6 @@ describe("createTailorDBHook", () => {
       // and an object value would replace the record's prototype.
       expect(Object.entries(result)).toContainEqual(["__proto__", expected]);
       expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
-    });
-  });
-
-  describe("field-level create hook and default", () => {
-    test("returns dates from a field hook and a `now` default as ISO strings", () => {
-      const now = new Date("2026-04-15T00:00:00.000Z");
-      const type = db.table("Test", {
-        stampedAt: db.datetime().hooks({ create: ({ now }) => now }),
-        createdAt: db.datetime().default("now"),
-      });
-      expect(createTailorDBHook(type)({}, now)).toMatchObject({
-        stampedAt: "2026-04-15T00:00:00.000Z",
-        createdAt: "2026-04-15T00:00:00.000Z",
-      });
     });
   });
 
@@ -287,12 +273,26 @@ describe("createTailorDBHook", () => {
       ]);
     });
 
-    test("normalizes a Date returned from the type hook to an ISO string", () => {
+    test("normalizes Dates returned from the type hook to ISO strings, inside arrays and objects too", () => {
       const fixed = new Date("2026-04-15T00:00:00.000Z");
       const type = db
-        .table("Test", { createdAt: db.datetime() })
-        .hooks({ create: () => ({ createdAt: fixed }) });
-      expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
+        .table("Test", {
+          createdAt: db.datetime(),
+          stamps: db.datetime({ array: true }),
+          audit: db.object({ at: db.datetime(), ats: db.datetime({ array: true }) }),
+        })
+        .hooks({
+          create: () => ({
+            createdAt: fixed,
+            stamps: [fixed],
+            audit: { at: fixed, ats: [fixed] },
+          }),
+        });
+      expect(createTailorDBHook(type)({})).toMatchObject({
+        createdAt: "2026-04-15T00:00:00.000Z",
+        stamps: ["2026-04-15T00:00:00.000Z"],
+        audit: { at: "2026-04-15T00:00:00.000Z", ats: ["2026-04-15T00:00:00.000Z"] },
+      });
     });
 
     test("shares the same now timestamp between field-level and table-level hooks", () => {
@@ -369,6 +369,30 @@ describe("createStandardSchema", () => {
   ])("returns a value when the optional array field is %s", (_label, input) => {
     const result = buildSchema()["~standard"].validate(input);
     expect(result).toHaveProperty("value");
+  });
+
+  test("fills `now` defaults of date and time fields with the UTC date and time", () => {
+    const type = db.table("Shift", {
+      title: db.string(),
+      day: db.date().default("now"),
+      at: db.time().default("now"),
+    });
+    const schemaType = t.object({
+      ...type.pickFields(["id", "day", "at"], { optional: true }),
+      ...type.omitFields(["id", "day", "at"]),
+    });
+    const now = new Date("2026-04-15T23:30:45.678Z");
+    const hook = createTailorDBHook(type);
+    const schema = createStandardSchema(schemaType, (data) => hook(data, now), type);
+    vi.stubEnv("TZ", "Asia/Tokyo");
+    try {
+      const result = schema["~standard"].validate({ title: "a" });
+      expect(result).toEqual({
+        value: expect.objectContaining({ title: "a", day: "2026-04-15", at: "23:30" }),
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test("returns issues for a table-level validate failure, naming the field", () => {
