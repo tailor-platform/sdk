@@ -54,10 +54,11 @@ module migrationDeploy {
 
   pure val FIELD_STATES: Set[FieldState] =
     Set(Absent).union(Set(true, false).map(r => Set(true, false).map(u => Present({ required: r, unique: u }))).flatten())
+  // An enum field defines at least one value.
   pure val ENUM_STATES: Set[EnumState] =
     Set(NoEnum).union(ENUM_VALUES.powerset().exclude(Set(Set())).map(vs => Values(vs)))
   pure val SHAPES: Set[Shape] = FIELD_STATES.map(f => ENUM_STATES.map(e => { f: f, e: e })).flatten()
-  pure val PRESENCES: Set[Set[Table]] = TABLES.powerset().exclude(Set(Set()))
+  pure val PRESENCES: Set[Set[Table]] = TABLES.powerset()
 
   pure def schemaOf(present: Set[Table], a: Shape, b: Shape, c: Shape): Schema =
     present.mapBy(t => if (t == "A") a else if (t == "B") b else c)

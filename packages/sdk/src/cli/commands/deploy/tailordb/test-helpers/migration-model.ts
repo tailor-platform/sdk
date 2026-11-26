@@ -231,6 +231,7 @@ export function countModelCases(traces: readonly ModelTrace[]): Map<string, numb
       const after = assertDefined(history[i], "every pending migration has a schema after");
       const kind = scripted.has(i) ? "scripted" : "unscripted";
       if (describeSchema(before) === describeSchema(after)) count("data-only migration");
+      if (before.size > 0 && after.size === 0) count("migration leaves no tables");
       for (const name of after.keys()) {
         if (before.has(name)) continue;
         count(`${kind} migration adds a table`);
@@ -248,7 +249,11 @@ export function countModelCases(traces: readonly ModelTrace[]): Map<string, numb
         for (const change of shapeChanges(previous, shape)) count(`${kind} migration: ${change}`);
       }
     }
-    for (const name of assertDefined(history[checkpoint], "the checkpoint has a schema").keys()) {
+    const atCheckpoint = assertDefined(history[checkpoint], "the checkpoint has a schema");
+    if (atCheckpoint.size === 0) {
+      count(fresh ? "fresh workspace with an empty baseline" : "checkpoint without tables");
+    }
+    for (const name of atCheckpoint.keys()) {
       if (!removedTables.has(name)) continue;
       count(`${fresh ? "fresh workspace" : "workspace"} table a pending migration removes`);
     }
