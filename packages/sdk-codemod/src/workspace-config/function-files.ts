@@ -374,9 +374,9 @@ function subscribesToResolvers(cache: ModuleCache): boolean {
 }
 
 /**
- * Report TailorDB type names that two namespaces of the merged workspace both use, which a
- * workspace config rejects, and, when an executor subscribes to resolvers, resolver names that two
- * namespaces both use, which its trigger resolves to one of them.
+ * Report TailorDB type names that two namespaces of the merged workspace both use, which a record
+ * trigger or `userProfile` has to name with its namespace, and, when an executor subscribes to
+ * resolvers, resolver names that two namespaces both use, which its trigger has to name the same way.
  * @param cache - Module cache of the project
  * @param members - The merged configs
  * @returns The reports, at the second definition
@@ -390,14 +390,16 @@ export function reportDuplicateNames(
     [
       "db",
       TABLE_CALL,
-      "a workspace config needs TailorDB type names to be unique across its namespaces",
+      (name: string, namespaces: readonly string[]) =>
+        `so a record trigger or \`userProfile\` that names ${name} without \`namespace\` stops \`tailor deploy\`, and seedPlugin names its data files ${namespaces.map((namespace) => `${namespace}.${name}.jsonl`).join(" and ")}. Add \`namespace\` where they name ${name}, and move its seed data to those files.`,
     ],
     ...(subscribesToResolvers(cache)
       ? [
           [
             "resolver",
             RESOLVER_NAME,
-            "an executor's resolverExecutedTrigger() names a resolver only by its name, so it subscribes to one of them",
+            (name: string) =>
+              `so a resolverExecutedTrigger() that names ${name} without \`namespace\` stops \`tailor deploy\`. Add \`namespace\` to it.`,
           ] as const,
         ]
       : []),
@@ -428,7 +430,7 @@ export function reportDuplicateNames(
             reports.push({
               file,
               node,
-              message: `Namespaces ${first} and ${namespace} both define ${name}, and ${problem}. Rename one of them.`,
+              message: `Namespaces ${first} and ${namespace} both define ${name}, ${problem(name, [first, namespace])}`,
             });
           }
         }
