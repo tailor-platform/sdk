@@ -102,7 +102,7 @@ export const user = db.table("User", {
 
 **type**: The TailorDB table that stores user records.
 
-**namespace** (optional): The TailorDB namespace where the user table is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required only when multiple TailorDB namespaces exist and the table lives in an external TailorDB:
+**namespace** (optional): The TailorDB namespace where the user table is defined. Usually auto-resolved from your `db` configuration, so you don't need to specify it. Required when multiple TailorDB namespaces exist and the table lives in an external TailorDB, or when several namespaces define a table with the user table's name:
 
 ```typescript
 userProfile: {

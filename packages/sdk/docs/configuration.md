@@ -671,4 +671,6 @@ Then forbid importing `getDB` from the generated file. For example, an `.oxlintr
 }
 ```
 
+When several TailorDB namespaces define a table with the same name, the built-in plugins name it after its namespace wherever their output names tables alone: `fileUtilsPlugin` keys it `"crm-db.Customer"`, `enumConstantsPlugin` starts its constants with the namespace (`CrmDbCustomerTier`), and seedPlugin names its files `crm-db.Customer.jsonl` and `crm-db.Customer.schema.ts`. A table whose name only one namespace defines keeps its own name. The `Table`, `Insertable`, `Selectable`, and `Updateable` types that `kyselyTypePlugin` generates take a table name alone, so for such a name they describe the tables of every namespace that defines it at once; for one namespace's table, use `Namespace["crm-db"]["Customer"]`.
+
 The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.
