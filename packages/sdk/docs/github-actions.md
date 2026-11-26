@@ -577,7 +577,8 @@ Because the variable is scoped to a GitHub Environment, both the `plan` and
 
 If `TAILOR_PLATFORM_WORKSPACE_ID` is unset, `deploy` fails because the target
 workspace is not provisioned, and `plan` reports that the workspace is not
-provisioned yet instead of running a dry-run.
+provisioned yet instead of running a dry-run (see
+[Empty entries in a workflow run](#empty-entries-in-a-workflow-run)).
 
 If the target environment has required reviewers, that approval gate applies to
 the `plan` job as well as `deploy`, because `plan` must enter the environment to
@@ -1054,6 +1055,8 @@ its value.
   `TAILOR_PLATFORM_WORKSPACE_ID` alone, and the codemods' changes are still
   committed when the agent cannot sign in.
 - Empty optional entries are listed on one line of the log, without failing.
+  The preview cleanup job counts `TAILOR_PLATFORM_ORGANIZATION_ID` among them,
+  since it needs the organization only to delete expired preview workspaces.
 
 ## GitHub Environments (approval gate)
 

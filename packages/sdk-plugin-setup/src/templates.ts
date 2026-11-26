@@ -365,39 +365,23 @@ type EnvCheck = {
 // The CLI also reads these from the job's env, which the managed jobs keep.
 const JOB_ENV_FALLBACK: ReadonlySet<string> = new Set([ORGANIZATION_ID.name, FOLDER_ID.name]);
 
-function expressionsIn(value: unknown, key?: string): string[] {
-  if (typeof value === "string") {
-    const embedded = [...value.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].map((match) => match[1]!);
-    return key === "if" && embedded.length === 0 ? [value] : embedded;
-  }
-  if (Array.isArray(value)) return value.flatMap((item) => expressionsIn(item));
-  if (value !== null && typeof value === "object") {
-    return Object.entries(value).flatMap(([childKey, child]) => expressionsIn(child, childKey));
-  }
-  return [];
-}
-
 function envCheckStep(
   steps: readonly Record<string, unknown>[],
   check: EnvCheck,
 ): string | undefined {
   const contexts = new Map<string, Set<string>>();
-  for (const expression of expressionsIn(steps)) {
-    for (const [, context, name] of expression.matchAll(
-      /\b(vars|secrets)\.([A-Za-z_][A-Za-z0-9_]*)/g,
-    )) {
-      if (name === "GITHUB_TOKEN") continue;
-      if (!contexts.has(name!)) contexts.set(name!, new Set());
-      contexts.get(name!)!.add(context!);
-    }
+  for (const [, context, name] of JSON.stringify(steps).matchAll(
+    /\b(vars|secrets)\.([A-Za-z_][A-Za-z0-9_]*)/g,
+  )) {
+    if (!contexts.has(name!)) contexts.set(name!, new Set());
+    contexts.get(name!)!.add(context!);
   }
-  if (contexts.size === 0) return undefined;
-  const order = ENV_REQUIREMENTS.map((requirement) => requirement.name);
-  const rank = (name: string) => (order.includes(name) ? order.indexOf(name) : order.length);
-  const names = [...contexts.keys()].toSorted((a, b) => rank(a) - rank(b));
-  const isRequired = (name: string) =>
-    !check.optional?.includes(name) &&
-    (ENV_REQUIREMENTS.find((requirement) => requirement.name === name)?.required ?? true);
+  const read = ENV_REQUIREMENTS.filter((requirement) => contexts.has(requirement.name));
+  if (read.length === 0) return undefined;
+  const names = read.map((requirement) => requirement.name);
+  const required = read
+    .filter((requirement) => requirement.required && !check.optional?.includes(requirement.name))
+    .map((requirement) => requirement.name);
   const set = (name: string) => {
     const operands = (["vars", "secrets"] as const)
       .filter((context) => contexts.get(name)!.has(context))
@@ -411,7 +395,7 @@ function envCheckStep(
   const condition = steps.find((step) => step.id === check.guards)?.if;
   return [
     `- id: ${ENV_CHECK_STEP}`,
-    ...(typeof condition === "string" ? [`  if: ${condition}`] : []),
+    ...(typeof condition === "string" ? [`  if: ${JSON.stringify(condition)}`] : []),
     `  uses: tailor-platform/actions/env-check@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     "  env:",
     ...names.map((name) => `    ${name}: ${set(name)}`),
@@ -420,26 +404,29 @@ function envCheckStep(
       ? []
       : [`    environment: ${JSON.stringify(check.environment)}`]),
     ...(check.packageManager === undefined ? [] : [`    package-manager: ${check.packageManager}`]),
-    ...list("required", names.filter(isRequired)),
+    ...list("required", required),
     ...list(
       "optional",
-      names.filter((name) => !isRequired(name)),
+      names.filter((name) => !required.includes(name)),
     ),
     ...(check.warnOnly ? ['    fail-on-missing: "false"'] : []),
   ].join("\n");
 }
+
+type EnvChecks = {
+  content: string;
+  /** Id of the job's `tailor-env-check` step, or none when the job reads no listed entry. */
+  idsOf: (job: string) => string[];
+};
 
 /**
  * Expand each `# __ENV_CHECK__` marker into a `tailor-env-check` step for the secrets and
  * variables its job reads, or drop it when the job reads none. Runs on a fully rendered workflow.
  * @param content - Rendered workflow
  * @param checks - How each job with a marker checks them, by job id
- * @returns The workflow and the ids of the steps it added
+ * @returns The workflow, and the step id each job got
  */
-function applyEnvChecks(
-  content: string,
-  checks: Record<string, EnvCheck>,
-): { content: string; ids: string[] } {
+function applyEnvChecks(content: string, checks: Record<string, EnvCheck>): EnvChecks {
   const jobs = (parse(content) as { jobs: Record<string, { steps: Record<string, unknown>[] }> })
     .jobs;
   const ids: string[] = [];
@@ -451,6 +438,7 @@ function applyEnvChecks(
     const marker = /^(\s*)# __ENV_CHECK__$/.exec(text);
     if (!marker) return [text];
     const check = job === undefined ? undefined : checks[job];
+    // Only a template edit reaches this: a marker in a job its render function configures no check for.
     if (job === undefined || check === undefined) {
       throw new Error(`No env check is configured for job ${job ?? "(none)"}.`);
     }
@@ -459,7 +447,10 @@ function applyEnvChecks(
     ids.push(`${job}/${ENV_CHECK_STEP}`);
     return step.split("\n").map((stepLine) => marker[1] + stepLine);
   });
-  return { content: lines.join("\n"), ids };
+  return {
+    content: lines.join("\n"),
+    idsOf: (id) => ids.filter((stepId) => stepId === `${id}/${ENV_CHECK_STEP}`),
+  };
 }
 
 function perAppGenerateCheckSteps(apps: readonly RenderApp[]): string {
@@ -699,13 +690,15 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     );
   }
 
+  const planEnvironment = planEnvironmentOf(params) ?? params.environment;
+  const migrationTestEnvironment = migrationTest?.environment ?? params.environment;
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
-  out = out.replace("__PLAN_ENVIRONMENT__", () => planEnvironmentOf(params) ?? params.environment);
+  out = out.replace("__PLAN_ENVIRONMENT__", () => planEnvironment);
 
   if (migrationTest) {
     const migrationTestValues: Record<string, string> = {
       __MIGRATION_TEST_LABEL__: migrationTest.label,
-      __MIGRATION_TEST_ENVIRONMENT__: migrationTest.environment ?? params.environment,
+      __MIGRATION_TEST_ENVIRONMENT__: migrationTestEnvironment,
       __MIGRATION_TEST_SOURCE_VARIABLE__:
         migrationTest.environment === undefined
           ? "TAILOR_PLATFORM_WORKSPACE_ID"
@@ -720,20 +713,15 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
   const { packageManager } = params;
   const envChecks = applyEnvChecks(out, {
     "tailor-plan": {
-      environment: planEnvironmentOf(params) ?? params.environment,
+      environment: planEnvironment,
       guards: "tailor-plan",
       packageManager,
       warnOnly: true,
     },
-    "tailor-migration-test": {
-      environment: migrationTest?.environment ?? params.environment,
-      packageManager,
-    },
+    "tailor-migration-test": { environment: migrationTestEnvironment, packageManager },
     "tailor-deploy": { environment: params.environment, packageManager },
   });
   out = envChecks.content;
-  const envCheckIds = (job: string) =>
-    envChecks.ids.filter((id) => id === `${job}/${ENV_CHECK_STEP}`);
 
   const generatedIds: string[] = [
     ...changesIds(patterns),
@@ -742,7 +730,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
     "tailor-plan/tailor-install",
-    ...envCheckIds("tailor-plan"),
+    ...envChecks.idsOf("tailor-plan"),
     ...generateCheckIds("tailor-plan", params.apps),
   ];
   generatedIds.push(...seedValidateIds("tailor-plan", seedValidate, params.apps));
@@ -780,7 +768,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
       "tailor-migration-test/tailor-checkout",
       "tailor-migration-test/tailor-setup",
       "tailor-migration-test/tailor-install",
-      ...envCheckIds("tailor-migration-test"),
+      ...envChecks.idsOf("tailor-migration-test"),
       "tailor-migration-test/tailor-migration-test-login",
       "tailor-migration-test/tailor-migration-test",
       "tailor-migration-test/tailor-migration-test-unlabel",
@@ -792,7 +780,7 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
     "tailor-deploy/tailor-install",
-    ...envCheckIds("tailor-deploy"),
+    ...envChecks.idsOf("tailor-deploy"),
     ...seedValidateIds("tailor-deploy", seed !== undefined, undefined),
     "tailor-deploy/tailor-apply",
     ...seedIds("tailor-deploy", seed),
@@ -845,8 +833,6 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-deploy": { environment, packageManager },
   });
   out = envChecks.content;
-  const envCheckIds = (job: string) =>
-    envChecks.ids.filter((id) => id === `${job}/${ENV_CHECK_STEP}`);
 
   const generatedIds: string[] = [];
   if (hasGuard) {
@@ -861,7 +847,7 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
     "tailor-plan/tailor-install",
-    ...envCheckIds("tailor-plan"),
+    ...envChecks.idsOf("tailor-plan"),
     ...generateCheckIds("tailor-plan", params.apps),
     ...seedValidateIds("tailor-plan", seedValidate, params.apps),
     "tailor-plan/tailor-drift-check",
@@ -873,7 +859,7 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
     "tailor-deploy/tailor-install",
-    ...envCheckIds("tailor-deploy"),
+    ...envChecks.idsOf("tailor-deploy"),
     "tailor-deploy/tailor-apply",
     ...seedIds("tailor-deploy", seed),
     "tailor-deploy/tailor-slack-prereq",
@@ -944,7 +930,7 @@ export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult
     "tailor-preview-deploy/tailor-checkout",
     "tailor-preview-deploy/tailor-setup",
     "tailor-preview-deploy/tailor-install",
-    ...envChecks.ids,
+    ...envChecks.idsOf("tailor-preview-deploy"),
     ...generateCheckIds("tailor-preview-deploy", params.apps),
     "tailor-preview-deploy/tailor-drift-check",
     "tailor-preview-deploy/tailor-preview-deploy",
@@ -973,7 +959,7 @@ export function renderPreviewCleanupWorkflow(params: RenderPreviewCleanupParams)
     () => params.branch,
   );
   // The cleanup action reads the organization only to prune expired workspaces.
-  const { content, ids } = applyEnvChecks(rendered, {
+  const { content, idsOf } = applyEnvChecks(rendered, {
     "tailor-preview-cleanup": {
       environment: params.environment,
       packageManager: params.packageManager,
@@ -987,7 +973,7 @@ export function renderPreviewCleanupWorkflow(params: RenderPreviewCleanupParams)
       "tailor-preview-cleanup/tailor-checkout",
       "tailor-preview-cleanup/tailor-setup",
       "tailor-preview-cleanup/tailor-install",
-      ...ids,
+      ...idsOf("tailor-preview-cleanup"),
       "tailor-preview-cleanup/tailor-preview-cleanup",
     ],
   };
@@ -1317,8 +1303,6 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     "tailor-autofix-push": {},
   });
   out = envChecks.content;
-  const envCheckIds = (job: string) =>
-    envChecks.ids.filter((id) => id === `${job}/${ENV_CHECK_STEP}`);
 
   const serviceIds = (job: string) =>
     isServiceProvider(provider)
@@ -1338,13 +1322,13 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
     "tailor-autofix/tailor-autofix-diff",
     ...(hasPushJob
       ? ["tailor-autofix/tailor-upload-patch"]
-      : [...envCheckIds("tailor-autofix"), ...serviceIds("tailor-autofix")]),
+      : [...envChecks.idsOf("tailor-autofix"), ...serviceIds("tailor-autofix")]),
   ];
   if (agent) {
     generatedIds.push(
       "tailor-autofix/tailor-codemod-agent-prompt",
       "tailor-codemod-agent",
-      ...envCheckIds("tailor-codemod-agent"),
+      ...envChecks.idsOf("tailor-codemod-agent"),
       ...[
         "tailor-checkout",
         "tailor-download-patch",
@@ -1359,7 +1343,7 @@ export function renderAutofixWorkflow(params: RenderAutofixParams): RenderResult
   if (hasPushJob) {
     generatedIds.push(
       "tailor-autofix-push",
-      ...envCheckIds("tailor-autofix-push"),
+      ...envChecks.idsOf("tailor-autofix-push"),
       ...(provider === "github-app" ? ["tailor-autofix-push/tailor-app-token"] : []),
       "tailor-autofix-push/tailor-checkout",
       "tailor-autofix-push/tailor-download-patch",

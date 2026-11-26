@@ -89,13 +89,30 @@ describe("tailor-env-check", () => {
   );
 
   test.each([...renders.values()].filter(({ template }) => template !== "autofix"))(
-    "$name checks right after install, before any step that reads an entry",
+    "$name checks right after install, in the job's environment, with its package manager",
     ({ content }) => {
       const checks = Object.entries(jobsOf(content)).flatMap(([name, job]) => {
-        const ids = job.steps.map((step) => step.id);
-        return ids.includes(ENV_CHECK) ? [{ name, after: ids[ids.indexOf(ENV_CHECK) - 1] }] : [];
+        const index = job.steps.findIndex((step) => step.id === ENV_CHECK);
+        if (index === -1) return [];
+        const install = job.steps.find((step) => step.id === "tailor-install");
+        return [
+          {
+            actual: {
+              name,
+              after: job.steps[index - 1]?.id,
+              environment: job.steps[index]!.with?.environment,
+              packageManager: job.steps[index]!.with?.["package-manager"],
+            },
+            expected: {
+              name,
+              after: "tailor-install",
+              environment: String(job.environment),
+              packageManager: install?.with?.["package-manager"],
+            },
+          },
+        ];
       });
-      expect(checks).toEqual(checks.map(({ name }) => ({ name, after: "tailor-install" })));
+      expect(checks.map(({ actual }) => actual)).toEqual(checks.map(({ expected }) => expected));
     },
   );
 
