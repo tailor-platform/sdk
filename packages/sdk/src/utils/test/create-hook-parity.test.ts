@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { db } from "#/configure/services/tailordb/schema";
+import { db, type TailorDBInstance } from "#/configure/services/tailordb/schema";
+import { t } from "#/configure/types/index";
 import { buildTableScripts } from "./internal";
 import { createTailorDBHook } from "./index";
 
@@ -54,7 +55,7 @@ const stamp = db.table("Stamp", {
   status: db.string().default("active"),
 });
 
-type Table = typeof order | typeof memo | typeof stamp;
+type Table = TailorDBInstance;
 
 // The Platform merges the script's result onto the create input.
 function deployedCreate(table: Table, row: Record<string, unknown>) {
@@ -76,7 +77,15 @@ function stored(record: object, row: Record<string, unknown>) {
   return Object.hasOwn(row, "id") ? { id, ...rest } : rest;
 }
 
-describe("createTailorDBHook matches the deployed create hook", () => {
+function fieldIssues(table: Table, record: Record<string, unknown>) {
+  const schema = t.object({
+    ...table.pickFields(["id"], { optional: true }),
+    ...table.omitFields(["id"]),
+  });
+  return schema.parse({ value: record, data: record, invoker: null }).issues;
+}
+
+describe("createTailorDBHook matches the deployed create hook, whose record passes its field types", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"], now });
   });
@@ -117,8 +126,8 @@ describe("createTailorDBHook matches the deployed create hook", () => {
     ],
     ["only required fields on a table without a table hook", stamp, { title: "a" }],
   ])("%s", (_label, table, row) => {
-    expect(stored(createTailorDBHook(table)(row, now), row)).toEqual(
-      stored(deployedCreate(table, row), row),
-    );
+    const deployed = stored(deployedCreate(table, row), row);
+    expect(fieldIssues(table, deployed)).toBeUndefined();
+    expect(stored(createTailorDBHook(table)(row, now), row)).toEqual(deployed);
   });
 });
