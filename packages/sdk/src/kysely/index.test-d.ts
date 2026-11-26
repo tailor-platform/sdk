@@ -14,6 +14,7 @@ import type {
   TailorDBSelectable,
   TailorDBUpdateable,
 } from "./index";
+import type { Decimal } from "decimal.js";
 import type { Temporal } from "temporal-spec";
 
 // Sanity check: verify typecheck catches errors
@@ -401,6 +402,59 @@ describe("temporal option", () => {
 
     expectTypeOf<TailorDBSelectable<typeof fields, true>>().toEqualTypeOf<{
       eventTimes: Temporal.PlainTime[];
+    }>();
+  });
+});
+
+describe("decimal option", () => {
+  test("maps decimal fields to Decimal when the third parameter is true", () => {
+    const fields = { price: db.decimal(), discount: db.decimal({ optional: true }) };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, false, true>>().toEqualTypeOf<{
+      price: Decimal;
+      discount: Decimal | null;
+    }>();
+    expectTypeOf<TailorDBInsertable<typeof fields, false, true>>().toEqualTypeOf<{
+      price: Decimal | string;
+      discount?: Decimal | string | null;
+    }>();
+    expectTypeOf<TailorDBUpdateable<typeof fields, false, true>>().toEqualTypeOf<{
+      price?: Decimal | string;
+      discount?: Decimal | string | null;
+    }>();
+  });
+
+  test("defaults to false, keeping decimals as strings", () => {
+    const fields = { price: db.decimal() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{ price: string }>();
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<
+      TailorDBSelectable<typeof fields, false, false>
+    >();
+  });
+
+  test("keeps a decimal field nested inside an object a string", () => {
+    const fields = { meta: db.object({ cost: db.decimal() }) };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, false, true>["meta"]>().toEqualTypeOf<{
+      cost: string;
+    }>();
+  });
+
+  test("wraps arrays of Decimal columns in ArrayColumnType", () => {
+    const fields = { history: db.decimal({ array: true }) };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, false, true>>().toEqualTypeOf<{
+      history: Decimal[];
+    }>();
+  });
+
+  test("combines with the temporal option", () => {
+    const fields = { price: db.decimal(), day: db.date() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, true, true>>().toEqualTypeOf<{
+      price: Decimal;
+      day: Temporal.PlainDate;
     }>();
   });
 });

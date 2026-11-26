@@ -209,8 +209,10 @@ Pass \`--remote\` to generate the script-scoped files from the deployed schema i
           });
         }
       }
+      const kyselyOptions = resolvePluginConfig(plugins, KyselyGeneratorID);
       const dbTypesContent = generateScriptDbTypes(snapshot, {
-        temporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal,
+        temporal: kyselyOptions?.temporal,
+        decimal: kyselyOptions?.decimal,
       });
       assertGeneratedTypeScript(dbTypesPath, dbTypesContent);
       fs.mkdirSync(scriptDir, { recursive: true });

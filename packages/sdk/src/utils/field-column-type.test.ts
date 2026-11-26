@@ -47,6 +47,7 @@ describe("COLUMN_TYPE_ALIASES", () => {
       "TemporalDate",
       "TemporalInstant",
       "TemporalTime",
+      "DecimalValue",
     ]);
   });
 
@@ -67,4 +68,21 @@ describe("COLUMN_TYPE_ALIASES", () => {
       write: `${temporalType} | string`,
     });
   });
+});
+
+describe("mapFieldTypeToColumnType with decimal", () => {
+  test("maps decimal to DecimalValue only when the option is on", () => {
+    expect(mapFieldTypeToColumnType("decimal", { decimal: true })).toBe("DecimalValue");
+    expect(mapFieldTypeToColumnType("decimal")).toBe("string");
+    expect(mapFieldTypeToColumnType("decimal", { decimal: false })).toBe("string");
+  });
+
+  test.each(["uuid", "string", "integer", "float", "bool", "date", "datetime", "time"])(
+    "leaves %s unaffected when decimal is on",
+    (fieldType) => {
+      expect(mapFieldTypeToColumnType(fieldType, { decimal: true })).toBe(
+        mapFieldTypeToColumnType(fieldType),
+      );
+    },
+  );
 });

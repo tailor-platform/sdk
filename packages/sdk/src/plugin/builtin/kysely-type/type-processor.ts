@@ -25,6 +25,7 @@ function emptyUsedUtilityTypes(): UsedUtilityTypes {
     TemporalDate: false,
     TemporalInstant: false,
     TemporalTime: false,
+    DecimalValue: false,
     Serial: false,
     ObjectColumnType: false,
     ArrayColumnType: false,
@@ -37,6 +38,7 @@ function mergeUsedUtilityTypes(a: UsedUtilityTypes, b: UsedUtilityTypes): UsedUt
     TemporalDate: a.TemporalDate || b.TemporalDate,
     TemporalInstant: a.TemporalInstant || b.TemporalInstant,
     TemporalTime: a.TemporalTime || b.TemporalTime,
+    DecimalValue: a.DecimalValue || b.DecimalValue,
     Serial: a.Serial || b.Serial,
     ObjectColumnType: a.ObjectColumnType || b.ObjectColumnType,
     ArrayColumnType: a.ArrayColumnType || b.ArrayColumnType,
@@ -53,7 +55,8 @@ function usesColumnTypeAlias(usedUtilityTypes: UsedUtilityTypes): boolean {
     usedUtilityTypes.Timestamp ||
     usedUtilityTypes.TemporalDate ||
     usedUtilityTypes.TemporalInstant ||
-    usedUtilityTypes.TemporalTime
+    usedUtilityTypes.TemporalTime ||
+    usedUtilityTypes.DecimalValue
   );
 }
 
@@ -148,6 +151,7 @@ function getBaseType(
   const type = mapFieldTypeToColumnType(fieldType, {
     ...options,
     temporal: options.temporal === true && !(nested && fieldType === "time"),
+    decimal: options.decimal === true && !nested,
   });
   switch (type) {
     case "Timestamp":
@@ -161,6 +165,9 @@ function getBaseType(
       break;
     case "TemporalTime":
       usedUtilityTypes.TemporalTime = true;
+      break;
+    case "DecimalValue":
+      usedUtilityTypes.DecimalValue = true;
       break;
     case "string":
     case "number":
@@ -307,6 +314,14 @@ export async function processKyselyType(
   );
 }
 
+function createGetDBArguments(options: ColumnTypeOptions): string {
+  const entries = [
+    ...(options.temporal ? ["temporal: true"] : []),
+    ...(options.decimal ? ["decimal: Decimal"] : []),
+  ];
+  return entries.length > 0 ? `{ ${entries.join(", ")} }` : "";
+}
+
 /**
  * Generate unified types file from multiple namespaces.
  * @param namespaceData - Namespace metadata
@@ -340,6 +355,9 @@ export function generateUnifiedKyselyTypes(
   if (globalUsedUtilityTypes.TemporalTime) {
     utilityTypeImports.push("type TemporalTime");
   }
+  if (globalUsedUtilityTypes.DecimalValue) {
+    utilityTypeImports.push("type DecimalValue");
+  }
   if (globalUsedUtilityTypes.ObjectColumnType) {
     utilityTypeImports.push("type ObjectColumnType");
   }
@@ -349,6 +367,10 @@ export function generateUnifiedKyselyTypes(
   if (globalUsedUtilityTypes.Serial) {
     utilityTypeImports.push("type Serial");
   }
+
+  const decimalImport = options.decimal
+    ? '\nimport { Decimal } from "@tailor-platform/sdk/runtime";'
+    : "";
 
   const importsSection = multiline /* ts */ `
     import {
@@ -361,7 +383,7 @@ export function generateUnifiedKyselyTypes(
       type NamespaceTableName,
       type NamespaceTransaction,
       type NamespaceUpdateable,
-    } from "@tailor-platform/sdk/kysely";
+    } from "@tailor-platform/sdk/kysely";${decimalImport}
   `;
 
   // Generate Namespace interface with multiple namespaces
@@ -386,7 +408,7 @@ export function generateUnifiedKyselyTypes(
       : `export interface Namespace {\n${namespaceInterfaces}\n}`;
 
   const getDBFunction = multiline /* ts */ `
-    export const getDB = createGetDB<Namespace>(${options.temporal ? "{ temporal: true }" : ""});
+    export const getDB = createGetDB<Namespace>(${createGetDBArguments(options)});
 
     export type DB<N extends keyof Namespace = keyof Namespace> = NamespaceDB<Namespace, N>;
   `;

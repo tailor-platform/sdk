@@ -6,12 +6,15 @@ export type FieldColumnType =
   | "Timestamp"
   | "TemporalDate"
   | "TemporalInstant"
-  | "TemporalTime";
+  | "TemporalTime"
+  | "DecimalValue";
 
 /** The opt-in column representations generated code uses instead of the defaults. */
 export type ColumnTypeOptions = {
   /** Resolve date/datetime/time fields to their Temporal column types. */
   temporal?: boolean | undefined;
+  /** Resolve decimal fields to `Decimal` column types. */
+  decimal?: boolean | undefined;
 };
 
 /**
@@ -40,8 +43,9 @@ export function mapFieldTypeToColumnType(
   switch (fieldType) {
     case "uuid":
     case "string":
-    case "decimal":
       return "string";
+    case "decimal":
+      return options.decimal === true ? "DecimalValue" : "string";
     case "integer":
     case "float":
       return "number";
@@ -92,6 +96,7 @@ export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> 
   ["TemporalDate", { select: "Temporal.PlainDate", write: "Temporal.PlainDate | string" }],
   ["TemporalInstant", { select: "Temporal.Instant", write: "Temporal.Instant | string" }],
   ["TemporalTime", { select: "Temporal.PlainTime", write: "Temporal.PlainTime | string" }],
+  ["DecimalValue", { select: "Decimal", write: "Decimal | string" }],
 ]);
 
 /** The settings of a TailorDB field that let the platform fill it on create. */
