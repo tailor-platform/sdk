@@ -851,7 +851,13 @@ function applyMetadataLabelWrite(
   return merged;
 }
 
-function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
+/**
+ * Combine a resource apply failure with the failure to write the metadata queued before it.
+ * @param applyError - Failure of the resource apply
+ * @param flushError - Failure of the metadata write that followed it
+ * @returns Error carrying both failures
+ */
+export function metadataRecoveryError(applyError: unknown, flushError: unknown): AggregateError {
   const describeCause = (error: unknown) =>
     isCLIError(error) ? plainRedacted(error.format()) : toError(error).message;
   return withErrorDiagnostics(
@@ -869,6 +875,34 @@ function metadataRecoveryError(applyError: unknown, flushError: unknown): Aggreg
   );
 }
 
+/** A metadata write batch held open across several applies. */
+export type OpenMetadataWriteBatch<TClient> = {
+  /** Client whose label writes are queued for the batch. */
+  readonly client: TClient;
+  /** Write the queued labels. */
+  readonly flush: () => Promise<void>;
+};
+
+/**
+ * Open a batch that collects metadata label changes until it is flushed.
+ * @template TClient
+ * @param client - Operator client instance
+ * @param onDropped - Receives the `sdk-on-app-*` labels a resource could not hold
+ * @returns The batch-aware client and the flush of its queue
+ */
+export function openMetadataWriteBatch<TClient extends MetadataLabelBulkClient>(
+  client: TClient,
+  onDropped?: DroppedOnAppLabelsSink,
+): OpenMetadataWriteBatch<TClient> {
+  const batch = new MetadataWriteBatch(client, onDropped);
+  const batchClient = new Proxy(client, {
+    get(target, property, receiver) {
+      return property === metadataWriteBatch ? batch : Reflect.get(target, property, receiver);
+    },
+  });
+  return { client: batchClient, flush: () => batch.flush() };
+}
+
 /**
  * Collect metadata label changes and write the final maps in batches.
  * @template TClient, T
@@ -882,15 +916,10 @@ export async function withMetadataWriteBatch<TClient extends MetadataLabelBulkCl
   apply: (client: TClient) => Promise<T>,
   onDropped?: DroppedOnAppLabelsSink,
 ): Promise<T> {
-  const batch = new MetadataWriteBatch(client, onDropped);
-  const batchClient = new Proxy(client, {
-    get(target, property, receiver) {
-      return property === metadataWriteBatch ? batch : Reflect.get(target, property, receiver);
-    },
-  });
+  const batch = openMetadataWriteBatch(client, onDropped);
   let result: T;
   try {
-    result = await apply(batchClient);
+    result = await apply(batch.client);
   } catch (applyError) {
     try {
       await batch.flush();

@@ -1,3 +1,4 @@
+import { driveMachine, type EffectToPerform } from "@toiroakr/chisel";
 import { logger } from "#/cli/shared/logger";
 import { withSpan } from "#/cli/telemetry/index";
 import { applyAIGateway, type planAIGateway } from "./aigateway";
@@ -8,6 +9,18 @@ import {
   type ApplicationLabelRejection,
   type planApplication,
 } from "./application";
+import {
+  APPLY_DONE,
+  APPLY_FLUSH,
+  APPLY_RELEASE,
+  applyMachine,
+  applyStart,
+  type ApplyStage,
+  type ApplyState,
+  type ApplyStep,
+  type ApplyStepRequest,
+  type ReleaseRequest,
+} from "./apply-machine";
 import { applyAuth, type planAuth } from "./auth";
 import { type DeploymentSource, sourceApplicationName } from "./deployment-target";
 import { applyExecutor, type planExecutor } from "./executor";
@@ -16,8 +29,9 @@ import { applyIdP, type planIdP } from "./idp";
 import {
   type DeployOwner,
   type DroppedOnAppLabels,
+  metadataRecoveryError,
   onAppLabelledResourceOf,
-  withMetadataWriteBatch,
+  openMetadataWriteBatch,
 } from "./label";
 import { MANAGED_RESOURCE_LABELS, type ManagedResourceType } from "./managed-resource-type";
 import { applyPipeline, type planPipeline } from "./resolver";
@@ -133,13 +147,6 @@ function forEachDeployment(
   })();
 }
 
-function makeStep(deployments: ReadonlyArray<PlannedDeployment>) {
-  return (
-    name: string,
-    apply: (deployment: PlannedDeployment) => Promise<unknown>,
-  ): Promise<void> => withSpan(name, () => forEachDeployment(deployments, apply));
-}
-
 /**
  * Validate every deployment's TailorDB migration state before anything else
  * is applied, so a stale migration checkpoint or schema fails the deploy with
@@ -153,9 +160,7 @@ export async function preflightAllTailorDB(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
-  await withSpan("apply.preflight", async () => {
-    await forEachDeployment(deployments, (d) => preflightTailorDB(client, d.tailorDB));
-  });
+  await driveApply("preflight", client, deployments, {});
 }
 
 /**
@@ -172,29 +177,8 @@ export async function applyPrerequisiteResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<{ droppedOnAppLabels: OnAppLabelsDropped[] }> {
-  const step = makeStep(deployments);
   const droppedOnAppLabels: OnAppLabelsDropped[] = [];
-  await withMetadataWriteBatch(
-    client,
-    async (applyClient) => {
-      await withSpan("apply.createUpdatePrerequisiteServices", async () => {
-        await step("apply.secretManager.createUpdate", (d) =>
-          applySecretManager(applyClient, d.secretManager, "create-update", d.application),
-        );
-        await step("apply.staticWebsite.createUpdate", (d) =>
-          applyStaticWebsite(applyClient, d.staticWebsite, "create-update"),
-        );
-        await step("apply.aiGateway.createUpdate", (d) =>
-          applyAIGateway(applyClient, d.aiGateway, "create-update"),
-        );
-        await step("apply.idp.createUpdate", (d) => applyIdP(applyClient, d.idp, "create-update"));
-        await step("apply.auth.createUpdatePrerequisites", (d) =>
-          applyAuth(applyClient, d.auth, "create-update-prerequisites"),
-        );
-      });
-    },
-    recordDroppedOnAppLabels(droppedOnAppLabels),
-  );
+  await driveApply("prerequisites", client, deployments, { droppedOnAppLabels });
   return { droppedOnAppLabels };
 }
 
@@ -281,30 +265,22 @@ export async function applyRemainingResources(
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<RemainingApplyResult> {
-  const held: HeldMaintenanceMode[] = [];
-  const labelRejections: ApplicationLabelRejection[] = [];
-  const droppedOnAppLabels: OnAppLabelsDropped[] = [];
-  let maintenance: TailorDBMaintenance[];
-  try {
-    maintenance = await applyRemainingResourcesHoldingMaintenanceMode(client, deployments, {
-      held,
-      labelRejections,
-      droppedOnAppLabels,
-    });
-  } catch (error) {
-    await releaseMaintenanceModes(client, held, true);
-    throw error;
-  }
-  const released = await releaseMaintenanceModes(client, held, false);
+  const outcomes: ApplyOutcomes = {
+    held: [],
+    maintenance: [],
+    labelRejections: [],
+    droppedOnAppLabels: [],
+  };
+  await driveApply("remaining", client, deployments, outcomes);
   const order = new Map(
     deployments.map((deployment, index) => [sourceApplicationName(deployment.source), index]),
   );
   return {
-    maintenance: [...maintenance, ...released].toSorted(
+    maintenance: (outcomes.maintenance ?? []).toSorted(
       (a, b) => (order.get(a.application) ?? 0) - (order.get(b.application) ?? 0),
     ),
-    labelRejections,
-    droppedOnAppLabels,
+    labelRejections: outcomes.labelRejections ?? [],
+    droppedOnAppLabels: outcomes.droppedOnAppLabels ?? [],
   };
 }
 
@@ -316,126 +292,166 @@ function maintenanceOf(
   return application === undefined ? report : { application, ...report };
 }
 
-type RemainingApplyOutcomes = {
-  held: HeldMaintenanceMode[];
-  labelRejections: ApplicationLabelRejection[];
-  droppedOnAppLabels: OnAppLabelsDropped[];
+type ApplyOutcomes = {
+  held?: HeldMaintenanceMode[];
+  maintenance?: TailorDBMaintenance[];
+  labelRejections?: ApplicationLabelRejection[];
+  droppedOnAppLabels?: OnAppLabelsDropped[];
 };
 
-async function applyRemainingResourcesHoldingMaintenanceMode(
+type StepContext = {
+  client: OperatorClient;
+  deployment: PlannedDeployment;
+  outcomes: ApplyOutcomes;
+};
+
+const APPLY_STEPS = {
+  "tailorDB.preflight": ({ client, deployment }) => preflightTailorDB(client, deployment.tailorDB),
+  "secretManager.create-update": ({ client, deployment }) =>
+    applySecretManager(client, deployment.secretManager, "create-update", deployment.application),
+  "staticWebsite.create-update": ({ client, deployment }) =>
+    applyStaticWebsite(client, deployment.staticWebsite, "create-update"),
+  "aiGateway.create-update": ({ client, deployment }) =>
+    applyAIGateway(client, deployment.aiGateway, "create-update"),
+  "idp.create-update": ({ client, deployment }) =>
+    applyIdP(client, deployment.idp, "create-update"),
+  "auth.create-update-prerequisites": ({ client, deployment }) =>
+    applyAuth(client, deployment.auth, "create-update-prerequisites"),
+  "functionRegistry.create-update": ({ client, deployment }) =>
+    applyFunctionRegistry(client, deployment.functionRegistry, "create-update"),
+  "tailorDBReplication.prepare": ({ client, deployment }) =>
+    applyTailorDBReplication(client, deployment.tailorDBReplication, "prepare"),
+  "tailorDB.create-update": async ({ client, deployment, outcomes }) => {
+    const report = await applyTailorDB(client, deployment.tailorDB, "create-update", {
+      holdMaintenanceMode: (release) => outcomes.held?.push({ deployment, release }),
+    });
+    if (report) outcomes.maintenance?.push(maintenanceOf(deployment, report));
+  },
+  "tailorDBReplication.create-update": ({ client, deployment }) =>
+    applyTailorDBReplication(client, deployment.tailorDBReplication, "create-update"),
+  "auth.create-update-dependents": ({ client, deployment }) =>
+    applyAuth(client, deployment.auth, "create-update-dependents"),
+  "pipeline.create-update": ({ client, deployment }) =>
+    applyPipeline(client, deployment.pipeline, "create-update"),
+  "pipeline.delete-resources": ({ client, deployment }) =>
+    applyPipeline(client, deployment.pipeline, "delete-resources"),
+  "auth.delete-resources": ({ client, deployment }) =>
+    applyAuth(client, deployment.auth, "delete-resources"),
+  "idp.delete-resources": ({ client, deployment }) =>
+    applyIdP(client, deployment.idp, "delete-resources"),
+  "app.create-update": async ({ client, deployment, outcomes }) => {
+    outcomes.labelRejections?.push(
+      ...(await applyApplication(client, deployment.app, "create-update")),
+    );
+  },
+  "executor.create-update": ({ client, deployment }) =>
+    applyExecutor(client, deployment.executor, "create-update"),
+  "workflowExecutionPolicy.create-update": ({ client, deployment }) =>
+    applyWorkflowJobFunctionExecutionPolicy(
+      client,
+      deployment.workflowExecutionPolicy,
+      "create-update",
+    ),
+  "workflow.create-update": ({ client, deployment }) =>
+    applyWorkflow(client, deployment.workflow, "create-update"),
+  "workflow.delete": ({ client, deployment }) =>
+    applyWorkflow(client, deployment.workflow, "delete"),
+  "workflowExecutionPolicy.delete": ({ client, deployment }) =>
+    applyWorkflowJobFunctionExecutionPolicy(client, deployment.workflowExecutionPolicy, "delete"),
+  "executor.delete": ({ client, deployment }) =>
+    applyExecutor(client, deployment.executor, "delete"),
+  "staticWebsite.delete": ({ client, deployment }) =>
+    applyStaticWebsite(client, deployment.staticWebsite, "delete"),
+  "aiGateway.delete": ({ client, deployment }) =>
+    applyAIGateway(client, deployment.aiGateway, "delete"),
+  "tailorDBReplication.delete": ({ client, deployment }) =>
+    applyTailorDBReplication(client, deployment.tailorDBReplication, "delete"),
+  "secretManager.delete": ({ client, deployment }) =>
+    applySecretManager(client, deployment.secretManager, "delete", deployment.application),
+  "app.delete": ({ client, deployment }) => applyApplication(client, deployment.app, "delete"),
+  "pipeline.delete-services": ({ client, deployment }) =>
+    applyPipeline(client, deployment.pipeline, "delete-services"),
+  "auth.delete-services": ({ client, deployment }) =>
+    applyAuth(client, deployment.auth, "delete-services"),
+  "idp.delete-services": ({ client, deployment }) =>
+    applyIdP(client, deployment.idp, "delete-services"),
+  "tailorDB.delete-services": ({ client, deployment }) =>
+    applyTailorDB(client, deployment.tailorDB, "delete-services"),
+  "functionRegistry.delete": ({ client, deployment }) =>
+    applyFunctionRegistry(client, deployment.functionRegistry, "delete"),
+} satisfies Record<ApplyStep, (context: StepContext) => Promise<unknown>>;
+
+function isApplyStep(name: string): name is ApplyStep {
+  return Object.hasOwn(APPLY_STEPS, name);
+}
+
+/**
+ * Run one apply stage as `applyMachine` orders it: each effect the machine names is performed here,
+ * and a failure goes wherever the machine says, so the metadata queued so far is written and the
+ * maintenance modes held so far are lifted before the first failure is thrown.
+ * @param stage - Stage to run
+ * @param client - Operator client instance
+ * @param deployments - Planned deployments to apply
+ * @param outcomes - Collects what the stage's applies report
+ */
+async function driveApply(
+  stage: ApplyStage,
   client: OperatorClient,
   deployments: ReadonlyArray<PlannedDeployment>,
-  outcomes: RemainingApplyOutcomes,
-): Promise<TailorDBMaintenance[]> {
-  const { held, labelRejections, droppedOnAppLabels } = outcomes;
-  const step = makeStep(deployments);
-  const maintenance: TailorDBMaintenance[] = [];
-
-  await withMetadataWriteBatch(
+  outcomes: ApplyOutcomes,
+): Promise<void> {
+  const batch = openMetadataWriteBatch(
     client,
-    async (applyClient) => {
-      await withSpan("apply.createUpdateServices", async () => {
-        await step("apply.functionRegistry.createUpdate", (d) =>
-          applyFunctionRegistry(applyClient, d.functionRegistry, "create-update"),
-        );
-        await step("apply.tailorDBReplication.prepare", (d) =>
-          applyTailorDBReplication(applyClient, d.tailorDBReplication, "prepare"),
-        );
-        await step("apply.tailorDB.createUpdate", async (d) => {
-          const report = await applyTailorDB(applyClient, d.tailorDB, "create-update", {
-            holdMaintenanceMode: (release) => held.push({ deployment: d, release }),
-          });
-          if (report) maintenance.push(maintenanceOf(d, report));
-        });
-        await step("apply.tailorDBReplication.createUpdate", (d) =>
-          applyTailorDBReplication(applyClient, d.tailorDBReplication, "create-update"),
-        );
-        await step("apply.auth.createUpdateDependents", (d) =>
-          applyAuth(applyClient, d.auth, "create-update-dependents"),
-        );
-        await step("apply.pipeline.createUpdate", (d) =>
-          applyPipeline(applyClient, d.pipeline, "create-update"),
-        );
-      });
-
-      await withSpan("apply.deleteSubgraphResources", async () => {
-        await forEachDeployment(deployments, (d) =>
-          applyPipeline(applyClient, d.pipeline, "delete-resources"),
-        );
-        await forEachDeployment(deployments, (d) =>
-          applyAuth(applyClient, d.auth, "delete-resources"),
-        );
-        await forEachDeployment(deployments, (d) =>
-          applyIdP(applyClient, d.idp, "delete-resources"),
-        );
-      });
-
-      await withSpan("apply.createUpdateApplication", async () => {
-        await forEachDeployment(deployments, async (d) => {
-          labelRejections.push(...(await applyApplication(applyClient, d.app, "create-update")));
-        });
-      });
-
-      await withSpan("apply.createUpdateDependentServices", async () => {
-        await step("apply.executor.createUpdate", (d) =>
-          applyExecutor(applyClient, d.executor, "create-update"),
-        );
-        // Execution policies must exist before workflow job functions that reference
-        // them by key, otherwise the runtime rejects the dispatch as an unknown key.
-        await step("apply.workflowExecutionPolicy.createUpdate", (d) =>
-          applyWorkflowJobFunctionExecutionPolicy(
-            applyClient,
-            d.workflowExecutionPolicy,
-            "create-update",
-          ),
-        );
-        await step("apply.workflow.createUpdate", (d) =>
-          applyWorkflow(applyClient, d.workflow, "create-update"),
-        );
-      });
-    },
-    recordDroppedOnAppLabels(droppedOnAppLabels),
+    outcomes.droppedOnAppLabels && recordDroppedOnAppLabels(outcomes.droppedOnAppLabels),
   );
-
-  await withSpan("apply.deleteDependentServices", async () => {
-    await forEachDeployment(deployments, (d) => applyWorkflow(client, d.workflow, "delete"));
-    await forEachDeployment(deployments, (d) =>
-      applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
-    );
-    await forEachDeployment(deployments, (d) => applyExecutor(client, d.executor, "delete"));
-    await forEachDeployment(deployments, (d) =>
-      applyStaticWebsite(client, d.staticWebsite, "delete"),
-    );
-    await forEachDeployment(deployments, (d) => applyAIGateway(client, d.aiGateway, "delete"));
-    await forEachDeployment(deployments, (d) =>
-      applyTailorDBReplication(client, d.tailorDBReplication, "delete"),
-    );
-    await forEachDeployment(deployments, (d) =>
-      applySecretManager(client, d.secretManager, "delete", d.application),
-    );
-  });
-
-  await withSpan("apply.deleteApplication", async () => {
-    await forEachDeployment(deployments, (d) => applyApplication(client, d.app, "delete"));
-  });
-
-  await withSpan("apply.deleteSubgraphServices", async () => {
-    await forEachDeployment(deployments, (d) =>
-      applyPipeline(client, d.pipeline, "delete-services"),
-    );
-    await forEachDeployment(deployments, (d) => applyAuth(client, d.auth, "delete-services"));
-    await forEachDeployment(deployments, (d) => applyIdP(client, d.idp, "delete-services"));
-    await forEachDeployment(deployments, (d) =>
-      applyTailorDB(client, d.tailorDB, "delete-services"),
-    );
-  });
-
-  await withSpan("apply.cleanup", async () => {
-    await forEachDeployment(deployments, (d) =>
-      applyFunctionRegistry(client, d.functionRegistry, "delete"),
-    );
-  });
-  return maintenance;
+  let failure: { error: unknown } | undefined;
+  const perform = async (effect: EffectToPerform<ApplyState, "next">): Promise<void> => {
+    if (effect.name === APPLY_FLUSH) {
+      try {
+        await batch.flush();
+      } catch (flushError) {
+        throw failure ? metadataRecoveryError(failure.error, flushError) : flushError;
+      }
+      return;
+    }
+    if (effect.name === APPLY_RELEASE) {
+      const { applyFailed } = effect.request as ReleaseRequest;
+      outcomes.maintenance?.push(
+        ...(await releaseMaintenanceModes(client, outcomes.held ?? [], applyFailed)),
+      );
+      return;
+    }
+    if (!isApplyStep(effect.name)) throw new TypeError(`Unknown apply step ${effect.name}`);
+    const apply = APPLY_STEPS[effect.name];
+    const { span, batched } = effect.request as ApplyStepRequest;
+    const stepClient = batched ? batch.client : client;
+    const run = () =>
+      forEachDeployment(deployments, (deployment) =>
+        apply({ client: stepClient, deployment, outcomes }),
+      );
+    await (span === undefined ? run() : withSpan(span, run));
+  };
+  let state: ApplyState = applyStart(stage);
+  while (state.phase !== APPLY_DONE) {
+    const phase = state.phase;
+    let failed: { error: unknown } | undefined;
+    const drive = async () => {
+      const result = await driveMachine(applyMachine, state, "next", { perform });
+      state = result.state;
+      const [first] = result.failures;
+      if (!first) return;
+      failed = { error: first.error };
+      if (first.name === APPLY_FLUSH && failure) failure = failed;
+      else failure ??= failed;
+      throw first.error;
+    };
+    try {
+      await (phase.startsWith("apply.") ? withSpan(phase, drive) : drive());
+    } catch (error) {
+      if (!failed || failed.error !== error) throw error;
+    }
+  }
+  if (failure) throw failure.error;
 }
 
 /**

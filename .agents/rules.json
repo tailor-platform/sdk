@@ -20,6 +20,7 @@
       "paths": [
         "packages/sdk/src/cli/commands/deploy/apply-phases.ts",
         "packages/sdk/src/cli/commands/deploy/apply-phases.test.ts",
+        "packages/sdk/src/cli/commands/deploy/apply-machine.ts",
         "packages/sdk/src/cli/commands/deploy/managed-resource-type.ts",
         "packages/sdk/src/cli/commands/deploy/test-helpers/plan-results.ts",
         "packages/sdk/src/cli/commands/remove.ts",

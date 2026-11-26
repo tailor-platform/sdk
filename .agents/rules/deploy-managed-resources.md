@@ -44,7 +44,10 @@ consumer below; the guard named with it fails while one is missing.
 
 ## Per plan kind
 
-- `apply-phases.ts` — apply the plan in a create-update phase and a delete phase. Guard:
+- `apply-machine.ts`'s `APPLY_PHASE_STEPS` — add a create-update step and a delete step to the
+  phases they belong to, and `apply-phases.ts`'s `APPLY_STEPS` — the apply call each step makes
+  (guard: `satisfies Record<ApplyStep, …>`). The machine orders the calls and decides what a
+  failure leaves; `apply-machine.test.ts` checks it under every failure. Guard:
   `apply-phases.test.ts`'s `PLAN_MARKERS` (`satisfies Record<keyof PlanResults, string>`).
 - `remove.ts` — add the plan to `plans` (`satisfies PlanResults`) and its `delete` apply calls.
   Guard: `remove.test.ts`'s `APPLY_BY_PLAN`.
