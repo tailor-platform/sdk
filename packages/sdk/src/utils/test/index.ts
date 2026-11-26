@@ -16,15 +16,30 @@ function setField(record: Record<string, unknown>, key: string, value: unknown):
   });
 }
 
+function nowDefaultValue(type: string, now: Date): Date | string | undefined {
+  switch (type) {
+    case "datetime":
+      return now;
+    case "date":
+      return now.toISOString().slice(0, 10);
+    case "time":
+      return now.toISOString().slice(11, 16);
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Creates a hook function that processes TailorDB table fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
- * - Returns dates from field hooks and `"now"` defaults as ISO strings
+ * - Fills a `"now"` default with `now` on a datetime field, and with its UTC date
+ *   (`YYYY-MM-DD`) or time (`HH:mm`) on a date or time field
+ * - Returns Dates from field hooks and datetime `"now"` defaults as ISO strings
  * - Calls the table's create hook with the input it receives once deployed: the
  *   data's own properties plus the values field hooks and defaults produce, with
- *   dates kept as `Date` objects
+ *   Dates kept as `Date` objects
  * - Takes each field from the data's own properties, so a field named after a
  *   member of `Object` such as `toString` is read from the record rather than
  *   from the prototype
@@ -48,7 +63,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         // such as `toString` would otherwise read the inherited value.
         const input = obj && Object.hasOwn(obj, key) ? obj[key] : undefined;
         let hookedValue: unknown;
-        let fromHookOrNow = false;
+        let serializeDate = false;
         if (key === "id") {
           hookedValue = input ?? crypto.randomUUID();
         } else if (field.type === "nested") {
@@ -63,15 +78,15 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           }
         } else if (field.metadata.hooks?.create) {
           hookedValue = field.metadata.hooks.create({ input, invoker: null, now });
-          fromHookOrNow = true;
+          serializeDate = true;
         } else {
           hookedValue = input;
         }
         if (hookedValue == null && field.metadata.default !== undefined) {
-          const isTimeType =
-            field.type === "datetime" || field.type === "date" || field.type === "time";
-          fromHookOrNow = field.metadata.default === "now" && isTimeType;
-          hookedValue = fromHookOrNow ? now : field.metadata.default;
+          const nowValue =
+            field.metadata.default === "now" ? nowDefaultValue(field.type, now) : undefined;
+          serializeDate = nowValue !== undefined;
+          hookedValue = nowValue ?? field.metadata.default;
         }
         if (
           field.type !== "nested" &&
@@ -85,7 +100,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         setField(
           hooked,
           key,
-          fromHookOrNow && hookedValue instanceof Date ? hookedValue.toISOString() : hookedValue,
+          serializeDate && hookedValue instanceof Date ? hookedValue.toISOString() : hookedValue,
         );
         return hooked;
       },

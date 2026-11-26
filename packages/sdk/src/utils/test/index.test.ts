@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/index";
 import { createStandardSchema, createTailorDBHook } from "./index";
@@ -369,6 +369,30 @@ describe("createStandardSchema", () => {
   ])("returns a value when the optional array field is %s", (_label, input) => {
     const result = buildSchema()["~standard"].validate(input);
     expect(result).toHaveProperty("value");
+  });
+
+  test("fills `now` defaults of date and time fields with the UTC date and time", () => {
+    const type = db.table("Shift", {
+      title: db.string(),
+      day: db.date().default("now"),
+      at: db.time().default("now"),
+    });
+    const schemaType = t.object({
+      ...type.pickFields(["id", "day", "at"], { optional: true }),
+      ...type.omitFields(["id", "day", "at"]),
+    });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+    vi.stubEnv("TZ", "Asia/Tokyo");
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-04-15T23:30:45.678Z") });
+    try {
+      const result = schema["~standard"].validate({ title: "a" });
+      expect(result).toEqual({
+        value: expect.objectContaining({ title: "a", day: "2026-04-15", at: "23:30" }),
+      });
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
   });
 
   test("returns issues for a table-level validate failure, naming the field", () => {

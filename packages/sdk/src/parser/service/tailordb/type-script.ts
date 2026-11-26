@@ -11,7 +11,12 @@ const NOW = "_now";
 
 const SOURCE_HASH_PREFIX = "// @sdk-source-hash:";
 
-const TIME_TYPES = new Set(["datetime", "date", "time"]);
+// The Platform stores a date or time only from a `YYYY-MM-DD` or `HH:mm` string.
+const NOW_EXPRESSIONS = new Map([
+  ["datetime", NOW],
+  ["date", `${NOW}.toISOString().slice(0, 10)`],
+  ["time", `${NOW}.toISOString().slice(11, 16)`],
+]);
 
 type HookOperation = "create" | "update";
 
@@ -115,7 +120,8 @@ const isNestedType = (config: ScriptFieldConfig): boolean =>
   config.type === "nested" && config.fields !== undefined;
 
 function serializeDefault(value: unknown, fieldType: string): string {
-  if (value === "now" && TIME_TYPES.has(fieldType)) return NOW;
+  const nowExpression = NOW_EXPRESSIONS.get(fieldType);
+  if (value === "now" && nowExpression !== undefined) return nowExpression;
   if (value instanceof Date) return `new Date(${JSON.stringify(value.toISOString())})`;
   return JSON.stringify(value);
 }

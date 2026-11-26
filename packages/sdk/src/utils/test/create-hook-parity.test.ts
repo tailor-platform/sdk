@@ -26,6 +26,8 @@ const order = db
     givenAt: db.datetime({ optional: true }),
     stampedAt: db.datetime({ optional: true }).hooks({ create: ({ now }) => now }),
     createdAt: db.datetime().default("now"),
+    day: db.date().default("now"),
+    at: db.time().default("now"),
     status: db.string().default("active"),
     slug: db.string({ optional: true }).hooks({ create: ({ input }) => input?.trim() ?? null }),
     address: db.object({ city: db.string() }, { optional: true }),
@@ -47,6 +49,8 @@ const stamp = db.table("Stamp", {
   title: db.string(),
   stampedAt: db.datetime({ optional: true }).hooks({ create: ({ now }) => now }),
   createdAt: db.datetime().default("now"),
+  day: db.date().default("now"),
+  at: db.time().default("now"),
   status: db.string().default("active"),
 });
 

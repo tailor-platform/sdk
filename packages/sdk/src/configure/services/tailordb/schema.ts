@@ -584,6 +584,7 @@ export interface TailorDBField<
    * no value (or a nullish hook result) is provided.
    *
    * For datetime/date/time fields, pass `"now"` to use the operation timestamp.
+   * A date field gets its UTC date (`YYYY-MM-DD`), and a time field its UTC time (`HH:mm`).
    */
   default: DBFieldDefaultMethod<Defined, Output, Nested>;
 
