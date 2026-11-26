@@ -4,6 +4,7 @@ import {
   arrayElements,
   entryKey,
   findImportStatements,
+  hasDynamicKey,
   importSource,
   importSpecNames,
   isInsideImportStatement,
@@ -19,6 +20,7 @@ import {
   parseConfigModule,
   resolveString,
   evaluatesToObject,
+  withoutTypeOperators,
   SDK_MODULE,
   type ConfigModule,
 } from "./config-module";
@@ -542,13 +544,21 @@ export function composeMembers(
       if (plugins) {
         const edits = pluginPathEdits(renamed, plugins, outputDir, composed.findings);
         for (const call of plugins.findAll({ rule: { kind: "call_expression" } })) {
-          const options = callArguments(call)[0];
-          if (calleeName(call) !== "seedPlugin" || options?.kind() !== "object") continue;
-          const entry = objectEntries(options).find(
-            (candidate) => entryKey(candidate) === "machineUserName",
-          );
-          const value = (entry && entryValue(entry)) ?? null;
-          if (!entry || evaluatesToObject(cache, renamed.module, value)) continue;
+          const options = withoutTypeOperators(callArguments(call)[0] ?? null);
+          if (calleeName(call) !== "seedPlugin" || !options) continue;
+          const entry =
+            options.kind() === "object"
+              ? objectEntries(options).find(
+                  (candidate) => entryKey(candidate) === "machineUserName",
+                )
+              : undefined;
+          if (!entry) {
+            if (options.kind() !== "object" || hasDynamicKey(options))
+              composed.seedMachineUsers.push({ file: member.path, node: options, name: null });
+            continue;
+          }
+          const value = entryValue(entry);
+          if (evaluatesToObject(cache, renamed.module, value)) continue;
           composed.seedMachineUsers.push({
             file: member.path,
             node: entry,

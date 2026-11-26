@@ -1450,27 +1450,41 @@ describe("v3/config-to-workspace", () => {
 
   const sharedSeedUser =
     'seedPlugin seeds as machine user "admin", and the merged workspace has several Auth services; write it as { namespace, machineUserName } with the Auth service it belongs to.';
+  const uncheckedSeedUser =
+    "The conversion cannot tell whether several Auth services of the merged workspace define the machine user seedPlugin seeds as; write it as { namespace, machineUserName } with the Auth service it belongs to.";
+  const seedOptions = (entry: string) => `{ distPath: "./seed", ${entry} }`;
   test.each([
-    ["a literal", 'machineUserName: "admin"', [sharedSeedUser]],
-    ["a const", "machineUserName: seedUser", [sharedSeedUser]],
-    ["a shorthand property", "machineUserName", [sharedSeedUser]],
-    ["a name no Auth service defines", 'machineUserName: "ghost"', []],
+    ["a literal", seedOptions('machineUserName: "admin"'), [sharedSeedUser]],
+    ["a const", seedOptions("machineUserName: seedUser"), [sharedSeedUser]],
+    ["a shorthand property", seedOptions("machineUserName"), [sharedSeedUser]],
+    ["a name no Auth service defines", seedOptions('machineUserName: "ghost"'), []],
     [
       "an object that names the Auth service",
-      'machineUserName: { namespace: "a-auth", machineUserName: "admin" }',
+      seedOptions('machineUserName: { namespace: "a-auth", machineUserName: "admin" }'),
       [],
     ],
-    ["a const holding an object that names the Auth service", "machineUserName: seedInvoker", []],
+    [
+      "a const holding an object that names the Auth service",
+      seedOptions("machineUserName: seedInvoker"),
+      [],
+    ],
     [
       "a value that cannot be read",
-      "machineUserName: process.env.SEED_USER",
-      [
-        "The conversion cannot tell whether several Auth services of the merged workspace define the machine user seedPlugin seeds as; write it as { namespace, machineUserName } with the Auth service it belongs to.",
-      ],
+      seedOptions("machineUserName: process.env.SEED_USER"),
+      [uncheckedSeedUser],
     ],
+    [
+      "a literal in options written with as const",
+      `${seedOptions('machineUserName: "admin"')} as const`,
+      [sharedSeedUser],
+    ],
+    ["options with a spread", seedOptions("...base"), [uncheckedSeedUser]],
+    ["options with a computed key", seedOptions('[key]: "admin"'), [uncheckedSeedUser]],
+    ["options that are not an object literal", "base", [uncheckedSeedUser]],
+    ["options without one", '{ distPath: "./seed" }', []],
   ])(
     "checks a seedPlugin machine user written as %s against the merged Auth services",
-    async (_, machineUser, messages) => {
+    async (_, options, messages) => {
       const config = (name: string, ...rest: string[]) =>
         lines(
           'import { defineAuth, defineConfig } from "@tailor-platform/sdk";',
@@ -1486,7 +1500,8 @@ describe("v3/config-to-workspace", () => {
           'const seedUser = "admin";',
           'const machineUserName = "admin";',
           'const seedInvoker = { namespace: "a-auth", machineUserName: "admin" } satisfies AuthMachineUser;',
-          `export const plugins = [seedPlugin({ distPath: "./seed", ${machineUser} }), auditPlugin({ machineUserName: "admin" })];`,
+          'const base = { machineUserName: "admin" };',
+          `export const plugins = [seedPlugin(${options}), auditPlugin({ machineUserName: "admin" })];`,
         ),
         "b/tailor.config.ts": config("b"),
       });
