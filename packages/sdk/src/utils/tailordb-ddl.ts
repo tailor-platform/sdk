@@ -141,7 +141,7 @@ function scalarLiteral(value: unknown, field: DDLFieldConfig, label: string): st
 const CURRENT_TIME_EXPRESSIONS = new Map([
   ["datetime", "now()"],
   ["date", "CURRENT_DATE"],
-  ["time", "LOCALTIME"],
+  ["time", "to_char(LOCALTIME, 'HH24:MI')::time"],
 ]);
 
 function defaultExpression(field: DDLFieldConfig, label: string): string {
