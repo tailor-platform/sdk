@@ -1,18 +1,33 @@
 // What one TailorDB namespace must hold while `tailor deploy` runs its pending migrations.
 // migration-model.test.ts replays each simulated trace against applyTailorDB.
 module migrationDeploy {
-  // Version v of a table has the optional fields f1..fv.
   type Table = str
-  type Schema = Table -> int
+
+  // Every table has a required field `name`, an optional string field `f`, and an optional enum
+  // field `e`.
+  type FieldState =
+    | Absent
+    | Present({ required: bool, unique: bool })
+  type EnumState =
+    | NoEnum
+    | Values(Set[str])
+  type Shape = { f: FieldState, e: EnumState }
+  type Schema = Table -> Shape
+
+  type Maintenance =
+    | DuringMigrations
+    | DuringDeploy
+    | Off
 
   type Step =
     | Start
     | Script(int)
     | Commit(int)
+    | Held
     | Done
 
   pure val TABLES = Set("A", "B", "C")
-  pure val MAX_VERSION = 2
+  pure val ENUM_VALUES = Set("X", "Y")
   pure val MAX_MIGRATIONS = 4
 
   // history[0] is the baseline and history[i] the schema after migration i; the local
@@ -23,22 +38,77 @@ module migrationDeploy {
   var fresh: bool
   // Last committed migration, whose schema the workspace holds when it is not fresh.
   var checkpoint: int
+  var maintenance: Maintenance
   var step: Step
-  // Tables and versions the namespace holds at `step`, except the tables in `unchecked`.
+  // Tables and shapes the namespace holds at `step`, except the tables in `unchecked`.
   var tables: Schema
-  // Tables with a GraphQL permission: every table at Start, and the ones checked at Done.
+  // Whether every table the namespace holds at `step` is restricted, or none is.
+  var restricted: bool
+  // Tables with a GraphQL permission, except the tables in `unchecked` and `uncheckedPermissions`.
   var permissions: Set[Table]
   var unchecked: Set[Table]
+  var uncheckedPermissions: Set[Table]
 
-  pure val SCHEMAS: Set[Schema] =
-    TABLES.powerset().exclude(Set(Set())).map(names => names.setOfMaps(1.to(MAX_VERSION))).flatten()
+  pure val FIELD_STATES: Set[FieldState] =
+    Set(Absent).union(Set(true, false).map(r => Set(true, false).map(u => Present({ required: r, unique: u }))).flatten())
+  pure val ENUM_STATES: Set[EnumState] =
+    Set(NoEnum).union(ENUM_VALUES.powerset().exclude(Set(Set())).map(vs => Values(vs)))
+  pure val SHAPES: Set[Shape] = FIELD_STATES.map(f => ENUM_STATES.map(e => { f: f, e: e })).flatten()
+  pure val PRESENCES: Set[Set[Table]] = TABLES.powerset().exclude(Set(Set()))
 
-  // A version only grows while its table stays, since a removed field stays until Post-migration.
-  pure def follows(prev: Schema, after: Schema): bool =
-    after.keys().forall(t => not(prev.keys().contains(t)) or after.get(t) >= prev.get(t))
+  pure def schemaOf(present: Set[Table], a: Shape, b: Shape, c: Shape): Schema =
+    present.mapBy(t => if (t == "A") a else if (t == "B") b else c)
 
-  // A migration's tables, with the ones it removes kept until its checkpoint commits.
-  pure def during(prev: Schema, after: Schema): Schema =
+  pure def isPresent(f: FieldState): bool = match f { | Absent => false | Present(_) => true }
+  pure def isRequired(f: FieldState): bool = match f { | Absent => false | Present(p) => p.required }
+  pure def isUnique(f: FieldState): bool = match f { | Absent => false | Present(p) => p.unique }
+  pure def hasEnum(e: EnumState): bool = match e { | NoEnum => false | Values(_) => true }
+  pure def valuesOf(e: EnumState): Set[str] = match e { | NoEnum => Set() | Values(vs) => vs }
+
+  // The changes existing records can refuse, which `migration generate` scaffolds a script for.
+  // A history can skip such a script, but a scripted one gives the model a step to check.
+  pure def breaks(before: Shape, after: Shape): bool = or {
+    not(isPresent(before.f)) and isRequired(after.f),
+    isPresent(before.f) and isPresent(after.f) and not(isRequired(before.f)) and isRequired(after.f),
+    isPresent(before.f) and isPresent(after.f) and not(isUnique(before.f)) and isUnique(after.f),
+    hasEnum(before.e) and hasEnum(after.e) and not(valuesOf(before.e).subseteq(valuesOf(after.e))),
+  }
+
+  pure def breaking(prev: Schema, after: Schema): bool =
+    prev.keys().intersect(after.keys()).exists(t => breaks(prev.get(t), after.get(t)))
+
+  // The Pre-phase shape of a table a migration keeps: a removed field stays as it was, and each
+  // constraint takes its looser side until Post-migration.
+  pure def relax(before: Shape, after: Shape): Shape = {
+    f: match before.f {
+      | Absent => match after.f {
+        | Absent => Absent
+        | Present(a) => Present({ required: false, unique: a.unique })
+      }
+      | Present(b) => match after.f {
+        | Absent => Present(b)
+        | Present(a) => Present({ required: b.required and a.required, unique: b.unique and a.unique })
+      }
+    },
+    e: match before.e {
+      | NoEnum => after.e
+      | Values(b) => match after.e {
+        | NoEnum => Values(b)
+        | Values(a) => Values(b.union(a))
+      }
+    },
+  }
+
+  // A migration's tables while its script runs; the tables it removes stay until its checkpoint
+  // commits.
+  pure def duringScript(prev: Schema, after: Schema): Schema =
+    prev.keys().union(after.keys()).mapBy(t =>
+      if (not(after.keys().contains(t))) prev.get(t)
+      else if (not(prev.keys().contains(t))) after.get(t)
+      else relax(prev.get(t), after.get(t)))
+
+  // A migration's tables after Post-migration, when its checkpoint commits.
+  pure def atCommit(prev: Schema, after: Schema): Schema =
     prev.keys().union(after.keys()).mapBy(t => if (after.keys().contains(t)) after.get(t) else prev.get(t))
 
   pure def maxOf(values: Set[int]): int = values.fold(-1, (acc, v) => if (v > acc) v else acc)
@@ -55,51 +125,102 @@ module migrationDeploy {
       not(lastOf(h).keys().contains(t)) and
       addedAt(h, t, if (h[i].keys().contains(t)) i else i - 1) > cp)
 
-  // Known gap: a table the workspace has and the local definitions keep is neither deleted when a
-  // pending migration removes it nor written with the schemas of the migrations before that.
-  pure def readdedTables(h: List[Schema], start: Schema, cp: int): Set[Table] =
-    start.keys().intersect(lastOf(h).keys()).filter(t => (cp + 1).to(h.length() - 1).exists(j => not(h[j].keys().contains(t))))
+  // Known gap: a table the workspace has and the local definitions keep is not deleted when a
+  // pending migration removes it, and keeps its shape while the plan leaves it unchanged.
+  pure def keptTables(h: List[Schema], start: Schema, cp: int): Set[Table] =
+    start.keys().intersect(lastOf(h).keys()).filter(t => (cp + 1).to(h.length() - 1).exists(j =>
+      if (h[j].keys().contains(t)) start.get(t) == lastOf(h).get(t) and h[j].get(t) != start.get(t)
+      else true))
 
   pure def uncheckedAt(h: List[Schema], start: Schema, cp: int, i: int): Set[Table] =
-    intermediateTables(h, cp, i).union(readdedTables(h, start, cp))
+    intermediateTables(h, cp, i).union(keptTables(h, start, cp))
+
+  // Known gap: a table the deploy creates from the checkpoint because a pending migration removes
+  // it gets no GraphQL permission.
+  pure def permissionlessTables(h: List[Schema], start: Schema, cp: int): Set[Table] =
+    h[cp].keys().filter(t =>
+      not(start.keys().contains(t)) and
+      (cp + 1).to(h.length() - 1).exists(j => not(h[j].keys().contains(t))))
 
   action init = {
     nondet n = 1.to(MAX_MIGRATIONS).oneOf()
-    nondet s0 = SCHEMAS.oneOf()
-    nondet s1 = SCHEMAS.filter(s => follows(s0, s)).oneOf()
-    nondet s2 = SCHEMAS.filter(s => follows(s1, s)).oneOf()
-    nondet s3 = SCHEMAS.filter(s => follows(s2, s)).oneOf()
-    nondet s4 = SCHEMAS.filter(s => follows(s3, s)).oneOf()
+    nondet p0 = PRESENCES.oneOf()
+    nondet p1 = PRESENCES.oneOf()
+    nondet p2 = PRESENCES.oneOf()
+    nondet p3 = PRESENCES.oneOf()
+    nondet p4 = PRESENCES.oneOf()
+    nondet a0 = SHAPES.oneOf()
+    nondet b0 = SHAPES.oneOf()
+    nondet c0 = SHAPES.oneOf()
+    nondet a1 = SHAPES.oneOf()
+    nondet b1 = SHAPES.oneOf()
+    nondet c1 = SHAPES.oneOf()
+    nondet a2 = SHAPES.oneOf()
+    nondet b2 = SHAPES.oneOf()
+    nondet c2 = SHAPES.oneOf()
+    nondet a3 = SHAPES.oneOf()
+    nondet b3 = SHAPES.oneOf()
+    nondet c3 = SHAPES.oneOf()
+    nondet a4 = SHAPES.oneOf()
+    nondet b4 = SHAPES.oneOf()
+    nondet c4 = SHAPES.oneOf()
     nondet isFresh = Bool.oneOf()
+    nondet mode = Set(DuringMigrations, DuringDeploy, Off).oneOf()
     nondet committed = 0.to(n - 1).oneOf()
-    nondet withScript = 1.to(n).powerset().oneOf()
-    val h = [s0, s1, s2, s3, s4].slice(0, n + 1)
+    nondet optionalScripts = 1.to(n).powerset().oneOf()
+    val h = [
+      schemaOf(p0, a0, b0, c0),
+      schemaOf(p1, a1, b1, c1),
+      schemaOf(p2, a2, b2, c2),
+      schemaOf(p3, a3, b3, c3),
+      schemaOf(p4, a4, b4, c4),
+    ].slice(0, n + 1)
     val cp = if (isFresh) 0 else committed
     val start = if (isFresh) Map() else h[cp]
     all {
       history' = h,
-      scripted' = withScript,
+      scripted' = optionalScripts.union(1.to(n).filter(i => breaking(h[i - 1], h[i]))),
       fresh' = isFresh,
       checkpoint' = cp,
+      maintenance' = mode,
       step' = Start,
       tables' = start,
+      restricted' = false,
       permissions' = start.keys(),
       unchecked' = Set(),
+      uncheckedPermissions' = Set(),
     }
   }
 
-  action enter(i: int): bool = all {
-    step' = if (scripted.contains(i)) Script(i) else Commit(i),
-    tables' = during(history[i - 1], history[i]),
-    permissions' = permissions,
-    unchecked' = uncheckedAt(history, if (fresh) Map() else history[checkpoint], checkpoint, i),
+  action enter(i: int): bool = {
+    val shown = if (scripted.contains(i)) duringScript(history[i - 1], history[i]) else atCommit(history[i - 1], history[i])
+    all {
+      step' = if (scripted.contains(i)) Script(i) else Commit(i),
+      tables' = shown,
+      restricted' = maintenance != Off,
+      permissions' = shown.keys(),
+      unchecked' = uncheckedAt(history, if (fresh) Map() else history[checkpoint], checkpoint, i),
+      uncheckedPermissions' = permissionlessTables(history, if (fresh) Map() else history[checkpoint], checkpoint),
+    }
+  }
+
+  // Every write is done, and a held maintenance mode still restricts the tables.
+  action hold: bool = all {
+    step' = Held,
+    tables' = lastOf(history),
+    restricted' = true,
+    permissions' = lastOf(history).keys(),
+    unchecked' = Set(),
+    uncheckedPermissions' = Set(),
   }
 
   action finish: bool = all {
     step' = Done,
     tables' = lastOf(history),
+    restricted' = false,
     permissions' = lastOf(history).keys(),
     unchecked' = Set(),
+    uncheckedPermissions' = Set(),
   }
 
   action advance = all {
@@ -107,11 +228,34 @@ module migrationDeploy {
     scripted' = scripted,
     fresh' = fresh,
     checkpoint' = checkpoint,
+    maintenance' = maintenance,
     match step {
       | Start => enter(checkpoint + 1)
-      | Script(i) => all { step' = Commit(i), tables' = tables, permissions' = permissions, unchecked' = unchecked }
-      | Commit(i) => if (i + 1 < history.length()) enter(i + 1) else finish
-      | Done => all { false, step' = step, tables' = tables, permissions' = permissions, unchecked' = unchecked }
+      | Script(i) => {
+        val shown = atCommit(history[i - 1], history[i])
+        all {
+          step' = Commit(i),
+          tables' = shown,
+          restricted' = restricted,
+          permissions' = shown.keys(),
+          unchecked' = unchecked,
+          uncheckedPermissions' = uncheckedPermissions,
+        }
+      }
+      | Commit(i) =>
+        if (i + 1 < history.length()) enter(i + 1)
+        else if (maintenance == DuringDeploy) hold
+        else finish
+      | Held => finish
+      | Done => all {
+        false,
+        step' = step,
+        tables' = tables,
+        restricted' = restricted,
+        permissions' = permissions,
+        unchecked' = unchecked,
+        uncheckedPermissions' = uncheckedPermissions,
+      }
     },
   }
 }

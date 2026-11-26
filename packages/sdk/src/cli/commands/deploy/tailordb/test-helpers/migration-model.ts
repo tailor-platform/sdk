@@ -16,20 +16,31 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
-/** Tables of one namespace, each with its shape version. */
-export type ModelSchema = ReadonlyMap<string, number>;
+/** A table's optional string field `f` and optional enum field `e`, as the model encodes them. */
+export interface ModelShape {
+  f: { tag: "Absent" } | { tag: "Present"; value: { required: boolean; unique: boolean } };
+  e: { tag: "NoEnum" } | { tag: "Values"; value: ReadonlySet<string> };
+}
+
+/** Tables of one namespace, each with its shape. */
+export type ModelSchema = ReadonlyMap<string, ModelShape>;
+
+type Maintenance = "DuringMigrations" | "DuringDeploy" | "Off";
 
 type ModelStep =
   | { tag: "Start" }
   | { tag: "Script"; value: number }
   | { tag: "Commit"; value: number }
+  | { tag: "Held" }
   | { tag: "Done" };
 
 export interface ModelState {
   step: ModelStep;
   tables: ModelSchema;
+  restricted: boolean;
   permissions: ReadonlySet<string>;
   unchecked: ReadonlySet<string>;
+  uncheckedPermissions: ReadonlySet<string>;
 }
 
 export interface ModelTrace {
@@ -38,6 +49,7 @@ export interface ModelTrace {
   scripted: ReadonlySet<number>;
   fresh: boolean;
   checkpoint: number;
+  maintenance: Maintenance;
   states: ModelState[];
 }
 
@@ -73,20 +85,18 @@ function readModelTraces(dir: string): ModelTrace[] {
       scripted: first.scripted as ReadonlySet<number>,
       fresh: first.fresh as boolean,
       checkpoint: first.checkpoint as number,
+      maintenance: (first.maintenance as { tag: Maintenance }).tag,
       states: states.slice(0, doneAt + 1).map((state) => ({
         step: state.step as ModelStep,
         tables: state.tables as ModelSchema,
+        restricted: state.restricted as boolean,
         permissions: state.permissions as ReadonlySet<string>,
         unchecked: state.unchecked as ReadonlySet<string>,
+        uncheckedPermissions: state.uncheckedPermissions as ReadonlySet<string>,
       })),
     };
-    const key = JSON.stringify([
-      trace.history.map((schema) => [...schema].toSorted()),
-      [...trace.scripted].toSorted(),
-      trace.fresh,
-      trace.checkpoint,
-    ]);
-    if (!traces.has(key)) traces.set(key, trace);
+    const scenario = describeScenario(trace);
+    if (!traces.has(scenario)) traces.set(scenario, trace);
   }
   return [...traces.values()];
 }
@@ -109,7 +119,7 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
         "run",
         MODEL_SPEC,
         "--step=advance",
-        "--max-steps=10",
+        "--max-steps=12",
         `--max-samples=${samples}`,
         `--n-traces=${samples}`,
         "--seed=1",
@@ -125,50 +135,75 @@ export function simulateModelTraces(samples: number): ModelTrace[] {
 }
 
 /**
+ * Describe a shape in a few characters, such as `f=req+uniq e=XY`.
+ * @param shape - Model shape
+ * @returns The description
+ */
+export function describeShape(shape: ModelShape): string {
+  const f =
+    shape.f.tag === "Absent"
+      ? "-"
+      : `${shape.f.value.required ? "req" : "opt"}${shape.f.value.unique ? "+uniq" : ""}`;
+  const e = shape.e.tag === "NoEnum" ? "-" : [...shape.e.value].toSorted().join("");
+  return `f=${f} e=${e}`;
+}
+
+/**
  * Describe a trace's scenario in one line, for a failure message.
  * @param trace - Model trace
- * @returns The scenario
+ * @returns The scenario, without the trace's file name
  */
 export function describeScenario(trace: ModelTrace): string {
   const schemas = trace.history
     .map((schema, i) => {
-      const tables = [...schema].map(([name, version]) => `${name}${version}`).join(",");
+      const tables = [...schema]
+        .toSorted(([a], [b]) => a.localeCompare(b))
+        .map(([name, shape]) => `${name}[${describeShape(shape)}]`)
+        .join(",");
       return `${i}${trace.scripted.has(i) ? "*" : ""}:{${tables}}`;
     })
     .join(" ");
   const start = trace.fresh ? "fresh" : `checkpoint ${trace.checkpoint}`;
-  return `${trace.file} ${start} ${schemas}`;
+  return `${start}, maintenance ${trace.maintenance}, ${schemas}`;
 }
 
-const VERSION_FIELD = /^f(\d+)$/;
-
-function fieldsAt(version: number): Record<string, SnapshotFieldConfig> {
+function modelFields(shape: ModelShape): Record<string, SnapshotFieldConfig> {
   const fields: Record<string, SnapshotFieldConfig> = { name: { type: "string", required: true } };
-  for (let v = 1; v <= version; v++) fields[`f${v}`] = { type: "string", required: false };
+  if (shape.f.tag === "Present") {
+    const { required, unique } = shape.f.value;
+    fields.f = { type: "string", required, ...(unique && { unique: true, index: true }) };
+  }
+  if (shape.e.tag === "Values") {
+    fields.e = {
+      type: "enum",
+      required: false,
+      allowedValues: [...shape.e.value].toSorted().map((value) => ({ value })),
+    };
+  }
   return fields;
 }
 
 /**
- * The snapshot table of a model table at a version.
+ * The snapshot table of a model table.
  * @param name - Table name
- * @param version - Shape version
+ * @param shape - Model shape
  * @returns Snapshot table
  */
-export function modelTable(name: string, version: number): TailorDBSnapshotType {
-  return snapshotTable(name, fieldsAt(version));
+export function modelTable(name: string, shape: ModelShape): TailorDBSnapshotType {
+  return snapshotTable(name, modelFields(shape));
 }
 
 /**
  * The manifest the planner builds for a model table.
  * @param name - Table name
- * @param version - Shape version
+ * @param shape - Model shape
  * @returns Table manifest
  */
 export function modelManifest(
   name: string,
-  version: number,
+  shape: ModelShape,
 ): MessageInitShape<typeof TailorDBTypeSchema> {
-  return generateTailorDBTypeManifestFromSnapshot(modelTable(name, version), { subscribed: false });
+  return generateTailorDBTypeManifestFromSnapshot(modelTable(name, shape), { subscribed: false });
 }
 
 /**
@@ -179,24 +214,36 @@ export function modelManifest(
  */
 export function modelDiff(before: ModelSchema, after: ModelSchema): DiffChange[] {
   const changes: DiffChange[] = [];
-  for (const [name, version] of after) {
+  for (const [name, shape] of after) {
     const previous = before.get(name);
     if (previous === undefined) {
-      changes.push({ kind: "table_added", tableName: name, after: modelTable(name, version) });
+      changes.push({ kind: "table_added", tableName: name, after: modelTable(name, shape) });
       continue;
     }
-    for (let v = previous + 1; v <= version; v++) {
-      changes.push({
-        kind: "field_added",
-        tableName: name,
-        fieldName: `f${v}`,
-        after: { type: "string", required: false },
-      });
+    const beforeFields = modelFields(previous);
+    const afterFields = modelFields(shape);
+    for (const fieldName of ["f", "e"]) {
+      const was = beforeFields[fieldName];
+      const now = afterFields[fieldName];
+      if (was && now) {
+        if (JSON.stringify(was) === JSON.stringify(now)) continue;
+        changes.push({
+          kind: "field_modified",
+          tableName: name,
+          fieldName,
+          before: was,
+          after: now,
+        });
+      } else if (now) {
+        changes.push({ kind: "field_added", tableName: name, fieldName, after: now });
+      } else if (was) {
+        changes.push({ kind: "field_removed", tableName: name, fieldName, before: was });
+      }
     }
   }
-  for (const [name, version] of before) {
+  for (const [name, shape] of before) {
     if (!after.has(name)) {
-      changes.push({ kind: "table_removed", tableName: name, before: modelTable(name, version) });
+      changes.push({ kind: "table_removed", tableName: name, before: modelTable(name, shape) });
     }
   }
   return changes;
@@ -217,9 +264,9 @@ interface FakeTable {
  */
 export function createFakeNamespace(namespace: string, start: ModelState) {
   const tables = new Map<string, FakeTable>(
-    [...start.tables].map(([name, version]) => [
+    [...start.tables].map(([name, shape]) => [
       name,
-      { type: modelManifest(name, version), permission: start.permissions.has(name) },
+      { type: modelManifest(name, shape), permission: start.permissions.has(name) },
     ]),
   );
   const rejections: string[] = [];
@@ -285,38 +332,87 @@ export function createFakeNamespace(namespace: string, start: ModelState) {
   return { overrides, tables, rejections };
 }
 
+/** What the fake namespace shows of one table. */
+interface ObservedTable {
+  shape: string;
+  restricted: boolean;
+  permission: boolean;
+}
+
+function describeManifest(type: MessageInitShape<typeof TailorDBTypeSchema>): string {
+  const { f, e } = type.schema?.fields ?? {};
+  const fState = f ? `${f.required ? "req" : "opt"}${f.unique ? "+uniq" : ""}` : "-";
+  const eState = e
+    ? (e.allowedValues ?? [])
+        .map((value) => value.value)
+        .toSorted()
+        .join("")
+    : "-";
+  return `f=${fState} e=${eState}`;
+}
+
+function isRestricted(type: MessageInitShape<typeof TailorDBTypeSchema>): boolean {
+  const settings = type.schema?.settings;
+  const ops = settings?.disableGqlOperations;
+  return (
+    ops?.create === true &&
+    ops.update === true &&
+    ops.delete === true &&
+    settings?.publishRecordEvents !== true &&
+    settings?.bulkUpsert !== true
+  );
+}
+
 /**
- * Read the version of each table the fake holds from its `f<n>` fields.
+ * Read what the fake namespace shows of each table.
  * @param tables - Tables of the fake namespace
- * @returns Each table's version
+ * @returns Each table's shape, restriction, and permission
  */
-export function versionsOf(tables: ReadonlyMap<string, FakeTable>): ModelSchema {
+export function observeTables(
+  tables: ReadonlyMap<string, FakeTable>,
+): ReadonlyMap<string, ObservedTable> {
   return new Map(
     [...tables].map(([name, table]) => [
       name,
-      Object.keys(table.type.schema?.fields ?? {}).filter((field) => VERSION_FIELD.test(field))
-        .length,
+      {
+        shape: describeManifest(table.type),
+        restricted: isRestricted(table.type),
+        permission: table.permission,
+      },
     ]),
   );
 }
 
 /**
- * Compare what the fake namespace holds with what a model state expects, skipping its unchecked
- * tables.
- * @param actual - Versions the fake holds
+ * Compare what the fake namespace shows with what a model state expects.
+ * @param actual - What the fake namespace shows
  * @param expected - Model state
  * @returns One line per mismatch
  */
-export function compareTables(actual: ModelSchema, expected: ModelState): string[] {
+export function compareTables(
+  actual: ReadonlyMap<string, ObservedTable>,
+  expected: ModelState,
+): string[] {
   return [...new Set([...actual.keys(), ...expected.tables.keys()])]
     .toSorted()
     .filter((name) => !expected.unchecked.has(name))
     .flatMap((name) => {
       const want = expected.tables.get(name);
       const got = actual.get(name);
-      if (want === got) return [];
-      const show = (version: number | undefined) =>
-        version === undefined ? "absent" : `v${version}`;
-      return [`${name}: expected ${show(want)}, got ${show(got)}`];
+      const wantShape = want === undefined ? "absent" : describeShape(want);
+      const gotShape = got?.shape ?? "absent";
+      const lines: string[] = [];
+      if (wantShape !== gotShape) lines.push(`${name}: expected ${wantShape}, got ${gotShape}`);
+      if (got && got.restricted !== expected.restricted) {
+        lines.push(`${name}: expected ${expected.restricted ? "restricted" : "unrestricted"}`);
+      }
+      const hasPermission = got?.permission ?? false;
+      if (
+        !expected.uncheckedPermissions.has(name) &&
+        hasPermission !== expected.permissions.has(name)
+      ) {
+        lines.push(`${name}: expected ${hasPermission ? "no permission" : "a permission"}`);
+      }
+      return lines;
     });
 }

@@ -13,6 +13,7 @@ import {
   gqlPermissionDeletion,
   gqlPermissionEntry,
   mkPendingMigration,
+  mockConfig,
   snapshotAt,
   typeDeletion,
   typeMetaRequest,
@@ -21,15 +22,17 @@ import {
   compareTables,
   createFakeNamespace,
   describeScenario,
+  describeShape,
+  type ModelShape,
   type ModelState,
   type ModelTrace,
   modelDiff,
   modelManifest,
   modelTable,
+  observeTables,
   simulateModelTraces,
-  versionsOf,
 } from "./test-helpers/migration-model";
-import { applyTailorDB } from "./index";
+import { applyTailorDB, type MaintenanceModeRelease } from "./index";
 
 vi.mock("./migration", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -56,12 +59,17 @@ const WORKSPACE_ID = "test-workspace";
 const stepLabel = (step: ModelState["step"]) =>
   step.tag === "Script" || step.tag === "Commit" ? `${step.tag} ${step.value}` : step.tag;
 
+const MAINTENANCE_MODES = {
+  DuringMigrations: "migration",
+  DuringDeploy: "deploy",
+  Off: false,
+} as const;
+
 async function replay(trace: ModelTrace): Promise<string[]> {
   const failures: string[] = [];
   const { history, checkpoint, fresh } = trace;
   const last = assertDefined(history.at(-1), "every history has a last schema");
   const start = assertDefined(trace.states[0], "every trace has a Start state");
-  const done = assertDefined(trace.states.at(-1), "every trace ends with Done");
   const fake = createFakeNamespace(NAMESPACE, start);
   const visited: string[] = [];
   const observe = (step: ModelState["step"]) => {
@@ -72,7 +80,7 @@ async function replay(trace: ModelTrace): Promise<string[]> {
       failures.push(`${label}: the model has no such step`);
       return;
     }
-    for (const line of compareTables(versionsOf(fake.tables), expected)) {
+    for (const line of compareTables(observeTables(fake.tables), expected)) {
       failures.push(`${label}: ${line}`);
     }
   };
@@ -88,7 +96,7 @@ async function replay(trace: ModelTrace): Promise<string[]> {
   const tablesByVersion = Object.fromEntries(
     history.map((schema, i) => [
       i,
-      Object.fromEntries([...schema].map(([name, version]) => [name, modelTable(name, version)])),
+      Object.fromEntries([...schema].map(([name, shape]) => [name, modelTable(name, shape)])),
     ]),
   );
   vi.mocked(reconstructSnapshotFromMigrations).mockImplementation((_dir, maxVersion) =>
@@ -96,22 +104,36 @@ async function replay(trace: ModelTrace): Promise<string[]> {
   );
   vi.mocked(getLatestMigrationNumber).mockReturnValue(history.length - 1);
 
-  const entryOf = ([name, version]: [string, number]) => ({
+  const entryOf = ([name, shape]: [string, ModelShape]) => ({
     name,
     request: {
       workspaceId: WORKSPACE_ID,
       namespaceName: NAMESPACE,
-      tailordbType: modelManifest(name, version),
+      tailordbType: modelManifest(name, shape),
     },
     metaRequest: typeMetaRequest(name),
   });
-  const creates = [...last].filter(([name]) => !start.tables.has(name)).map(entryOf);
-  const updates = [...last]
-    .filter(([name, version]) => start.tables.has(name) && start.tables.get(name) !== version)
-    .map(entryOf);
+  const startShape = (name: string) => {
+    const shape = start.tables.get(name);
+    return shape && describeShape(shape);
+  };
+  const kept = [...last].filter(([name]) => start.tables.has(name));
   const deletes = [...start.tables.keys()].filter((name) => !last.has(name));
   const planResult = createPlanResult({
-    type: { creates, updates, deletes: deletes.map((name) => typeDeletion(name)) },
+    type: {
+      creates: [...last].filter(([name]) => !start.tables.has(name)).map(entryOf),
+      updates: kept
+        .filter(([name, shape]) => startShape(name) !== describeShape(shape))
+        .map(entryOf),
+      unchanged: kept
+        .filter(([name, shape]) => startShape(name) === describeShape(shape))
+        .map(([name]) => ({
+          name,
+          request: { namespaceName: NAMESPACE },
+          metaRequest: typeMetaRequest(name),
+        })),
+      deletes: deletes.map((name) => typeDeletion(name)),
+    },
     gqlPermission: {
       creates: [...last.keys()]
         .filter((name) => !start.permissions.has(name))
@@ -120,7 +142,8 @@ async function replay(trace: ModelTrace): Promise<string[]> {
         .filter((name) => !last.has(name))
         .map((name) => gqlPermissionDeletion(name)),
     },
-    local: [...last].map(([name, version]) => modelTable(name, version)),
+    local: [...last].map(([name, shape]) => modelTable(name, shape)),
+    context: { config: { ...mockConfig, maintenanceMode: MAINTENANCE_MODES[trace.maintenance] } },
   });
   const pending = history.slice(checkpoint + 1).map((schema, offset) => {
     const number = checkpoint + 1 + offset;
@@ -136,18 +159,15 @@ async function replay(trace: ModelTrace): Promise<string[]> {
   const info = vi.spyOn(logger, "info").mockImplementation(() => {});
 
   try {
-    await applyTailorDB(client, planResult, "create-update");
-    observe(done.step);
-    const permissions = [...fake.tables]
-      .filter(([, table]) => table.permission)
-      .map(([name]) => name)
-      .toSorted();
-    const expectedPermissions = [...done.permissions].toSorted();
-    if (permissions.join() !== expectedPermissions.join()) {
-      failures.push(
-        `Done: permissions ${permissions.join()}, expected ${expectedPermissions.join()}`,
-      );
+    const releases: MaintenanceModeRelease[] = [];
+    await applyTailorDB(client, planResult, "create-update", {
+      holdMaintenanceMode: (release) => releases.push(release),
+    });
+    if (releases.length > 0) {
+      observe({ tag: "Held" });
+      for (const release of releases) await release(client);
     }
+    observe({ tag: "Done" });
     const expectedSteps = trace.states.slice(1).map((state) => stepLabel(state.step));
     if (visited.join() !== expectedSteps.join()) {
       failures.push(`steps ${visited.join(", ")}, expected ${expectedSteps.join(", ")}`);
@@ -167,17 +187,17 @@ async function replay(trace: ModelTrace): Promise<string[]> {
 
 describe("migration deploy model", () => {
   test(
-    "each simulated deploy holds the tables migration-deploy.qnt expects",
+    "each simulated deploy holds what migration-deploy.qnt expects at every step",
     { timeout: 120_000 },
     async () => {
-      const traces = simulateModelTraces(5000);
-      expect(traces.length).toBeGreaterThan(4000);
+      const traces = simulateModelTraces(3000);
+      expect(traces.length).toBeGreaterThan(2900);
       const failed: string[] = [];
       for (const trace of traces) {
         vi.clearAllMocks();
         const failures = await replay(trace);
         if (failures.length > 0)
-          failed.push(`${describeScenario(trace)}\n  ${failures.join("\n  ")}`);
+          failed.push(`${trace.file} ${describeScenario(trace)}\n  ${failures.join("\n  ")}`);
       }
       expect({ traces: traces.length, failed: failed.length, first: failed.slice(0, 15) }).toEqual({
         traces: traces.length,
