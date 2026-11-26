@@ -122,7 +122,9 @@ const CHECKED_RESOURCES: Record<CheckedResourceType, CheckedResource> = {
     label: ({ namespace, name }) => `TailorDB table "${name}" in namespace "${namespace}"`,
     deletesOf: (plan) =>
       plan.tailorDB.changeSet.type.deletes
-        .filter((del) => !isRecreated(plan.tailorDB.changeSet, del))
+        .filter(
+          (del) => !isRecreated(plan.tailorDB.changeSet, del.request.namespaceName ?? "", del.name),
+        )
         .map(({ name, request }) => ({
           namespace: request.namespaceName,
           name,

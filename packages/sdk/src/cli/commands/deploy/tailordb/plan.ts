@@ -64,17 +64,39 @@ export type TailorDBChangeSet = TailorDBPlanResult["changeSet"];
 export type NamespacedEntry = { name: string; request: { namespaceName?: string | undefined } };
 
 /**
+ * Whether change-set entries name a table.
+ * @param entries - Change-set entries
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Name of the table
+ * @returns Whether an entry names the table in the namespace
+ */
+export function plansTable(
+  entries: readonly NamespacedEntry[],
+  namespaceName: string,
+  tableName: string,
+): boolean {
+  return entries.some(
+    (entry) => entry.name === tableName && (entry.request.namespaceName ?? "") === namespaceName,
+  );
+}
+
+/**
  * Whether the plan deletes a table and creates it again: the deletion runs before the
  * migrations or once the migration that removes the table commits, so the closing deletions
  * leave the table the deploy created again.
  * @param changeSet - TailorDB change set
- * @param del - A planned deletion
- * @returns Whether the plan also creates a table of that name in the namespace
+ * @param namespaceName - Namespace of the table
+ * @param tableName - Name of the table
+ * @returns Whether the plan both deletes and creates a table of that name in the namespace
  */
-export function isRecreated(changeSet: TailorDBChangeSet, del: NamespacedEntry): boolean {
-  return changeSet.type.creates.some(
-    (create) =>
-      create.name === del.name && create.request.namespaceName === del.request.namespaceName,
+export function isRecreated(
+  changeSet: TailorDBChangeSet,
+  namespaceName: string,
+  tableName: string,
+): boolean {
+  return (
+    plansTable(changeSet.type.deletes, namespaceName, tableName) &&
+    plansTable(changeSet.type.creates, namespaceName, tableName)
   );
 }
 

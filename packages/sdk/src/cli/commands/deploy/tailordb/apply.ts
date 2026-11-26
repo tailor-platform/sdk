@@ -120,6 +120,7 @@ import {
 import {
   isRecreated,
   type NamespacedEntry,
+  plansTable,
   type planTailorDB,
   recreatedTablesOf,
   type TailorDBChangeSet,
@@ -343,10 +344,7 @@ async function validateTailorDBMigrationState(
   }
   for (const [namespace, { tableNames }] of validation.unfinishedRemovals) {
     const unplanned = tableNames.filter(
-      (tableName) =>
-        !result.changeSet.type.deletes.some(
-          (del) => del.request.namespaceName === namespace && del.name === tableName,
-        ),
+      (tableName) => !plansTable(result.changeSet.type.deletes, namespace, tableName),
     );
     if (unplanned.length > 0) {
       throw CLIError({
@@ -367,7 +365,7 @@ async function validateTailorDBMigrationState(
   const recreatedTables = recreatedTablesOf(validation, context.tailorDBInputs);
   const unexpectedlyRecreated = result.changeSet.type.deletes.filter(
     (del) =>
-      isRecreated(result.changeSet, del) &&
+      isRecreated(result.changeSet, del.request.namespaceName ?? "", del.name) &&
       !recreatedTables.get(del.request.namespaceName ?? "")?.has(del.name),
   );
   if (unexpectedlyRecreated.length > 0) {
@@ -1160,8 +1158,6 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  */
 async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<string>> {
   const { client, changeSet, migrationContext, phaseSettings, pending, validation } = flow;
-  const plansDeletion = (deletes: readonly NamespacedEntry[], key: string) =>
-    deletes.some((del) => namespacedTableKey(del.request.namespaceName ?? "", del.name) === key);
   const deferredGqlPermissionKeys = new Set(
     [...changeSet.gqlPermission.creates, ...changeSet.gqlPermission.updates]
       .filter((permission) => {
@@ -1187,11 +1183,11 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
       if (!namespaceName || !tableName) continue;
       const tableKey = namespacedTableKey(namespaceName, tableName);
       if (
-        plansDeletion(changeSet.type.deletes, tableKey) &&
+        isRecreated(changeSet, namespaceName, tableName) &&
         !validation.unfinishedRemovals.get(namespaceName)?.tableNames.includes(tableName)
       ) {
         processedTables.created.add(tableKey);
-        if (plansDeletion(changeSet.gqlPermission.deletes, tableKey)) {
+        if (plansTable(changeSet.gqlPermission.deletes, namespaceName, tableName)) {
           processedTables.gqlPermissionsProcessed.add(tableKey);
         }
         continue;
@@ -2354,13 +2350,13 @@ async function applyRemainingDeletions(
   await Promise.all(
     changeSet.gqlPermission.deletes
       .filter((del) => !isDeleted(deletedResources.gqlPermissions, del))
-      .filter((del) => !isRecreated(changeSet, del))
+      .filter((del) => !isRecreated(changeSet, del.request.namespaceName ?? "", del.name))
       .map((del) => client.deleteTailorDBGQLPermission(del.request)),
   );
   await awaitAllSettledOrThrow(
     changeSet.type.deletes
       .filter((del) => !isDeleted(deletedResources.types, del))
-      .filter((del) => !isRecreated(changeSet, del))
+      .filter((del) => !isRecreated(changeSet, del.request.namespaceName ?? "", del.name))
       .map(async (del) => {
         await client.deleteTailorDBType(del.request);
         onTableDeleted(del);

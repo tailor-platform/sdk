@@ -1111,8 +1111,7 @@ export async function deletePlannedTables(
   permissionsDeletedByDeploy: ReadonlySet<string> = new Set(),
 ): Promise<ReadonlySet<string>> {
   const tableKey = (tableName: string) => namespacedTableKey(namespace, tableName);
-  const isKept = (name: string) =>
-    isRecreated(changeSet, { name, request: { namespaceName: namespace } });
+  const isKept = (name: string) => isRecreated(changeSet, namespace, name);
   // The closing deletions skip a planned permission deletion the deploy's own cleanup already
   // made, unless the plan creates the table again and a later removal must delete it once more.
   for (const del of entriesOfNamespace(changeSet.gqlPermission.deletes, namespace)) {
