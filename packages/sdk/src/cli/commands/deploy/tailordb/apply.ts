@@ -1149,8 +1149,11 @@ function isOutsideMigrations(flow: MigrationFlow, namespaceName: string | undefi
  * its first pending migration — the whole baseline on a fresh-workspace replay, and
  * every table when the pending migration is data-only — are equally dropped by the loop
  * and run here too, built from that snapshot so scripts see the checkpoint state rather
- * than the final schema. Every other planned create and update in a migrating namespace
- * waits until every migration has committed: enforcing the final schema earlier could
+ * than the final schema. One that the first pending migration removes or renames away
+ * also gets the snapshot's GraphQL permission: no Pre-phase writes one before that
+ * migration's checkpoint, and resuming the migration verifies it. Every other planned
+ * create and update in a migrating namespace waits until every migration has
+ * committed: enforcing the final schema earlier could
  * apply a change whose migration has not run. Tables a pending migration removes or
  * renames away have no planned create, so the workspace lacks them on a fresh replay;
  * they are created here from the snapshot too, and the migration that removes them
@@ -1210,6 +1213,16 @@ async function applyChangesBeforeMigrations(flow: MigrationFlow): Promise<Set<st
           tailordbType: generateMigrationPhaseManifest(priorTable, namespaceName, phaseSettings),
         }),
       );
+      const firstMigration = pending.firstByNamespace.get(namespaceName);
+      if (firstMigration && getTablesDeletedAfterCheckpoint(firstMigration.diff).has(tableName)) {
+        await createSnapshotGqlPermission(
+          client,
+          migrationContext.workspaceId,
+          namespaceName,
+          tableName,
+          priorTable.permissions?.gql,
+        );
+      }
     }
     for (const [namespaceName, removedTables] of pending.deletedTables) {
       await createRemovedBaselineTables(flow, namespaceName, removedTables);

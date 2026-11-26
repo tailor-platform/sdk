@@ -208,6 +208,110 @@ describe("migration flow: replaying a history that removes tables", () => {
     expect(permission[0]).toBeLessThan(table[0]!);
   });
 
+  test("creates the GraphQL permission of a baseline table the local definitions keep and a pending migration removes, and creates the plan's permission again at the re-add", async () => {
+    const tableA = { ...snapshotTable("A", nameField), permissions: { gql: allowAll } };
+    const tableC = snapshotTable("C", nameField);
+    snapshotState.tablesByVersion = {
+      0: { A: tableA, C: tableC },
+      1: { C: tableC },
+      2: { A: tableA, C: tableC },
+    };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("A"), typeEntry("C")] },
+      gqlPermission: { creates: [gqlPermissionEntry("A")] },
+      local: [tableA, tableC],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: tableA } as any],
+      ),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_added", tableName: "A", after: tableA } as any],
+        { number: 2, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const created = createOrdersOf(client, "A");
+    const permissionCreates = permissionCreateOrdersOf(client, "A");
+    expect(created).toHaveLength(2);
+    expect(permissionCreates).toHaveLength(2);
+    expect(permissionCreates[0]).toBeGreaterThan(created[0]!);
+    expect(permissionCreates[0]).toBeLessThan(firstScriptOrder());
+    const { table, permission } = deleteOrders(client, NAMESPACE, "A");
+    expect(permission).toHaveLength(1);
+    expect(permission[0]).toBeGreaterThan(checkpointOrder(1));
+    expect(permission[0]).toBeLessThan(table[0]!);
+    expect(created[1]).toBeGreaterThan(table[0]!);
+    expect(permissionCreates[1]).toBeGreaterThan(created[1]!);
+    const permissionRequests = vi.mocked(client.createTailorDBGQLPermission).mock.calls;
+    expect(permissionRequests[0]?.[0].permission).toEqual(protoGqlPermission(allowAll));
+    expect(permissionRequests[1]?.[0]).toEqual(gqlPermissionEntry("A").request);
+  });
+
+  test("creates the plan's GraphQL permission, not the checkpoint's, for a baseline table no pending migration removes", async () => {
+    const tableA = { ...snapshotTable("A", nameField), permissions: { gql: allowAll } };
+    snapshotState.tablesByVersion = { 0: { A: tableA }, 1: { A: tableA } };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("A")] },
+      gqlPermission: { creates: [gqlPermissionEntry("A")] },
+      local: [tableA],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([mkPendingMigration([])]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(vi.mocked(client.createTailorDBGQLPermission).mock.calls).toEqual([
+      [gqlPermissionEntry("A").request],
+    ]);
+  });
+
+  test("creates the plan's GraphQL permission before the first script for a baseline table whose permission the first migration changes and a later one removes", async () => {
+    const before = { ...snapshotTable("A", nameField), permissions: { gql: allowAll } };
+    const after = { ...snapshotTable("A", nameField), permissions: { gql: [] } };
+    snapshotState.tablesByVersion = { 0: { A: before }, 1: { A: after }, 2: {}, 3: { A: after } };
+    const planResult = createPlanResult({
+      type: { creates: [typeEntry("A")] },
+      gqlPermission: { creates: [gqlPermissionEntry("A")] },
+      local: [after],
+    });
+    planResult.context.pendingMigrations = checkpoint.mockPending([
+      mkPendingMigration([
+        {
+          kind: "permission_modified",
+          tableName: "A",
+          before: before.permissions,
+          after: after.permissions,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      ]),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_removed", tableName: "A", before: after } as any],
+        { number: 2, hasScript: false },
+      ),
+      mkPendingMigration(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        [{ kind: "table_added", tableName: "A", after } as any],
+        { number: 3, hasScript: false },
+      ),
+    ]);
+    const client = checkpoint.createMockClient();
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const permissionCreates = permissionCreateOrdersOf(client, "A");
+    expect(permissionCreates[0]).toBeLessThan(scriptOrder(1));
+    expect(vi.mocked(client.createTailorDBGQLPermission).mock.calls[0]?.[0]).toEqual(
+      gqlPermissionEntry("A").request,
+    );
+  });
+
   test("creates a table that a later migration removes and re-adds, deletes it at the removal, and creates it again at the re-add", async () => {
     const audit = snapshotTable("Audit", nameField);
     const draft = snapshotTable("Draft", nameField);
