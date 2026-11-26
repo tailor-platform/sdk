@@ -10,7 +10,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { withSourceLocation } from "@tailor-platform/sdk/cli";
+import { logger, withSourceLocation } from "@tailor-platform/sdk/cli";
 import { jsonlRecordLines } from "lines-db";
 import * as path from "pathe";
 import type { ErrorSourceLocation, SeedData } from "@tailor-platform/sdk/cli";
@@ -155,7 +155,11 @@ function readSeedRows(
     }
     throw error;
   }
-  return jsonlRecordLines(content).map(({ text, line }) => {
+  const records = jsonlRecordLines(content);
+  for (const { line, warning } of records) {
+    if (warning) logger.warn(`${relativeRowLocation({ file: jsonlPath, line })} ${warning}`);
+  }
+  return records.map(({ text, line }) => {
     let value: unknown;
     try {
       value = JSON.parse(text);

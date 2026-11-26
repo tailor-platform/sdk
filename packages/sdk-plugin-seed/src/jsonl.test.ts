@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { errorToJson } from "@tailor-platform/sdk/cli";
+import { errorToJson, logger } from "@tailor-platform/sdk/cli";
 import { JsonlReader, unwrap } from "lines-db";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -188,6 +188,28 @@ describe("loadSeedData", () => {
 
     expect(validatorRows).toEqual([{ id: 1 }, { id: 2 }]);
     expect(loadSeedData(dir, ["User"])).toEqual({ User: validatorRows });
+  });
+
+  test("warns with the file and line of a row surrounded by a no-break space", () => {
+    const dir = makeDataDir({ "User.jsonl": '{"id":1}\n{"id":2}\u00A0\n' });
+    vi.spyOn(process, "cwd").mockReturnValue(dir);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    loadSeedData(dir, ["User"]);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "User.jsonl:2 has U+00A0 around its row, which JSON does not allow",
+    );
+  });
+
+  test("does not warn about spaces, tabs, blank lines or CRLF around rows", () => {
+    const dir = makeDataDir({ "User.jsonl": ' {"id":1}\t\r\n\r\n\u00A0\n{"id":2}\n' });
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    loadSeedData(dir, ["User"]);
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   test.each(["null", "[]", '"text"', "42"])("rejects non-object JSON rows: %s", (row) => {

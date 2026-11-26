@@ -357,7 +357,11 @@ export function loadSnapshotSeedData(
       }
       throw error;
     }
-    data[tableName] = jsonlRecordLines(content).flatMap(({ text, line }) => {
+    const records = jsonlRecordLines(content);
+    for (const { line, warning } of records) {
+      if (warning) logger.warn(`${path.relative(process.cwd(), jsonlPath)}:${line} ${warning}`);
+    }
+    data[tableName] = records.flatMap(({ text, line }) => {
       let value: unknown;
       try {
         value = JSON.parse(text);

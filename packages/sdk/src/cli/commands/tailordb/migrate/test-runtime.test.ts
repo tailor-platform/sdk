@@ -7,6 +7,7 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { errorToJson } from "#/cli/shared/error-json";
+import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { getNamespacesWithMigrations } from "./config";
@@ -285,6 +286,21 @@ describe("migration test runtime", () => {
       });
     },
   );
+
+  test("warns with the file and line of a baseline seed row surrounded by a no-break space", () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+    temporaryDirectories.push(dataDir);
+    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), '{"id":1}\n{"id":2}\u00A0\n');
+    vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    loadSnapshotSeedData(dataDir, ["Customer"]);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Customer.jsonl:2 has U+00A0 around its row, which JSON does not allow",
+    );
+  });
 
   test("rejects a baseline seed row that is not a JSON object at its line", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
