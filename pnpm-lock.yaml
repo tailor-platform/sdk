@@ -598,7 +598,7 @@ snapshots:
 				"zod": "4.6.7",
 			},
 			"devDependencies": {
-				"@tailor-platform/app-shell": "1.20.0",
+				"@tailor-platform/app-shell": "1.21.0",
 				"@tailor-platform/sdk": "workspace:^",
 				"@tailor-platform/shared": "workspace:^",
 				"@types/node": "26.6.6",
@@ -3587,8 +3587,8 @@ snapshots:
 			"integrity": "sha512-6tcXo4kA8HgGO7AVmawB57RYi/piBPYVHVcO6dXjX+SZw8GoHmi262sp4v2Ha2kNP9Cx84qei27yT+fjS1lxgg==",
 		},
 
-		"@tailor-platform/app-shell@1.20.0": {
-			"integrity": "sha512-h7Sf96kk1csj5Ty2/AltgX9NoaAJSvh+rbmcXejwJCUtD/SMK1kW3v9vtlvgeu6f5TL+0c/CH/NQwr5Kq7J1mg==",
+		"@tailor-platform/app-shell@1.21.0": {
+			"integrity": "sha512-4Xj5gQHrZB0mCRV5lj/t0aGoTf7Qn5Lts1wc71smtL9cb8Kd6zucbUU/EGdPAPk7McFi6TYLs3e+HMv/USVcIw==",
 			"peerDependencies": {
 				"@types/react": {
 					"version": "19.3.0",
