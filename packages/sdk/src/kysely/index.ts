@@ -21,6 +21,7 @@ import {
   type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";
+import { withDecimal, type DecimalClass } from "./decimal-client";
 import type {
   IsAutoFilledDBField,
   IsReadOnlyDBField,
@@ -112,6 +113,14 @@ export type CreateGetDBOptions = {
    * with this runtime behavior. Defaults to `false`.
    */
   temporal?: boolean;
+  /**
+   * The `Decimal` class to read TailorDB decimal fields as, such as the one exported by
+   * `@tailor-platform/sdk/runtime`. When given, decimal columns come back as `Decimal` instead of
+   * strings and `Decimal` values are accepted as query parameters. Match the `decimal` option
+   * `kyselyTypePlugin` was configured with so the generated table types agree with this runtime
+   * behavior. Defaults to strings.
+   */
+  decimal?: DecimalClass;
 };
 
 /**
@@ -120,7 +129,7 @@ export type CreateGetDBOptions = {
  * @returns A getDB function that creates Kysely instances for specific namespaces
  */
 export function createGetDB<NS>(options: CreateGetDBOptions = {}) {
-  const temporal = options.temporal;
+  const { temporal, decimal } = options;
   return function getDB<const N extends keyof NS & string>(
     namespace: N,
     config?: Omit<KyselyConfig, "dialect">,
@@ -128,7 +137,7 @@ export function createGetDB<NS>(options: CreateGetDBOptions = {}) {
     const client = new tailordb.Client({ namespace, ...(temporal ? { temporal } : {}) });
     return new Kysely<NS[N]>({
       ...config,
-      dialect: new TailordbDialect(client),
+      dialect: new TailordbDialect(decimal ? withDecimal(client, decimal) : client),
     });
   };
 }

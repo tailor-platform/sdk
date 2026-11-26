@@ -71,9 +71,19 @@ export type TailordbCommandType =
   | "COPY"
   | "CREATE";
 
+/** Name and PostgreSQL type name of a column in a {@link TailordbQueryResult}. */
+export interface TailordbQueryField {
+  /** Column name as it appears in each row, so an alias such as `select price as p` is `p` */
+  name: string;
+  /** PostgreSQL type name, such as `numeric`, `float8`, or `_numeric` for an array of numeric */
+  typeName: string;
+}
+
 /** Result of a single `queryObject` call against the TailorDB driver. */
 export interface TailordbQueryResult<T> {
   rows: T[];
+  /** Column types of the result, present even when no row matches. Absent on runtimes that do not report them. */
+  fields?: readonly TailordbQueryField[];
   command: TailordbCommandType;
   rowCount: number;
 }

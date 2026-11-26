@@ -1,4 +1,5 @@
-import { Decimal, isStorableDecimal } from "./decimal";
+import { Decimal } from "./decimal";
+import { isStorableDecimal } from "./decimal-range";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "./types";
