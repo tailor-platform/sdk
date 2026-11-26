@@ -31,7 +31,7 @@ export default defineConfig({
 
 - Destination names are unique across the workspace, and each destination writes to a different dataset. Project and dataset names are compared case-insensitively.
 - A destination's project and dataset cannot be changed. To write to another dataset, define a destination with a new name and point the replications at it.
-- To rename a destination but keep its dataset, first remove the old destination and the replications that use it in one deploy, then add the new one in a later deploy.
+- A destination that no replication uses can be renamed while keeping its dataset. To move replications to a renamed destination on the same dataset, first deploy without the old destination and the replications that use it, then add the new destination and the replications in a later deploy.
 - A destination that is neither used by a replication nor listed in `dbReplicationDestinations` is deleted.
 
 ### Granting access

@@ -370,23 +370,28 @@ function assertUntouchedReplicationsUnaffected(
 
 type DestinationDataset = { name: string; dataset: string };
 
+type AssertDatasetsFreeParams = {
+  creates: ReadonlyArray<CreateDestination>;
+  existing: Readonly<Record<string, { resource: ProtoDestination } | undefined>>;
+  /** Destinations deleted before any destination is created. */
+  earlyDeletes: ReadonlySet<string>;
+  /** Replications that still use each destination when destinations are created. */
+  usersOf: ReadonlyMap<string, string[]>;
+};
+
 /**
- * Stop before creating a destination on a dataset another destination of the workspace uses.
- * @param creates - Destinations this deploy creates
- * @param existing - Destinations of the workspace
- * @param deleted - Destinations this deploy deletes
+ * Stop before creating a destination on a dataset another destination still uses when it is created.
+ * @param params - Destinations this deploy creates, and the workspace's destinations
  * @throws CLIError coded `TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE`
  */
-function assertDatasetsFree(
-  creates: ReadonlyArray<CreateDestination>,
-  existing: Readonly<Record<string, { resource: ProtoDestination } | undefined>>,
-  deleted: ReadonlySet<string>,
-): void {
-  const used = Object.values(existing).flatMap((entry): DestinationDataset[] => {
+function assertDatasetsFree(params: AssertDatasetsFreeParams): void {
+  const used = Object.values(params.existing).flatMap((entry): DestinationDataset[] => {
     const bigquery = entry && bigQueryOf(entry.resource);
-    return bigquery ? [{ name: entry.resource.name, dataset: bigQueryDatasetKey(bigquery) }] : [];
+    return bigquery && !params.earlyDeletes.has(entry.resource.name)
+      ? [{ name: entry.resource.name, dataset: bigQueryDatasetKey(bigquery) }]
+      : [];
   });
-  const taken = creates.flatMap((create) => {
+  const taken = params.creates.flatMap((create) => {
     const kind = create.request.destination?.kind;
     if (kind?.case !== "bigquery") return [];
     const dataset = bigQueryDatasetKey({
@@ -395,9 +400,10 @@ function assertDatasetsFree(
     });
     const other = used.find((item) => item.dataset === dataset);
     if (!other) return [];
+    const users = params.usersOf.get(other.name) ?? [];
     return [
-      deleted.has(other.name)
-        ? `"${create.name}" writes to ${dataset}, which destination "${other.name}" still uses until this deploy deletes it`
+      users.length > 0
+        ? `"${create.name}" writes to ${dataset}, which destination "${other.name}" uses until replications ${users.map((name) => `"${name}"`).join(", ")} stop writing to it`
         : `"${create.name}" writes to ${dataset}, which destination "${other.name}" uses`,
     ];
   });
@@ -406,7 +412,7 @@ function assertDatasetsFree(
     code: "TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE",
     message: `A dataset can have one replication destination:\n${taken.map((line) => `  - ${line}`).join("\n")}`,
     suggestion:
-      "To rename a destination, remove the old one and the replications that use it in an earlier deploy.",
+      "To move replications to a renamed destination on the same dataset, first deploy without the old destination and the replications that use it, then add the new destination and the replications.",
     context: { taken },
   });
 }
@@ -598,7 +604,6 @@ export async function planTailorDBReplication(
     ),
   );
   const deletedDestinations = new Set(destination.deletes.map(({ name }) => name));
-  assertDatasetsFree(destination.creates, existingDestinations, deletedDestinations);
   assertUntouchedReplicationsUnaffected({
     existing: existingInits,
     managed: new Set([
@@ -651,6 +656,17 @@ export async function planTailorDBReplication(
   const earlyDestinationDeletes = new Set(
     destination.deletes.filter(({ name }) => !referenced.has(name)).map(({ name }) => name),
   );
+  const usersOf = new Map<string, string[]>();
+  for (const [name, existing] of existingInits) {
+    if (deleted.has(name)) continue;
+    usersOf.set(existing.destination, [...(usersOf.get(existing.destination) ?? []), name]);
+  }
+  assertDatasetsFree({
+    creates: destination.creates,
+    existing: existingDestinations,
+    earlyDeletes: earlyDestinationDeletes,
+    usersOf,
+  });
 
   return {
     workspaceId,

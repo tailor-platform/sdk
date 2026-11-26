@@ -449,22 +449,43 @@ describe("planTailorDBReplication", () => {
     });
   });
 
-  test("rejects a new destination on a dataset another destination uses", async () => {
+  test("renames a destination no replication uses, keeping its dataset", async () => {
     const client = createClient({ destinations: [existingWarehouse()] });
+    const plan = await planTailorDBReplication(
+      contextOf(client, {
+        destinations: [
+          { name: "warehouse2", bigquery: { project: "acme-analytics", dataset: "TAILOR" } },
+        ],
+      }),
+      noTailorDBDeletes,
+    );
+
+    expect(plan.changeSet.destination.creates.map(({ name }) => name)).toEqual(["warehouse2"]);
+    expect([...plan.earlyDestinationDeletes]).toEqual(["warehouse"]);
+  });
+
+  test("rejects a new destination on a dataset a kept replication still writes through another destination", async () => {
+    const client = createClient({
+      destinations: [existingWarehouse()],
+      replications: [existingReplicationOf()],
+    });
+    const warehouse2 = {
+      name: "warehouse2",
+      bigquery: { project: "acme-analytics", dataset: "tailor" },
+    };
 
     await expect(
       planTailorDBReplication(
         contextOf(client, {
-          destinations: [
-            { name: "warehouse2", bigquery: { project: "acme-analytics", dataset: "TAILOR" } },
-          ],
+          destinations: [warehouse2],
+          replications: [replicationOf({ destination: "warehouse2" })],
         }),
         noTailorDBDeletes,
       ),
     ).rejects.toMatchObject({
       code: "TAILORDB_REPLICATION_DESTINATION_DATASET_IN_USE",
       message: expect.stringContaining(
-        '"warehouse2" writes to acme-analytics.tailor, which destination "warehouse" still uses until this deploy deletes it',
+        '"warehouse2" writes to acme-analytics.tailor, which destination "warehouse" uses until replications "analytics" stop writing to it',
       ),
     });
   });
