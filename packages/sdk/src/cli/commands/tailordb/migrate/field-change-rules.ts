@@ -1,13 +1,18 @@
 /**
- * Field changes that rows stored under the previous schema can break, with
- * the Pre-phase relaxation and the `migrate.ts` statement each one needs.
- * Rules are listed in the order a field's breaking changes are reported and
- * its statements run: references are repaired before the fixups that rewrite
- * those rows.
+ * How the field change rules of `field-change-model.ts` are reported, applied to a
+ * Pre-phase field, and scaffolded into `migrate.ts` statements. Rules are listed in
+ * the order a field's breaking changes are reported and its statements run:
+ * references are repaired before the fixups that rewrite those rows.
  */
 
 import { formatForeignKeyTarget } from "./diff-calculator";
-import { supportsInPlaceFieldTypeChange } from "./field-type-change";
+import {
+  evaluateFieldChange,
+  FIELD_CHANGE_RULE_IDS,
+  type FieldChangeInput,
+  type FieldChangeOutcome,
+  type FieldChangeRuleId,
+} from "./field-change-model";
 import { DEFAULT_DECIMAL_SCALE } from "./snapshot-normalization";
 import type {
   BreakingChangeInfo,
@@ -29,41 +34,10 @@ export interface PreMigrationField {
 }
 
 /** A field or nested member the migration changes; `before` is undefined when it adds one. */
-export interface FieldRuleInput {
-  before: SnapshotFieldConfig | undefined;
-  after: SnapshotFieldConfig;
-  nestedMember: boolean;
-  /** Confirmed table renames (old name → new name); the Pre-phase does not know them, so no relaxation may depend on them. */
-  typeRenameTargets: ReadonlyMap<string, string> | undefined;
-}
+export type FieldRuleInput = FieldChangeInput;
 
-type AddedField = FieldRuleInput & { before: undefined };
 type ModifiedField = FieldRuleInput & { before: SnapshotFieldConfig };
 type ScaffoldedChange = FieldAddedChange | FieldModifiedChange | FieldTypeModifiedChange;
-
-interface Breakage {
-  reason: string;
-  /** `migration generate` rejects the change and shows the three-step hint. */
-  unsupported?: true | undefined;
-}
-
-interface Relaxation<I> {
-  /** When to relax, if not exactly when the rule breaks. */
-  when?: ((input: I) => boolean) | undefined;
-  apply: (field: PreMigrationField, input: I) => void;
-}
-
-interface Rule<I, C> {
-  breaks: (input: I) => Breakage | undefined;
-  /** null when the Pre-phase sends the target contract, or keeps the whole previous field (a type change). */
-  relax: Relaxation<I> | null;
-  /** The statement `migrate.ts` runs for a top-level field the rule breaks; null when there is none. */
-  scaffold: ((change: C) => string) | null;
-}
-
-type FieldChangeRule =
-  | ({ on: "added" } & Rule<AddedField, FieldAddedChange>)
-  | ({ on: "modified" } & Rule<ModifiedField, FieldModifiedChange | FieldTypeModifiedChange>);
 
 /**
  * Whether a field that had no foreign key gains one.
@@ -93,141 +67,69 @@ export function changesForeignKeyTarget(
   );
 }
 
-/**
- * A retarget that follows a confirmed table rename and keeps the key keeps its
- * references valid: the copy preserves record ids.
- * @param input - The changed field
- * @returns True if stored references may point at no record of the new target
- */
-function isBreakingForeignKeyRetarget(input: ModifiedField): boolean {
-  const { before, after, typeRenameTargets } = input;
-  return (
-    changesForeignKeyTarget(before, after) &&
-    (before.foreignKeyField !== after.foreignKeyField ||
-      typeRenameTargets?.get(before.foreignKeyType ?? "") !== after.foreignKeyType)
-  );
-}
-
 function removedEnumValues(before: SnapshotFieldConfig, after: SnapshotFieldConfig): string[] {
   if (before.type !== "enum" || after.type !== "enum") return [];
   const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
   return (before.allowedValues ?? []).map((v) => v.value).filter((v) => !afterValues.has(v));
 }
 
-function withholdForeignKey(field: PreMigrationField): void {
-  delete field.foreignKey;
-  delete field.foreignKeyType;
-  delete field.foreignKeyField;
-}
+type RulePresentation = {
+  /** How a breaking change is reported. */
+  reason: (input: FieldRuleInput) => string;
+  /** The statement `migrate.ts` runs for a top-level field the rule breaks; null when there is none. */
+  scaffold: ((change: ScaffoldedChange) => string) | null;
+};
 
-const unsupportedWhen = (unsupported: boolean) =>
-  unsupported ? { unsupported: true as const } : {};
+type ModifiedChange = FieldModifiedChange | FieldTypeModifiedChange;
 
-const FIELD_CHANGE_RULES: readonly FieldChangeRule[] = [
-  {
-    on: "modified",
-    breaks: ({ before, after, nestedMember }) =>
-      before.type === after.type
-        ? undefined
-        : {
-            reason: `Field type changed from ${before.type} to ${after.type}`,
-            ...unsupportedWhen(nestedMember || !supportsInPlaceFieldTypeChange(before, after)),
-          },
-    relax: null,
-    scaffold: (change) => generateFieldTypeChangeScript(change),
+const asModified = (change: ScaffoldedChange) => change as ModifiedChange;
+const modified = (input: FieldRuleInput) => input as ModifiedField;
+
+const RULE_PRESENTATION = {
+  typeChanged: {
+    reason: (input) =>
+      `Field type changed from ${modified(input).before.type} to ${input.after.type}`,
+    scaffold: (change) => generateFieldTypeChangeScript(asModified(change)),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after }) =>
-      (before.array ?? false) === (after.array ?? false)
-        ? undefined
-        : {
-            reason: before.array
-              ? "Field changed from array to single value"
-              : "Field changed from single value to array",
-            unsupported: true,
-          },
-    relax: null,
+  arrayChanged: {
+    reason: (input) =>
+      modified(input).before.array
+        ? "Field changed from array to single value"
+        : "Field changed from single value to array",
     scaffold: null,
   },
-  {
-    on: "modified",
-    breaks: (input) =>
-      isBreakingForeignKeyRetarget(input)
-        ? {
-            reason: `Foreign key target changed from ${formatForeignKeyTarget(input.before)} to ${formatForeignKeyTarget(input.after)}`,
-            ...unsupportedWhen(input.nestedMember),
-          }
-        : undefined,
-    relax: {
-      when: ({ before, after }) => changesForeignKeyTarget(before, after),
-      apply: withholdForeignKey,
-    },
+  foreignKeyRetargeted: {
+    reason: (input) =>
+      `Foreign key target changed from ${formatForeignKeyTarget(modified(input).before)} to ${formatForeignKeyTarget(input.after)}`,
     scaffold: (change) =>
       generateUnmatchedReferenceScript(
-        change,
-        `Migrate ${change.fieldName} references from ${formatForeignKeyTarget(change.before)} to ${formatForeignKeyTarget(change.after)}`,
+        asModified(change),
+        `Migrate ${change.fieldName} references from ${formatForeignKeyTarget(asModified(change).before)} to ${formatForeignKeyTarget(change.after)}`,
       ),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after, nestedMember }) =>
-      !nestedMember && addsForeignKey(before, after)
-        ? { reason: `Foreign key to ${after.foreignKeyType} added to field` }
-        : undefined,
-    relax: { apply: withholdForeignKey },
+  foreignKeyAdded: {
+    reason: (input) => `Foreign key to ${input.after.foreignKeyType} added to field`,
     scaffold: (change) =>
       generateUnmatchedReferenceScript(
-        change,
+        asModified(change),
         `Check existing ${change.fieldName} values against the new foreign key to ${change.after.foreignKeyType}`,
       ),
   },
-  {
-    on: "added",
-    breaks: ({ after }) => (after.required ? { reason: "Required field added" } : undefined),
-    relax: {
-      apply: (field) => {
-        field.required = false;
-      },
-    },
-    scaffold: (change) => generatePopulateScript(change),
+  requiredFieldAdded: {
+    reason: () => "Required field added",
+    scaffold: (change) => generatePopulateScript(change as FieldAddedChange),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after }) =>
-      !before.required && after.required
-        ? { reason: "Field changed from optional to required" }
-        : undefined,
-    relax: {
-      apply: (field) => {
-        field.required = false;
-      },
-    },
-    scaffold: (change) => generateFillNullScript(change),
+  madeRequired: {
+    reason: () => "Field changed from optional to required",
+    scaffold: (change) => generateFillNullScript(asModified(change)),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after, nestedMember }) =>
-      before.type === "decimal" && after.type === "decimal" && before.scale !== after.scale
-        ? {
-            reason: `Decimal scale changed from ${before.scale} to ${after.scale}`,
-            ...unsupportedWhen(nestedMember),
-          }
-        : undefined,
-    relax: null,
-    scaffold: (change) => generateDecimalScaleChangeScript(change),
+  decimalScaleChanged: {
+    reason: (input) =>
+      `Decimal scale changed from ${modified(input).before.scale} to ${input.after.scale}`,
+    scaffold: (change) => generateDecimalScaleChangeScript(asModified(change)),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after }) =>
-      !(before.unique ?? false) && (after.unique ?? false)
-        ? { reason: "Unique constraint added to field" }
-        : undefined,
-    relax: {
-      apply: (field) => {
-        field.unique = false;
-      },
-    },
+  uniqueAdded: {
+    reason: () => "Unique constraint added to field",
     scaffold: (change) =>
       generateUniqueDedupeScript(
         change.tableName,
@@ -235,55 +137,27 @@ const FIELD_CHANGE_RULES: readonly FieldChangeRule[] = [
         change.kind === "field_type_modified" ? "throw" : "suffix",
       ),
   },
-  {
-    on: "modified",
-    breaks: ({ before, after }) => {
-      const removed = removedEnumValues(before, after);
-      return removed.length > 0
-        ? { reason: `Enum values removed: ${removed.join(", ")}` }
-        : undefined;
-    },
-    relax: {
-      // Snapshots omit allowedValues when an enum has no values left.
-      apply: (field, { before, after }) => {
-        const values = new Map<string, string>();
-        for (const v of before.allowedValues ?? []) values.set(v.value, v.description ?? "");
-        for (const v of after.allowedValues ?? []) {
-          if (!values.has(v.value)) values.set(v.value, v.description ?? "");
-        }
-        field.allowedValues = Array.from(values, ([value, description]) => ({
-          value,
-          description,
-        }));
-      },
-    },
-    scaffold: (change) => generateEnumValueMigrationScript(change),
+  enumValuesRemoved: {
+    reason: (input) =>
+      `Enum values removed: ${removedEnumValues(modified(input).before, input.after).join(", ")}`,
+    scaffold: (change) => generateEnumValueMigrationScript(asModified(change)),
   },
-];
+} satisfies Record<FieldChangeRuleId, RulePresentation>;
 
-interface EvaluatedRule {
-  breakage: Breakage | undefined;
-  relax: ((field: PreMigrationField) => void) | undefined;
+function withholdForeignKey(field: PreMigrationField): void {
+  delete field.foreignKey;
+  delete field.foreignKeyType;
+  delete field.foreignKeyField;
 }
 
-function evaluateRule<I extends FieldRuleInput>(rule: Rule<I, never>, input: I): EvaluatedRule {
-  const breakage = rule.breaks(input);
-  const { relax } = rule;
-  const relaxes = relax && (relax.when ? relax.when(input) : breakage !== undefined);
-  return {
-    breakage,
-    relax: relaxes ? (field) => relax.apply(field, input) : undefined,
-  };
-}
-
-function evaluateRules(input: FieldRuleInput): EvaluatedRule[] {
-  const { before } = input;
-  return FIELD_CHANGE_RULES.flatMap((rule) => {
-    if (rule.on === "added") {
-      return before === undefined ? [evaluateRule(rule, { ...input, before })] : [];
-    }
-    return before === undefined ? [] : [evaluateRule(rule, { ...input, before })];
-  });
+function widenEnumValues(field: PreMigrationField, input: ModifiedField): void {
+  // Snapshots omit allowedValues when an enum has no values left.
+  const values = new Map<string, string>();
+  for (const v of input.before.allowedValues ?? []) values.set(v.value, v.description ?? "");
+  for (const v of input.after.allowedValues ?? []) {
+    if (!values.has(v.value)) values.set(v.value, v.description ?? "");
+  }
+  field.allowedValues = Array.from(values, ([value, description]) => ({ value, description }));
 }
 
 /** Identifies the changed field in a breaking change report. */
@@ -291,6 +165,10 @@ interface BreakingFieldLocation {
   tableName: string;
   /** Field name, dotted for a nested member. */
   fieldName: string;
+}
+
+function brokenRules(outcome: FieldChangeOutcome): FieldChangeRuleId[] {
+  return FIELD_CHANGE_RULE_IDS.filter((id) => outcome.breaks[id] !== "none");
 }
 
 /**
@@ -303,17 +181,12 @@ export function collectBreakingFieldChanges(
   location: BreakingFieldLocation,
   input: FieldRuleInput,
 ): BreakingChangeInfo[] {
-  return evaluateRules(input).flatMap(({ breakage }) =>
-    breakage
-      ? [
-          {
-            ...location,
-            reason: breakage.reason,
-            ...(breakage.unsupported && { unsupported: true, showThreeStepHint: true }),
-          },
-        ]
-      : [],
-  );
+  const outcome = evaluateFieldChange(input);
+  return brokenRules(outcome).map((id) => ({
+    ...location,
+    reason: RULE_PRESENTATION[id].reason(input),
+    ...(outcome.breaks[id] === "unsupported" && { unsupported: true, showThreeStepHint: true }),
+  }));
 }
 
 /**
@@ -323,7 +196,11 @@ export function collectBreakingFieldChanges(
  * @param input - The changed field
  */
 export function relaxFieldForPreMigration(field: PreMigrationField, input: FieldRuleInput): void {
-  for (const { relax } of evaluateRules(input)) relax?.(field);
+  const { relax } = evaluateFieldChange(input);
+  if (relax.withoutForeignKey) withholdForeignKey(field);
+  if (relax.optional) field.required = false;
+  if (relax.notUnique) field.unique = false;
+  if (relax.previousEnumValues) widenEnumValues(field, modified(input));
 }
 
 /**
@@ -336,22 +213,16 @@ export function scaffoldFieldChange(
   change: ScaffoldedChange,
   typeRenameTargets: ReadonlyMap<string, string>,
 ): string[] {
-  const base = { after: change.after, nestedMember: false, typeRenameTargets };
-  return FIELD_CHANGE_RULES.flatMap((rule) => {
-    const statement =
-      rule.on === "added"
-        ? change.kind === "field_added"
-          ? scaffoldRule(rule, change, { ...base, before: undefined })
-          : undefined
-        : change.kind === "field_added"
-          ? undefined
-          : scaffoldRule(rule, change, { ...base, before: change.before });
-    return statement === undefined ? [] : [statement];
+  const outcome = evaluateFieldChange({
+    before: change.kind === "field_added" ? undefined : change.before,
+    after: change.after,
+    nestedMember: false,
+    typeRenameTargets,
   });
-}
-
-function scaffoldRule<I, C>(rule: Rule<I, C>, change: C, input: I): string | undefined {
-  return rule.scaffold && rule.breaks(input) ? rule.scaffold(change) : undefined;
+  return brokenRules(outcome).flatMap((id) => {
+    const { scaffold } = RULE_PRESENTATION[id];
+    return scaffold ? [scaffold(change)] : [];
+  });
 }
 
 function generatePopulateScript(change: FieldAddedChange): string {
