@@ -1511,7 +1511,7 @@ function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBFiel
 // this literal in sync with the "timestamps() updatedAt hook resolves to the pinned
 // expr" test in parser/service/tailordb/field.precompiled.test.ts, which fails if it
 // ever drifts from what this hook's own source naturally produces.
-type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null, string | Date>;
+type TimestampsUpdatedAtHookFn = UpdateHookFn<string | Date | null | undefined, string | Date>;
 const PRECOMPILED_EXPR_KEY: PrecompiledScriptExprKey =
   "tailor-platform/sdk:precompiled-script-expr";
 const precompiledExprs: PrecompiledScriptExprMap = {

@@ -599,7 +599,7 @@ describe("TailorDBField hooks modifier tests", () => {
     db.string().hooks({
       create: (args) => {
         expectTypeOf(args).toEqualTypeOf<{
-          input: string | null;
+          input: string | null | undefined;
           invoker: TailorPrincipal | null;
           now: Date;
         }>();
@@ -607,7 +607,7 @@ describe("TailorDBField hooks modifier tests", () => {
       },
       update: (args) => {
         expectTypeOf(args).toEqualTypeOf<{
-          input: string | null;
+          input: string | null | undefined;
           oldValue: string;
           invoker: TailorPrincipal | null;
           now: Date;
@@ -1055,11 +1055,14 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  test("type create hook input: required fields are non-nullable, optional fields are nullable", () => {
+  test("type create hook input: required fields are present, id and optional fields may be absent", () => {
     db.table("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
       create: ({ input, invoker, now }) => {
-        expectTypeOf(input.name).toEqualTypeOf<string>();
-        expectTypeOf(input.age).toEqualTypeOf<number | null>();
+        expectTypeOf(input).toEqualTypeOf<{
+          readonly id?: string | null | undefined;
+          readonly name: string;
+          readonly age?: number | null | undefined;
+        }>();
         expectTypeOf(invoker).toBeNullable();
         expectTypeOf(now).toEqualTypeOf<Date>();
         return {};
@@ -1075,6 +1078,21 @@ describe("TailorDBType hooks modifier tests", () => {
       create: ({ input }) => {
         expectTypeOf(input.name).toEqualTypeOf<string>();
         expectTypeOf(input.status).toEqualTypeOf<string>();
+        return {};
+      },
+    });
+  });
+
+  test("type create hook input: an optional field with a create hook is present, a serial field is absent", () => {
+    db.table("Test", {
+      tag: db.string({ optional: true }).hooks({ create: () => "tagged" }),
+      seq: db.int().serial({ start: 1 }),
+    }).hooks({
+      create: ({ input }) => {
+        expectTypeOf(input).toEqualTypeOf<{
+          readonly id?: string | null | undefined;
+          readonly tag: string | null;
+        }>();
         return {};
       },
     });

@@ -6,7 +6,7 @@ import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type { UpdateHookFn } from "#/configure/services/tailordb/types";
 import type { FieldValidateInput } from "#/configure/types/field.types";
 
-type InputArgs = { input: string | null };
+type InputArgs = { input: string | null | undefined };
 
 describe("parseFieldConfig precompiled expressions", () => {
   test("uses precompiled hook expression when attached", () => {
@@ -70,8 +70,10 @@ describe("parseFieldConfig precompiled expressions", () => {
   // future change to the call-args template in hook-args-object.ts is caught here
   // instead of silently diverging from the pin.
   test("timestamps() updatedAt hook pin matches its natural expr", () => {
-    const updatedAtHook: UpdateHookFn<string | Date | null, string | Date> = ({ input, now }) =>
-      input ?? now;
+    const updatedAtHook: UpdateHookFn<string | Date | null | undefined, string | Date> = ({
+      input,
+      now,
+    }) => input ?? now;
 
     const type = db.table("User", {
       updatedAt: db.datetime().hooks({ update: updatedAtHook }),
