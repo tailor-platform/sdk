@@ -39,3 +39,5 @@ jobs:
           license-groups: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSE_GROUPS }}
           additional-licenses: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSES }}
           denied-licenses: ${{ vars.CHECK_LICENSES_DENIED_LICENSES }}
+          # Quint is Apache-2.0 but writes it as "Apache 2.0" in its package.json.
+          package-exceptions: '{"Apache 2.0": [["@tailor-platform/sdk", "@informalsystems/quint"]]}'
