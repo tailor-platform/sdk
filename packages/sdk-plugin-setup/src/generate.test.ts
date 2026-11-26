@@ -1050,7 +1050,7 @@ describe("ERD preview steps", () => {
   const FAKE_NPM = `#!/usr/bin/env bash
 set -euo pipefail
 [ "$1 $2 $3" = "install --global --prefix" ]
-[[ $5 == corepack@* ]]
+case "$5" in corepack@*) ;; *) exit 1 ;; esac
 bin_dir=$4/bin
 if [ "$RUNNER_OS" = Windows ]; then bin_dir=$4; fi
 mkdir -p "$bin_dir"
