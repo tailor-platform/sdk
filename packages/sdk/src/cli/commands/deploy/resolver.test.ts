@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { symbols } from "#/cli/shared/logger";
+import { namespacedNames } from "#/cli/shared/publish-events";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { deployApplicationOf } from "./deploy-application";
 import { applicationOwner, buildMetaRequest, sdkNameLabelKey } from "./label";
@@ -215,7 +216,9 @@ describe("planPipeline (resolver service level)", () => {
         owner: applicationOwner(createMockApplication([createResolverServiceWith(publishEvents)])),
         forRemoval: false,
         config: mockConfig,
-        executorUsedResolvers: subscribed ? new Set(["myResolver"]) : new Set<string>(),
+        executorUsedResolvers: namespacedNames(
+          subscribed ? [{ namespace: "shared-pipeline", name: "myResolver" }] : [],
+        ),
       });
     }
 
@@ -269,10 +272,52 @@ describe("planPipeline (resolver service level)", () => {
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
-        executorUsedResolvers: new Set<string>(),
+        executorUsedResolvers: namespacedNames([]),
       });
 
       expect(desiredPublishExecutionEvents(result)).toBe(expected);
+    });
+
+    test("an executor subscribes only to the resolver in the namespace its trigger names", async () => {
+      const shopResolvers = { ...createResolverServiceWith(false), namespace: "shop-api" };
+      const crmResolvers = { ...createResolverServiceWith(undefined), namespace: "crm-api" };
+      const application = createMockApplication([shopResolvers, crmResolvers], {
+        executorService: {
+          config: {},
+          executors: {},
+          loadExecutors: vi.fn().mockResolvedValue({
+            "/onResolved.ts": {
+              name: "on-resolved",
+              disabled: false,
+              trigger: {
+                kind: "resolverExecuted",
+                resolverName: "myResolver",
+                namespace: "crm-api",
+              },
+            },
+          }),
+        },
+      });
+
+      const result = await planPipeline({
+        client: createMockClient([]),
+        workspaceId,
+        application,
+        applications: [],
+        owner: applicationOwner(application),
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedResolvers: namespacedNames([]),
+      });
+
+      const published = Object.fromEntries(
+        result.changeSet.resolver.creates.map((entry) => [
+          entry.request.namespaceName,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (entry as any).request.pipelineResolver.publishExecutionEvents,
+        ]),
+      );
+      expect(published).toEqual({ "shop-api": false, "crm-api": true });
     });
 
     test("a disabled executor does not reject an explicit opt-out", async () => {
@@ -298,7 +343,7 @@ describe("planPipeline (resolver service level)", () => {
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
-        executorUsedResolvers: new Set<string>(),
+        executorUsedResolvers: namespacedNames([]),
       });
 
       expect(desiredPublishExecutionEvents(result)).toBe(false);
@@ -322,7 +367,9 @@ describe("planPipeline (resolver service level)", () => {
           owner: applicationOwner(createMockApplication([createResolverServiceWith(false)])),
           forRemoval: false,
           config: mockConfig,
-          executorUsedResolvers: new Set(["myResolver"]),
+          executorUsedResolvers: namespacedNames([
+            { namespace: "shared-pipeline", name: "myResolver" },
+          ]),
         }),
       ).rejects.toThrow('Resolver "myResolver" has "publishEvents: false"');
 

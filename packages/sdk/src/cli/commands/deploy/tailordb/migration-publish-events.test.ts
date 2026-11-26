@@ -8,6 +8,7 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
+import { namespacedNames } from "#/cli/shared/publish-events";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
 import {
@@ -143,7 +144,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           snapshotTable(name, { status: { type: "string", required: true } }),
         ),
       context: {
-        executorUsedTables: new Set<string>(options.subscribedTables ?? []),
+        executorUsedTables: namespacedNames(
+          (options.subscribedTables ?? []).map((name) => ({ namespace: "test-ns", name })),
+        ),
         config: {
           ...mockConfig,
           maintenanceMode: "maintenanceMode" in options ? options.maintenanceMode : "migration",

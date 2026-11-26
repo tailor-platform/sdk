@@ -1,6 +1,7 @@
 import type { NormalizedSchemaSnapshot } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { ConfigServices, EnvOverrides, ServiceSettings } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { NamespacedNames } from "#/cli/shared/publish-events";
 import type { DeployApplication } from "./deploy-application";
 import type { DeployOwner, DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
@@ -40,10 +41,10 @@ export interface PlanContext {
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string> | undefined;
-  /** Type names that have at least one executor with a TailorDB record trigger. */
-  executorUsedTailorDBTables?: ReadonlySet<string> | undefined;
-  /** Resolver names that have at least one executor with a resolverExecuted trigger. */
-  executorUsedResolvers?: ReadonlySet<string> | undefined;
+  /** Tables that have at least one executor with a TailorDB record trigger. */
+  executorUsedTailorDBTables?: NamespacedNames | undefined;
+  /** Resolvers that have at least one executor with a resolverExecuted trigger. */
+  executorUsedResolvers?: NamespacedNames | undefined;
   /** Static website names planned by any config in the same deploy run. */
   expectedLocalStaticWebsiteNames?: ReadonlySet<string> | undefined;
   /** Planned external Auth IDP config names keyed by Auth namespace. */

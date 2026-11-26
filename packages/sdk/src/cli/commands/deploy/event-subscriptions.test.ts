@@ -34,6 +34,8 @@ type TargetSpec = {
    * holds the same name twice.
    */
   extraResolverNamespace?: { namespace: string; resolvers: string[]; pinned?: string[] };
+  /** A second TailorDB namespace on this config, listed before the one `types` builds. */
+  extraTailorDBNamespace?: { namespace: string; types: string[]; pinned?: string[] };
   externalTailorDBNamespaces?: string[];
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
@@ -62,6 +64,24 @@ function targetServices(spec: TargetSpec) {
       id: spec.appId,
       name: spec.configPath.split("/")[0],
       tailorDBServices: [
+        ...(spec.extraTailorDBNamespace
+          ? [
+              {
+                namespace: spec.extraTailorDBNamespace.namespace,
+                types: Object.fromEntries(
+                  spec.extraTailorDBNamespace.types.map((name) => [
+                    name,
+                    {
+                      name,
+                      settings: spec.extraTailorDBNamespace?.pinned?.includes(name)
+                        ? { publishEvents: true }
+                        : {},
+                    },
+                  ]),
+                ),
+              },
+            ]
+          : []),
         {
           namespace: `db${suffix}`,
           // settings is a required field on TailorDBType, so the fixture carries it.
@@ -822,12 +842,49 @@ describe("collectEventSubscriptions and a disabled executor", () => {
 
     // ...but it contributes nothing to any publishEvents flag.
     const owned = ownedSubscriptions(subscriptions, subscriber);
-    expect(subscribedTailorDBTables(owned)).toEqual(new Set());
-    expect(subscribedResolvers(owned)).toEqual(new Set());
+    expect(subscribedTailorDBTables(owned).entries).toEqual([]);
+    expect(subscribedResolvers(owned).entries).toEqual([]);
     expect(subscribedIdps(owned)).toEqual(new Set());
     const workflows = subscribedWorkflows(owned);
     expect(workflows.execution.workflowNames).toEqual(new Set());
     expect(workflows.jobExecution.workflowNames).toEqual(new Set());
+  });
+
+  test("a TailorDB trigger that names its namespace subscribes to the table there", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      types: ["Order"],
+      extraTailorDBNamespace: { namespace: "db-archive", types: ["Order"], pinned: ["Order"] },
+      executors: { "on-order": { kind: "tailordb", tableName: "Order", namespace: "db" } },
+    });
+    const subscriptions = collectEventSubscriptions([subscriber]);
+
+    expect(subscriptions).toMatchObject([
+      { key: "tailordb:db:type:Order", namespace: "db", pinned: false },
+    ]);
+    expect(subscribedTailorDBTables(subscriptions).entries).toEqual([
+      { namespace: "db", name: "Order" },
+    ]);
+  });
+
+  test("a resolver trigger that names its namespace subscribes to the resolver there", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      resolvers: ["createLead"],
+      extraResolverNamespace: {
+        namespace: "crm-api",
+        resolvers: ["createLead"],
+        pinned: ["createLead"],
+      },
+      executors: {
+        "on-lead": { kind: "resolverExecuted", resolverName: "createLead", namespace: "pipeline" },
+      },
+    });
+    const subscriptions = collectEventSubscriptions([subscriber]);
+
+    expect(subscriptions).toMatchObject([
+      { key: "pipeline:pipeline:resolver:createLead", namespace: "pipeline", pinned: false },
+    ]);
   });
 
   test("an enabled executor still subscribes alongside a disabled one", () => {
@@ -839,7 +896,7 @@ describe("collectEventSubscriptions and a disabled executor", () => {
     });
     const owned = ownedSubscriptions(collectEventSubscriptions([subscriber]), subscriber);
 
-    expect(subscribedTailorDBTables(owned)).toEqual(new Set(["Order"]));
+    expect(subscribedTailorDBTables(owned).entries).toEqual([{ namespace: "db", name: "Order" }]);
   });
 
   test.each([

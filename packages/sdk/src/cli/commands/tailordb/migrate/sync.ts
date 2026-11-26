@@ -1,6 +1,7 @@
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
+import { localTailorDBTriggerNamespace } from "#/cli/commands/deploy/executor";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import {
   clearMaintenanceModeRecord,
@@ -122,8 +123,8 @@ export async function assertMigrationsReproduceLocalTypes(
   }
   const executorUsedTables = new Set<string>();
   for (const executor of Object.values(executorService?.executors ?? {})) {
-    if (!subscribesToEvents(executor)) continue;
-    if (executor.trigger.kind === "tailordb") {
+    if (!subscribesToEvents(executor) || executor.trigger.kind !== "tailordb") continue;
+    if (localTailorDBTriggerNamespace(application, executor.trigger) === target.namespace) {
       executorUsedTables.add(executor.trigger.tableName);
     }
   }

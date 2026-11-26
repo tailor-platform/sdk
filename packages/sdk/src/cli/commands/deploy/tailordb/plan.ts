@@ -27,12 +27,15 @@ import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { CLIError } from "#/cli/shared/errors";
 import {
   assertNoPublishEventsConflict,
+  namespacedNames,
+  type NamespacedNames,
   publishEventsConflict,
   subscribesToEvents,
 } from "#/cli/shared/publish-events";
 import { createChangeSet } from "../change-set";
 import { defineRequestComparison, isRequestUnchanged } from "../compare";
 import { applicationsListing } from "../deploy-application";
+import { localTailorDBTriggerNamespace } from "../executor";
 import { diffKeyed, labeledResourceChecks } from "../keyed-diff";
 import {
   addDependencyRecords,
@@ -172,13 +175,14 @@ export async function planTailorDB(context: PlanContext) {
   const executors = forRemoval
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
-  const executorUsedTables = new Set(context.executorUsedTailorDBTables ?? []);
-  for (const executor of executors) {
-    if (!subscribesToEvents(executor)) continue;
-    if (executor.trigger.kind === "tailordb") {
-      executorUsedTables.add(executor.trigger.tableName);
-    }
-  }
+  const executorUsedTables = namespacedNames([
+    ...(context.executorUsedTailorDBTables?.entries ?? []),
+    ...executors.flatMap((executor) => {
+      if (!subscribesToEvents(executor) || executor.trigger.kind !== "tailordb") return [];
+      const namespace = localTailorDBTriggerNamespace(application, executor.trigger);
+      return namespace === undefined ? [] : [{ namespace, name: executor.trigger.tableName }];
+    }),
+  ]);
 
   // Validate migrations at plan time so a migration script that is missing,
   // cannot be bundled, or has no machine user to run it fails the deploy
@@ -453,7 +457,7 @@ async function planTypes(
   client: OperatorClient,
   workspaceId: string,
   tailordbs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
+  executorUsedTables: NamespacedNames,
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace: Map<string, Record<string, TailorDBSnapshotType>> | undefined,
   forceApplyAll: boolean,
@@ -506,7 +510,7 @@ async function planTypes(
     for (const [tableName, type] of Object.entries(types)) {
       assertNoPublishEventsConflict({
         explicit: type.settings?.publishEvents,
-        subscribed: executorUsedTables.has(tableName),
+        subscribed: executorUsedTables.has(tailordb.namespace, tableName),
         conflict: publishEventsConflict.tailorDBType(tableName),
       });
     }
@@ -537,7 +541,7 @@ async function planTypes(
           workspaceId,
           namespaceName,
           tailordbType: generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
-            subscribed: executorUsedTables.has(tableName),
+            subscribed: executorUsedTables.has(namespaceName, tableName),
             namespaceGqlOperations: gqlOperations,
           }),
         },

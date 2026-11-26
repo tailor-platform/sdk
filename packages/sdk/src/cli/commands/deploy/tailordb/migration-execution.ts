@@ -33,6 +33,7 @@ import type {
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { TailorDBDeployInput } from "#/cli/commands/tailordb/migrate/schema-checks";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
+import type { NamespacedNames } from "#/cli/shared/publish-events";
 import type { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 type MigrationTableSettings = {
@@ -286,7 +287,7 @@ export const migrationSnapshotCache = {
 export type MigrationPhaseSettings = {
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>;
   /** Tables an enabled executor in this deploy subscribes to */
-  executorUsedTables: ReadonlySet<string>;
+  executorUsedTables: NamespacedNames;
   /** Whether the migrating namespaces are in maintenance mode */
   restricted: boolean;
 };
@@ -319,7 +320,7 @@ export function generateMigrationPhaseManifest(
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
     subscribed:
       snapshotType.settings?.publishEvents !== false &&
-      phaseSettings.executorUsedTables.has(snapshotType.name),
+      phaseSettings.executorUsedTables.has(namespaceName, snapshotType.name),
     namespaceGqlOperations,
   });
 }
@@ -819,7 +820,7 @@ type RewriteRestrictedTablesParams = {
   namespaceName: string;
   snapshot: SchemaSnapshot;
   input: TailorDBDeployInput;
-  executorUsedTables: ReadonlySet<string>;
+  executorUsedTables: NamespacedNames;
   settingsState?: ReadonlyMap<string, MigrationTableSettings> | undefined;
   restricted: boolean;
   continueOnError?: boolean | undefined;
@@ -967,7 +968,7 @@ async function rewriteRestrictedTables(
 export function resolveMigrationSnapshotSettings(
   snapshot: SchemaSnapshot,
   input: TailorDBDeployInput,
-  executorUsedTables: ReadonlySet<string>,
+  executorUsedTables: NamespacedNames,
 ): Map<string, MigrationTableSettings> {
   const settingsByTable = new Map<string, MigrationTableSettings>();
   for (const [tableName, snapshotType] of Object.entries(snapshot.tables)) {
@@ -979,7 +980,7 @@ export function resolveMigrationSnapshotSettings(
     settingsByTable.set(tableName, {
       bulkUpsert: settings.bulkUpsert ?? false,
       publishRecordEvents:
-        snapshotType.settings?.publishEvents ?? executorUsedTables.has(tableName),
+        snapshotType.settings?.publishEvents ?? executorUsedTables.has(input.namespace, tableName),
       ...(settings.disableGqlOperations && {
         disableGqlOperations: {
           create: settings.disableGqlOperations.create ?? false,
@@ -1007,7 +1008,7 @@ export function releaseRecordedMaintenanceMode(
   capturedSettings: ReadonlyMap<string, MigrationTableSettings>,
   snapshot: SchemaSnapshot,
   input: TailorDBDeployInput,
-  executorUsedTables: ReadonlySet<string>,
+  executorUsedTables: NamespacedNames,
 ): Map<string, MigrationTableSettings> {
   const checkpointSettings = resolveMigrationSnapshotSettings(snapshot, input, executorUsedTables);
   return new Map(
@@ -1037,7 +1038,7 @@ export async function applyMigrationRestrictions(
   snapshots: ReadonlyMap<string, SchemaSnapshot>,
   restrictionState: MigrationRestrictionState,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
+  executorUsedTables: NamespacedNames,
   workspaceId: string,
 ): Promise<void> {
   for (const [namespaceName, snapshot] of snapshots) {
@@ -1078,7 +1079,7 @@ export async function restoreMigrationRestrictions(
   snapshots: ReadonlyMap<string, SchemaSnapshot>,
   settingsToRestore: MigrationRestrictionState | undefined,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
-  executorUsedTables: ReadonlySet<string>,
+  executorUsedTables: NamespacedNames,
   workspaceId: string,
   maintenanceMode: boolean,
 ): Promise<void> {

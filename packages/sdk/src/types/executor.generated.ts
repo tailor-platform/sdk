@@ -11,6 +11,8 @@ export type TailorDBTrigger = {
   )[];
   /** TailorDB table name to watch for events */
   tableName: string;
+  /** TailorDB namespace of the table, when several namespaces define its name */
+  namespace?: string | undefined;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };
@@ -20,6 +22,8 @@ export type ResolverExecutedTrigger = {
   kind: "resolverExecuted";
   /** Name of the resolver to trigger on */
   resolverName: string;
+  /** Resolver namespace of the resolver, when several namespaces define its name */
+  namespace?: string | undefined;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };

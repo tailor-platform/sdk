@@ -1703,3 +1703,43 @@ describe("single-event authAccessToken triggers", () => {
     expect(factory({ auth: "my-auth" }).auth).toBe("my-auth");
   });
 });
+
+describe("TailorDB and resolver triggers", () => {
+  test.each([
+    ["recordCreatedTrigger", () => recordCreatedTrigger({ type: createUserType() })],
+    ["recordUpdatedTrigger", () => recordUpdatedTrigger({ type: createUserType() })],
+    ["recordDeletedTrigger", () => recordDeletedTrigger({ type: createUserType() })],
+    [
+      "recordTrigger",
+      () => recordTrigger({ type: createUserType(), events: ["created", "deleted"] }),
+    ],
+    ["resolverExecutedTrigger", () => resolverExecutedTrigger({ resolver: createBoolResolver() })],
+  ])("%s leaves the namespace out when it is not given", (_name, factory) => {
+    expect(factory()).not.toHaveProperty("namespace");
+  });
+
+  test.each([
+    [
+      "recordCreatedTrigger",
+      () => recordCreatedTrigger({ type: createUserType(), namespace: "crm-db" }),
+    ],
+    [
+      "recordUpdatedTrigger",
+      () => recordUpdatedTrigger({ type: createUserType(), namespace: "crm-db" }),
+    ],
+    [
+      "recordDeletedTrigger",
+      () => recordDeletedTrigger({ type: createUserType(), namespace: "crm-db" }),
+    ],
+    [
+      "recordTrigger",
+      () => recordTrigger({ type: createUserType(), events: ["updated"], namespace: "crm-db" }),
+    ],
+    [
+      "resolverExecutedTrigger",
+      () => resolverExecutedTrigger({ resolver: createBoolResolver(), namespace: "crm-db" }),
+    ],
+  ])("%s carries the namespace it is given", (_name, factory) => {
+    expect(factory().namespace).toBe("crm-db");
+  });
+});

@@ -18,12 +18,20 @@ export const TailorDBTriggerSchema = z.strictObject({
     .transform((arr) => [...new Set(arr)])
     .describe("TailorDB event types to trigger on"),
   tableName: z.string().describe("TailorDB table name to watch for events"),
+  namespace: z
+    .string()
+    .optional()
+    .describe("TailorDB namespace of the table, when several namespaces define its name"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 
 export const ResolverExecutedTriggerSchema = z.strictObject({
   kind: z.literal("resolverExecuted"),
   resolverName: z.string().describe("Name of the resolver to trigger on"),
+  namespace: z
+    .string()
+    .optional()
+    .describe("Resolver namespace of the resolver, when several namespaces define its name"),
   condition: functionSchema.optional().describe("Condition function to filter events"),
 });
 

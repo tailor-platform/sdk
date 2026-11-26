@@ -5,6 +5,8 @@ import {
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
+  ResolverExecutedTriggerSchema,
+  TailorDBTriggerSchema,
   WebhookOperationSchema,
   WorkflowExecutionTriggerSchema,
   WorkflowJobExecutionTriggerSchema,
@@ -322,6 +324,31 @@ describe("AuthAccessTokenTriggerSchema", () => {
   test.each(["", "My_Auth"])("rejects auth %j", (auth) => {
     const error = expectParseFailure(AuthAccessTokenTriggerSchema.safeParse({ ...trigger, auth }));
     expect(error.issues).toEqual([expect.objectContaining({ path: ["auth"] })]);
+  });
+});
+
+describe("triggers that name a namespace", () => {
+  test("TailorDBTriggerSchema keeps the namespace", () => {
+    const data = expectParseSuccess(
+      TailorDBTriggerSchema.safeParse({
+        kind: "tailordb",
+        events: ["tailordb.type_record.created"],
+        tableName: "Customer",
+        namespace: "crm-db",
+      }),
+    );
+    expect(data.namespace).toBe("crm-db");
+  });
+
+  test("ResolverExecutedTriggerSchema keeps the namespace", () => {
+    const data = expectParseSuccess(
+      ResolverExecutedTriggerSchema.safeParse({
+        kind: "resolverExecuted",
+        resolverName: "createOrder",
+        namespace: "crm-api",
+      }),
+    );
+    expect(data.namespace).toBe("crm-api");
   });
 });
 

@@ -28,6 +28,7 @@ import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-he
 import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { CLIError } from "#/cli/shared/errors";
 import { symbols } from "#/cli/shared/logger";
+import { namespacedNames } from "#/cli/shared/publish-events";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import {
@@ -289,12 +290,12 @@ describe("planTailorDB (service level)", () => {
       migrationTestBaselines: new Map([
         ["tailordb", { migrationNumber: 3, snapshot: baseline, historyId: null }],
       ]),
-      executorUsedTailorDBTables: new Set(),
+      executorUsedTailorDBTables: namespacedNames([]),
     });
 
     expect(Object.keys(result.context.tailorDBInputs[0]!.types)).toEqual(["Legacy"]);
     expect(result.changeSet.type.creates[0]!.name).toBe("Legacy");
-    expect(result.context.executorUsedTables).toEqual(new Set());
+    expect(result.context.executorUsedTables.entries).toEqual([]);
 
     await applyTailorDB(client, result, "create-update");
 
@@ -703,7 +704,9 @@ describe("planTailorDB (service level)", () => {
           owner: appOwner,
           forRemoval: false,
           config: mockConfig,
-          executorUsedTailorDBTables: subscribed ? new Set(["User"]) : new Set<string>(),
+          executorUsedTailorDBTables: namespacedNames(
+            subscribed ? [{ namespace: "shared-db", name: "User" }] : [],
+          ),
         });
       }
 
@@ -730,6 +733,45 @@ describe("planTailorDB (service level)", () => {
         },
       );
 
+      test("an executor enables record events only on the table in the namespace its trigger names", async () => {
+        const shop = createMockTailorDBService("shop-db");
+        const crm = createMockTailorDBService("crm-db");
+        Object.defineProperty(shop, "types", { value: { User: createTypeWith(false) } });
+        Object.defineProperty(crm, "types", { value: { User: createTypeWith(undefined) } });
+        const application = createMockApplication([shop, crm]);
+        vi.mocked(application.executorService!.loadExecutors).mockResolvedValue({
+          "/executors/on-user.ts": {
+            name: "on-user",
+            disabled: false,
+            trigger: {
+              kind: "tailordb",
+              events: ["tailordb.type_record.created"],
+              tableName: "User",
+              namespace: "crm-db",
+            },
+            operation: { kind: "function", body: () => {} },
+          },
+        });
+
+        const result = await planTailorDB({
+          client: createMockClient([]),
+          workspaceId,
+          application,
+          applications: [],
+          owner: appOwner,
+          forRemoval: false,
+          config: mockConfig,
+        });
+
+        const published = Object.fromEntries(
+          result.changeSet.type.creates.map((entry) => [
+            entry.request.namespaceName,
+            entry.request.tailordbType?.schema?.settings?.publishRecordEvents,
+          ]),
+        );
+        expect(published).toEqual({ "shop-db": false, "crm-db": true });
+      });
+
       test("throws when an opt-out is combined with a subscribing executor", async () => {
         await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
           'TailorDB table "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
@@ -753,7 +795,7 @@ describe("planTailorDB (service level)", () => {
             owner: appOwner,
             forRemoval: false,
             config: mockConfig,
-            executorUsedTailorDBTables: new Set(["User"]),
+            executorUsedTailorDBTables: namespacedNames([{ namespace: "shared-db", name: "User" }]),
           }),
         ).rejects.toThrow('TailorDB table "User" has "publishEvents: false"');
 
@@ -3350,7 +3392,9 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: { User: userType },
       },
     ];
-    planResult.context.executorUsedTables = new Set(["User"]);
+    planResult.context.executorUsedTables = namespacedNames([
+      { namespace: "test-tailordb", name: "User" },
+    ]);
     return planResult;
   }
 

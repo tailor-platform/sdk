@@ -269,6 +269,8 @@ export type TailorDBTrigger<Args> = ParserTailorDBTrigger & {
 
 type RecordTriggerOptions<T extends TailorDBType, Args> = {
   type: T;
+  /** TailorDB namespace of `type`. Required when several namespaces define a table of its name. */
+  namespace?: string;
   condition?: (args: Args) => boolean;
 };
 
@@ -281,11 +283,12 @@ type RecordTriggerOptions<T extends TailorDBType, Args> = {
 export function recordCreatedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordCreatedArgs<T>>,
 ): TailorDBTrigger<RecordCreatedArgs<T>> {
-  const { type, condition } = options;
+  const { type, namespace, condition } = options;
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.created"],
     tableName: type.name,
+    ...(namespace !== undefined ? { namespace } : {}),
     condition,
     __args: {} as RecordCreatedArgs<T>,
   };
@@ -300,11 +303,12 @@ export function recordCreatedTrigger<T extends TailorDBType>(
 export function recordUpdatedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordUpdatedArgs<T>>,
 ): TailorDBTrigger<RecordUpdatedArgs<T>> {
-  const { type, condition } = options;
+  const { type, namespace, condition } = options;
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.updated"],
     tableName: type.name,
+    ...(namespace !== undefined ? { namespace } : {}),
     condition,
     __args: {} as RecordUpdatedArgs<T>,
   };
@@ -319,11 +323,12 @@ export function recordUpdatedTrigger<T extends TailorDBType>(
 export function recordDeletedTrigger<T extends TailorDBType>(
   options: RecordTriggerOptions<T, RecordDeletedArgs<T>>,
 ): TailorDBTrigger<RecordDeletedArgs<T>> {
-  const { type, condition } = options;
+  const { type, namespace, condition } = options;
   return {
     kind: "tailordb",
     events: ["tailordb.type_record.deleted"],
     tableName: type.name,
+    ...(namespace !== undefined ? { namespace } : {}),
     condition,
     __args: {} as RecordDeletedArgs<T>,
   };
@@ -331,6 +336,8 @@ export function recordDeletedTrigger<T extends TailorDBType>(
 
 type RecordTriggerMultiOptions<T extends TailorDBType, K extends RecordEventKind[]> = {
   type: T;
+  /** TailorDB namespace of `type`. Required when several namespaces define a table of its name. */
+  namespace?: string;
   events: K;
   condition?: (args: RecordMultiArgs<T, K>) => boolean;
 };
@@ -346,11 +353,12 @@ export function recordTrigger<
   T extends TailorDBType,
   const K extends [RecordEventKind, ...RecordEventKind[]],
 >(options: RecordTriggerMultiOptions<T, K>): TailorDBTrigger<RecordMultiArgs<T, K>> {
-  const { type, events, condition } = options;
+  const { type, namespace, events, condition } = options;
   return {
     kind: "tailordb",
     events: events.map((k) => recordEventMap[k]),
     tableName: type.name,
+    ...(namespace !== undefined ? { namespace } : {}),
     condition,
     __args: {} as RecordMultiArgs<T, K>,
   };
@@ -366,6 +374,8 @@ export type ResolverExecutedTrigger<Args> = ParserResolverExecutedTrigger & {
 
 type ResolverExecutedTriggerOptions<R extends ResolverConfig> = {
   resolver: R;
+  /** Resolver namespace of `resolver`. Required when several namespaces define a resolver of its name. */
+  namespace?: string;
   condition?: (args: ResolverExecutedArgs<R>) => boolean;
 };
 
@@ -378,10 +388,11 @@ type ResolverExecutedTriggerOptions<R extends ResolverConfig> = {
 export function resolverExecutedTrigger<R extends ResolverConfig>(
   options: ResolverExecutedTriggerOptions<R>,
 ): ResolverExecutedTrigger<ResolverExecutedArgs<R>> {
-  const { resolver, condition } = options;
+  const { resolver, namespace, condition } = options;
   return {
     kind: "resolverExecuted",
     resolverName: resolver.name,
+    ...(namespace !== undefined ? { namespace } : {}),
     condition,
     __args: {} as ResolverExecutedArgs<R>,
   };

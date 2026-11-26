@@ -1,4 +1,5 @@
 import { isPlainObject } from "es-toolkit/predicate";
+import { namespacedNames } from "#/cli/shared/publish-events";
 import { createChangeSet } from "../change-set";
 import type { PlanResults } from "../apply-phases";
 
@@ -33,7 +34,7 @@ export function tailorDBPlanResultContext(
     application: {} as TailorDBPlanResultContext["application"],
     owner: { kind: "application", name: "my-app", id: undefined },
     tailorDBInputs: [],
-    executorUsedTables: new Set<string>(),
+    executorUsedTables: namespacedNames([]),
     config: {} as TailorDBPlanResultContext["config"],
     noSchemaCheck: false,
     namespacesWithMigrations: [],

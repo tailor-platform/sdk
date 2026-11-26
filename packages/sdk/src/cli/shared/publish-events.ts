@@ -1,5 +1,33 @@
 import { CLIError } from "./errors";
 
+/** A resource name with the namespace that defines it. */
+export type NamespacedName = { namespace: string; name: string };
+
+/**
+ * Names of namespaced resources, such as the TailorDB tables executors subscribe to. A name is
+ * looked up together with its namespace, since several namespaces can define one name.
+ */
+export interface NamespacedNames {
+  readonly entries: ReadonlyArray<NamespacedName>;
+  has(namespace: string, name: string): boolean;
+}
+
+/**
+ * Collect namespaced resource names.
+ * @param entries - Names with their namespaces; repeats are kept once
+ * @returns The names, looked up by namespace and name
+ */
+export function namespacedNames(entries: Iterable<NamespacedName>): NamespacedNames {
+  const byKey = new Map<string, NamespacedName>();
+  for (const entry of entries) {
+    byKey.set(JSON.stringify([entry.namespace, entry.name]), entry);
+  }
+  return {
+    entries: [...byKey.values()],
+    has: (namespace, name) => byKey.has(JSON.stringify([namespace, name])),
+  };
+}
+
 /** Resource and trigger named in a `publishEvents` opt-out conflict error. */
 export type PublishEventsConflict = {
   /** Resource named in the error, e.g. `TailorDB table "Order"`. */
