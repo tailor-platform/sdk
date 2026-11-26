@@ -5,20 +5,24 @@ import { buildTableScripts } from "./internal";
 import { createTailorDBHook } from "./index";
 
 const now = new Date("2026-04-15T01:02:03.004Z");
+const startsAt = new Date("2026-01-01T00:00:00.000Z");
 
 type TableHookArgs = { input: object };
 
 // Deployed scripts embed hooks by their source, so this must not reference outer bindings.
-const describeInput = (args: TableHookArgs) => ({
-  info: JSON.stringify(
-    Object.entries(args.input)
-      .map(
-        ([key, value]) =>
-          `${key}:${value instanceof Date ? "Date" : value === null ? "null" : typeof value}`,
-      )
-      .toSorted(),
-  ),
-});
+const describeInput = (args: TableHookArgs) => {
+  const kind = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(kind).join()}]`;
+    return value instanceof Date ? "Date" : value === null ? "null" : typeof value;
+  };
+  return {
+    info: JSON.stringify(
+      Object.entries(args.input)
+        .map(([key, value]) => `${key}:${kind(value)}`)
+        .toSorted(),
+    ),
+  };
+};
 
 const order = db
   .table("Order", {
@@ -26,7 +30,10 @@ const order = db
     note: db.string({ optional: true }),
     givenAt: db.datetime({ optional: true }),
     stampedAt: db.datetime({ optional: true }).hooks({ create: ({ now }) => now }),
+    stampedAts: db.datetime({ array: true, optional: true }).hooks({ create: ({ now }) => [now] }),
     createdAt: db.datetime().default("now"),
+    startsAt: db.datetime().default(startsAt),
+    startsAts: db.datetime({ array: true }).default([startsAt]),
     day: db.date().default("now"),
     at: db.time().default("now"),
     status: db.string().default("active"),
@@ -49,7 +56,10 @@ const memo = db
 const stamp = db.table("Stamp", {
   title: db.string(),
   stampedAt: db.datetime({ optional: true }).hooks({ create: ({ now }) => now }),
+  stampedAts: db.datetime({ array: true, optional: true }).hooks({ create: ({ now }) => [now] }),
   createdAt: db.datetime().default("now"),
+  startsAt: db.datetime().default(startsAt),
+  startsAts: db.datetime({ array: true }).default([startsAt]),
   day: db.date().default("now"),
   at: db.time().default("now"),
   status: db.string().default("active"),
@@ -85,7 +95,7 @@ function fieldIssues(table: Table, record: Record<string, unknown>) {
   return schema.parse({ value: record, data: record, invoker: null }).issues;
 }
 
-describe("createTailorDBHook matches the deployed create hook, whose record passes its field types", () => {
+describe("createTailorDBHook matches the deployed create hook, and both records pass their field types", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"], now });
   });
@@ -127,7 +137,9 @@ describe("createTailorDBHook matches the deployed create hook, whose record pass
     ["only required fields on a table without a table hook", stamp, { title: "a" }],
   ])("%s", (_label, table, row) => {
     const deployed = stored(deployedCreate(table, row), row);
+    const local: Record<string, unknown> = createTailorDBHook(table)(row, now);
     expect(fieldIssues(table, deployed)).toBeUndefined();
-    expect(stored(createTailorDBHook(table)(row, now), row)).toEqual(deployed);
+    expect(fieldIssues(table, local)).toBeUndefined();
+    expect(stored(local, row)).toEqual(deployed);
   });
 });

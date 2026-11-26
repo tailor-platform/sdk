@@ -105,22 +105,6 @@ describe("createTailorDBHook", () => {
     });
   });
 
-  describe("field-level create hook and default", () => {
-    test("returns dates from a field hook and a default as ISO strings", () => {
-      const now = new Date("2026-04-15T00:00:00.000Z");
-      const type = db.table("Test", {
-        stampedAt: db.datetime().hooks({ create: ({ now }) => now }),
-        createdAt: db.datetime().default("now"),
-        startsAt: db.datetime().default(new Date("2026-01-01T00:00:00.000Z")),
-      });
-      expect(createTailorDBHook(type)({}, now)).toMatchObject({
-        stampedAt: "2026-04-15T00:00:00.000Z",
-        createdAt: "2026-04-15T00:00:00.000Z",
-        startsAt: "2026-01-01T00:00:00.000Z",
-      });
-    });
-  });
-
   describe("single nested object field", () => {
     test("recursively processes the nested object", () => {
       const type = db.table("Test", {
@@ -289,12 +273,26 @@ describe("createTailorDBHook", () => {
       ]);
     });
 
-    test("normalizes a Date returned from the type hook to an ISO string", () => {
+    test("normalizes Dates returned from the type hook to ISO strings, inside arrays and objects too", () => {
       const fixed = new Date("2026-04-15T00:00:00.000Z");
       const type = db
-        .table("Test", { createdAt: db.datetime() })
-        .hooks({ create: () => ({ createdAt: fixed }) });
-      expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
+        .table("Test", {
+          createdAt: db.datetime(),
+          stamps: db.datetime({ array: true }),
+          audit: db.object({ at: db.datetime(), ats: db.datetime({ array: true }) }),
+        })
+        .hooks({
+          create: () => ({
+            createdAt: fixed,
+            stamps: [fixed],
+            audit: { at: fixed, ats: [fixed] },
+          }),
+        });
+      expect(createTailorDBHook(type)({})).toMatchObject({
+        createdAt: "2026-04-15T00:00:00.000Z",
+        stamps: ["2026-04-15T00:00:00.000Z"],
+        audit: { at: "2026-04-15T00:00:00.000Z", ats: ["2026-04-15T00:00:00.000Z"] },
+      });
     });
 
     test("shares the same now timestamp between field-level and table-level hooks", () => {
