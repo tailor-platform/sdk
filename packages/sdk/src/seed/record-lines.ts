@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { jsonlRecordLines } from "lines-db";
 import type { ValidationErrorDetail } from "lines-db";
 
 /**
@@ -12,14 +13,7 @@ import type { ValidationErrorDetail } from "lines-db";
  * @returns 1-based physical line, or undefined when the file holds no such record
  */
 export function physicalLineOfRecord(content: string, recordIndex: number): number | undefined {
-  const lines = content.split("\n");
-  let remaining = recordIndex;
-  for (const [index, line] of lines.entries()) {
-    if (line.trim().length === 0) continue;
-    if (remaining === 0) return index + 1;
-    remaining -= 1;
-  }
-  return undefined;
+  return jsonlRecordLines(content)[recordIndex]?.line;
 }
 
 /**

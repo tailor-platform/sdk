@@ -10,9 +10,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { withSourceLocation } from "@tailor-platform/sdk/cli";
+import { logger, withSourceLocation } from "@tailor-platform/sdk/cli";
+import { jsonlRecordLines } from "lines-db";
 import * as path from "pathe";
-import { jsonlRecordLines } from "./record-lines";
 import type { ErrorSourceLocation, SeedData } from "@tailor-platform/sdk/cli";
 
 type AssertSeedDataDirectoryOptions = {
@@ -59,6 +59,12 @@ export interface LoadSeedDataOptions {
    * defined in more than one of them is rejected. Defaults to `id`.
    */
   keyField?: string;
+  /**
+   * Warn about a row surrounded by a character JSON does not allow as
+   * whitespace, such as a no-break space. Defaults to true. Validation turns it
+   * off because it reports the same rows itself.
+   */
+  warnAboutStrayWhitespace?: boolean;
 }
 
 /**
@@ -145,7 +151,7 @@ function readSeedRows(
   typeName: string,
   options: LoadSeedDataOptions,
 ): { row: SeedData[string][number]; line: number }[] {
-  const { requireId = false, requiredFieldsByType = {} } = options;
+  const { requireId = false, requiredFieldsByType = {}, warnAboutStrayWhitespace = true } = options;
   let content: string;
   try {
     content = readFileSync(jsonlPath, "utf-8");
@@ -155,7 +161,12 @@ function readSeedRows(
     }
     throw error;
   }
-  return jsonlRecordLines(content).map(({ text, line }) => {
+  const records = jsonlRecordLines(content);
+  for (const { line, warning } of records) {
+    if (warning && warnAboutStrayWhitespace)
+      logger.warn(`${relativeRowLocation({ file: jsonlPath, line })} ${warning}`);
+  }
+  return records.map(({ text, line }) => {
     let value: unknown;
     try {
       value = JSON.parse(text);

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
+import { jsonlRecordLines } from "lines-db";
 import * as path from "pathe";
 import {
   deployMigrationTestBaseline,
@@ -356,11 +357,11 @@ export function loadSnapshotSeedData(
       }
       throw error;
     }
-    const lines = (content.startsWith("\uFEFF") ? content.slice(1) : content).split("\n");
-    data[tableName] = lines.flatMap((raw, index) => {
-      const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
-      if (text.trim().length === 0) return [];
-      const line = index + 1;
+    const records = jsonlRecordLines(content);
+    for (const { line, warning } of records) {
+      if (warning) logger.warn(`${path.relative(process.cwd(), jsonlPath)}:${line} ${warning}`);
+    }
+    data[tableName] = records.flatMap(({ text, line }) => {
       let value: unknown;
       try {
         value = JSON.parse(text);

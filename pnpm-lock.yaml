@@ -456,7 +456,7 @@ snapshots:
 				"globals": "17.14.0",
 				"inflection": "3.0.2",
 				"kysely": "0.29.9",
-				"lines-db": "0.19.2",
+				"lines-db": "0.19.3",
 				"mime-types": "3.0.2",
 				"open": "11.0.4",
 				"oxc-parser": "0.159.0",
@@ -547,7 +547,7 @@ snapshots:
 			"dependencies": {
 				"@lines-db/studio": "0.16.7",
 				"@politty/zod": "0.7.8",
-				"lines-db": "0.19.2",
+				"lines-db": "0.19.3",
 				"open": "11.0.4",
 				"pathe": "2.0.3",
 				"pkg-types": "2.4.0",
@@ -1990,7 +1990,7 @@ snapshots:
 			"peerDependencies": {
 				"lines-db": {
 					"specifier": "^0.19.2",
-					"version": "0.19.2",
+					"version": "0.19.3",
 				},
 				"typescript": {
 					"specifier": ">=5 <7 || >=7.1.0-0",
@@ -5804,8 +5804,8 @@ snapshots:
 			},
 		},
 
-		"lines-db@0.19.2": {
-			"integrity": "sha512-yRCcaXMVFby6HFdMH9aH17czQ4uZUbT9LXA6EDAfT8xqEwbAuaE/7rqbFAYT4OhKrnFGhNfxm/m8J4CRa5gYEg==",
+		"lines-db@0.19.3": {
+			"integrity": "sha512-AgPn5pjalNu0A35eht/uSaHM/hto+uMspujqGtAsqOidM7iG9OQry0zK89HcW5NApn/EQqe7QRfXvRgnAFjuJw==",
 			"engines": {"node": ">=22.18.0"},
 			"hasBin": true,
 			"peerDependencies": {

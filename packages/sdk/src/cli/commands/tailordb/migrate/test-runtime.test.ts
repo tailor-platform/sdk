@@ -7,6 +7,7 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { errorToJson } from "#/cli/shared/error-json";
+import { logger } from "#/cli/shared/logger";
 import { mockOperatorClient } from "#/cli/shared/test-helpers/operator-client";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { getNamespacesWithMigrations } from "./config";
@@ -244,6 +245,9 @@ describe("migration test runtime", () => {
     ["leading blank lines", '\n\n{"id":1}\n{"id":2}\n'],
     ["CRLF endings and a blank line", '{"id":1}\r\n\r\n{"id":2}\r\n'],
     ["a byte order mark", '\uFEFF{"id":1}\n{"id":2}\n'],
+    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n'],
+    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n'],
+    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n'],
   ])(
     "reads the baseline seed rows the validator reads from a file with %s",
     async (_label, content) => {
@@ -260,9 +264,6 @@ describe("migration test runtime", () => {
   test.each([
     ["a malformed row", "not-json\n", 1],
     ["a malformed row after blank lines", '\n\n{"id":1}\nnot-json\n', 4],
-    ["a second byte order mark", '\uFEFF\uFEFF{"id":1}\n{"id":2}\n', 1],
-    ["a no-break space before the first row", '\u00A0{"id":1}\n{"id":2}\n', 1],
-    ["a no-break space after the last row", '{"id":1}\n{"id":2}\u00A0\n', 2],
   ])(
     "rejects a baseline seed file with %s at the line the validator rejects",
     async (_label, content, line) => {
@@ -285,6 +286,21 @@ describe("migration test runtime", () => {
       });
     },
   );
+
+  test("warns with the file and line of a baseline seed row surrounded by a no-break space", () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
+    temporaryDirectories.push(dataDir);
+    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), '{"id":1}\n{"id":2}\u00A0\n');
+    vi.spyOn(process, "cwd").mockReturnValue(dataDir);
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    loadSnapshotSeedData(dataDir, ["Customer"]);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Customer.jsonl:2 has U+00A0 around its row, which JSON does not allow",
+    );
+  });
 
   test("rejects a baseline seed row that is not a JSON object at its line", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
