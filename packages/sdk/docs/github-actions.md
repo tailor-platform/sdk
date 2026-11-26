@@ -1356,7 +1356,12 @@ server and its runners first:
   [Customizing the generated workflow](#customizing-the-generated-workflow)).
   The runners need Actions runner 2.327.1 or later, which runs the Node 24
   actions the workflows use, and `gh` and `jq` on `PATH` (plus `node` with
-  `--erd-preview`).
+  `--erd-preview`). With `--erd-preview`, when the PR's base branch uses
+  yarn, the ERD preview job installs Corepack from the npm registry, and
+  Corepack downloads the Yarn version that the branch declares in
+  `packageManager` or `devEngines.packageManager` (Yarn 1 when it declares
+  none) from `repo.yarnpkg.com` (Yarn 2 and later) or `registry.yarnpkg.com`
+  (Yarn 1), so the runners need access to them.
 - **Actions from github.com:** the workflows use `tailor-platform/actions`,
   `actions/cache`, `actions/checkout`, `actions/setup-node`,
   `pnpm/action-setup`, and `oven-sh/setup-bun` (and `actions/upload-artifact`

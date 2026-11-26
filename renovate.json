@@ -45,6 +45,14 @@
       "depNameTemplate": "tailor-platform/actions",
       "autoReplaceStringTemplate": "const TEMPLATE_CHANGED_SINCE_RELEASE = true;\nexport const ACTIONS_SHA = \"{{newDigest}}\";\nexport const ACTIONS_VERSION = \"{{newValue}}\";",
       "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "Update the Corepack version that generated workflows install",
+      "managerFilePatterns": ["/^packages/sdk-plugin-setup/src/.+\\.workflow\\.yml$/"],
+      "matchStrings": ["corepack@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
+      "depNameTemplate": "corepack",
+      "datasourceTemplate": "npm"
     }
   ],
   "packageRules": [
