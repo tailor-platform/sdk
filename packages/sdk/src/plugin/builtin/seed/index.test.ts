@@ -40,6 +40,71 @@ describe("seedPlugin", () => {
     expect(schema.content).toContain('from "../../tailordb/user"');
   });
 
+  test("names the data and schema files of a table several namespaces define after its namespace", async () => {
+    const configPath = "/proj/app/tailor.config.ts";
+    const table = (name: string, fields: Record<string, unknown> = {}) =>
+      ({ name, fields: { id: { config: {} }, ...fields } }) as unknown as TailorDBType;
+    const plugin = seedPlugin({ distPath: "./seed" });
+
+    const result = await assertDefined(
+      plugin.onTailorDBReady,
+      "onTailorDBReady missing",
+    )({
+      tailordb: [
+        {
+          namespace: "shop-db",
+          tables: {
+            Customer: table("Customer"),
+            Order: table("Order", {
+              customerId: { config: {}, relation: { targetType: "Customer", key: "id" } },
+            }),
+          },
+          sourceInfo: new Map([
+            ["Customer", { filePath: "/proj/app/shop/customer.ts", exportName: "customer" }],
+            ["Order", { filePath: "/proj/app/shop/order.ts", exportName: "order" }],
+          ]),
+          pluginAttachments: new Map(),
+        },
+        {
+          namespace: "crm-db",
+          tables: { Customer: table("Customer", { email: { config: {} } }) },
+          sourceInfo: new Map([
+            ["Customer", { filePath: "/proj/app/crm/customer.ts", exportName: "customer" }],
+          ]),
+          pluginAttachments: new Map(),
+        },
+      ],
+      auths: {
+        "crm-auth": {
+          name: "crm-auth",
+          idProvider: { kind: "BuiltInIdP", namespace: "crm-idp" },
+          userProfile: { tableName: "Customer", namespace: "crm-db", usernameField: "email" },
+        } as unknown as GeneratorAuthInput,
+      },
+      baseDir: "/proj/.tailor/generated/seed",
+      configPath,
+      pluginConfig: { distPath: "./seed" },
+    });
+
+    const files = new Map(result.files.map((file) => [path.basename(file.path), file.content]));
+    expect([...files.keys()].toSorted()).toEqual([
+      "Order.jsonl",
+      "Order.schema.ts",
+      "_User.jsonl",
+      "_User.schema.ts",
+      "crm-db.Customer.jsonl",
+      "crm-db.Customer.schema.ts",
+      "shop-db.Customer.jsonl",
+      "shop-db.Customer.schema.ts",
+    ]);
+    expect(files.get("Order.schema.ts")).toContain(
+      '{"column":"customerId","references":{"table":"shop-db.Customer","column":"id"}}',
+    );
+    expect(files.get("crm-db.Customer.schema.ts")).toContain('"table":"_User"');
+    expect(files.get("shop-db.Customer.schema.ts")).not.toContain('"table":"_User"');
+    expect(files.get("_User.schema.ts")).toContain('table: "crm-db.Customer"');
+  });
+
   const builtInIdpAuth = (name: string, idp: string) =>
     ({
       name,

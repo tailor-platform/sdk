@@ -272,6 +272,8 @@ export interface PluginSchemaParams {
   configImportPath: string;
   /** Relative import path to the original table file (for table-attached plugins) */
   originalImportPath?: string;
+  /** Namespace to generate the table for, when several namespaces have a table of its name */
+  namespace?: string | undefined;
 }
 
 /**
@@ -303,7 +305,8 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     throw new Error(`rowType is required for plugin-generated table "${tableName}"`);
   }
 
-  const { configImportPath, originalImportPath } = params;
+  const { configImportPath, originalImportPath, namespace } = params;
+  const namespaceArg = namespace === undefined ? "" : `, ${JSON.stringify(namespace)}`;
 
   const schemaTypeCode = ml /* ts */ `
     const schemaType = t.object({
@@ -327,7 +330,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { ${pluginSource.originalExportName} } from "${originalImportPath}";
 
     const configPath = join(import.meta.dirname, "${configImportPath}");
-    const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", ${pluginSource.originalExportName}, "${pluginSource.generatedTableKind}");
+    const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", ${pluginSource.originalExportName}, "${pluginSource.generatedTableKind}"${namespaceArg});
 
     ${rowTypeCode}
     ${schemaTypeCode}
@@ -357,7 +360,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
     import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
 
     const configPath = join(import.meta.dirname, "${configImportPath}");
-    const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", null, "${pluginSource.generatedTableKind}");
+    const ${exportName} = await getGeneratedTable(configPath, "${pluginSource.pluginId}", null, "${pluginSource.generatedTableKind}"${namespaceArg});
 
     ${rowTypeCode}
     ${schemaTypeCode}

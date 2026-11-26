@@ -13,7 +13,7 @@ import {
 import { resolvePluginConfig } from "#/plugin/get-plugin-config";
 import { getAuthInput } from "./auth-input";
 import { configOf, machineUserAuths } from "./config-file";
-import { atConfigSource } from "./config-loader";
+import { atConfigSource, tailorDBTypeNameGroupsOf } from "./config-loader";
 import { type CLIError, locatedCLIError } from "./errors";
 import { resolveMachineUser } from "./machine-user";
 import { loadConfigFileNamespaces } from "./tailordb-namespaces";
@@ -77,6 +77,11 @@ export interface SeedContext {
 export interface LoadSeedContextOptions {
   /** Path to tailor.config.ts. Defaults to searching from the current directory. */
   configPath?: string | undefined;
+  /**
+   * Accept tables whose name several TailorDB namespaces define, which a caller tells apart by
+   * {@link SeedNamespaceConfig.entityNames}. Without it, such a config is rejected.
+   */
+  allowSharedTableNames?: boolean | undefined;
 }
 
 /**
@@ -93,9 +98,10 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   });
   const config = configOf(loaded);
 
-  // Seed files and type filters identify types by bare name, so enforce the
-  // same cross-namespace uniqueness that generation and deploy enforce.
-  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: services.tailorDBServices });
+  assertUniqueLocalTailorDBTypeNames({
+    tailorDBServices: services.tailorDBServices,
+    groups: options.allowSharedTableNames ? tailorDBTypeNameGroupsOf(config) : undefined,
+  });
 
   const pluginOptions = resolvePluginConfig(loaded.plugins, SeedGeneratorID);
   if (!pluginOptions) {

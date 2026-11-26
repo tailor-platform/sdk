@@ -117,6 +117,7 @@ describe("processIdpUser", () => {
       schema: {
         usernameField: "email",
         userTableName: "User",
+        userTableNamespace: "main-db",
       },
     });
   });

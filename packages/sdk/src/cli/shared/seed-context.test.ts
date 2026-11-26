@@ -104,6 +104,63 @@ describe("loadSeedContext", () => {
     await expect(loadSeedContext()).rejects.toThrow(/User/);
   });
 
+  describe("a workspace whose applications' namespaces share a table name", () => {
+    function mockSharedWorkspace(): void {
+      loadConfigFileNamespaces.mockResolvedValue({
+        loaded: {
+          kind: "workspace",
+          workspace: {
+            path: "/proj/tailor.config.ts",
+            auth: {},
+            apps: { shop: { db: ["shop-db"] }, crm: { db: ["crm-db"] } },
+          },
+          plugins: [seedPluginInstance({ distPath: "./seed" })],
+        },
+        services: {
+          tailorDBServices: [
+            fakeService("shop-db", ["Customer", "Order"]),
+            fakeService("crm-db", ["Customer"]),
+          ],
+          authServices: [],
+        },
+        namespaces: [
+          fakeNamespace("shop-db", [
+            fakeType("Customer", { code: { config: { serial: {} } } }),
+            fakeType("Order", {
+              customer: { config: {}, relation: { targetType: "Customer", key: "code" } },
+            }),
+          ]),
+          fakeNamespace("crm-db", [fakeType("Customer", { code: { config: { serial: {} } } })]),
+        ],
+      } as unknown as LoadedConfigFileNamespaces);
+    }
+
+    test("names each table after its namespace for a caller that reads entity names", async () => {
+      mockSharedWorkspace();
+
+      const context = await loadSeedContext({ allowSharedTableNames: true });
+
+      expect(context.namespaces).toMatchObject([
+        { namespace: "shop-db", entityNames: { Customer: "shop-db.Customer" } },
+        { namespace: "crm-db", entityNames: { Customer: "crm-db.Customer" } },
+      ]);
+    });
+
+    test("keeps a serial field only on the table a relation of its own namespace keys to", async () => {
+      mockSharedWorkspace();
+
+      const context = await loadSeedContext({ allowSharedTableNames: true });
+
+      expect(context.namespaces.map((ns) => ns.omitFields?.["Customer"])).toEqual([[], ["code"]]);
+    });
+
+    test("rejects the config for a caller that does not read entity names", async () => {
+      mockSharedWorkspace();
+
+      await expect(loadSeedContext()).rejects.toMatchObject({ code: "DEFINITION_NAME_DUPLICATE" });
+    });
+  });
+
   test("throws when seedPlugin has no distPath", async () => {
     mockLoadResult({ plugins: [seedPluginInstance({})] });
 
