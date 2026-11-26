@@ -54,6 +54,7 @@ export const BUILDER_METHODS: ReadonlySet<string> = new Set([
   "permission",
   "pickFields",
   "plugin",
+  "replication",
 ]);
 
 interface AnnotatedSource {

@@ -127,6 +127,14 @@ function plainChangeSetsOf(results: PlanResults): {
       { changeSet: results.app, label: "application" },
     ],
     afterGroups: [
+      {
+        changeSet: results.tailorDBReplication.changeSet.destination,
+        label: "tailordbReplicationDestination",
+      },
+      {
+        changeSet: results.tailorDBReplication.changeSet.replication,
+        label: "tailordbReplication",
+      },
       { changeSet: results.secretManager.vaultChangeSet, label: "vault" },
       { changeSet: results.secretManager.secretChangeSet, label: "secret" },
     ],

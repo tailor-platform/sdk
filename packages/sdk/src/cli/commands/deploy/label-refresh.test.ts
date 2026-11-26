@@ -8,6 +8,7 @@ import { applyPipeline } from "./resolver";
 import { applySecretManager } from "./secret-manager";
 import { applyStaticWebsite } from "./staticwebsite";
 import { applyTailorDB } from "./tailordb";
+import { applyTailorDBReplication } from "./tailordb-replication";
 import { emptyPlanResults } from "./test-helpers/plan-results";
 import { applyWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -79,6 +80,20 @@ const CASES = {
   },
   "staticwebsite.custom_domain_transfer": NO_SDK_LABELS,
   "tailordb.gql_permission": NO_SDK_LABELS,
+  "tailordb.replication": {
+    plan: (results) => results.tailorDBReplication.changeSet.replication.unchanged.push(item),
+    apply: (client, results) =>
+      applyTailorDBReplication(client, results.tailorDBReplication, "create-update"),
+  },
+  "tailordb.replication_destination": {
+    plan: (results) =>
+      results.tailorDBReplication.changeSet.destination.unchanged.push({
+        ...item,
+        pendingPermission: false,
+      }),
+    apply: (client, results) =>
+      applyTailorDBReplication(client, results.tailorDBReplication, "prepare"),
+  },
   "tailordb.service": {
     plan: (results) => results.tailorDB.changeSet.service.unchanged.push(item),
     apply: (client, results) => applyTailorDB(client, results.tailorDB, "create-update"),

@@ -57,6 +57,7 @@ import {
   configInvalidError,
   configIssuesError,
 } from "#/cli/shared/validation-errors";
+import { type FlatIssue } from "#/cli/shared/zod-issues";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -68,6 +69,7 @@ import {
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
 import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
+import { type TailorDBReplicationDestinationConfig } from "#/configure/services/tailordb-replication/types";
 import {
   type EnvOverrideService,
   mapEnvOverridesAsync,
@@ -78,6 +80,11 @@ import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
 import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
+import {
+  bigQueryDatasetKey,
+  replicationTableKey,
+  TailorDBReplicationDestinationSchema,
+} from "#/parser/service/tailordb-replication/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
 import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
 import { KyselyGeneratorID } from "#/plugin/builtin/kysely-type/index";
@@ -89,11 +96,20 @@ import type { FunctionBundleSettings } from "#/cli/services/function-bundle";
 import type { SdkBuilderAnnotationCache } from "#/cli/shared/sdk-builder-pure-plugin";
 import type { ProjectSourcesFilter } from "#/cli/shared/sourcemap-sources";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
+import type {
+  TailorDBReplication,
+  TailorDBReplicationType,
+} from "#/parser/service/tailordb-replication/types";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { PluginManager } from "#/plugin/manager";
 import type { EffectiveDateDefault } from "#/runtime/types";
 import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
 import type { IdP } from "#/types/idp.generated";
 import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
+import type {
+  TailorDBReplicationDestination,
+  TailorDBTypeReplication,
+} from "#/types/tailordb-replication.generated";
 import type { z } from "zod";
 
 type SecretVault = {
@@ -127,6 +143,8 @@ export type ConfigServices = {
   readonly httpAdapterService: Readonly<HttpAdapterService> | undefined;
   readonly staticWebsiteServices: ReadonlyArray<StaticWebsite>;
   readonly aiGatewayServices: ReadonlyArray<AIGateway>;
+  readonly dbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestination>;
+  readonly dbReplications: ReadonlyArray<TailorDBReplication>;
   readonly secrets: ReadonlyArray<SecretVault>;
   readonly ignoreNullishValues: boolean;
   readonly env: Readonly<Record<string, string | number | boolean>>;
@@ -183,6 +201,7 @@ const SERVICE_LABELS = {
   auth: "Auth service",
   staticWebsites: "static website",
   aiGateways: "AI Gateway",
+  dbReplicationDestinations: "TailorDB replication destination",
   secrets: "secret manager",
 } as const;
 
@@ -600,6 +619,236 @@ function defineAIGateways(
   return aiGatewayServices;
 }
 
+type DefineTailorDBReplicationsResult = {
+  dbReplicationDestinations: TailorDBReplicationDestination[];
+  dbReplications: TailorDBReplication[];
+};
+
+function replicationsPath(namespace: string): FlatIssue["path"] {
+  return ["db", namespace, "replications"];
+}
+
+function throwReplicationIssues(configPath: string, issues: FlatIssue[]): void {
+  if (issues.length === 0) return;
+  throw configIssuesError({
+    file: configPath,
+    exportName: "default",
+    subject: "Tailor config",
+    issues,
+  });
+}
+
+/**
+ * Collect the replications the TailorDB namespaces declare and the destinations they and
+ * `dbReplicationDestinations` deploy. Each replication's tables are filled in once the tables
+ * are loaded, by {@link resolveTailorDBReplicationTypes}.
+ * @param source - The config's service declarations
+ * @param tailorDBServices - TailorDB namespaces of the config, with their parsed settings
+ * @returns Destinations and replications, each replication without tables
+ */
+function defineTailorDBReplications(
+  source: ServiceSource,
+  tailorDBServices: ReadonlyArray<TailorDBService>,
+): DefineTailorDBReplicationsResult {
+  const configPath = source.settings.path;
+  const issues: FlatIssue[] = [];
+  const declaredDestinations: Array<{ input: unknown; path: FlatIssue["path"] }> =
+    source.dbReplicationDestinations.map((input, index) => ({
+      input,
+      path: ["dbReplicationDestinations", index],
+    }));
+  const dbReplications: TailorDBReplication[] = [];
+  const namespaceOfReplication = new Map<string, string>();
+  for (const service of tailorDBServices) {
+    for (const [name, settings] of Object.entries(service.config.replications ?? {})) {
+      if (!settings) continue;
+      const path = [...replicationsPath(service.namespace), name];
+      const other = namespaceOfReplication.get(name);
+      if (other !== undefined) {
+        issues.push({
+          path,
+          message: `Replication "${name}" is also declared by TailorDB namespace "${other}"; replication names are unique across the workspace`,
+        });
+        continue;
+      }
+      namespaceOfReplication.set(name, service.namespace);
+      declaredDestinations.push({ input: settings.destination, path: [...path, "destination"] });
+      dbReplications.push({
+        name,
+        source: { namespace: service.namespace },
+        destination: settings.destination.name,
+        ...(settings.tablePrefix !== undefined && { tablePrefix: settings.tablePrefix }),
+        enabled: settings.enabled,
+        types: [],
+      });
+    }
+  }
+
+  const destinationsByName = new Map<
+    string,
+    { destination: TailorDBReplicationDestination; path: FlatIssue["path"] }
+  >();
+  for (const { input, path } of declaredDestinations) {
+    const result = TailorDBReplicationDestinationSchema.safeParse(input);
+    if (!result.success) {
+      throw configInvalidError({
+        file: configPath,
+        exportName: "default",
+        subject: "config for TailorDB replication destination",
+        error: result.error,
+        pathPrefix: path,
+      });
+    }
+    const destination = result.data;
+    const known = destinationsByName.get(destination.name);
+    if (!known) {
+      destinationsByName.set(destination.name, { destination, path });
+    } else if (
+      bigQueryDatasetKey(known.destination.bigquery) !== bigQueryDatasetKey(destination.bigquery)
+    ) {
+      issues.push({ path, message: `Two different destinations are named "${destination.name}"` });
+    }
+  }
+  const destinationByDataset = new Map<string, string>();
+  destinationsByName.forEach(({ destination, path }) => {
+    const other = destinationByDataset.get(bigQueryDatasetKey(destination.bigquery));
+    if (other !== undefined) {
+      issues.push({
+        path: [...path, "bigquery"],
+        message: `Destination "${destination.name}" writes to the same dataset as destination "${other}"`,
+      });
+    }
+    destinationByDataset.set(bigQueryDatasetKey(destination.bigquery), destination.name);
+  });
+  throwReplicationIssues(configPath, issues);
+  return {
+    dbReplicationDestinations: [...destinationsByName.values()].map(
+      ({ destination }) => destination,
+    ),
+    dbReplications,
+  };
+}
+
+function checkReplicatedFields(
+  type: TailorDBType,
+  entry: TailorDBTypeReplication,
+  path: FlatIssue["path"],
+): FlatIssue[] {
+  return (["excludeFields", "includeFields"] as const).flatMap((listKey) =>
+    (entry[listKey] ?? []).flatMap((fieldName, index) => {
+      const field = fieldName === "id" ? undefined : type.fields[fieldName];
+      if (!field) {
+        return [
+          {
+            path: [...path, listKey, index],
+            message: `Table "${type.name}" has no field "${fieldName}" to replicate`,
+          },
+        ];
+      }
+      if (listKey === "includeFields" && field.config.vector) {
+        return [
+          {
+            path: [...path, listKey, index],
+            message: `Field "${type.name}.${fieldName}" is a vector field, which is not replicated`,
+          },
+        ];
+      }
+      return [];
+    }),
+  );
+}
+
+type ResolveTailorDBReplicationTypesParams = {
+  configPath: string;
+  replications: DefineTailorDBReplicationsResult;
+  tailorDBServices: ReadonlyArray<TailorDBService>;
+};
+
+/**
+ * Fill in the tables each replication copies, from the `.replication()` of the namespace's
+ * loaded tables, and check what those tables declare.
+ * @param params - Replications without tables, and the loaded TailorDB namespaces
+ * @returns The replications with their tables
+ */
+function resolveTailorDBReplicationTypes(
+  params: ResolveTailorDBReplicationTypesParams,
+): DefineTailorDBReplicationsResult {
+  const { configPath, replications, tailorDBServices } = params;
+  const issues: FlatIssue[] = [];
+  const typesByReplication = new Map<string, TailorDBReplicationType[]>(
+    replications.dbReplications.map(({ name }) => [name, []]),
+  );
+  for (const service of tailorDBServices) {
+    const declared = Object.keys(service.config.replications ?? {});
+    const deployed = replications.dbReplications
+      .filter(({ source }) => source.namespace === service.namespace)
+      .map(({ name }) => name);
+    for (const type of Object.values(service.types)) {
+      const targeted = new Set<string>();
+      (type.replication ?? []).forEach((entry, index) => {
+        const path = ["db", service.namespace, "tables", type.name, "replication", index];
+        const fieldIssues = checkReplicatedFields(type, entry, path);
+        issues.push(...fieldIssues);
+        const unknown = (entry.targets ?? []).filter((target) => !declared.includes(target));
+        for (const target of unknown) {
+          issues.push({
+            path: [...path, "targets"],
+            message: `Table "${type.name}" names replication "${target}", which TailorDB namespace "${service.namespace}" does not declare in replications`,
+          });
+        }
+        for (const target of entry.targets ?? declared) {
+          if (targeted.has(target)) {
+            issues.push({
+              path,
+              message: `Table "${type.name}" sets replication "${target}" more than once`,
+            });
+          }
+          targeted.add(target);
+        }
+        if (fieldIssues.length > 0 || unknown.length > 0) return;
+        for (const target of entry.targets ?? deployed) {
+          typesByReplication.get(target)?.push({
+            name: type.name,
+            ...(entry.excludeFields && { excludeFields: entry.excludeFields }),
+            ...(entry.includeFields && { includeFields: entry.includeFields }),
+          });
+        }
+      });
+    }
+  }
+  throwReplicationIssues(configPath, issues);
+  const dbReplications = replications.dbReplications.map((replication) => ({
+    ...replication,
+    types: typesByReplication.get(replication.name) ?? [],
+  }));
+  throwReplicationIssues(configPath, sharedReplicationTableIssues(dbReplications));
+  return {
+    dbReplicationDestinations: replications.dbReplicationDestinations,
+    dbReplications,
+  };
+}
+
+function sharedReplicationTableIssues(
+  dbReplications: ReadonlyArray<TailorDBReplication>,
+): FlatIssue[] {
+  const writers = new Map<string, string>();
+  return dbReplications.flatMap((replication) =>
+    replication.types.flatMap((type) => {
+      const table = replicationTableKey(replication.tablePrefix, type.name);
+      const key = `${replication.destination}/${table}`;
+      const other = writers.get(key);
+      writers.set(key, replication.name);
+      if (other === undefined || other === replication.name) return [];
+      return [
+        {
+          path: [...replicationsPath(replication.source.namespace), replication.name],
+          message: `Replications "${other}" and "${replication.name}" both write table "${table}" of destination "${replication.destination}"; give one of them a different tablePrefix`,
+        },
+      ];
+    }),
+  );
+}
+
 function parseSecretManager(
   config: AppConfig["secrets"],
   configPath: string,
@@ -652,6 +901,7 @@ function parseSecretManager(
 }
 
 type DefineServicesResult = {
+  replicationResult: DefineTailorDBReplicationsResult;
   tailordbResult: DefineTailorDBResult;
   resolverResult: DefineResolverResult;
   idpResult: DefineIdpResult;
@@ -668,6 +918,7 @@ interface ServiceSource {
   pluginResolverOutputKey: string;
   idps: ReadonlyArray<ServiceEntry<IdPConfig>>;
   auths: ReadonlyArray<ServiceEntry<AuthConfig, string>>;
+  dbReplicationDestinations: ReadonlyArray<TailorDBReplicationDestinationConfig>;
 }
 
 function configServiceSource(config: LoadedConfig): ServiceSource {
@@ -679,6 +930,7 @@ function configServiceSource(config: LoadedConfig): ServiceSource {
       key: isIdpConfigList(config.idp) ? index : undefined,
     })),
     auths: config.auth ? [{ config: config.auth }] : [],
+    dbReplicationDestinations: config.dbReplicationDestinations ?? [],
   };
 }
 
@@ -694,6 +946,7 @@ function workspaceServiceSource(workspace: LoadedWorkspaceConfig): ServiceSource
       config: auth,
       key: singleServiceKey(workspace.definedBy, name),
     })),
+    dbReplicationDestinations: [],
   };
 }
 
@@ -733,6 +986,7 @@ function defineServices(
   );
   const { secrets, ignoreNullishValues } = parseSecretManager(settings.secrets, settings.path);
   return {
+    replicationResult: defineTailorDBReplications(source, tailordbResult.tailorDBServices),
     tailordbResult,
     resolverResult,
     idpResult,
@@ -763,6 +1017,8 @@ function buildConfigServices(params: BuildConfigServicesParams): ConfigServices 
     httpAdapterService: params.httpAdapterService,
     staticWebsiteServices: params.staticWebsiteServices,
     aiGatewayServices: params.aiGatewayServices,
+    dbReplicationDestinations: params.replicationResult.dbReplicationDestinations,
+    dbReplications: params.replicationResult.dbReplications,
     secrets: params.secrets,
     ignoreNullishValues: params.ignoreNullishValues,
     env: params.env,
@@ -1162,6 +1418,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
 
   // 1. Define services (synchronous)
   const {
+    replicationResult,
     tailordbResult,
     resolverResult: configuredResolverResult,
     idpResult,
@@ -1193,6 +1450,11 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   assertUniqueLocalTailorDBTypeNames({
     tailorDBServices: tailordbResult.tailorDBServices,
     scope: tailorDBTypeNameScopeOf(config),
+  });
+  const resolvedReplications = resolveTailorDBReplicationTypes({
+    configPath: settings.path,
+    replications: replicationResult,
+    tailorDBServices: tailordbResult.tailorDBServices,
   });
   const pluginResolverServices = definePluginResolverServices(config, pluginManager);
   const resolverResult: DefineResolverResult = {
@@ -1382,6 +1644,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       httpAdapterService,
       staticWebsiteServices,
       aiGatewayServices,
+      replicationResult: resolvedReplications,
       secrets,
       ignoreNullishValues,
       env: resolved.env,

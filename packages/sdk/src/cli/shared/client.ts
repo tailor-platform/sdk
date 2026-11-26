@@ -719,6 +719,8 @@ export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
   "CreateSecretManagerVault",
   "CreateStaticWebsite",
   "CreateTailorDBGQLPermission",
+  "CreateTailorDBReplication",
+  "CreateTailorDBReplicationDestination",
   "CreateTailorDBService",
   "CreateTailorDBType",
   "CreateTenantConfig",
@@ -832,6 +834,8 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "DeleteSecretManagerVault",
   "DeleteStaticWebsite",
   "DeleteTailorDBGQLPermission",
+  "DeleteTailorDBReplication",
+  "DeleteTailorDBReplicationDestination",
   "DeleteTailorDBService",
   "DeleteTailorDBType",
   "DeleteTenantConfig",
@@ -868,6 +872,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "UpdateSecretManagerSecret",
   "UpdateStaticWebsite",
   "UpdateTailorDBGQLPermission",
+  "UpdateTailorDBReplication",
   "UpdateTailorDBType",
   "UpdateTenantConfig",
   "UpdateUserProfileConfig",
@@ -875,6 +880,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "UpdateWorkflowJobFunction", // the CLI uses the repeat's version
   "UpdateWorkflowJobFunctionExecutionPolicy",
   "UpdateWorkspacePlatformUser",
+  "VerifyTailorDBReplicationDestination",
 ]);
 
 /**

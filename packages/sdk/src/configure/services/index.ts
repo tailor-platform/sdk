@@ -19,6 +19,7 @@ export * from "./executor";
 export * from "./workflow";
 export * from "./staticwebsite";
 export * from "./aigateway";
+export * from "./tailordb-replication";
 export * from "./idp";
 export * from "./secrets";
 export * from "./http-adapter";

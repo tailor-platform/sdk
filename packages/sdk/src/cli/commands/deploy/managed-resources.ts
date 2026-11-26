@@ -1,4 +1,5 @@
 import { logger } from "#/cli/shared/logger";
+import { bigQueryDatasetKey } from "#/parser/service/tailordb-replication/index";
 import { deploymentPlanResults, type PlannedDeployment, type PlanResults } from "./apply-phases";
 import { createChangeSet, type HasName } from "./change-set";
 import { assertNoDuplicateResourceNames, type ResourceNameCheck } from "./duplicate-resource-names";
@@ -46,13 +47,20 @@ export function computeRenamedAppDeletions(params: {
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  assertNoDuplicateResourceNames(
-    targets,
-    GLOBAL_RESOURCE_NAMES.map((check) => ({
+  assertNoDuplicateResourceNames(targets, [
+    ...GLOBAL_RESOURCE_NAMES.map((check) => ({
       ...check,
       resourceLabel: MANAGED_RESOURCE_LABELS[check.resourceType],
     })),
-  );
+    {
+      resourceType: "tailordb.replication_destination",
+      resourceLabel: "BigQuery dataset of TailorDB replication destinations",
+      namesOf: (target) =>
+        target.application.dbReplicationDestinations.map(({ bigquery }) =>
+          bigQueryDatasetKey(bigquery),
+        ),
+    },
+  ]);
 }
 
 /**
@@ -258,6 +266,12 @@ export const MANAGED_RESOURCES = {
   "staticwebsite.custom_domain_transfer": managedResource({
     changeSetOf: (results) => results.staticWebsite.customDomainTransferChangeSet,
   }),
+  "tailordb.replication": managedResource({
+    changeSetOf: (results) => results.tailorDBReplication.changeSet.replication,
+  }),
+  "tailordb.replication_destination": managedResource({
+    changeSetOf: (results) => results.tailorDBReplication.changeSet.destination,
+  }),
   "tailordb.gql_permission": managedResource({
     changeSetOf: (results) => results.tailorDB.changeSet.gqlPermission,
     namespace: { owner: "tailordb.service", of: (item) => item.request.namespaceName },
@@ -340,6 +354,12 @@ export function collectImportantResourceDeletions(
     ...results.auth.changeSet.oauth2Client.replaces.map((replace) => ({
       resourceType: "auth.oauth2_client" as const,
       resourceLabel: `${MANAGED_RESOURCE_LABELS["auth.oauth2_client"]} (client type change)`,
+      resourceName: replace.name,
+    })),
+    ...deletesNeedingConfirmation(results, "tailordb.replication"),
+    ...results.tailorDBReplication.changeSet.replication.replaces.map((replace) => ({
+      resourceType: "tailordb.replication" as const,
+      resourceLabel: `${MANAGED_RESOURCE_LABELS["tailordb.replication"]} (replaced, which rewrites all its tables)`,
       resourceName: replace.name,
     })),
     ...deletesNeedingConfirmation(results, "auth.connection"),
@@ -450,6 +470,14 @@ const GLOBAL_RESOURCE_NAMES: ReadonlyArray<
   {
     resourceType: "staticwebsite",
     namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
+  },
+  {
+    resourceType: "tailordb.replication",
+    namesOf: (target) => target.application.dbReplications.map(({ name }) => name),
+  },
+  {
+    resourceType: "tailordb.replication_destination",
+    namesOf: (target) => target.application.dbReplicationDestinations.map(({ name }) => name),
   },
   {
     resourceType: "tailordb.service",

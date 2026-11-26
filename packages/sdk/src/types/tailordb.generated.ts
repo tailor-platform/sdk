@@ -1057,6 +1057,16 @@ export type TailorDBTypeRawInput = {
         }
       | undefined;
     typeValidate?: Function | undefined;
+    replication?:
+      | {
+          /** Replications of the namespace that copy this table; every one when omitted */
+          targets?: string[] | undefined;
+          /** Replicate every field but these. Fields added later are replicated. */
+          excludeFields?: string[] | undefined;
+          /** Replicate only these fields. Fields added later are not replicated. */
+          includeFields?: string[] | undefined;
+        }[]
+      | undefined;
   };
 };
 
@@ -1104,6 +1114,16 @@ export type TailorDBTypeRaw = {
         }
       | undefined;
     typeValidate?: Function | undefined;
+    replication?:
+      | {
+          /** Replications of the namespace that copy this table; every one when omitted */
+          targets?: string[] | undefined;
+          /** Replicate every field but these. Fields added later are replicated. */
+          excludeFields?: string[] | undefined;
+          /** Replicate only these fields. Fields added later are not replicated. */
+          includeFields?: string[] | undefined;
+        }[]
+      | undefined;
   };
 };
 
@@ -1139,6 +1159,31 @@ export type TailorDBServiceConfigInput = {
         read?: boolean | undefined;
       }
     | undefined;
+  /** Replications of this namespace's tables, keyed by replication name. A replication whose value is `undefined` is declared but not deployed. */
+  replications?:
+    | {
+        [x: string]:
+          | {
+              /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+              destination: {
+                /** Replication destination name */
+                name: string;
+                /** BigQuery dataset to replicate into */
+                bigquery: {
+                  /** Google Cloud project ID hosting the dataset. Cannot be changed after the destination is created. */
+                  project: string;
+                  /** BigQuery dataset ID. Cannot be changed after the destination is created. */
+                  dataset: string;
+                };
+              };
+              /** Prefix prepended to each destination table name */
+              tablePrefix?: string | undefined;
+              /** Whether the replication runs */
+              enabled?: boolean | undefined;
+            }
+          | undefined;
+      }
+    | undefined;
 };
 
 export type TailorDBServiceConfig = {
@@ -1161,4 +1206,29 @@ export type TailorDBServiceConfig = {
     | undefined;
   /** Default GraphQL operations for all tables in this service */
   gqlOperations?: GqlOperations;
+  /** Replications of this namespace's tables, keyed by replication name. A replication whose value is `undefined` is declared but not deployed. */
+  replications?:
+    | {
+        [x: string]:
+          | {
+              /** Destination to write into, as returned by `defineTailorDBReplicationDestination()` */
+              destination: {
+                /** Replication destination name */
+                name: string;
+                /** BigQuery dataset to replicate into */
+                bigquery: {
+                  /** Google Cloud project ID hosting the dataset. Cannot be changed after the destination is created. */
+                  project: string;
+                  /** BigQuery dataset ID. Cannot be changed after the destination is created. */
+                  dataset: string;
+                };
+              };
+              /** Prefix prepended to each destination table name */
+              tablePrefix?: string | undefined;
+              /** Whether the replication runs */
+              enabled: boolean;
+            }
+          | undefined;
+      }
+    | undefined;
 };

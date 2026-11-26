@@ -43,6 +43,8 @@ export type ResourceKind =
   | "staticwebsite"
   | "aigateway"
   | "tailordb"
+  | "tailordb_replication"
+  | "tailordb_replication_destination"
   | "vault";
 
 /**

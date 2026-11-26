@@ -40,6 +40,9 @@ const mocks = vi.hoisted(() => {
     applyAIGateway: vi.fn(async (_client, result, phase) => {
       calls.push(`aigateway:${marker(result)}:${String(phase)}`);
     }),
+    applyTailorDBReplication: vi.fn(async (_client, result, phase) => {
+      calls.push(`tailordbReplication:${marker(result)}:${String(phase)}`);
+    }),
     applyIdP: vi.fn(async (_client, result, phase) => {
       calls.push(`idp:${marker(result)}:${String(phase)}`);
     }),
@@ -84,6 +87,9 @@ vi.mock("./function-registry", () => ({ applyFunctionRegistry: mocks.applyFuncti
 vi.mock("./staticwebsite", () => ({ applyStaticWebsite: mocks.applyStaticWebsite }));
 vi.mock("./aigateway", () => ({ applyAIGateway: mocks.applyAIGateway }));
 vi.mock("./idp", () => ({ applyIdP: mocks.applyIdP }));
+vi.mock("./tailordb-replication", () => ({
+  applyTailorDBReplication: mocks.applyTailorDBReplication,
+}));
 vi.mock("./tailordb", () => ({
   applyTailorDB: mocks.applyTailorDB,
   preflightTailorDB: mocks.preflightTailorDB,
@@ -106,6 +112,7 @@ const PLAN_MARKERS = {
   tailorDB: "tailordb",
   staticWebsite: "staticwebsite",
   aiGateway: "aigateway",
+  tailorDBReplication: "tailordbReplication",
   idp: "idp",
   auth: "auth",
   pipeline: "pipeline",
@@ -179,6 +186,8 @@ describe("applyDeploymentPlans", () => {
           "apply.secretManager.createUpdate",
           "apply.staticWebsite.createUpdate",
           "apply.tailorDB.createUpdate",
+          "apply.tailorDBReplication.createUpdate",
+          "apply.tailorDBReplication.prepare",
           "apply.workflow.createUpdate",
           "apply.workflowExecutionPolicy.createUpdate",
         ].toSorted(),
@@ -224,8 +233,12 @@ describe("applyDeploymentPlans", () => {
       "auth:buyer-auth:create-update-prerequisites",
       "function:supplier-function:create-update",
       "function:buyer-function:create-update",
+      "tailordbReplication:supplier-tailordbReplication:prepare",
+      "tailordbReplication:buyer-tailordbReplication:prepare",
       "tailordb:supplier-tailordb:create-update",
       "tailordb:buyer-tailordb:create-update",
+      "tailordbReplication:supplier-tailordbReplication:create-update",
+      "tailordbReplication:buyer-tailordbReplication:create-update",
       "auth:supplier-auth:create-update-dependents",
       "auth:buyer-auth:create-update-dependents",
       "pipeline:supplier-pipeline:create-update",
@@ -254,6 +267,8 @@ describe("applyDeploymentPlans", () => {
       "staticwebsite:buyer-staticwebsite:delete",
       "aigateway:supplier-aigateway:delete",
       "aigateway:buyer-aigateway:delete",
+      "tailordbReplication:supplier-tailordbReplication:delete",
+      "tailordbReplication:buyer-tailordbReplication:delete",
       "secret:supplier-secret:delete",
       "secret:buyer-secret:delete",
       "application:supplier-application:delete",
@@ -357,7 +372,9 @@ describe("applyDeploymentPlans", () => {
 
     expect(mocks.calls).toEqual([
       "function:supplier-function:create-update",
+      "tailordbReplication:supplier-tailordbReplication:prepare",
       "tailordb:supplier-tailordb:create-update",
+      "tailordbReplication:supplier-tailordbReplication:create-update",
       "auth:supplier-auth:create-update-dependents",
       "pipeline:supplier-pipeline:create-update",
       "pipeline:supplier-pipeline:delete-resources",
@@ -372,6 +389,7 @@ describe("applyDeploymentPlans", () => {
       "executor:supplier-executor:delete",
       "staticwebsite:supplier-staticwebsite:delete",
       "aigateway:supplier-aigateway:delete",
+      "tailordbReplication:supplier-tailordbReplication:delete",
       "secret:supplier-secret:delete",
       "application:supplier-application:delete",
       "pipeline:supplier-pipeline:delete-services",
@@ -684,6 +702,8 @@ describe("applyRemainingResources with a held maintenance mode", () => {
     expect(mocks.calls).toEqual([
       "function:supplier-function:create-update",
       "function:buyer-function:create-update",
+      "tailordbReplication:supplier-tailordbReplication:prepare",
+      "tailordbReplication:buyer-tailordbReplication:prepare",
       "tailordb:supplier-tailordb:create-update",
       "tailordb:buyer-tailordb:create-update",
       "release:supplier-tailordb",

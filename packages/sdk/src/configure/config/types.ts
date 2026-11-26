@@ -8,6 +8,7 @@ import type { IdPConfig, IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { SecretsConfig } from "#/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
+import type { TailorDBReplicationDestinationConfig } from "#/configure/services/tailordb-replication/types";
 import type {
   TailorDBOwnServiceConfigInput,
   TailorDBServiceInput,
@@ -229,6 +230,7 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Single IdP config, e.g. `myIdp`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
+ * - `dbReplicationDestinations`: TailorDB replication destinations to keep while no replication uses them
  * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
@@ -304,6 +306,13 @@ export interface AppConfig<
   staticWebsites?: StaticWebsites;
   /** AI Gateway configurations. Must be an array, e.g. `[gateway]`. */
   aiGateways?: AIGateways;
+  /**
+   * BigQuery datasets that TailorDB replications write into, e.g. `[warehouse]`.
+   * A replication's `destination` is deployed without being listed here; list a
+   * destination to keep it while no replication uses it, for example to grant
+   * its service account access before adding replications.
+   */
+  dbReplicationDestinations?: TailorDBReplicationDestinationConfig[];
   /** Secret Manager vault configurations. Keys are vault names, values are records of secret names to values. */
   secrets?: SecretsConfig;
   /**

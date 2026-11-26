@@ -67,9 +67,12 @@ import {
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
 import {
   CreateTailorDBGQLPermissionRequestSchema,
+  CreateTailorDBReplicationDestinationRequestSchema,
+  CreateTailorDBReplicationRequestSchema,
   CreateTailorDBServiceRequestSchema,
   CreateTailorDBTypeRequestSchema,
   UpdateTailorDBGQLPermissionRequestSchema,
+  UpdateTailorDBReplicationRequestSchema,
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
@@ -382,6 +385,17 @@ export const REQUEST_CHECKS = {
   "auth.connection": {
     creates: [requestCheck(CreateAuthConnectionRequestSchema, (item) => item.request)],
     updates: [requestCheck(UpdateAuthConnectionRequestSchema, (item) => item.request)],
+  },
+  "tailordb.replication": {
+    creates: [requestCheck(CreateTailorDBReplicationRequestSchema, (item) => item.request)],
+    updates: [requestCheck(UpdateTailorDBReplicationRequestSchema, (item) => item.request)],
+    replaces: [requestCheck(CreateTailorDBReplicationRequestSchema, (item) => item.request)],
+  },
+  "tailordb.replication_destination": {
+    creates: [
+      requestCheck(CreateTailorDBReplicationDestinationRequestSchema, (item) => item.request),
+    ],
+    updates: [],
   },
   function_registry: {
     creates: [requestCheck(CreateFunctionRegistryRequestSchema, functionUploadInfoMessage)],

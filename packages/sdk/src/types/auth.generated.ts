@@ -1366,6 +1366,13 @@ export type AuthConfigInput =
                     }
                   | undefined;
                 typeValidate?: Function;
+                replication?:
+                  | {
+                      targets?: string[] | undefined;
+                      excludeFields?: string[] | undefined;
+                      includeFields?: string[] | undefined;
+                    }[]
+                  | undefined;
               };
               readonly plugins: {
                 pluginId: string;
@@ -2869,6 +2876,13 @@ export type AuthConfig =
                     }
                   | undefined;
                 typeValidate?: Function | undefined;
+                replication?:
+                  | {
+                      targets?: string[] | undefined;
+                      excludeFields?: string[] | undefined;
+                      includeFields?: string[] | undefined;
+                    }[]
+                  | undefined;
               };
             };
             usernameField: string;

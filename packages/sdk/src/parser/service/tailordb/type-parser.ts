@@ -206,6 +206,7 @@ function parseTailorDBType(
     ...(typeof metadata.typeValidate === "function" && {
       typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate, dateDefault),
     }),
+    ...(metadata.replication && { replication: metadata.replication }),
   };
 }
 

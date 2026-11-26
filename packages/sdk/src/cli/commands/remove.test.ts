@@ -33,6 +33,7 @@ import type { PlanResults } from "./deploy/apply-phases";
 const mocks = vi.hoisted(() => ({
   plans: undefined as unknown as PlanResults,
   applyAIGateway: vi.fn(),
+  applyTailorDBReplication: vi.fn(),
   applyApplication: vi.fn(),
   applyAuth: vi.fn(),
   applyExecutor: vi.fn(),
@@ -48,6 +49,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("#/cli/commands/deploy/aigateway", () => ({
   planAIGateway: async () => mocks.plans.aiGateway,
   applyAIGateway: mocks.applyAIGateway,
+}));
+vi.mock("#/cli/commands/deploy/tailordb-replication", () => ({
+  planTailorDBReplication: async () => mocks.plans.tailorDBReplication,
+  applyTailorDBReplication: mocks.applyTailorDBReplication,
 }));
 vi.mock("#/cli/commands/deploy/application", () => ({
   planApplication: async () => mocks.plans.app,
@@ -158,6 +163,7 @@ const APPLY_BY_PLAN: Record<keyof PlanResults, { mock: { calls: unknown[][] } }>
   tailorDB: mocks.applyTailorDB,
   staticWebsite: mocks.applyStaticWebsite,
   aiGateway: mocks.applyAIGateway,
+  tailorDBReplication: mocks.applyTailorDBReplication,
   idp: mocks.applyIdP,
   auth: mocks.applyAuth,
   pipeline: mocks.applyPipeline,

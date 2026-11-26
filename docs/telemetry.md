@@ -53,6 +53,7 @@ deploy
 ├── plan
 │   ├── plan.functionRegistry
 │   ├── plan.tailorDB
+│   ├── plan.tailorDBReplication
 │   ├── plan.staticWebsite
 │   ├── plan.aiGateway
 │   ├── plan.idp
@@ -73,10 +74,12 @@ deploy
 │   └── apply.auth.createUpdatePrerequisites
 ├── apply.createUpdateServices
 │   ├── apply.functionRegistry.createUpdate
+│   ├── apply.tailorDBReplication.prepare
 │   ├── apply.tailorDB.createUpdate
 │   │   ├── apply.tailorDB.migration.prePhase
 │   │   ├── apply.tailorDB.migration.script
 │   │   └── apply.tailorDB.migration.postPhase
+│   ├── apply.tailorDBReplication.createUpdate
 │   ├── apply.auth.createUpdateDependents
 │   └── apply.pipeline.createUpdate
 ├── apply.deleteSubgraphResources

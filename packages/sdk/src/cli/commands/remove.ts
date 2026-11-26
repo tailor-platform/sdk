@@ -21,6 +21,10 @@ import {
   assertStaticWebsiteDeletesNotOffered,
   planStaticWebsite,
 } from "#/cli/commands/deploy/staticwebsite";
+import {
+  applyTailorDBReplication,
+  planTailorDBReplication,
+} from "#/cli/commands/deploy/tailordb-replication";
 import { applyTailorDB, planTailorDB } from "#/cli/commands/deploy/tailordb/index";
 import { applyWorkflow, planWorkflow } from "#/cli/commands/deploy/workflow";
 import {
@@ -120,6 +124,8 @@ const REMOVAL_LISTING_ORDER: ReadonlyArray<ManagedResourceType> = [
   "staticwebsite",
   "aigateway",
   "application",
+  "tailordb.replication",
+  "tailordb.replication_destination",
   "tailordb.service",
   "tailordb.type",
   "tailordb.gql_permission",
@@ -165,8 +171,10 @@ async function execRemove(
   };
   // Keyed like `PlannedDeployment` (deploy/apply-phases.ts): adding a resource
   // type there without also adding it here fails to compile.
+  const tailorDB = await planTailorDB(ctx);
   const plans = {
-    tailorDB: await planTailorDB(ctx),
+    tailorDB,
+    tailorDBReplication: await planTailorDBReplication(ctx, tailorDB),
     staticWebsite: await planStaticWebsite(ctx),
     aiGateway: await planAIGateway(ctx),
     idp: await planIdP(ctx),
@@ -223,6 +231,8 @@ async function execRemove(
   await applyExecutor(client, plans.executor, "delete");
   await applyStaticWebsite(client, plans.staticWebsite, "delete");
   await applyAIGateway(client, plans.aiGateway, "delete");
+  await applyTailorDBReplication(client, plans.tailorDBReplication, "prepare");
+  await applyTailorDBReplication(client, plans.tailorDBReplication, "delete");
   await applyApplication(client, plans.app, "delete");
   await applyPipeline(client, plans.pipeline, "delete-resources");
   await applyPipeline(client, plans.pipeline, "delete-services");

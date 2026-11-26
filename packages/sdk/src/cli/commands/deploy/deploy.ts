@@ -119,6 +119,7 @@ import { assertResourcesNotInUse } from "./resources-in-use";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { planTailorDB } from "./tailordb";
+import { planTailorDBReplication } from "./tailordb-replication";
 import {
   assertSkipNamespacesKnown,
   formatMigrationSkipSteps,
@@ -186,6 +187,7 @@ const REUSABLE_ON_REBUILD_KINDS: ReadonlySet<ReusablePlanKind> = new Set([
   "tailorDB",
   "secretManager",
   "aiGateway",
+  "tailorDBReplication",
   "staticWebsite",
   "workflowExecutionPolicy",
   "idp",
@@ -255,6 +257,14 @@ export async function shouldForceApplyAll(
   });
   application.aiGatewayServices.forEach((gateway) => {
     candidateTrns.add(resourceTrn(workspaceId, "aigateway", gateway.name));
+  });
+  application.dbReplicationDestinations.forEach((destination) => {
+    candidateTrns.add(
+      resourceTrn(workspaceId, "tailordb_replication_destination", destination.name),
+    );
+  });
+  application.dbReplications.forEach((replication) => {
+    candidateTrns.add(resourceTrn(workspaceId, "tailordb_replication", replication.name));
   });
   application.resolverServices.forEach((pipeline) => {
     candidateTrns.add(resourceTrn(workspaceId, "pipeline", pipeline.namespace));
@@ -602,8 +612,13 @@ async function planDeploymentTarget(
       ),
     );
     const unchangedWorkflowJobs = collectUnchangedWorkflowJobs(functionRegistry.changeSet);
+    const tailorDBPlan =
+      skip?.has("tailorDB") && previous
+        ? Promise.resolve(previous.tailorDB)
+        : withSpan("plan.tailorDB", () => planTailorDB(ctx));
     const [
       tailorDB,
+      tailorDBReplication,
       staticWebsite,
       aiGateway,
       idp,
@@ -615,9 +630,12 @@ async function planDeploymentTarget(
       workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
-      skip?.has("tailorDB") && previous
-        ? previous.tailorDB
-        : withSpan("plan.tailorDB", () => planTailorDB(ctx)),
+      tailorDBPlan,
+      skip?.has("tailorDBReplication") && previous
+        ? previous.tailorDBReplication
+        : tailorDBPlan.then((plan) =>
+            withSpan("plan.tailorDBReplication", () => planTailorDBReplication(ctx, plan)),
+          ),
       skip?.has("staticWebsite") && previous
         ? previous.staticWebsite
         : withSpan("plan.staticWebsite", () => planStaticWebsite(ctx)),
@@ -690,6 +708,7 @@ async function planDeploymentTarget(
       forceApplyAll,
       functionRegistry,
       tailorDB,
+      tailorDBReplication,
       staticWebsite,
       aiGateway,
       idp,
