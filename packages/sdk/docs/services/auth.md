@@ -344,6 +344,10 @@ The added names also pass type checking wherever the registries apply, such as a
 
 When the Auth service is an external one (`auth: { name: "...", external: true }`), the machine users are not in your config, so `tailor.d.ts` cannot narrow the invoker type and any string passes type checking. For resolvers and executors, the deploy-time check is what catches a misspelled name in that case.
 
+### Several Auth Services (Beta)
+
+A [`defineWorkspace()` config](../workspace.md#several-auth-services) can define several Auth services. `AuthNamespaceName` and `MachineUserName` then cover all of them, and a plain string `invoker` names the machine user in whichever Auth service defines it. When two Auth services define the same name, `tailor deploy` stops with `INVOKER_MACHINE_USER_AMBIGUOUS`; pass the object form above to name the Auth service. A string literal `invoker` passed to `workflow.start()` is resolved the same way when `deploy` bundles the function; see [Starting a Workflow from a Resolver](./workflow.md#starting-a-workflow-from-a-resolver).
+
 ## OAuth 2.0 Clients
 
 Configure OAuth 2.0 clients for third-party applications:

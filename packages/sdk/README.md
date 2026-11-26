@@ -78,6 +78,7 @@ into the current project under `.agents/skills` and `.claude/skills`, so rerun
 ### Guides
 
 - [Multi-Environment Configuration](./docs/multi-environment.md) - Deploying one config to multiple workspaces
+- [Workspace Configuration](./docs/workspace.md) - Declaring every service and application of a workspace in one config (Beta)
 - [Cloning Application Data](./docs/data-clone.md) - Copying an application's data from one workspace to another
 - [Runtime API](./docs/runtime.md) - Typed wrappers for `tailor.iconv`, `tailor.secretmanager`, `tailor.idp`, `tailor.workflow`, `tailor.context`, `tailor.authconnection`, and `tailordb.file`
 - [Testing Guide](./docs/testing.md) - Unit and E2E testing patterns

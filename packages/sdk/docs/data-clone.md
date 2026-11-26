@@ -41,6 +41,8 @@ The platform rejects a clone unless all of the following hold:
 
    The application is the one named by `name` in `tailor.config.ts`, so run all three steps from that application's project. The command asks for confirmation unless `--yes` is given.
 
+With a [workspace config](./workspace.md#commands) (Beta), the application is the only one in `apps`, or the one `--name` names, which a workspace with several applications requires. Only the TailorDB namespaces that application lists are cloned, so in step 2 empty each of them with `tailor tailordb truncate --namespace <namespace> -w <target-workspace-id>` instead of `--all`, which also empties the namespaces of the other applications.
+
 ## What is copied
 
 | Data                      | Copied                    |

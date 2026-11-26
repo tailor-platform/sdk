@@ -425,8 +425,8 @@ export interface WorkspaceConfig<
   /**
    * Environment variables every function of the workspace receives, as `context.env` in
    * resolvers and the second argument `{ env }` in workflow job bodies. A resolver namespace,
-   * the executors, the workflows, and an auth service can override the value of a key declared
-   * here.
+   * the executors, and the workflows can override the value of a key declared here. The `Env`
+   * type comes from the values here, so give an override the same type as the value it replaces.
    *
    * A value that looks like a credential is rejected, since `env` is deployed
    * as plaintext. When the detection is wrong about a value, wrap it as

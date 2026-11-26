@@ -90,7 +90,7 @@ export interface LoadConfigOptions {
 /** What a command that does not accept a workspace config says about it. */
 export interface ConfigKindUnsupportedOptions {
   message: string;
-  suggestion: string;
+  suggestion?: string;
 }
 
 /**
@@ -107,7 +107,8 @@ export function configKindUnsupportedError(
 }
 
 /**
- * Load Tailor configuration file and associated plugins.
+ * Load Tailor configuration file and associated plugins. A config defined with `defineWorkspace()`
+ * or `defineApp()` is rejected with `CONFIG_KIND_UNSUPPORTED`; `loadConfigFile()` loads every kind.
  * @param configPath - Optional explicit config path
  * @param options - Optional module import behavior.
  * @returns Loaded config, plugins, and config path
@@ -120,8 +121,7 @@ export async function loadConfig(
   if (loaded.kind === "workspace") {
     throw configKindUnsupportedError(loaded.workspace, {
       message:
-        "This command does not support a config defined with defineWorkspace() or defineApp().",
-      suggestion: "Define the config with defineConfig() to use this command.",
+        "This command does not support a config defined with defineWorkspace() or defineApp() yet.",
     });
   }
   return { config: loaded.config, plugins: loaded.plugins };
@@ -188,7 +188,8 @@ export async function loadConfigFile(
       exportName: "default",
       subject: "Tailor config",
       issues: [{ path: [], message: "default export not found" }],
-      suggestion: "Export the config as the default export: export default defineConfig({ ... })",
+      suggestion:
+        "Export the config as the default export: export default defineConfig({ ... }), or defineWorkspace() or defineApp() in place of defineConfig()",
     });
   }
 

@@ -112,7 +112,8 @@ namespace (a `db` key). These are separate namespaces that only share the name: 
 `db: { main: ... }` and `resolver: { billing: ... }`, generated resolvers go to a `main` resolver
 namespace, not `billing`. If you configure a resolver namespace with that name, generated resolvers
 join its configured files and use its `defaultPermission`. Otherwise, a resolver namespace is created
-automatically. Configure `defaultPermission` to restrict access; without it, generated resolvers are
+automatically, except in a [workspace config](#workspace-configs-beta). Configure
+`defaultPermission` to restrict access; without it, generated resolvers are
 accessible to anonymous callers, like regular resolvers with no permission declared. Generating into
 an external resolver namespace or duplicating a resolver name within a namespace fails the build.
 
@@ -345,11 +346,11 @@ const deployedInfo: Plugin = {
   id: "@example/deployed-info",
   description: "Reports the deployed application URL",
   onDeployed(ctx) {
-    const [app] = ctx.applications.filter(({ configPath }) => configPath === ctx.configPath);
-    const url = app?.url;
-    if (!url) return;
-    ctx.logger.success(`Application ready: ${url}`);
-    return { outputs: { url } };
+    const urls = ctx.applications
+      .filter(({ configPath, url }) => configPath === ctx.configPath && url)
+      .map(({ name, url }) => ({ name, url }));
+    for (const { name, url } of urls) ctx.logger.success(`Application ${name} ready: ${url}`);
+    return { outputs: { urls } };
   },
 };
 
@@ -393,6 +394,27 @@ Hooks do not run during dry-run, build-only, or migration test deployments.
 Dry-run lists the pending hooks; with `--json`, they appear under
 `pendingDeployedHooks` as `{ application, pluginId }` entries. Calling `deploy()` from the programmatic CLI
 API runs hooks under the same conditions as `tailor deploy`.
+
+## Workspace Configs (Beta)
+
+A [`defineWorkspace()` or `defineApp()` config](../workspace.md) declares the services of a whole
+workspace, which several applications can share. Plugins registered in it receive:
+
+- In generation-time hooks, every TailorDB namespace of the workspace, including those no
+  application lists, and every Auth service in `auths`. Reading the deprecated `auth` throws when
+  the workspace has several Auth services.
+- In `onDeployed`, every application of the workspace in `ctx.applications`, each with the config's
+  path as its `configPath` and no `id`, and every static website of the workspace in
+  `ctx.staticWebsites`. Reading the deprecated `ctx.application` throws when the workspace has no
+  application or several, and the hook then fails with `DEPLOYED_HOOK_FAILED`.
+- In `tailor deploy --json`, `deployedHooks` and `pendingDeployedHooks` entries have no
+  `application`.
+
+Resolvers that a definition-time hook returns go to the resolver namespace named after the
+TailorDB namespace, as above, but a workspace config does not create that resolver namespace for
+them. Declare it under `resolver`; otherwise, `tailor generate` and `tailor deploy` stop with
+`PLUGIN_RESOLVER_NAMESPACE_UNDECLARED`. In a `defineWorkspace()` config, also list it in the
+`apps` that expose the resolvers: a resolver namespace no application lists is in no GraphQL API.
 
 ## Hook Scheduling Rules
 

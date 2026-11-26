@@ -29,6 +29,7 @@ Commands for managing Auth service resources (auth connections, machine users, a
 Returns a list of OAuth2 clients with the following fields:
 
 - `name` - Client name
+- `authNamespace` - Auth service the client belongs to
 - `description` - Client description
 - `clientId` - OAuth2 client ID
 - `grantTypes` - Supported grant types (e.g., `authorization_code`, `refresh_token`)

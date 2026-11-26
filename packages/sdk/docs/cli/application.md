@@ -93,7 +93,9 @@ and `staticWebsites` keyed by site name. Endpoint `url` and `domain` are include
 when a Platform Application with that name exists. If Auth is configured, `auth`
 includes its `namespace` and `oauth2Clients` with each client's `name` and public `clientId`.
 Client secrets are excluded. These fields are returned even when no deploy plugin
-is registered or no resources changed.
+is registered or no resources changed. For a [workspace config](../workspace.md) (Beta),
+`applications` has one entry per `apps` entry, each with the workspace config as its
+`configPath` and no `id`.
 
 Plugins that return outputs add entries under `deployedHooks`. For example, the
 frontend plugin provides upload results in `deployedHooks[].outputs.frontends`.
@@ -167,7 +169,7 @@ create one explicitly before requesting a deployment plan.
 
 **Config File Modification:**
 
-On the first local run, `deploy` assigns your application a stable id (a UUID) so the SDK can recognize ownership across renames. Projects that use `tailor setup` get it recorded in `.github/tailor.lock` under `appIds`; other projects get an `id: "<uuid>"` field written into the `defineConfig({...})` call in `tailor.config.ts`. Commit the file that received the id. See [Configuration](../configuration.md#application-settings) for details.
+On the first local run, `deploy` assigns your application a stable id (a UUID) so the SDK can recognize ownership across renames. Projects that use `tailor setup` get it recorded in `.github/tailor.lock` under `appIds`; other projects get an `id: "<uuid>"` field written into the `defineConfig({...})` call in `tailor.config.ts`. Commit the file that received the id. See [Configuration](../configuration.md#application-settings) for details. A [workspace config](../workspace.md) (Beta) gets no id.
 
 **Multiple Config Deploys:**
 
@@ -178,6 +180,8 @@ tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.t
 ```
 
 When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
+
+A [workspace config](../workspace.md) (Beta) declares the services and applications of the whole workspace in one file, so it needs no other configs. It cannot be combined with them: `--config` with a workspace config and other configs stops with `DEPLOY_WORKSPACE_CONFIG_WITH_OTHERS`.
 
 Names that identify a resource across the whole workspace, such as application, executor, workflow, and static website names and service namespaces, must be unique across all configs in one deploy. Otherwise, `deploy` fails before planning any changes and lists every duplicate with the config files that define it.
 
@@ -276,6 +280,7 @@ After printing the plan, `deploy` asks for confirmation before applying when the
 - Existing resources that `tailor` does not manage yet
 - Deletion of TailorDB tables, TailorDB replications (including a replacement, which rewrites all the replication's tables), static websites, AI gateways, OAuth2 clients (including a client type change), Auth connections, Secret Manager vaults, or Secret Manager secrets
 - Deletion of the application of a config that no longer defines or references any TailorDB namespace, resolver namespace, IdP, or Auth service (see [Application Settings](../configuration.md#application-settings))
+- For a [workspace config](../workspace.md#deploying) (Beta): resources that `defineConfig()` configs deployed, which the workspace config takes over or deletes, and deletion of an application removed from `apps`
 
 Declining cancels the deploy. When the plan includes none of these, `deploy` applies it without asking.
 
@@ -322,8 +327,10 @@ Pass the global `--json` / `-j` flag to get machine-readable output.
 - `summary` — counts of each change type. `forcedBySdkVersion` counts the updates forced by the SDK version, which are also included in `update`. `labelRefreshes` counts the resources that are left as they are while only the labels the SDK sets on them are rewritten, such as a function script's SDK version label after an SDK upgrade; they are not included in `update`. TailorDB tables and resolvers are not counted, although deploy rewrites their labels too.
 - `changes` — planned resource changes, each with `action`, `name`, and optional `labels` / `namespace`. An update forced by the SDK version also has `forcedBySdkVersion: true`.
 - `warnings` — resources not in config (`type: "unmanaged"`), secrets with missing values (`type: "skippedSecret"`), or applications recorded as depending on this deploy but missing from it (`type: "missingDependentApp"`). Unmanaged resources and missing dependent applications require confirmation in apply mode (apply is cancelled if declined); skipped secrets are non-blocking.
+  - An `unmanaged` entry has `managedBy: "workspace"` when a [workspace config](../workspace.md) (Beta) manages the resource; deploying the `defineConfig()` config takes it over from the workspace config.
   - A `missingDependentApp` entry names the missing application's `appId`, the `reason` it depends on this deploy, and the resource whose event publishing turns off when applying without it (`resourceType` and `name`, plus `namespace` for a TailorDB table or resolver). An entry about a workflow's jobs rather than the workflow itself has `scope: "jobs"`.
 - `conflicts` — resources owned by another application that conflict with the current config. Require confirmation in apply mode; apply is cancelled if declined.
+- `takeovers` — present only for a [workspace config](../workspace.md#first-deploy-after-defineconfig) (Beta) that finds resources `defineConfig()` configs deployed: each entry has `resourceType`, `name`, `action` (`"update"` for a resource the workspace config takes over, `"delete"` for one it deletes), and, when known, `currentOwner`, the application that deployed it. Require confirmation in apply mode.
 - `resourceType` in `warnings` and `conflicts` is a stable identifier of the resource kind, such as `executor`, `tailordb.service`, or `secret.secret`. The human-readable plan shows a display name instead.
 
 **Apply** (`--json`): writes a JSON object to stdout:
@@ -364,6 +371,8 @@ After applying, `deploy` records its SDK version on the workspace as the `sdk-ve
 
 When the workspace or a resource has no room for more labels, remove labels that `tailor` does not set from it to make room.
 
+For a [workspace config](../workspace.md#deploying) (Beta), `warnings` lists the resources whose `sdk-on-app-*` labels did not all fit in the Platform's label limit, as `{ "type": "onAppLabelsDropped", "resourceType": "tailordb.service", "name": "...", "applications": ["..."] }` entries naming the applications whose labels were left off. When a resource other than an application holds too many labels even without its `sdk-on-app-*` labels, `deploy` fails with `METADATA_LABEL_LIMIT_EXCEEDED`; remove labels that `tailor` does not set from the resource. A `defineApp()` config stops with `DEPLOY_OTHER_CONFIG_RESOURCES` before applying anything when the workspace holds resources of another config (see [Workspace Configuration](../workspace.md#single-application-projects-defineapp)).
+
 ## remove
 
 Remove all resources managed by the application from the workspace.
@@ -385,6 +394,8 @@ tailor remove [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+A [workspace config](../workspace.md#commands) (Beta) is rejected with `CONFIG_KIND_UNSUPPORTED`. To remove an application or service, remove it from the config and run `tailor deploy`; to remove everything, run `tailor workspace delete`.
+
 ## show
 
 Show information about the deployed application.
@@ -405,6 +416,8 @@ tailor show [options]
 | `--app <APP>`                   | -     | Application of the config (default: the only application the config defines; with several, every deployed application) | No       | -       | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+For a [workspace config](../workspace.md#commands) (Beta) with several applications, `show` without `--app` prints the workspace once and each deployed application under `applications`, and warns about each application that is not deployed yet.
 
 ## open
 

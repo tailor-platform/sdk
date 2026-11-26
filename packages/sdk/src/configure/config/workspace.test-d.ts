@@ -1,9 +1,10 @@
-// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
-import { describe, test } from "vitest";
+import { describe, expectTypeOf, test } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { t } from "#/configure/types/type";
 import { defineApp, defineWorkspace } from "./workspace";
+// oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
+import type { AppDefinition, WorkspaceConfig } from "@tailor-platform/sdk";
 
 const corpAuth = defineAuth("corp-auth", {
   machineUserAttributes: { role: t.string() },
@@ -174,5 +175,12 @@ describe("defineApp", () => {
       // @ts-expect-error - an application exposes a single IdP
       idp: [corpIdp],
     });
+  });
+});
+
+describe("@tailor-platform/sdk", () => {
+  test("exports the config types of defineWorkspace and defineApp", () => {
+    expectTypeOf(defineWorkspace({ apps: {} })).toExtend<WorkspaceConfig>();
+    expectTypeOf(defineApp({ name: "shop" })).toExtend<AppDefinition>();
   });
 });

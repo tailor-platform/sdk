@@ -60,7 +60,7 @@ export async function listOAuth2Clients(
 
 export const listCommand = defineAppCommand({
   name: "list",
-  description: "List all OAuth2 clients in the application.",
+  description: "List the OAuth2 clients of the Auth services the config uses.",
   args: z.strictObject({
     ...deploymentArgs,
     ...paginationArgs(),

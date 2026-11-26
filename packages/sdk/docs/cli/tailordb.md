@@ -83,6 +83,7 @@ tailor tailordb truncate User Post --yes
   - Specific tables: requires typing `yes`
 - Use `--yes` flag to skip confirmation prompts (useful for scripts and CI/CD)
 - Namespaces declared with `{ external: true }` are skipped by `--all` and rejected with a dedicated error when targeted by `--namespace`. Run truncate from the app that owns the namespace.
+- With a [workspace config](../workspace.md#commands) (Beta), `--all` truncates every TailorDB namespace of the workspace, including those no application lists.
 
 ### tailordb migration
 
@@ -320,7 +321,7 @@ tailor tailordb migration test [options]
 | `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                                                                                                                                                                               | No       | -        | -                                 |
 | `--keep-ttl <KEEP_TTL>`                       | -     | Record an expiry on the kept workspace, e.g. 24h or 7d (less than 50,000,000 days), so workspace prune --expired can delete it (requires --keep)                                                                                 | No       | -        | -                                 |
 | `--clone-timeout <CLONE_TIMEOUT>`             | -     | How long to wait for the clone to finish with --data clone, e.g. 30s or 10m (default: 30m)                                                                                                                                       | No       | -        | -                                 |
-| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed, migration, and assertion script execution                                                                                                                                                                 | No       | -        | -                                 |
+| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed, migration, and assertion script execution: its name, or `<auth>/<name>` to name its Auth service too                                                                                                      | No       | -        | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

@@ -48,4 +48,6 @@ export const plugins = definePlugins(
 
 Each site name must match a static website defined in `staticWebsites` in the same config.
 
+`export`, `serve`, and `deploy` do not support a `tailor.config.ts` defined with `defineWorkspace()` or `defineApp()` (Beta) yet: they stop with `CONFIG_KIND_UNSUPPORTED`.
+
 Run `tailor tailordb erd <command> --help` for the full option reference.

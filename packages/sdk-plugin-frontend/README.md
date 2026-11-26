@@ -72,6 +72,8 @@ must be declared in `staticWebsites` of the same config that registers
 `frontendPlugin`. With multiple configs, register each frontend in the config that
 declares its site; a site from another config fails before the build starts. The
 `env` callback can still read the URLs of other configs' sites from `applications`.
+A `defineWorkspace()` or `defineApp()` config (Beta) declares every site of the workspace, so its
+`frontendPlugin` can build any of them.
 
 ## Build environment
 

@@ -19,6 +19,8 @@ For service-specific documentation, see:
 
 To deploy the same config to multiple workspaces with per-environment values, see [Multi-Environment Configuration](./multi-environment.md).
 
+This page describes `defineConfig()`, which defines one application and its services. To declare every service of a workspace and the applications that expose them in one file, use `defineWorkspace()`, or `defineApp()` for a single application; see [Workspace Configuration](./workspace.md) (Beta). The settings below take the same values there unless that page says otherwise.
+
 ### Application Settings
 
 ```typescript
@@ -127,7 +129,7 @@ export default defineConfig({
 });
 ```
 
-`deploy` creates the application only when the config defines or references at least one TailorDB namespace, resolver namespace, IdP, or Auth service. A config with none of them has no application, so its CORS, allowed IP addresses, introspection setting, metadata, and HTTP adapters are not deployed. When a config drops the last of them, `deploy` asks for [confirmation](./cli/application.md#deploy) and deletes the application an earlier deploy created, together with any labels other tools added to it. If an executor's `graphql` operation still targets the application, including one in the same config that sets no `appName`, `deploy` stops with `SERVICE_IN_USE` instead, so keep one of them or remove that executor. Once the application is deleted, adding one back recreates it at the same URL.
+`deploy` creates the application only when the config defines or references at least one TailorDB namespace, resolver namespace, IdP, or Auth service. A config with none of them has no application, so its CORS, allowed IP addresses, introspection setting, metadata, and HTTP adapters are not deployed. When a config drops the last of them, `deploy` asks for [confirmation](./cli/application.md#deploy) and deletes the application an earlier deploy created, together with any labels other tools added to it. If an executor's `graphql` operation still targets the application, including one in the same config that sets no `appName`, `deploy` stops with `SERVICE_IN_USE` instead, so keep one of them or remove that executor. Once the application is deleted, adding one back recreates it at the same URL. In a [`defineWorkspace()` config](./workspace.md#services-and-applications), an application that lists no service is rejected instead.
 
 ### Type Definitions Without `tailor generate` (Beta)
 
@@ -281,6 +283,8 @@ The settings apply to resolvers, executors, workflow jobs, auth hooks, HTTP adap
 ### External Resources
 
 You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.
+
+`external` and `asExternal()` are for `defineConfig()` only. A [workspace config](./workspace.md) declares every service it uses, and its applications share them by name.
 
 ```typescript
 export default defineConfig({
@@ -629,5 +633,42 @@ export const getDB = createScopedGetDB<"customer-db" | "order-db">();
 ```
 
 Passing this `getDB` another namespace, or a table of another namespace, fails to type-check. It is the same `getDB` when your code runs, so it restricts nothing at runtime. To keep code from importing the unrestricted `getDB`, forbid `@tailor-platform/sdk/plugin/kysely-type/db` with your linter's `no-restricted-imports` outside the file that calls `createScopedGetDB`.
+
+With `distPath`, create the narrowed `getDB` from the `Namespace` type of the generated file with `createGetDB` from `@tailor-platform/sdk/kysely`. When the plugin sets `temporal: true`, pass `{ temporal: true }` as well, so the values match the generated types:
+
+```typescript
+import { createGetDB } from "@tailor-platform/sdk/kysely";
+import type { Namespace } from "../../generated/tailordb";
+
+export const getDB = createGetDB<Pick<Namespace, "customer-db" | "order-db">>();
+```
+
+Then forbid importing `getDB` from the generated file. For example, an `.oxlintrc.json` where `src/shop/db.ts` creates the narrowed `getDB` reports any other file that imports the unrestricted one, from either module:
+
+```json
+{
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@tailor-platform/sdk/plugin/kysely-type/db",
+            "message": "Import getDB from src/shop/db.ts."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["**/generated/tailordb"],
+            "importNames": ["getDB"],
+            "message": "Import getDB from src/shop/db.ts."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [{ "files": ["src/shop/db.ts"], "rules": { "no-restricted-imports": "off" } }]
+}
+```
 
 The types follow edits to your TailorDB definition files and to the plugin options. A definition file added while TypeScript is running is not picked up, whether you only create it or also open it in the editor: restart the TypeScript server in your editor, or the `tsc --watch` process. A single `tsc` run always reads the current files.

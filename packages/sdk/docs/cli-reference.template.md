@@ -164,9 +164,12 @@ read them:
 - `AUTH_CONFIG_REQUIRED`: a pending migration has a `migrate.ts`, but the config defines no auth to
   run it. `error.context.file` names the config.
 - `MACHINE_USER_REQUIRED`: a pending migration has a `migrate.ts`, but no machine user is selected
-  to run the scripts of its namespace. `error.context.file` names the config.
+  to run the scripts of its namespace, for example because a workspace config with several Auth
+  services sets no `migration.machineUser`. `error.context.file` names the config.
 - `MACHINE_USER_NOT_FOUND`: the machine user selected to run a pending migration's `migrate.ts` is
   not defined in auth. `error.context.file` names the config.
+- `MACHINE_USER_AMBIGUOUS` (Beta): the machine user selected to run a pending migration's `migrate.ts`
+  is defined in several Auth services of a workspace config. `error.context.file` names the config.
 - `MIGRATION_OUTCOME_UNSETTLED`: an earlier deploy could not confirm whether a migration's script
   ran, and the migration has not been settled since.
 - `MIGRATION_IN_PROGRESS_INVALID`: the migration recorded as in progress cannot be read, is not the
@@ -281,6 +284,9 @@ read them:
 - `MIGRATION_TEST_TARGET_INVALID`: the target workspace is the source workspace.
 - `MIGRATION_TEST_REGION_MISMATCH`: with `--data clone`, the target workspace is in a different
   region from the source.
+- `MIGRATION_TEST_CLONE_UNSUPPORTED` (Beta): with `--data clone`, a workspace config does not
+  deploy exactly one application, or that application does not list every namespace with pending
+  migrations. `error.context` lists `applications` and `pendingNamespaces`.
 - `MIGRATION_TEST_ASSERT_NAMESPACE_REQUIRED`: `--assert` was given, the pending migrations span
   several namespaces, and `--assert-namespace` was not given.
 - `MIGRATION_TEST_NO_PENDING_MIGRATIONS`: the source workspace has no pending migration, or the
@@ -409,28 +415,28 @@ tailor deploy --env-file .env --env-file .env.production
 
 You can use environment variables to configure workspace and authentication:
 
-| Variable                                     | Description                                                                                                      |
-| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                                             |
-| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                                        |
-| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                                    |
-| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                                    |
-| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                           |
-| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                                       |
-| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                                     |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                             |
-| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                         |
-| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function run`, `machineuser token`                     |
-| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                          |
-| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`            |
-| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                                |
-| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count                |
-| `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                             |
-| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                      |
-| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                                      |
-| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                                 |
-| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                       |
-| `TAILOR_NOTIFICATION_BANNER`                 | Unread WARNING/CRITICAL notifications listed after a command in an interactive terminal: `on` (default) or `off` |
+| Variable                                     | Description                                                                                                                                              |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TAILOR_PLATFORM_WORKSPACE_ID`               | Workspace ID for deployment commands                                                                                                                     |
+| `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                                                                                |
+| `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                                                                            |
+| `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                                                                            |
+| `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                                                                   |
+| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                                                                               |
+| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                                                                             |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                                                                     |
+| `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                                                                 |
+| `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `workflow run`, `function run`, `machineuser token`; `<auth>/<name>` names its Auth service too |
+| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                                                                  |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`                                                    |
+| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                                                                        |
+| `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count                                                        |
+| `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent platform RPCs during `apply`/`deploy`. Defaults to 16                                                                                     |
+| `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                                                              |
+| `TAILOR_GITHUB_ACTIONS_ANNOTATIONS`          | GitHub Actions failure annotations: `on` (default) or `off`                                                                                              |
+| `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                                                                         |
+| `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                                                               |
+| `TAILOR_NOTIFICATION_BANNER`                 | Unread WARNING/CRITICAL notifications listed after a command in an interactive terminal: `on` (default) or `off`                                         |
 
 ### Authentication Token Priority
 

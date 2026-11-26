@@ -178,7 +178,8 @@ async function loadNamespaceData(
 /**
  * Load local TailorDB namespaces exactly as SDK generation/deploy sees them:
  * the config is loaded, user types are generated, and each selected
- * namespace's types are loaded with namespace plugins applied.
+ * namespace's types are loaded with namespace plugins applied. A config defined
+ * with `defineWorkspace()` or `defineApp()` is rejected with `CONFIG_KIND_UNSUPPORTED`.
  * @param options - Namespace loading options.
  * @returns The loaded config and TailorDB namespace data.
  */

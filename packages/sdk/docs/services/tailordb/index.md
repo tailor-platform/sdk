@@ -29,7 +29,7 @@ Define TailorDB tables in files matching glob patterns specified in `tailor.conf
 - **Export method**: Use named exports (`export const`)
 - **Export both value and type**: Always export both the runtime value and TypeScript type
 - **Table names**: Use 1-63 ASCII letters or digits, starting with an uppercase letter
-- **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application
+- **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application, or, in a [`defineWorkspace()` config](../../workspace.md#services-and-applications) (Beta), across all TailorDB namespaces of the workspace
 
 ```typescript
 import { db } from "@tailor-platform/sdk";

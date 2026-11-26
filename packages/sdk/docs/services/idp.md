@@ -26,6 +26,7 @@ Configure the Built-in IdP using `defineIdp()`:
 - **Configuration location**: Define in `tailor.config.ts` and set it as `idp`
 - **Uniqueness**: IdP names must be unique within a workspace
 - **Arrays are deprecated**: `idp: [myIdp]` still works but is removed in v3, and so is declaring several IdPs in one config. `tailor upgrade` rewrites an array that holds one IdP; an array with several IdPs is reported for you to change by hand.
+- **Workspace configs (Beta)**: a [`defineWorkspace()` config](../workspace.md#idps) declares any number of IdPs under `idp`, keyed by name, and each application exposes at most one of them in its GraphQL API. Function code reaches every IdP with `new idp.Client({ namespace })`.
 
 ```typescript
 import { defineIdp, defineConfig } from "@tailor-platform/sdk";

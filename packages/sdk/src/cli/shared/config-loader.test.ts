@@ -102,6 +102,28 @@ describe("loadConfigFile", () => {
     });
   });
 
+  test.each([
+    {
+      name: "defineWorkspace",
+      source: `export default defineWorkspace({ db: { main: { files: [] } }, apps: { shop: { db: ["main"] } } });`,
+    },
+    {
+      name: "defineApp",
+      source: `export default defineApp({ name: "shop", db: { main: { files: [] } } });`,
+    },
+  ])("loads a config made with $name from @tailor-platform/sdk", async ({ source }) => {
+    const configPath = writeConfig(
+      `import { defineApp, defineWorkspace } from "@tailor-platform/sdk";\n${source}\n`,
+    );
+
+    const loaded = await loadConfigFile(configPath);
+
+    expect(loaded).toMatchObject({
+      kind: "workspace",
+      workspace: { apps: { shop: { db: ["main"] } } },
+    });
+  });
+
   test("reports a value the types would reject as CONFIG_INVALID", async () => {
     const configPath = writeConfig(
       brandedDefault(
@@ -184,6 +206,7 @@ describe("loadConfig", () => {
     const error = await rejectionOf(loadConfig(configPath));
 
     expect(error).toMatchObject({ code: "CONFIG_KIND_UNSUPPORTED" });
+    expect(error).not.toMatchObject({ suggestion: expect.stringContaining("defineConfig()") });
     expect(getErrorDiagnostics(error).location).toEqual({ file: configPath });
   });
 
@@ -357,7 +380,8 @@ describe("loadConfig", () => {
     expect(error).toMatchObject({
       code: "CONFIG_INVALID",
       message: "Invalid Tailor config:\n  - (root): default export not found",
-      suggestion: "Export the config as the default export: export default defineConfig({ ... })",
+      suggestion:
+        "Export the config as the default export: export default defineConfig({ ... }), or defineWorkspace() or defineApp() in place of defineConfig()",
       context: {
         file: configPath,
         exportName: "default",

@@ -49,6 +49,8 @@ export * from "#/configure/services/index";
 
 // oxlint-disable-next-line typescript/no-deprecated -- Only the array overload of defineConfig is deprecated, until its removal in v3.
 export { defineConfig, definePlugins } from "#/configure/config/index";
+export { defineApp, defineWorkspace } from "#/configure/config/workspace";
+export type { AppDefinition, WorkspaceConfig } from "#/configure/config/types";
 export { PluginValidationError } from "#/utils/plugin-validation-error";
 
 // Plugin types for custom plugin development
