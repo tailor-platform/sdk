@@ -245,7 +245,7 @@
   },
   "devDependencies": {
     "@ark/attest": "0.58.1",
-    "@electric-sql/pglite": "0.5.17",
+    "@electric-sql/pglite": "0.6.0",
     "@informalsystems/quint": "0.34.0",
     "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
