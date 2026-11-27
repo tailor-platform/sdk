@@ -451,23 +451,7 @@ import type {
 
 ## Replicating Generated Tables
 
-A table that a plugin generates is [replicated](../services/tailordb/replication.md#tables-that-plugins-generate) when the plugin calls `.replication()` on it, as for any table. What the plugin sets is the default: users replace it for a table in their namespace's `pluginTables`, keyed by the table's name.
-
-- Omit `targets`, so that the entry applies to every replication of the namespace. Replication names come from each user's config, and a target the namespace does not declare fails when the config loads.
-- To leave a table out unless users choose to replicate it, do not call `.replication()` on it.
-- Document which tables your plugin generates, which of them it replicates, and which fields it leaves out, so that users can set `pluginTables`.
-
-```typescript
-onTailorDBNamespaceLoaded() {
-  return {
-    tables: {
-      auditLog: db
-        .table("AuditLog", { action: db.string(), ipAddress: db.string() })
-        .replication({ excludeFields: ["ipAddress"] }),
-    },
-  };
-},
-```
+A plugin cannot call `.replication()` on a table it generates: if it does, commands that load TailorDB tables, such as `tailor generate`, fail with `PLUGIN_TABLE_INVALID`. Users choose which generated tables each replication copies, and which fields, in the replication's [`pluginTables`](../services/tailordb/replication.md#tables-that-plugins-generate). Document the tables your plugin generates and the fields users may want to leave out, such as personal data.
 
 ## getGeneratedTable Helper
 

@@ -9,7 +9,6 @@ import type { IdPOwnConfig } from "#/configure/services/idp/types";
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { SecretsDefinition } from "#/configure/services/secrets/types";
 import type {
-  TailorDBPluginTableConfig,
   TailorDBReplicationConfig,
   TailorDBReplicationDestinationServiceInput,
   TailorDBTableReplication,
@@ -39,7 +38,6 @@ import type { PluginConfigInput } from "#/types/plugin-config.generated";
 import type { ResolverInput } from "#/types/resolver.generated";
 import type { SecretsInput } from "#/types/secrets.generated";
 import type {
-  TailorDBPluginTableInput,
   TailorDBReplicationDestinationInput,
   TailorDBReplicationSettingsInput,
   TailorDBTypeReplicationInput,
@@ -193,13 +191,6 @@ describe("configure input types are accepted by the schema that parses them", ()
     expectTypeOf<Settings>().toExtend<TailorDBReplicationSettingsInput>();
     expectTypeOf<
       ExtraKeyPaths<Settings, TailorDBReplicationSettingsInput>
-    >().toEqualTypeOf<never>();
-  });
-
-  test("db namespace pluginTables", () => {
-    expectTypeOf<TailorDBPluginTableConfig>().toExtend<TailorDBPluginTableInput>();
-    expectTypeOf<
-      ExtraKeyPaths<TailorDBPluginTableConfig, TailorDBPluginTableInput>
     >().toEqualTypeOf<never>();
   });
 

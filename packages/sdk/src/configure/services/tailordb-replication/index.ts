@@ -3,8 +3,6 @@ import type {
   TailorDBReplicationDestinationServiceInput,
 } from "./types";
 export type {
-  TailorDBPluginTableConfig,
-  TailorDBPluginTablesConfig,
   TailorDBReplicationConfig,
   TailorDBReplicationDestinationConfig,
   TailorDBReplicationsConfig,

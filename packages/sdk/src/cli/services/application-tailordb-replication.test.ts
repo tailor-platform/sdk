@@ -13,10 +13,9 @@ import { defineApplication, loadApplication } from "./application";
 import type { CLIError } from "#/cli/shared/errors";
 import type { AppConfig } from "#/configure/config/types";
 import type {
-  TailorDBPluginTablesConfig,
+  TailorDBReplicationConfig,
   TailorDBReplicationsConfig,
 } from "#/configure/services/tailordb-replication/types";
-import type { TailorAnyDBType } from "#/configure/services/tailordb/types";
 import type { Plugin } from "#/plugin/types";
 
 const warehouse = defineTailorDBReplicationDestination("warehouse", {
@@ -163,7 +162,6 @@ describe("loadApplication TailorDB replication tables", () => {
     userTable?: string;
     replications?: TailorDBReplicationsConfig;
     plugins?: Plugin[];
-    pluginTables?: TailorDBPluginTablesConfig;
   };
 
   async function load(params: LoadParams) {
@@ -194,7 +192,6 @@ export const user = db
                 analytics: { destination: warehouse },
                 lake: { destination: warehouse, tablePrefix: "lake_" },
               },
-              ...(params.pluginTables && { pluginTables: params.pluginTables }),
             },
           },
         },
@@ -212,18 +209,12 @@ export const user = db
       .gqlPermission(unsafeAllowAllGqlPermission);
   }
 
-  function namespacePlugin(id: string, generate: () => TailorAnyDBType): Plugin {
-    return {
-      id,
-      description: `Generate the ${id} table`,
-      importPath: `@example/${id}`,
-      onTailorDBNamespaceLoaded: () => ({ tables: { [id]: generate() } }),
-    };
-  }
-
-  function auditLogPlugin(generate: () => TailorAnyDBType = () => pluginTable("AuditLog")): Plugin {
-    return namespacePlugin("audit-log", generate);
-  }
+  const auditLogPlugin: Plugin = {
+    id: "audit-log",
+    description: "Generate the audit log table",
+    importPath: "@example/audit-log",
+    onTailorDBNamespaceLoaded: () => ({ tables: { auditLog: pluginTable("AuditLog") } }),
+  };
 
   const archivePlugin: Plugin = {
     id: "archive",
@@ -270,94 +261,53 @@ export const user = db
     expect(replications.every(({ types }) => types.length === 0)).toBe(true);
   });
 
-  test.each<{ title: string; pluginTables?: TailorDBPluginTablesConfig }>([
-    { title: "pluginTables does not name" },
-    { title: "pluginTables sets no replication for", pluginTables: { AuditLog: {} } },
-  ])("keeps the plugin's .replication() for a table $title", async ({ pluginTables }) => {
+  test("adds a plugin table only to the replications whose pluginTables list it, with their fields", async () => {
     const replications = await load({
-      plugins: [
-        auditLogPlugin(() => pluginTable("AuditLog").replication({ excludeFields: ["ip"] })),
-      ],
-      ...(pluginTables && { pluginTables }),
-    });
-
-    expect(replications).toEqual([
-      { name: "analytics", types: [{ name: "AuditLog", excludeFields: ["ip"] }] },
-      { name: "lake", types: [{ name: "AuditLog", excludeFields: ["ip"] }] },
-    ]);
-  });
-
-  test("replaces the plugin's .replication() with the table's pluginTables entries", async () => {
-    const replications = await load({
-      plugins: [
-        auditLogPlugin(() => pluginTable("AuditLog").replication({ excludeFields: ["ip"] })),
-      ],
-      pluginTables: {
-        AuditLog: { replication: [{ targets: ["analytics"], includeFields: ["action"] }] },
+      plugins: [auditLogPlugin],
+      replications: {
+        analytics: {
+          destination: warehouse,
+          pluginTables: { AuditLog: { excludeFields: ["ip"] } },
+        },
+        lake: { destination: warehouse, tablePrefix: "lake_" },
+        archive: {
+          destination: warehouse,
+          tablePrefix: "archive_",
+          pluginTables: { AuditLog: {} },
+        },
       },
     });
 
     expect(replications).toEqual([
-      { name: "analytics", types: [{ name: "AuditLog", includeFields: ["action"] }] },
+      { name: "analytics", types: [{ name: "AuditLog", excludeFields: ["ip"] }] },
       { name: "lake", types: [] },
+      { name: "archive", types: [{ name: "AuditLog" }] },
     ]);
   });
 
-  test("leaves out a table whose pluginTables replication is false", async () => {
-    const replications = await load({
-      plugins: [auditLogPlugin(() => pluginTable("AuditLog").replication({}))],
-      pluginTables: { AuditLog: { replication: false } },
-    });
-
-    expect(replications).toEqual([
-      { name: "analytics", types: [] },
-      { name: "lake", types: [] },
-    ]);
-  });
-
-  test("replicates a table the plugin does not call .replication() on", async () => {
-    const replications = await load({
-      plugins: [auditLogPlugin()],
-      pluginTables: { AuditLog: { replication: [{}] } },
-    });
-
-    expect(replications).toEqual([
-      { name: "analytics", types: [{ name: "AuditLog" }] },
-      { name: "lake", types: [{ name: "AuditLog" }] },
-    ]);
-  });
-
-  test("sets a table a plugin generates for another table", async () => {
+  test("adds a table a plugin generates for another table", async () => {
     const replications = await load({
       plugins: [archivePlugin],
       userTable: ".plugin({ archive: {} } as never)",
-      pluginTables: { UserArchive: { replication: [{ targets: ["lake"] }] } },
+      replications: {
+        lake: {
+          destination: warehouse,
+          pluginTables: { UserArchive: { includeFields: ["action"] } },
+        },
+      },
     });
 
     expect(replications).toEqual([
-      { name: "analytics", types: [] },
-      { name: "lake", types: [{ name: "UserArchive" }] },
-    ]);
-  });
-
-  test("accepts a plugin target the namespace does not declare when pluginTables replaces it", async () => {
-    const replications = await load({
-      plugins: [
-        auditLogPlugin(() => pluginTable("AuditLog").replication({ targets: ["archive"] })),
-      ],
-      pluginTables: { AuditLog: { replication: [{ targets: ["lake"] }] } },
-    });
-
-    expect(replications).toEqual([
-      { name: "analytics", types: [] },
-      { name: "lake", types: [{ name: "AuditLog" }] },
+      { name: "lake", types: [{ name: "UserArchive", includeFields: ["action"] }] },
     ]);
   });
 
   const keySuggestion =
-    "Key pluginTables by the names of tables that plugins generate in the namespace, and set how a table you define is replicated with .replication() on it.";
-  const pluginReplicationSuggestion =
-    "Replace the replication a plugin sets on a table it generates with db.<namespace>.pluginTables.<table>.replication.";
+    "Key pluginTables by the names of tables that plugins generate in the namespace, and replicate a table you define with .replication() on it.";
+
+  function listing(pluginTables: NonNullable<TailorDBReplicationConfig["pluginTables"]>) {
+    return { analytics: { destination: warehouse, pluginTables } };
+  }
 
   test.each<{ title: string; params: LoadParams; issues: string[]; suggestion?: string }>([
     {
@@ -385,7 +335,7 @@ export const user = db
       title: "a vector field in includeFields",
       params: { userTable: '.replication({ includeFields: ["embedding"] })' },
       issues: [
-        'db.main-db.tables.User.replication.0.includeFields.0: Table "User" lists vector field "embedding" in includeFields, which is not replicated',
+        'db.main-db.tables.User.replication.0.includeFields.0: Field "User.embedding" is a vector field, which is not replicated',
       ],
     },
     {
@@ -403,98 +353,62 @@ export const user = db
     },
     {
       title: "a pluginTables key no plugin generates",
-      params: { plugins: [auditLogPlugin()], pluginTables: { auditLog: { replication: [{}] } } },
+      params: { plugins: [auditLogPlugin], replications: listing({ auditLog: {} }) },
       issues: [
-        'db.main-db.pluginTables.auditLog: No plugin generates table "auditLog" in TailorDB namespace "main-db" (plugin-generated tables: "AuditLog")',
+        'db.main-db.replications.analytics.pluginTables.auditLog: No plugin generates table "auditLog" in TailorDB namespace "main-db" (plugin-generated tables: "AuditLog")',
       ],
       suggestion: keySuggestion,
     },
     {
       title: "a pluginTables key in a namespace no plugin generates tables for",
-      params: { plugins: [], pluginTables: { AuditLog: { replication: [{}] } } },
+      params: { plugins: [], replications: listing({ AuditLog: {} }) },
       issues: [
-        'db.main-db.pluginTables.AuditLog: No plugin generates table "AuditLog" in TailorDB namespace "main-db" (plugin-generated tables: none)',
+        'db.main-db.replications.analytics.pluginTables.AuditLog: No plugin generates table "AuditLog" in TailorDB namespace "main-db" (plugin-generated tables: none)',
       ],
       suggestion: keySuggestion,
     },
     {
       title: "a pluginTables key naming a table the config defines",
-      params: { plugins: [auditLogPlugin()], pluginTables: { User: { replication: [{}] } } },
+      params: {
+        plugins: [auditLogPlugin],
+        replications: listing({ User: { excludeFields: ["phone"] } }),
+      },
       issues: [
-        'db.main-db.pluginTables.User: Table "User" is not generated by a plugin (plugin-generated tables: "AuditLog")',
+        'db.main-db.replications.analytics.pluginTables.User: Table "User" is not generated by a plugin (plugin-generated tables: "AuditLog")',
       ],
       suggestion: keySuggestion,
     },
     {
-      title: "a pluginTables target the namespace does not declare",
-      params: {
-        plugins: [auditLogPlugin()],
-        pluginTables: { AuditLog: { replication: [{ targets: ["archive"] }] } },
-      },
-      issues: [
-        'db.main-db.pluginTables.AuditLog.replication.0.targets: Table "AuditLog" names replication "archive", which TailorDB namespace "main-db" does not declare in replications',
-      ],
-    },
-    {
       title: "a pluginTables field the table does not have",
       params: {
-        plugins: [auditLogPlugin()],
-        pluginTables: { AuditLog: { replication: [{ excludeFields: ["phone"] }] } },
+        plugins: [auditLogPlugin],
+        replications: listing({ AuditLog: { excludeFields: ["phone"] } }),
       },
       issues: [
-        'db.main-db.pluginTables.AuditLog.replication.0.excludeFields.0: Table "AuditLog" has no field "phone" to replicate',
+        'db.main-db.replications.analytics.pluginTables.AuditLog.excludeFields.0: Table "AuditLog" has no field "phone" to replicate',
       ],
     },
     {
-      title: "an empty pluginTables replication",
+      title: "both field lists in a pluginTables entry",
       params: {
-        plugins: [auditLogPlugin()],
-        pluginTables: { AuditLog: { replication: [] as never } },
+        plugins: [auditLogPlugin],
+        replications: listing({
+          AuditLog: { excludeFields: ["ip"], includeFields: ["action"] } as never,
+        }),
       },
       issues: [
-        "db.main-db.pluginTables.AuditLog.replication: must list at least one entry, or be false to leave the table out",
+        "db.main-db.replications.analytics.pluginTables.AuditLog: Specify either `excludeFields` or `includeFields`, not both.",
       ],
     },
     {
-      title: "a plugin target the namespace does not declare",
+      title: "an unknown pluginTables key and a missing field together",
       params: {
-        plugins: [
-          auditLogPlugin(() => pluginTable("AuditLog").replication({ targets: ["archive"] })),
-        ],
+        plugins: [auditLogPlugin],
+        replications: listing({ Audit: {}, AuditLog: { includeFields: ["phone"] } }),
       },
       issues: [
-        'db.main-db.tables.AuditLog.replication.0.targets: Table "AuditLog" generated by plugin "audit-log" names replication "archive", which TailorDB namespace "main-db" does not declare in replications',
-      ],
-      suggestion: pluginReplicationSuggestion,
-    },
-    {
-      title: "plugin targets the namespace does not declare on two tables",
-      params: {
-        plugins: [
-          auditLogPlugin(() => pluginTable("AuditLog").replication({ targets: ["archive"] })),
-          namespacePlugin("setting", () =>
-            pluginTable("Setting").replication({ targets: ["archive"] }),
-          ),
-        ],
-      },
-      issues: [
-        'db.main-db.tables.AuditLog.replication.0.targets: Table "AuditLog" generated by plugin "audit-log"',
-        'db.main-db.tables.Setting.replication.0.targets: Table "Setting" generated by plugin "setting"',
-      ],
-      suggestion: pluginReplicationSuggestion,
-    },
-    {
-      title: "an unknown pluginTables key and an invalid entry together",
-      params: {
-        plugins: [auditLogPlugin()],
-        pluginTables: {
-          Audit: { replication: [{}] },
-          AuditLog: { replication: [{ targets: ["archive"] }] },
-        },
-      },
-      issues: [
-        'db.main-db.pluginTables.Audit: No plugin generates table "Audit"',
-        'db.main-db.pluginTables.AuditLog.replication.0.targets: Table "AuditLog" names replication "archive"',
+        'db.main-db.replications.analytics.pluginTables.Audit: No plugin generates table "Audit"',
+        'db.main-db.replications.analytics.pluginTables.AuditLog.includeFields.0: Table "AuditLog" has no field "phone"',
       ],
       suggestion: keySuggestion,
     },
@@ -503,6 +417,7 @@ export const user = db
 
     expect(error).toMatchObject({ code: "CONFIG_INVALID" });
     expect((error as CLIError).suggestion).toBe(suggestion);
+    expect((error as CLIError).context?.["issues"]).toHaveLength(issues.length);
     for (const issue of issues) {
       expect(error).toHaveProperty("message", expect.stringContaining(issue));
     }

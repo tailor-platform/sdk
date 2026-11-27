@@ -38,6 +38,21 @@ export const TailorDBReplicationDestinationSchema = z.strictObject({
     .describe("BigQuery dataset to replicate into"),
 });
 
+const excludeFieldsSchema = fieldListSchema
+  .optional()
+  .describe("Replicate every field but these. Fields added later are replicated.");
+
+const includeFieldsSchema = fieldListSchema
+  .optional()
+  .describe("Replicate only these fields. Fields added later are not replicated.");
+
+type FieldLists = { excludeFields?: string[] | undefined; includeFields?: string[] | undefined };
+
+const atMostOneFieldList = [
+  (lists: FieldLists) => lists.excludeFields === undefined || lists.includeFields === undefined,
+  { message: "Specify either `excludeFields` or `includeFields`, not both." },
+] as const;
+
 export const TailorDBReplicationSettingsSchema = z.strictObject({
   destination: TailorDBReplicationDestinationSchema.describe(
     "Destination to write into, as returned by `defineTailorDBReplicationDestination()`",
@@ -51,6 +66,17 @@ export const TailorDBReplicationSettingsSchema = z.strictObject({
     .optional()
     .describe("Prefix prepended to each destination table name"),
   enabled: z.boolean().default(true).describe("Whether the replication runs"),
+  pluginTables: z
+    .record(
+      z.string(),
+      z
+        .strictObject({ excludeFields: excludeFieldsSchema, includeFields: includeFieldsSchema })
+        .refine(...atMostOneFieldList),
+    )
+    .optional()
+    .describe(
+      "Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy",
+    ),
 });
 
 export const TailorDBReplicationsSchema = z
@@ -67,31 +93,7 @@ export const TailorDBTypeReplicationSchema = z
       .refine((names) => new Set(names).size === names.length, "must not name a replication twice")
       .optional()
       .describe("Replications of the namespace that copy this table; every one when omitted"),
-    excludeFields: fieldListSchema
-      .optional()
-      .describe("Replicate every field but these. Fields added later are replicated."),
-    includeFields: fieldListSchema
-      .optional()
-      .describe("Replicate only these fields. Fields added later are not replicated."),
+    excludeFields: excludeFieldsSchema,
+    includeFields: includeFieldsSchema,
   })
-  .refine((type) => type.excludeFields === undefined || type.includeFields === undefined, {
-    message: "Specify either `excludeFields` or `includeFields`, not both.",
-  });
-
-export const TailorDBPluginTableSchema = z.strictObject({
-  replication: z
-    .union([
-      z.literal(false),
-      z
-        .array(TailorDBTypeReplicationSchema)
-        .min(1, "must list at least one entry, or be false to leave the table out"),
-    ])
-    .optional()
-    .describe(
-      "How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out",
-    ),
-});
-
-export const TailorDBPluginTablesSchema = z
-  .record(z.string(), TailorDBPluginTableSchema)
-  .describe("Settings of tables that plugins generate in this namespace, keyed by table name");
+  .refine(...atMostOneFieldList);

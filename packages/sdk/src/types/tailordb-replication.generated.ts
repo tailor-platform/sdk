@@ -20,6 +20,17 @@ export type TailorDBReplicationSettingsInput = {
   tablePrefix?: string | undefined;
   /** Whether the replication runs */
   enabled?: boolean | undefined;
+  /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+  pluginTables?:
+    | {
+        [x: string]: {
+          /** Replicate every field but these. Fields added later are replicated. */
+          excludeFields?: string[] | undefined;
+          /** Replicate only these fields. Fields added later are not replicated. */
+          includeFields?: string[] | undefined;
+        };
+      }
+    | undefined;
 };
 
 export type TailorDBReplicationSettings = {
@@ -29,6 +40,17 @@ export type TailorDBReplicationSettings = {
   tablePrefix?: string | undefined;
   /** Whether the replication runs */
   enabled: boolean;
+  /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+  pluginTables?:
+    | {
+        [x: string]: {
+          /** Replicate every field but these. Fields added later are replicated. */
+          excludeFields?: string[] | undefined;
+          /** Replicate only these fields. Fields added later are not replicated. */
+          includeFields?: string[] | undefined;
+        };
+      }
+    | undefined;
 };
 
 /**
@@ -53,6 +75,17 @@ export type TailorDBReplicationsInput = {
         tablePrefix?: string | undefined;
         /** Whether the replication runs */
         enabled?: boolean | undefined;
+        /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+        pluginTables?:
+          | {
+              [x: string]: {
+                /** Replicate every field but these. Fields added later are replicated. */
+                excludeFields?: string[] | undefined;
+                /** Replicate only these fields. Fields added later are not replicated. */
+                includeFields?: string[] | undefined;
+              };
+            }
+          | undefined;
       }
     | undefined;
 };
@@ -76,6 +109,17 @@ export type TailorDBReplications = {
         tablePrefix?: string | undefined;
         /** Whether the replication runs */
         enabled: boolean;
+        /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+        pluginTables?:
+          | {
+              [x: string]: {
+                /** Replicate every field but these. Fields added later are replicated. */
+                excludeFields?: string[] | undefined;
+                /** Replicate only these fields. Fields added later are not replicated. */
+                includeFields?: string[] | undefined;
+              };
+            }
+          | undefined;
       }
     | undefined;
 };
@@ -89,40 +133,3 @@ export type TailorDBTypeReplication = {
   includeFields?: string[] | undefined;
 };
 export type TailorDBTypeReplicationInput = TailorDBTypeReplication;
-
-export type TailorDBPluginTable = {
-  /** How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out */
-  replication?:
-    | false
-    | {
-        /** Replications of the namespace that copy this table; every one when omitted */
-        targets?: string[] | undefined;
-        /** Replicate every field but these. Fields added later are replicated. */
-        excludeFields?: string[] | undefined;
-        /** Replicate only these fields. Fields added later are not replicated. */
-        includeFields?: string[] | undefined;
-      }[]
-    | undefined;
-};
-export type TailorDBPluginTableInput = TailorDBPluginTable;
-
-/**
- * Settings of tables that plugins generate in this namespace, keyed by table name
- */
-export type TailorDBPluginTables = {
-  [x: string]: {
-    /** How replications of the namespace copy the table, in place of the plugin's `.replication()`; `false` leaves the table out */
-    replication?:
-      | false
-      | {
-          /** Replications of the namespace that copy this table; every one when omitted */
-          targets?: string[] | undefined;
-          /** Replicate every field but these. Fields added later are replicated. */
-          excludeFields?: string[] | undefined;
-          /** Replicate only these fields. Fields added later are not replicated. */
-          includeFields?: string[] | undefined;
-        }[]
-      | undefined;
-  };
-};
-export type TailorDBPluginTablesInput = TailorDBPluginTables;

@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": minor
 ---
 
-Choose how `tailor deploy` replicates tables that plugins generate with a TailorDB namespace's `pluginTables` config, keyed by table name: a table's `replication` takes the same entries as `.replication()` and replaces what the plugin sets, and `false` leaves the table out.
+Replicate tables that plugins generate by listing them in a replication's `pluginTables`, keyed by table name, with the fields to copy as in `.replication()` (`{}` copies every field). Deploying (`tailor deploy` and `tailor tailordb migration test`) fails when a key names no table a plugin generates in the namespace.

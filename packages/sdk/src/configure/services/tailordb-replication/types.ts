@@ -3,7 +3,6 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 import type {
-  TailorDBPluginTableInput,
   TailorDBReplicationDestinationInput,
   TailorDBReplicationSettingsInput,
 } from "#/types/tailordb-replication.generated";
@@ -24,9 +23,18 @@ export type TailorDBReplicationDestinationConfig = TailorDBReplicationDestinatio
   TailorDBReplicationDestinationDefinitionBrand;
 
 /** A replication of a TailorDB namespace's tables, keyed by its name in the namespace's `replications`. */
-export type TailorDBReplicationConfig = Omit<TailorDBReplicationSettingsInput, "destination"> & {
+export type TailorDBReplicationConfig = Omit<
+  TailorDBReplicationSettingsInput,
+  "destination" | "pluginTables"
+> & {
   /** Destination to write into, as returned by `defineTailorDBReplicationDestination()`. It is deployed with the replication. */
   destination: TailorDBReplicationDestinationConfig;
+  /**
+   * Tables that plugins generate in the namespace for this replication to copy, keyed by table
+   * name, with the fields to copy as in `.replication()`, e.g.
+   * `{ AuditLog: { excludeFields: ["ipAddress"] } }`. `{}` copies every field.
+   */
+  pluginTables?: Record<string, TailorDBTableReplicationFields<Record<string, unknown>>>;
 };
 
 /**
@@ -47,26 +55,11 @@ type TailorDBTableReplicationFields<Fields> =
   | { excludeFields?: never; includeFields?: never };
 
 /**
- * How replications of the namespace copy a table, passed to `.replication()` or listed in the
- * namespace's `pluginTables`. List at most one of `excludeFields` and `includeFields`; with
- * neither, every field is copied. Vector fields are never replicated, so `includeFields` cannot
- * list them.
+ * How replications of the namespace copy a table, passed to `.replication()`. List at most one
+ * of `excludeFields` and `includeFields`; with neither, every field is copied. Vector fields are
+ * never replicated, so `includeFields` cannot list them.
  */
 export type TailorDBTableReplication<Fields> = TailorDBTableReplicationFields<Fields> & {
   /** Replications of the namespace that copy the table; every one when omitted. */
   targets?: string[];
 };
-
-type TailorDBPluginTableReplication = TailorDBTableReplication<Record<string, unknown>>;
-
-/** Settings of a table that a plugin generates, keyed by the table's name in the namespace's `pluginTables`. */
-export type TailorDBPluginTableConfig = Omit<TailorDBPluginTableInput, "replication"> & {
-  /**
-   * How replications of the namespace copy the table, in place of what the plugin sets with
-   * `.replication()`. `false` leaves the table out.
-   */
-  replication?: false | [TailorDBPluginTableReplication, ...TailorDBPluginTableReplication[]];
-};
-
-/** Settings of tables that plugins generate in a TailorDB namespace, keyed by table name. */
-export type TailorDBPluginTablesConfig = Record<string, TailorDBPluginTableConfig>;

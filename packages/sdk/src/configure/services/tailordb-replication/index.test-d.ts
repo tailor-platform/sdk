@@ -1,11 +1,7 @@
 import { assertType, describe, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
 import { db } from "#/configure/services/tailordb/schema";
-import {
-  defineTailorDBReplicationDestination,
-  type TailorDBPluginTableConfig,
-  type TailorDBPluginTablesConfig,
-} from "./index";
+import { defineTailorDBReplicationDestination, type TailorDBReplicationConfig } from "./index";
 
 const table = db.table("User", {
   name: db.string(),
@@ -86,18 +82,23 @@ describe("namespace replications", () => {
   });
 });
 
-describe("namespace pluginTables", () => {
-  test("accept .replication() entries and false", () => {
+describe("replication pluginTables", () => {
+  test("accept the field lists of .replication() without targets", () => {
     assertType(
       defineConfig({
         name: "shop",
         db: {
           "main-db": {
             files: [],
-            pluginTables: {
-              AuditLog: { replication: [{ targets: ["analytics"], excludeFields: ["ip"] }] },
-              DeletedOrder: { replication: false },
-              Setting: {},
+            replications: {
+              analytics: {
+                destination: warehouse,
+                pluginTables: {
+                  AuditLog: { excludeFields: ["ip"] },
+                  Setting: { includeFields: ["name"] },
+                  DeletedOrder: {},
+                },
+              },
             },
           },
         },
@@ -105,26 +106,18 @@ describe("namespace pluginTables", () => {
     );
   });
 
-  test("reject an empty list", () => {
-    assertType(
-      defineConfig({
-        name: "shop",
-        // @ts-expect-error list at least one entry, or false
-        db: { "main-db": { files: [], pluginTables: { AuditLog: { replication: [] } } } },
-      }),
-    );
-  });
-
-  test("reject both lists in one entry", () => {
-    const pluginTables: TailorDBPluginTablesConfig = {
-      // @ts-expect-error at most one of excludeFields and includeFields
-      AuditLog: { replication: [{ excludeFields: ["ip"], includeFields: ["action"] }] },
+  test("reject both lists, targets, and a nested replication", () => {
+    const replication: TailorDBReplicationConfig = {
+      destination: warehouse,
+      pluginTables: {
+        // @ts-expect-error at most one of excludeFields and includeFields
+        AuditLog: { excludeFields: ["ip"], includeFields: ["action"] },
+        // @ts-expect-error a replication's pluginTables lists tables for that replication only
+        Setting: { targets: ["lake"] },
+        // @ts-expect-error an entry is a field list
+        DeletedOrder: { replication: false },
+      },
     };
-    assertType(pluginTables);
-  });
-
-  test("take one table's settings as TailorDBPluginTableConfig", () => {
-    const auditLog: TailorDBPluginTableConfig = { replication: false };
-    assertType<TailorDBPluginTablesConfig>({ AuditLog: auditLog });
+    assertType(replication);
   });
 });

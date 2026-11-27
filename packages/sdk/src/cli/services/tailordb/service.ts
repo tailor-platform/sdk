@@ -136,6 +136,27 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     return result.data;
   };
 
+  const parseGeneratedTable = (table: unknown, origin: string): TailorDBTypeSchemaOutput => {
+    const parsed = parsePluginTable(table, origin);
+    if (parsed.metadata.replication !== undefined) {
+      throw CLIError({
+        code: "PLUGIN_TABLE_INVALID",
+        message: `TailorDB table ${origin} in TailorDB service "${namespace}" calls .replication(), which a plugin cannot call on a table it generates`,
+        suggestion: `Remove .replication() from the table in the plugin, or update the plugin. To replicate the table, list it in the pluginTables of a replication in db.${namespace}.replications.`,
+        context: {
+          namespace,
+          issues: [
+            {
+              path: ["metadata", "replication"],
+              message: "A plugin cannot call .replication() on a table it generates",
+            },
+          ],
+        },
+      });
+    }
+    return parsed;
+  };
+
   const describeGeneratedTable = (name: unknown, kind: string, pluginId: string): string => {
     const namePart = typeof name === "string" && name.length > 0 ? `"${name}" ` : "";
     return `${namePart}generated as "${kind}" by plugin "${pluginId}"`;
@@ -243,7 +264,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           );
     const parsedGeneratedTables = generatedTables.map((generatedTable) => ({
       ...generatedTable,
-      table: parsePluginTable(
+      table: parseGeneratedTable(
         generatedTable.table,
         describeGeneratedTable(
           generatedTable.tableName,
@@ -414,7 +435,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           pluginId,
           config,
           kind,
-          table: parsePluginTable(
+          table: parseGeneratedTable(
             generatedTable,
             describeGeneratedTable(getRawPluginTableName(generatedTable), kind, pluginId),
           ),
