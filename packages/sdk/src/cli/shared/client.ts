@@ -849,6 +849,7 @@ export const REPEATABLE_METHODS: ReadonlySet<string> = new Set([
   "PublishDeployment",
   "RemoveCustomDomain",
   "RemoveWorkspacePlatformUser",
+  "RepairTailorDBReplication", // the repeat finds the tables already waiting for a repair
   "RequestCustomDomainTransfer",
   "RestoreWorkspace",
   "RevokeAuthConnection",

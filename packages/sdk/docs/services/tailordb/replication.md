@@ -36,7 +36,7 @@ export default defineConfig({
 
 ### Granting access
 
-Replications write to BigQuery as the workspace's replication service account, which every destination of the workspace shares. When `tailor deploy` creates a destination, it prints that account's email. Grant it:
+Replications write to BigQuery as the workspace's replication service account, which every destination of the workspace shares. When `tailor deploy` creates a destination, it prints that account's email; [`tailor tailordb replication destination list`](../../cli/tailordb.md#tailordb-replication-destination-list) shows it later too. Grant it:
 
 - the **BigQuery Data Editor** role (`roles/bigquery.dataEditor`) on the dataset
 - the **BigQuery Job User** role (`roles/bigquery.jobUser`) on the project
@@ -146,3 +146,7 @@ Each table is written to the BigQuery table `<tablePrefix><TableName>`, for exam
 - Deleting a replication or a destination leaves the data already in BigQuery as it is.
 - If one deploy would have two replications exchange their tables, for example by swapping their `tablePrefix`, `deploy` deletes one of them and creates it again, which rewrites all its tables. `deploy` asks for confirmation first.
 - If the platform disables a replication, for example while its workspace is deleted, the next `deploy` enables it again and its tables are rewritten.
+
+## Checking and repairing tables
+
+[`tailor tailordb replication list`](../../cli/tailordb.md#tailordb-replication-list) lists the workspace's replications. [`tailor tailordb replication status <name>`](../../cli/tailordb.md#tailordb-replication-status) shows the state of each table a replication writes. A table in `ERROR`, for example one deleted in BigQuery, stays there until it is repaired: [`tailor tailordb replication repair <name>`](../../cli/tailordb.md#tailordb-replication-repair) rewrites the tables in `ERROR`, and `--type` rewrites the tables of the types you name.

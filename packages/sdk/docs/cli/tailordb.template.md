@@ -75,6 +75,20 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb/migration.md).
 
+{{politty:command:tailordb replication:heading}}
+
+{{politty:command:tailordb replication:description}}
+
+{{politty:command:tailordb replication:usage}}
+
+{{politty:command:tailordb replication:subcommands}}
+
+{{politty:command:tailordb replication:global-options-link}}
+{{politty:command:tailordb replication list}}
+{{politty:command:tailordb replication status}}
+{{politty:command:tailordb replication repair}}
+{{politty:command:tailordb replication destination}}
+
 ### tailordb erd (Beta)
 
 The `tailordb erd` commands (export, diff, serve, deploy) are provided by the `@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
