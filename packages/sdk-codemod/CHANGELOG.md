@@ -1,5 +1,15 @@
 # @tailor-platform/sdk-codemod
 
+## 0.16.0
+
+### Minor Changes
+
+- [#3261](https://github.com/tailor-platform/sdk/pull/3261) [`f493045`](https://github.com/tailor-platform/sdk/commit/f4930454218db58cefb26a275528b85174b0d64f) Thanks [@dqn](https://github.com/dqn)! - Add the v3 codemods `v3/config-to-app` and `v3/config-to-workspace`, which `tailor upgrade` runs on the upgrade to v3. `v3/config-to-app` rewrites a `defineConfig()` config deployed on its own to `defineApp()`. `v3/config-to-workspace` merges the configs deployed to one workspace into one `defineWorkspace()` config in the upgraded directory and deletes them. Both record the config under `workspaces` in `.github/tailor.lock`, and report what they leave for a manual change. `tailor upgrade` now lists the files the codemods deleted.
+
+### Patch Changes
+
+- [#3264](https://github.com/tailor-platform/sdk/pull/3264) [`ac95495`](https://github.com/tailor-platform/sdk/commit/ac9549505c23286d44d3ca93dec6faf6207a4365) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor upgrade` skipping a command line that puts a global option between its tokens, such as `tailor --json function test-run a.ts`, `tailor function --verbose test-run a.ts`, `tailor function --json script`, `tailor-sdk --envFile .env apply`, or `tailor-sdk --no-json crash-report list`. The `v2/apply-to-deploy`, `v2/cli-rename`, `v2/test-run-arg-input`, `v3/function-script-rename`, and `v3/function-test-run-rename` codemods now skip every spelling of `--verbose`, `--json`, `--env-file`, and `--env-file-if-exists` that the CLI accepts, including `--no-json`, camelCase names such as `--envFile`, and joined short flags such as `-je .env`. When `v3/function-test-run-rename` cannot rewrite a command that a package runner starts, it now also reports one that has a global option between `function` and `test-run`. `v2/test-run-arg-input` also no longer splits a command at an escaped `\&`, `\|`, or `\;`, so `--name foo\&bar --arg '{"input":{...}}'` is unwrapped like any other `--arg`. The leftover check of `v3/function-test-run-rename` also reads a global option in a script's argv array in every spelling the CLI accepts, such as `['function', '--envFile', '.env local', 'test-run']` or `-je`, so it no longer misses such a command. A shell script or other text file with an already migrated command whose option value is named `test-run`, such as `tailor function --env-file test-run run a.ts`, is no longer reported.
+
 ## 0.15.0
 
 ### Minor Changes

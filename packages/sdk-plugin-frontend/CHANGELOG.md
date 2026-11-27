@@ -1,5 +1,22 @@
 # @tailor-platform/sdk-plugin-frontend
 
+## 0.4.1
+
+### Patch Changes
+
+- [#3321](https://github.com/tailor-platform/sdk/pull/3321) [`e1d6a20`](https://github.com/tailor-platform/sdk/commit/e1d6a207d45925935bbd881e214b2dbeef0f4f75) Thanks [@dqn](https://github.com/dqn)! - Export `defineWorkspace()` and `defineApp()` (beta) from `@tailor-platform/sdk`, with their config types `WorkspaceConfig` and `AppDefinition`. A `defineWorkspace()` config declares every service of a workspace in one `tailor.config.ts` and lists the services each application exposes; `defineApp()` is its single-application form, `defineConfig()` without `id` and `external`. The new Workspace Configuration guide (`docs/workspace.md`) describes how to write, deploy, and move to one.
+  
+  With such a config:
+  
+  - `tailor deploy` deploys the whole workspace. Its first deploy over resources that `defineConfig()` configs deployed lists them and asks before taking them over. Installing `@tailor-platform/sdk` writes the config's `tailor.d.ts`.
+  - `query`, `tailordb truncate`, the `tailordb migration` commands, `function run` and `script`, `workflow run` and `start`, `api`, `seed`, and the `machineuser` and `oauth2client` commands run on it. For the several Auth services such a config can have, a machine user or OAuth2 client can be written as `<auth>/<name>`, `startWorkflow()` and seedPlugin's `machineUserName` take `{ namespace, machineUserName }`, and `loadSeedContext()` returns `resolveMachineUser()` and `appName`.
+  - `tailor show` and `tailor open` take `--app`, and `tailor show` without it, for a config with several applications, lists the deployed ones and warns about the others. `tailor data clone` clones its only application, and `tailor remove` stops and points to `tailor deploy` and `tailor workspace delete`. For a `defineConfig()` config, `--app` accepts only the config's own name.
+  - `tailor setup ci` generates one deploy for the whole workspace, records the config under `workspaces` in `.github/tailor.lock`, rejects `--erd-preview`, and takes `--migration-test` only when the config deploys one application that lists every TailorDB namespace with migrations. `tailor setup --seed` reads a seedPlugin `machineUserName` given as `{ namespace, machineUserName }`.
+  
+  CLI help shows the `<auth>/<name>` form, and the READMEs of the seed, frontend, and TailorDB ERD plugins describe workspace configs.
+- Updated dependencies [[`85b4512`](https://github.com/tailor-platform/sdk/commit/85b4512f05d8462a162c95dcd5c54aa0f39f06e0), [`f493045`](https://github.com/tailor-platform/sdk/commit/f4930454218db58cefb26a275528b85174b0d64f), [`36067ab`](https://github.com/tailor-platform/sdk/commit/36067ab4900cbeadc149784a0a4336297e584f65), [`0685207`](https://github.com/tailor-platform/sdk/commit/0685207226e61ab86acc173f0c27e134d116b134), [`ea284a8`](https://github.com/tailor-platform/sdk/commit/ea284a83c7557bce1c8f69d8a6ddbbe1ddbafdc1), [`e6f404a`](https://github.com/tailor-platform/sdk/commit/e6f404a23304e4af0e6a2411f8d2e8fb9e5d83ae), [`62221a0`](https://github.com/tailor-platform/sdk/commit/62221a0cb7ec5fc35c11ea21280a616064159065), [`173521f`](https://github.com/tailor-platform/sdk/commit/173521f3356c4ecd60aff91517c9671a392d1267), [`020444e`](https://github.com/tailor-platform/sdk/commit/020444e202b5f564e41643191f7a768a78822d36), [`e1d6a20`](https://github.com/tailor-platform/sdk/commit/e1d6a207d45925935bbd881e214b2dbeef0f4f75), [`c82e196`](https://github.com/tailor-platform/sdk/commit/c82e196974010ae86d3e6e8c5fe5339af30f800f), [`01ef061`](https://github.com/tailor-platform/sdk/commit/01ef061b6c7cab4af481c882b11e468b4931bc35), [`1eb84c0`](https://github.com/tailor-platform/sdk/commit/1eb84c03bcdaf745d3403698c9e5c42092bd33d0), [`5ee0fb0`](https://github.com/tailor-platform/sdk/commit/5ee0fb0f22f39d014b62fc649ea8583719cf80e1), [`564ebaa`](https://github.com/tailor-platform/sdk/commit/564ebaa7b3be0dc3d8b9bebd1f40675ddec3185f), [`7269e5f`](https://github.com/tailor-platform/sdk/commit/7269e5f276f153c2d5bc787a3432a0138302d89c), [`1331622`](https://github.com/tailor-platform/sdk/commit/13316226df3bdca835874cab796942bf46dd052a)]:
+  - @tailor-platform/sdk@2.49.0
+
 ## 0.4.0
 
 ### Minor Changes
