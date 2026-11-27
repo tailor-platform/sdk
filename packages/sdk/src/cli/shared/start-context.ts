@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { loadFilesWithBaseDir, type FileLoadConfig } from "#/cli/services/file-loader";
 import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-utils";
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
@@ -24,6 +24,8 @@ export interface StartModuleBindings {
 
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
+  /** Directory the workflow config's file patterns were resolved against (default: process.cwd()) */
+  baseDir?: string | undefined;
   /**
    * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
    * config has no Auth service, and a string-literal invoker stops the build.
@@ -177,9 +179,11 @@ export async function buildStartContext(
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
   const unlistedModules = new Map<string, StartModuleBindings | null>();
-  if (!workflowConfig) return { modules, authNamespace, tsconfigCache, unlistedModules };
+  const loaded = workflowConfig
+    ? loadFilesWithBaseDir(workflowConfig, baseDir)
+    : { files: [], baseDir };
 
-  for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
+  for (const file of loaded.files) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
       const parsed = parseStartModule(file, source);
@@ -204,7 +208,7 @@ export async function buildStartContext(
       ?.exports.set("default", { kind: "workflow", name: workflow.name });
   }
 
-  return { modules, authNamespace, tsconfigCache, unlistedModules };
+  return { modules, baseDir: loaded.baseDir, authNamespace, tsconfigCache, unlistedModules };
 }
 
 function sortedTargets(bindings: Map<string, StartTarget>) {

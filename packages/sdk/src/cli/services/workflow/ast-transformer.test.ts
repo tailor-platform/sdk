@@ -1329,6 +1329,8 @@ export default make("made-workflow");
     type ProjectOptions = {
       /** List the files through a symlink to the project directory. */
       listedThroughSymlink?: boolean;
+      /** List the files relative to the working directory, outside the config directory, as v1 configs did. */
+      listedRelativeToCwd?: boolean;
     };
 
     async function transformInProject(
@@ -1344,11 +1346,17 @@ export default make("made-workflow");
       const dir = tmpDir;
       const listedRoot = options.listedThroughSymlink ? path.join(dir, "link") : dir;
       if (options.listedThroughSymlink) fs.symlinkSync(dir, listedRoot, "dir");
+      const originalCwd = process.cwd();
+      if (options.listedRelativeToCwd) process.chdir(dir);
       const context = await buildStartContext(
-        { files: listedFiles.map((file) => path.join(listedRoot, file)) },
+        {
+          files: options.listedRelativeToCwd
+            ? [...listedFiles]
+            : listedFiles.map((file) => path.join(listedRoot, file)),
+        },
         undefined,
-        listedRoot,
-      );
+        options.listedRelativeToCwd ? path.join(dir, "config") : listedRoot,
+      ).finally(() => process.chdir(originalCwd));
       const callerFile = path.join(dir, "src/caller.ts");
       return { callerFile, run: () => transformStartCallsWithContext(source, context, callerFile) };
     }
@@ -1459,7 +1467,7 @@ export default make("made-workflow");
       expect(thrown).toMatchObject({
         code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
         message: `sub.start() cannot be rewritten: job "sub-job" is defined in ${displayFile}, which the config's workflow "files" do not include.`,
-        suggestion: `Add ${displayFile} to the workflow "files" in the config (add a workflow service if it has none), or remove the "!" pattern or "ignores" entry that leaves it out.`,
+        suggestion: `Add src/workflows/sub.ts to the workflow "files" in the config (add a workflow service if it has none), or remove the "!" pattern or "ignores" entry that leaves it out.`,
         context: {
           file: callerFile,
           callee: "sub.start",
@@ -1471,6 +1479,21 @@ export default make("made-workflow");
         },
       });
       expect(getErrorDiagnostics(thrown as Error).location).toEqual({ file: callerFile });
+    });
+
+    test("suggests the entry relative to the working directory when the files fall back to it", async () => {
+      using _warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const { run } = await transformInProject(
+        `import { sub } from "./workflows/sub";\nawait sub.start({ id: 1 });`,
+        ["src/workflows/sync.ts"],
+        { listedRelativeToCwd: true },
+      );
+
+      expect(run).toThrow(
+        expect.objectContaining({
+          suggestion: expect.stringContaining('Add src/workflows/sub.ts to the workflow "files"'),
+        }),
+      );
     });
 
     test("does not report a file in files that the import reaches through another path", async () => {
@@ -1494,6 +1517,7 @@ export const run = async () => await notify.start();`,
       expect(run).toThrow(
         expect.objectContaining({
           code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+          suggestion: expect.stringContaining('Add src/caller.ts to the workflow "files"'),
           context: expect.objectContaining({
             file: callerFile,
             callee: "notify.start",

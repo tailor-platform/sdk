@@ -252,9 +252,10 @@ interface OutsideFilesStartCall {
   targetFile: string;
 }
 
-function startTargetOutsideFilesError(call: OutsideFilesStartCall): Error {
+function startTargetOutsideFilesError(call: OutsideFilesStartCall, baseDir = process.cwd()): Error {
   const { calleeText, currentFilePath, importSource, importedName, target, targetFile } = call;
   const displayFile = path.relative(process.cwd(), targetFile);
+  const filesEntry = path.relative(baseDir, targetFile);
   return locatedCLIError(
     { file: currentFilePath },
     {
@@ -263,7 +264,7 @@ function startTargetOutsideFilesError(call: OutsideFilesStartCall): Error {
         `${calleeText}() cannot be rewritten: ${target.kind} "${target.name}" is defined in ` +
         `${displayFile}, which the config's workflow "files" do not include.`,
       suggestion:
-        `Add ${displayFile} to the workflow "files" in the config (add a workflow service if it ` +
+        `Add ${filesEntry} to the workflow "files" in the config (add a workflow service if it ` +
         `has none), or remove the "!" pattern or "ignores" entry that leaves it out.`,
       context: {
         callee: calleeText,
@@ -298,13 +299,16 @@ function assertRewritableStartCalls(
   ) => {
     const resolved = resolveUnlistedTarget(context, unlisted, importedName);
     if (!resolved) return;
-    throw startTargetOutsideFilesError({
-      calleeText,
-      currentFilePath,
-      importSource: unlisted.importSource,
-      importedName,
-      ...resolved,
-    });
+    throw startTargetOutsideFilesError(
+      {
+        calleeText,
+        currentFilePath,
+        importSource: unlisted.importSource,
+        importedName,
+        ...resolved,
+      },
+      context.baseDir,
+    );
   };
   walkBindingAware(program, names, (node, shadowedNames) => {
     const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
@@ -331,12 +335,15 @@ function assertRewritableStartCalls(
     }
     const local = unlistedLocals.get(startCall.identifierName);
     if (local && !isListedFile(context, currentFilePath)) {
-      throw startTargetOutsideFilesError({
-        calleeText,
-        currentFilePath,
-        target: local,
-        targetFile: currentFilePath.replace(/[?#].*$/, ""),
-      });
+      throw startTargetOutsideFilesError(
+        {
+          calleeText,
+          currentFilePath,
+          target: local,
+          targetFile: currentFilePath.replace(/[?#].*$/, ""),
+        },
+        context.baseDir,
+      );
     }
     const undetectable = undetectableImports.get(startCall.identifierName);
     if (!undetectable) return;

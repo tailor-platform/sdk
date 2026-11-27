@@ -27,8 +27,29 @@ export function loadFilesWithIgnores(
   baseDir: string,
   warn: (message: string) => void,
 ): string[] {
+  return loadFilesWithBaseDir(config, baseDir, warn).files;
+}
+
+export interface LoadedFiles {
+  files: string[];
+  /** Directory the patterns were resolved against: baseDir, or process.cwd() after the v1 fallback */
+  baseDir: string;
+}
+
+/**
+ * Load files like `loadFilesWithIgnores`, also returning the directory the patterns were resolved against.
+ * @param config - Configuration with files patterns and optional ignores patterns
+ * @param baseDir - Directory relative patterns are resolved against
+ * @param warn - Reports glob errors and compatibility warnings
+ * @returns The absolute file paths and the directory their patterns were resolved against
+ */
+export function loadFilesWithBaseDir(
+  config: FileLoadConfig,
+  baseDir: string,
+  warn: (message: string) => void,
+): LoadedFiles {
   if (config.files.length === 0) {
-    return [];
+    return { files: [], baseDir };
   }
 
   const resolved = resolveFiles(config, baseDir, warn);
@@ -36,7 +57,7 @@ export function loadFilesWithIgnores(
     .filter((pattern) => !pattern.startsWith("!"))
     .every((pattern) => path.isAbsolute(pattern));
   if (resolved.matchedAnyPattern || baseDir === process.cwd() || allPositivePatternsAbsolute) {
-    return resolved.files;
+    return { files: resolved.files, baseDir };
   }
 
   // v1 compatibility fallback: pre-existing configs may have relative
@@ -61,7 +82,7 @@ export function loadFilesWithIgnores(
         `this fallback will be removed in v3.`,
     );
   }
-  return resolveFiles(config, process.cwd(), warn).files;
+  return { files: resolveFiles(config, process.cwd(), warn).files, baseDir: process.cwd() };
 }
 
 interface ResolvedFiles {
