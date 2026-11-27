@@ -184,6 +184,7 @@ export async function bundleWorkflowRunJobs(
     tsconfigCache,
     dateDefault: effectiveDateDefault(config),
     kyselyTemporal: target.kyselyTemporal ?? false,
+    kyselyDecimal: target.kyselyDecimal ?? false,
   });
 
   return {

@@ -59,7 +59,11 @@ function applyConfig(plugin: ReturnType<typeof createEnvironmentPlugin>, userCon
 }
 
 // The real loader imports the file; these tests only exercise the wiring.
-const legacyLoader = async () => ({ dateDefault: "legacy" as const, kyselyTemporal: false });
+const legacyLoader = async () => ({
+  dateDefault: "legacy" as const,
+  kyselyTemporal: false,
+  kyselyDecimal: false,
+});
 
 describe("createBlockPlugin", () => {
   test("replaces a blocked import with a throwing statement", () => {
@@ -794,6 +798,7 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
       dateDefault: "temporal",
       kyselyTemporal: false,
+      kyselyDecimal: false,
     }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
@@ -808,6 +813,7 @@ describe("createEnvironmentPlugin", () => {
       return {
         dateDefault: path.includes("/temporal/") ? "temporal" : "legacy",
         kyselyTemporal: false,
+        kyselyDecimal: false,
       };
     });
     const userConfig: any = {
@@ -837,17 +843,20 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
       dateDefault: "legacy",
       kyselyTemporal: true,
+      kyselyDecimal: true,
     }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
 
     expect(userConfig.test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL).toBe("true");
+    expect(userConfig.test.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL).toBe("true");
   });
 
   test("seeds each project's own kysely temporal and blanks it on projects that select another environment", async () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async (path) => ({
       dateDefault: "legacy",
       kyselyTemporal: path.includes("/temporal/"),
+      kyselyDecimal: false,
     }));
     const userConfig: any = {
       root: "/proj",

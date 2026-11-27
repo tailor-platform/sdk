@@ -616,6 +616,8 @@ kyselyTypePlugin({ distPath: "./generated/tailordb.ts", decimal: true });
 
 The generated table types then give each decimal column the type `Decimal` when you read it, and accept `Decimal` or a string when you write it. The columns come back as `Decimal` whatever name the query gives them, so `select price as p` and `sum(price)` are covered; a decimal field inside an object stays a string. Every result column the Platform reports as `numeric` becomes a `Decimal`: decimal columns, and aggregates and arithmetic over them (`sum(price)`, `avg(price)`, `price * 2`). Aggregates over integer or float columns come back as numbers. Kysely types an aggregate such as `sum()` as `string | number | bigint`, so read a decimal aggregate with `new Decimal(String(row.total))`. `Decimal` parameters are sent without an exponent (`new Decimal("1e-7")` is sent as `"0.0000001"`). The generated `getDB()` imports `Decimal` from `@tailor-platform/sdk/runtime`, which also exports the class for your own code. A function that uses this `getDB()` bundles decimal.js; a function that does not use the option does not.
 
+With `contentMapper: true`, set `decimal: true` the same way; the `getDB` you import from `@tailor-platform/sdk/plugin/kysely-type/db` then returns `Decimal` values, and TypeScript derives the `Decimal` column types through the content mapper.
+
 The option works with `distPath` only; combining it with `contentMapper: true` is rejected.
 
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:

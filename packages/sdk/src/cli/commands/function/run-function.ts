@@ -28,6 +28,8 @@ export interface FunctionRunTarget {
   /** Loaded config of either kind */
   config: LoadedConfig | LoadedWorkspaceConfig;
   kyselyTemporal?: boolean | undefined;
+  /** Whether `kyselyTypePlugin` is configured with `decimal: true`, which the bundled `getDB` follows */
+  kyselyDecimal?: boolean | undefined;
   /** Operator client */
   client: OperatorClient;
   /** Workspace the function runs in */
@@ -220,6 +222,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
     treeshake: buildOptions.treeshake,
     dateDefault: effectiveDateDefault(config),
     kyselyTemporal: target.kyselyTemporal ?? false,
+    kyselyDecimal: target.kyselyDecimal ?? false,
     machineUser: target.machineUser,
     workspaceId: target.workspaceId,
   });

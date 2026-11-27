@@ -82,6 +82,8 @@ interface BundleForRunOptions {
   dateDefault?: EffectiveDateDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
   kyselyTemporal?: boolean | undefined;
+  /** Whether `kyselyTypePlugin` is configured with `decimal: true`, which the bundled `getDB` follows */
+  kyselyDecimal?: boolean | undefined;
 }
 
 interface BundleForRunResult {
@@ -108,6 +110,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     workspaceId,
     dateDefault = "legacy",
     kyselyTemporal = false,
+    kyselyDecimal = false,
   } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
@@ -146,6 +149,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
             : { date: true, temporal: true, decimal: false },
           dateDefault,
           kyselyTemporal,
+          kyselyDecimal,
         ),
         createSdkBuilderPurePlugin(),
       ],

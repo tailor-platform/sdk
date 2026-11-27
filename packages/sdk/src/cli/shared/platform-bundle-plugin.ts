@@ -36,6 +36,8 @@ const DATE_DEFAULT_GATE =
 // Read at module top level by the bundled `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db`.
 const KYSELY_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
+const KYSELY_DECIMAL_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL\b/g;
 
 /**
  * Value representations (`as: "date"`, `"temporal"`, `"decimal"`) whose conversion code a bundle keeps.
@@ -51,15 +53,18 @@ export type BundledRepresentations = {
  * @param representations - Value representations whose conversion code the bundle keeps
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
  * @param kyselyTemporal - Whether `kyselyTypePlugin` is configured with `temporal: true`
+ * @param kyselyDecimal - Whether `kyselyTypePlugin` is configured with `decimal: true`
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
   representations: BundledRepresentations = { date: true, temporal: true, decimal: false },
   dateDefault: EffectiveDateDefault = "legacy",
   kyselyTemporal = false,
+  kyselyDecimal = false,
 ): rolldown.Plugin {
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
   const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
+  const kyselyDecimalLiteral = kyselyDecimal ? '"true"' : "undefined";
   return {
     name: "tailor-platform-bundle-define",
     transform(code) {
@@ -70,7 +75,8 @@ export function createPlatformBundleDefinePlugin(
         .replaceAll(WITHOUT_TEMPORAL_GATE, String(!representations.temporal))
         .replaceAll(WITHOUT_DECIMAL_GATE, String(!representations.decimal))
         .replaceAll(DATE_DEFAULT_GATE, dateDefaultLiteral)
-        .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral);
+        .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral)
+        .replaceAll(KYSELY_DECIMAL_GATE, kyselyDecimalLiteral);
       return {
         code: source.toString(),
         map: source.generateMap({ hires: "boundary" }).toString(),
