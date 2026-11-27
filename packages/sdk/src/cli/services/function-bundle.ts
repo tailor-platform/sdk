@@ -175,12 +175,11 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           createStartTransformPlugin(startContext, hookFailures),
         ]),
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(
-          representations,
+        createPlatformBundleDefinePlugin(representations, {
           dateDefault,
           kyselyTemporal,
           kyselyDecimal,
-        ),
+        }),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       ];

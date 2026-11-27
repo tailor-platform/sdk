@@ -147,9 +147,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
           detected.type === "resolver"
             ? resolverDateRepresentations(detected.fields, dateDefault)
             : { date: true, temporal: true, decimal: false },
-          dateDefault,
-          kyselyTemporal,
-          kyselyDecimal,
+          { dateDefault, kyselyTemporal, kyselyDecimal },
         ),
         createSdkBuilderPurePlugin(),
       ],

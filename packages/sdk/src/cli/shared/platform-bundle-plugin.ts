@@ -49,19 +49,28 @@ export type BundledRepresentations = {
 };
 
 /**
+ * Configuration values the platform bundle folds into the SDK runtime.
+ */
+export type PlatformBundleDefaults = {
+  /** Representation applied to `t` date fields that omit `as` */
+  dateDefault?: EffectiveDateDefault;
+  /** Whether `kyselyTypePlugin` is configured with `temporal: true` */
+  kyselyTemporal?: boolean;
+  /** Whether `kyselyTypePlugin` is configured with `decimal: true` */
+  kyselyDecimal?: boolean;
+};
+
+/**
  * Create the platform bundle define plugin.
  * @param representations - Value representations whose conversion code the bundle keeps
- * @param dateDefault - Representation applied to `t` date fields that omit `as`
- * @param kyselyTemporal - Whether `kyselyTypePlugin` is configured with `temporal: true`
- * @param kyselyDecimal - Whether `kyselyTypePlugin` is configured with `decimal: true`
+ * @param defaults - Configuration values the bundle folds into the SDK runtime
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
   representations: BundledRepresentations = { date: true, temporal: true, decimal: false },
-  dateDefault: EffectiveDateDefault = "legacy",
-  kyselyTemporal = false,
-  kyselyDecimal = false,
+  defaults: PlatformBundleDefaults = {},
 ): rolldown.Plugin {
+  const { dateDefault = "legacy", kyselyTemporal = false, kyselyDecimal = false } = defaults;
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
   const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
   const kyselyDecimalLiteral = kyselyDecimal ? '"true"' : "undefined";

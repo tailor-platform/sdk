@@ -37,9 +37,7 @@ describe("platformBundleDefinePlugin", () => {
       plugins: [
         createPlatformBundleDefinePlugin(
           { date: false, temporal: false, decimal: false },
-          "date",
-          true,
-          true,
+          { dateDefault: "date", kyselyTemporal: true, kyselyDecimal: true },
         ),
       ],
       output: { format: "esm", sourcemap: true, minify: true },
@@ -110,7 +108,10 @@ describe("createPlatformBundleDefinePlugin date default", () => {
     expect(
       run(
         code,
-        createPlatformBundleDefinePlugin({ date: true, temporal: true, decimal: false }, "legacy"),
+        createPlatformBundleDefinePlugin(
+          { date: true, temporal: true, decimal: false },
+          { dateDefault: "legacy" },
+        ),
       ),
     ).toBe("read(undefined);");
   });
@@ -121,14 +122,17 @@ describe("createPlatformBundleDefinePlugin date default", () => {
         code,
         createPlatformBundleDefinePlugin(
           { date: true, temporal: true, decimal: false },
-          "temporal",
+          { dateDefault: "temporal" },
         ),
       ),
     ).toBe('read("temporal");');
     expect(
       run(
         code,
-        createPlatformBundleDefinePlugin({ date: true, temporal: true, decimal: false }, "date"),
+        createPlatformBundleDefinePlugin(
+          { date: true, temporal: true, decimal: false },
+          { dateDefault: "date" },
+        ),
       ),
     ).toBe('read("date");');
   });
@@ -145,15 +149,29 @@ describe("createPlatformBundleDefinePlugin kysely decimal", () => {
 
   test("folds the kysely decimal gate to undefined unless the plugin is configured with decimal", () => {
     expect(run(code)).toBe("read(undefined);");
-    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false, false))).toBe(
-      "read(undefined);",
-    );
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin(undefined, {
+          dateDefault: "legacy",
+          kyselyTemporal: false,
+          kyselyDecimal: false,
+        }),
+      ),
+    ).toBe("read(undefined);");
   });
 
   test("folds the kysely decimal gate to the string true when the plugin is configured with decimal", () => {
-    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false, true))).toBe(
-      'read("true");',
-    );
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin(undefined, {
+          dateDefault: "legacy",
+          kyselyTemporal: false,
+          kyselyDecimal: true,
+        }),
+      ),
+    ).toBe('read("true");');
   });
 });
 
@@ -162,15 +180,27 @@ describe("createPlatformBundleDefinePlugin kysely temporal", () => {
 
   test("folds the kysely temporal gate to undefined unless the plugin is configured with temporal", () => {
     expect(run(code)).toBe("read(undefined);");
-    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false))).toBe(
-      "read(undefined);",
-    );
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin(undefined, {
+          dateDefault: "legacy",
+          kyselyTemporal: false,
+        }),
+      ),
+    ).toBe("read(undefined);");
   });
 
   test("folds the kysely temporal gate to the string true when the plugin is configured with temporal", () => {
-    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", true))).toBe(
-      'read("true");',
-    );
+    expect(
+      run(
+        code,
+        createPlatformBundleDefinePlugin(undefined, {
+          dateDefault: "legacy",
+          kyselyTemporal: true,
+        }),
+      ),
+    ).toBe('read("true");');
   });
 });
 
@@ -189,7 +219,10 @@ describe("date default gate in the built runtime", () => {
       "run `pnpm build` first: dist has no chunk with bundledDateDefault",
     ).toBeDefined();
 
-    const folded = run(chunk!, createPlatformBundleDefinePlugin(undefined, "temporal"));
+    const folded = run(
+      chunk!,
+      createPlatformBundleDefinePlugin(undefined, { dateDefault: "temporal" }),
+    );
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
     expect(folded).toMatch(/="temporal";return \w+===`temporal`\|\|\w+===`date`\?\w+:`legacy`/);
   });
@@ -215,7 +248,10 @@ describe("kysely temporal gate in the built runtime", () => {
       "utf8",
     );
 
-    const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", true));
+    const folded = run(
+      built,
+      createPlatformBundleDefinePlugin(undefined, { dateDefault: "legacy", kyselyTemporal: true }),
+    );
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
     expect(folded).toContain('"true"===`true`');
   });
@@ -236,7 +272,14 @@ describe("kysely temporal gate in the built runtime", () => {
       "utf8",
     );
 
-    const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", false, true));
+    const folded = run(
+      built,
+      createPlatformBundleDefinePlugin(undefined, {
+        dateDefault: "legacy",
+        kyselyTemporal: false,
+        kyselyDecimal: true,
+      }),
+    );
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL");
     expect(folded).toContain('"true"===`true`');
   });
