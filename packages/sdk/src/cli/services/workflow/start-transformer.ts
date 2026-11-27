@@ -1,10 +1,16 @@
+import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { walkBindingAware } from "#/cli/shared/binding-aware-walk";
 import { locatedCLIError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import {
+  createModuleBindings,
   normalizeFilePath,
+  parseStartModule,
+  safeRealpath,
+  SOURCE_EXTENSIONS,
+  SOURCE_FILE_PATTERN,
   type StartContext,
   type StartModuleBindings,
   type StartTarget,
@@ -44,10 +50,21 @@ interface NamespaceImport {
   module: StartModuleBindings;
 }
 
+interface UnlistedImport {
+  importSource: string;
+  /** Imported export name; absent for a namespace import. */
+  importedName?: string | undefined;
+  /** Paths the import source may resolve to before an extension or `/index` is added. */
+  candidates: string[];
+}
+
 interface LocalTargets {
   targets: Map<string, StartTarget>;
   undetectableImports: Map<string, UndetectableImport>;
   namespaceImports: Map<string, NamespaceImport>;
+  unlistedImports: Map<string, UnlistedImport>;
+  /** Workflows and jobs the current file defines, when it is not a workflow file. */
+  unlistedLocals: Map<string, StartTarget>;
 }
 
 const START_CALL_RE = /\.start(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)*\(/;
@@ -91,68 +108,115 @@ function findModule(context: StartContext, candidatePath: string): StartModuleBi
   return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
 }
 
-function resolveImport(
-  context: StartContext,
+function importCandidates(
   currentFilePath: string,
   importSource: string,
   tsconfigCache: TsconfigLookupCache,
-): StartModuleBindings | undefined {
+): string[] {
   const currentDirectory = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
-  if (importSource.startsWith(".")) {
-    return findModule(context, path.resolve(currentDirectory, importSource));
+  if (importSource.startsWith(".")) return [path.resolve(currentDirectory, importSource)];
+  return matchTsconfigPaths(importSource, currentDirectory, tsconfigCache);
+}
+
+function findSourceFile(candidate: string): string | undefined {
+  const base = normalizeFilePath(candidate);
+  for (const file of [
+    ...SOURCE_EXTENSIONS.map((extension) => `${base}${extension}`),
+    ...SOURCE_EXTENSIONS.map((extension) => path.join(base, `index${extension}`)),
+  ]) {
+    if (fs.statSync(file, { throwIfNoEntry: false })?.isFile()) return file;
   }
-  for (const candidate of matchTsconfigPaths(importSource, currentDirectory, tsconfigCache)) {
-    const found = findModule(context, candidate);
-    if (found) return found;
+  return undefined;
+}
+
+function isListedFile(context: StartContext, file: string): boolean {
+  const realFile = normalizeFilePath(safeRealpath(file));
+  return [...context.modules.values()].some(
+    (module) => normalizeFilePath(safeRealpath(module.sourceFile)) === realFile,
+  );
+}
+
+function readStartModule(file: string): StartModuleBindings | null {
+  try {
+    return parseStartModule(file, fs.readFileSync(file, "utf-8")).bindings ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readUnlistedModule(context: StartContext, file: string): StartModuleBindings | null {
+  const cached = context.unlistedModules?.get(file);
+  if (cached !== undefined) return cached;
+  const bindings = isListedFile(context, file) ? null : readStartModule(file);
+  context.unlistedModules?.set(file, bindings);
+  return bindings;
+}
+
+function resolveUnlistedTarget(
+  context: StartContext,
+  unlisted: UnlistedImport,
+  exportName: string,
+): { target: StartTarget; targetFile: string } | undefined {
+  for (const candidate of unlisted.candidates) {
+    const file = findSourceFile(candidate);
+    if (!file) continue;
+    const target = readUnlistedModule(context, file)?.exports.get(exportName);
+    return target && { target, targetFile: file };
   }
   return undefined;
 }
 
 function collectLocalTargets(
   program: Program,
+  sourceText: string,
   context: StartContext,
   currentFilePath: string,
 ): LocalTargets {
-  const targets = new Map<string, StartTarget>();
+  const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
+  const targets = new Map(currentModule?.localBindings);
+  const unlistedLocals = currentModule
+    ? new Map<string, StartTarget>()
+    : createModuleBindings(currentFilePath, program, sourceText).localBindings;
   const undetectableImports = new Map<string, UndetectableImport>();
   const namespaceImports = new Map<string, NamespaceImport>();
-  const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
-  if (currentModule) {
-    for (const [localName, target] of currentModule.localBindings) {
-      targets.set(localName, target);
-    }
-  }
+  const unlistedImports = new Map<string, UnlistedImport>();
 
   const tsconfigCache = context.tsconfigCache ?? createTsconfigLookupCache();
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
     const importSource = statement.source.value;
     if (typeof importSource !== "string") continue;
-    const importedModule = resolveImport(context, currentFilePath, importSource, tsconfigCache);
-    if (!importedModule) continue;
+    const candidates = importCandidates(currentFilePath, importSource, tsconfigCache);
+    const importedModule = candidates
+      .map((candidate) => findModule(context, candidate))
+      .find((module) => module !== undefined);
 
     for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue;
+      const localName = specifier.local.name;
       if (specifier.type === "ImportNamespaceSpecifier") {
-        namespaceImports.set(specifier.local.name, { importSource, module: importedModule });
+        if (importedModule)
+          namespaceImports.set(localName, { importSource, module: importedModule });
+        else unlistedImports.set(localName, { importSource, candidates });
         continue;
       }
-      if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue;
 
       const importedName =
         specifier.type === "ImportDefaultSpecifier"
           ? "default"
           : getModuleExportName(specifier.imported);
       if (!importedName) continue;
-      const target = importedModule.exports.get(importedName);
-      if (!target) {
-        undetectableImports.set(specifier.local.name, { importSource, importedName });
+      if (!importedModule) {
+        unlistedImports.set(localName, { importSource, importedName, candidates });
         continue;
       }
-      targets.set(specifier.local.name, target);
+      const target = importedModule.exports.get(importedName);
+      if (target) targets.set(localName, target);
+      else undetectableImports.set(localName, { importSource, importedName });
     }
   }
 
-  return { targets, undetectableImports, namespaceImports };
+  return { targets, undetectableImports, namespaceImports, unlistedImports, unlistedLocals };
 }
 
 function undetectableStartCallError(
@@ -178,13 +242,74 @@ function undetectableStartCallError(
   );
 }
 
-function assertNoUndetectableStartCalls(
+interface OutsideFilesStartCall {
+  calleeText: string;
+  currentFilePath: string;
+  /** Import the call reaches its target through; absent for a target the calling file defines. */
+  importSource?: string | undefined;
+  importedName?: string | undefined;
+  target: StartTarget;
+  targetFile: string;
+}
+
+function startTargetOutsideFilesError(call: OutsideFilesStartCall, baseDir = process.cwd()): Error {
+  const { calleeText, currentFilePath, importSource, importedName, target, targetFile } = call;
+  const displayFile = path.relative(process.cwd(), targetFile);
+  const filesEntry = path.relative(baseDir, targetFile);
+  return locatedCLIError(
+    { file: currentFilePath },
+    {
+      code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+      message:
+        `${calleeText}() cannot be rewritten: ${target.kind} "${target.name}" is defined in ` +
+        `${displayFile}, which the config's workflow "files" do not include.`,
+      suggestion:
+        `Add ${filesEntry} to the workflow "files" in the config (add a workflow service if it ` +
+        `has none), or remove the "!" pattern or "ignores" entry that leaves it out.`,
+      context: {
+        callee: calleeText,
+        importSource,
+        importedName,
+        kind: target.kind,
+        targetName: target.name,
+        targetFile,
+      },
+    },
+  );
+}
+
+function assertRewritableStartCalls(
   program: Program,
   sourceText: string,
-  { undetectableImports, namespaceImports }: LocalTargets,
+  localTargets: LocalTargets,
+  context: StartContext,
   currentFilePath: string,
 ): void {
-  const names = new Set([...undetectableImports.keys(), ...namespaceImports.keys()]);
+  const { undetectableImports, namespaceImports, unlistedImports, unlistedLocals } = localTargets;
+  const names = new Set([
+    ...undetectableImports.keys(),
+    ...namespaceImports.keys(),
+    ...unlistedImports.keys(),
+    ...unlistedLocals.keys(),
+  ]);
+  const assertImportNotOutsideFiles = (
+    calleeText: string,
+    unlisted: UnlistedImport,
+    importedName: string,
+  ) => {
+    const resolved = resolveUnlistedTarget(context, unlisted, importedName);
+    if (!resolved) return;
+    throw startTargetOutsideFilesError(
+      {
+        calleeText,
+        currentFilePath,
+        importSource: unlisted.importSource,
+        importedName,
+        ...resolved,
+      },
+      context.baseDir,
+    );
+  };
   walkBindingAware(program, names, (node, shadowedNames) => {
     const namespaceCall = getNamespaceStartCallInfo(node, sourceText);
     if (namespaceCall && !shadowedNames.has(namespaceCall.identifierName)) {
@@ -195,17 +320,34 @@ function assertNoUndetectableStartCalls(
           importedName: namespaceCall.memberName,
         });
       }
+      const unlisted = unlistedImports.get(namespaceCall.identifierName);
+      if (unlisted && unlisted.importedName === undefined) {
+        assertImportNotOutsideFiles(namespaceCall.calleeText, unlisted, namespaceCall.memberName);
+      }
     }
 
     const startCall = getStartCallInfo(node);
     if (!startCall || shadowedNames.has(startCall.identifierName)) return;
+    const calleeText = `${startCall.identifierName}.start`;
+    const unlisted = unlistedImports.get(startCall.identifierName);
+    if (unlisted?.importedName !== undefined) {
+      assertImportNotOutsideFiles(calleeText, unlisted, unlisted.importedName);
+    }
+    const local = unlistedLocals.get(startCall.identifierName);
+    if (local && !isListedFile(context, currentFilePath)) {
+      throw startTargetOutsideFilesError(
+        {
+          calleeText,
+          currentFilePath,
+          target: local,
+          targetFile: currentFilePath.replace(/[?#].*$/, ""),
+        },
+        context.baseDir,
+      );
+    }
     const undetectable = undetectableImports.get(startCall.identifierName);
     if (!undetectable) return;
-    throw undetectableStartCallError(
-      `${startCall.identifierName}.start`,
-      currentFilePath,
-      undetectable,
-    );
+    throw undetectableStartCallError(calleeText, currentFilePath, undetectable);
   });
 }
 
@@ -255,7 +397,7 @@ export function detectResolvedStartCalls(
   return detectStartCallsWithTargets(
     program,
     sourceText,
-    collectLocalTargets(program, context, currentFilePath),
+    collectLocalTargets(program, sourceText, context, currentFilePath),
   );
 }
 
@@ -265,8 +407,8 @@ export function transformStartCalls(
   currentFilePath: string,
 ): RolldownMagicString {
   const { program } = parseSync("input.ts", source);
-  const localTargets = collectLocalTargets(program, startContext, currentFilePath);
-  assertNoUndetectableStartCalls(program, source, localTargets, currentFilePath);
+  const localTargets = collectLocalTargets(program, source, startContext, currentFilePath);
+  assertRewritableStartCalls(program, source, localTargets, startContext, currentFilePath);
   const { authNamespace, jobFunctionName } = startContext;
   const allStartCalls = detectStartCallsWithTargets(program, source, localTargets);
   const nestedStartCalls: Array<{ call: ResolvedStartCall; parent: ResolvedStartCall }> = [];
@@ -513,16 +655,17 @@ export function createStartTransformPlugin(
   startContext: StartContext | undefined,
   hookFailures: HookFailures,
 ): Plugin | undefined {
-  if (!startContext || startContext.modules.size === 0) return undefined;
+  if (!startContext) return undefined;
 
   return {
     name: "start-transform",
     transform: {
-      filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
+      filter: { id: { include: [SOURCE_FILE_PATTERN] } },
       handler(code, id) {
         if (!hasStartCall(code)) return null;
         return hookFailures.capture(() => {
           const transformed = transformStartCalls(code, startContext, id);
+          if (!transformed.hasChanged()) return null;
           return {
             code: transformed.toString(),
             map: transformed.generateMap({ hires: "boundary" }).toString(),

@@ -932,6 +932,95 @@ export default createWorkflow({ name: "workflow", mainJob });
       });
     });
 
+    test("throws when a job starts a job defined in a file outside workflow.files", async () => {
+      const dir = createTempDir();
+      const workflowsDir = path.join(dir, "workflows");
+      fs.mkdirSync(workflowsDir);
+
+      const subFile = path.join(workflowsDir, "sub.ts");
+      const mainFile = path.join(workflowsDir, "main.ts");
+      fs.writeFileSync(
+        subFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const sub = createWorkflowJob({ name: "sub-job", body: async () => "sub" });
+`,
+      );
+      fs.writeFileSync(
+        mainFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { sub } from "./sub";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await sub.start(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [mainFile] });
+
+      await expect(
+        bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: mainFile }],
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+        context: { targetName: "sub-job", targetFile: subFile },
+      });
+    });
+
+    test("throws when a helper outside workflow.files starts a job it defines", async () => {
+      const dir = createTempDir();
+      const workflowsDir = path.join(dir, "workflows");
+      const libDir = path.join(dir, "lib");
+      fs.mkdirSync(workflowsDir);
+      fs.mkdirSync(libDir);
+
+      const notifyFile = path.join(libDir, "notify.ts");
+      const mainFile = path.join(workflowsDir, "main.ts");
+      fs.writeFileSync(
+        notifyFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const notifyJob = createWorkflowJob({ name: "notify-job", body: async () => "sent" });
+export async function notify() {
+  return await notifyJob.start();
+}
+`,
+      );
+      fs.writeFileSync(
+        mainFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { notify } from "../lib/notify";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await notify(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildStartContext({ files: [mainFile] });
+
+      await expect(
+        bundleWorkflowJobs({
+          allJobs: [{ name: "main-job", exportName: "mainJob", sourceFile: mainFile }],
+          mainJobNames: ["main-job"],
+          startContext: context,
+          baseDir: dir,
+        }),
+      ).rejects.toMatchObject({
+        code: "WORKFLOW_START_TARGET_OUTSIDE_FILES",
+        context: { callee: "notifyJob.start", targetName: "notify-job", targetFile: notifyFile },
+      });
+    });
+
     test("throws when a factored-out start() call lives in a file outside workflow.files", async () => {
       const dir = createTempDir();
       const workflowsDir = path.join(dir, "workflows");

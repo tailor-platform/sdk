@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { loadFilesWithBaseDir, type FileLoadConfig } from "#/cli/services/file-loader";
 import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-utils";
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
@@ -24,6 +24,8 @@ export interface StartModuleBindings {
 
 export interface StartContext {
   modules: Map<string, StartModuleBindings>;
+  /** Directory the workflow config's file patterns were resolved against (default: process.cwd()) */
+  baseDir?: string | undefined;
   /**
    * Namespace of the config's only Auth service. Without it and `machineUserAuthNamespaces`, the
    * config has no Auth service, and a string-literal invoker stops the build.
@@ -37,7 +39,24 @@ export interface StartContext {
    */
   machineUserAuthNamespaces?: ReadonlyMap<string, readonly string[]> | undefined;
   tsconfigCache?: TsconfigLookupCache | undefined;
+  /**
+   * Bindings of imported source files outside the workflow files, by file path; null for a file that
+   * cannot be read or parsed, or that is a workflow file reached through another path.
+   */
+  unlistedModules?: Map<string, StartModuleBindings | null> | undefined;
 }
+
+type ParsedStartModule =
+  | { bindings: StartModuleBindings; errors?: undefined }
+  | { bindings?: undefined; errors: string[] };
+
+/** Extensions of the source files that start calls and workflow files are read from. */
+export const SOURCE_EXTENSIONS = [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"] as const;
+
+/** Matches a path ending in one of SOURCE_EXTENSIONS. */
+export const SOURCE_FILE_PATTERN = new RegExp(
+  `\\.(${SOURCE_EXTENSIONS.map((extension) => extension.slice(1)).join("|")})$`,
+);
 
 /**
  * Normalize a source module path for start-call binding lookup.
@@ -45,14 +64,36 @@ export interface StartContext {
  * @returns Absolute path without a JavaScript or TypeScript extension
  */
 export function normalizeFilePath(filePath: string): string {
-  return path.resolve(filePath.replace(/[?#].*$/, "")).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
+  return path.resolve(filePath.replace(/[?#].*$/, "")).replace(SOURCE_FILE_PATTERN, "");
 }
 
-function createModuleBindings(
+/**
+ * Resolve symlinks in a path, falling back to the absolute path when it cannot be resolved.
+ * @param filePath - Path to resolve
+ * @returns Real path of the file, or its absolute path
+ */
+export function safeRealpath(filePath: string): string {
+  const resolved = path.resolve(filePath);
+  try {
+    return fs.realpathSync(resolved);
+  } catch (e) {
+    logger.debug(`realpathSync failed for ${resolved}: ${e instanceof Error ? e.message : e}`);
+    return resolved;
+  }
+}
+
+/**
+ * Collect the workflows and jobs a parsed module defines and exports.
+ * @param sourceFile - Source file path
+ * @param program - Parsed program of the file
+ * @param source - Source text of the file
+ * @returns The module's start-call bindings
+ */
+export function createModuleBindings(
   sourceFile: string,
   program: ReturnType<typeof parseSync>["program"],
   source: string,
-) {
+): StartModuleBindings {
   const localBindings = new Map<string, StartTarget>();
   const exports = new Map<string, StartTarget>();
 
@@ -103,6 +144,18 @@ function createModuleBindings(
   return { sourceFile, localBindings, exports } satisfies StartModuleBindings;
 }
 
+/**
+ * Parse a source file and collect the workflows and jobs it defines and exports.
+ * @param file - Source file path
+ * @param source - Source text of the file
+ * @returns The module's start-call bindings, or the parse error messages
+ */
+export function parseStartModule(file: string, source: string): ParsedStartModule {
+  const { program, errors } = parseSync(file, source);
+  if (errors.length > 0) return { errors: errors.map((e) => e.message) };
+  return { bindings: createModuleBindings(file, program, source) };
+}
+
 export interface LoadedWorkflowSource {
   workflow: { name: string };
   sourceFile: string;
@@ -125,20 +178,22 @@ export async function buildStartContext(
   tsconfigCache: TsconfigLookupCache = createTsconfigLookupCache(),
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
-  if (!workflowConfig) return { modules, authNamespace, tsconfigCache };
+  const unlistedModules = new Map<string, StartModuleBindings | null>();
+  const loaded = workflowConfig
+    ? loadFilesWithBaseDir(workflowConfig, baseDir)
+    : { files: [], baseDir };
 
-  for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
+  for (const file of loaded.files) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
-      const { program, errors } = parseSync(file, source);
-      if (errors.length > 0) {
-        logger.warn(
-          `Failed to parse workflow file ${file}: ${errors.map((e) => e.message).join("; ")}`,
-          { mode: "stream" },
-        );
+      const parsed = parseStartModule(file, source);
+      if (parsed.errors) {
+        logger.warn(`Failed to parse workflow file ${file}: ${parsed.errors.join("; ")}`, {
+          mode: "stream",
+        });
         continue;
       }
-      modules.set(normalizeFilePath(file), createModuleBindings(file, program, source));
+      modules.set(normalizeFilePath(file), parsed.bindings);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
@@ -153,7 +208,7 @@ export async function buildStartContext(
       ?.exports.set("default", { kind: "workflow", name: workflow.name });
   }
 
-  return { modules, authNamespace, tsconfigCache };
+  return { modules, baseDir: loaded.baseDir, authNamespace, tsconfigCache, unlistedModules };
 }
 
 function sortedTargets(bindings: Map<string, StartTarget>) {

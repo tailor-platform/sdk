@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
-import * as path from "pathe";
 import { buildFunctionBundle, type FunctionBundleSettings } from "#/cli/services/function-bundle";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { CLIError, internalError, isCLIError, locatedCLIError } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { SOURCE_FILE_PATTERN, safeRealpath } from "#/cli/shared/start-context";
 import ml from "#/utils/multiline";
 import { getModuleExportName, type ASTNode } from "./ast-utils";
 import { walkAst } from "./ast-walk";
@@ -18,16 +18,6 @@ import type { HookFailures } from "#/cli/services/hook-failures";
 import type { StartContext } from "#/cli/shared/start-context";
 import type { AllowedRuntimeGlobals } from "#/configure/config/types";
 import type * as rolldown from "rolldown";
-
-function safeRealpath(p: string): string {
-  const resolved = path.resolve(p);
-  try {
-    return fs.realpathSync(resolved);
-  } catch (e) {
-    logger.debug(`realpathSync failed for ${resolved}: ${e instanceof Error ? e.message : e}`);
-    return resolved;
-  }
-}
 
 interface JobInfo {
   name: string;
@@ -663,7 +653,7 @@ function createWorkflowTransformPlugins(
       transform: {
         filter: {
           id: {
-            include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
+            include: [SOURCE_FILE_PATTERN],
           },
         },
         handler(code, id) {
