@@ -57,8 +57,9 @@ trap 'forward_signal HUP 129' HUP
 trap 'forward_signal INT 130' INT
 trap 'forward_signal TERM 143' TERM
 
+[[ ${1:-} != -- ]] || shift
 set -m
-pnpm run test:e2e &
+pnpm run test:e2e "$@" &
 test_pid=$!
 set +m
 wait "$test_pid"
