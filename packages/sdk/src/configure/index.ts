@@ -16,7 +16,10 @@ export namespace t {
 }
 
 export { type TailorAnyField, type TailorField } from "#/configure/types/type";
-export { type DateRepresentationRegistry } from "#/configure/types/field.types";
+export {
+  type DateRepresentationRegistry,
+  type DecimalRepresentationRegistry,
+} from "#/configure/types/field.types";
 export {
   type TailorPrincipal,
   type Attributes,

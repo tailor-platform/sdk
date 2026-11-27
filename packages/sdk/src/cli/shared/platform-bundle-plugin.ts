@@ -1,5 +1,5 @@
 import { RolldownMagicString } from "rolldown";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "#/runtime/types";
 import type * as rolldown from "rolldown";
 
 // Match the exact `process.env.__TAILOR_PLATFORM_BUNDLE` member-expression: the
@@ -33,6 +33,10 @@ const WITHOUT_DECIMAL_GATE =
 const DATE_DEFAULT_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT\b/g;
 
+// Read at call time by `dateRepresentationOf`; folded to the configured literal here.
+const DECIMAL_DEFAULT_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT\b/g;
+
 // Read at module top level by the bundled `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db`.
 const KYSELY_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
@@ -54,6 +58,8 @@ export type BundledRepresentations = {
 export type PlatformBundleDefaults = {
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault;
+  /** Representation applied to `t.decimal()` fields that omit `as` */
+  decimalDefault?: EffectiveDecimalDefault;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true` */
   kyselyTemporal?: boolean;
   /** Whether `kyselyTypePlugin` is configured with `decimal: true` */
@@ -62,16 +68,28 @@ export type PlatformBundleDefaults = {
 
 /**
  * Create the platform bundle define plugin.
- * @param representations - Value representations whose conversion code the bundle keeps
+ * @param representationsInput - Value representations whose conversion code the bundle keeps; when omitted, date and Temporal are kept, and Decimal is kept only under a decimal default
  * @param defaults - Configuration values the bundle folds into the SDK runtime
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
-  representations: BundledRepresentations = { date: true, temporal: true, decimal: false },
+  representationsInput?: BundledRepresentations,
   defaults: PlatformBundleDefaults = {},
 ): rolldown.Plugin {
-  const { dateDefault = "legacy", kyselyTemporal = false, kyselyDecimal = false } = defaults;
+  const {
+    dateDefault = "legacy",
+    decimalDefault = "legacy",
+    kyselyTemporal = false,
+    kyselyDecimal = false,
+  } = defaults;
+  const representations = representationsInput ?? {
+    date: true,
+    temporal: true,
+    decimal: decimalDefault === "decimal",
+  };
   const dateDefaultLiteral = dateDefault === "legacy" ? "undefined" : JSON.stringify(dateDefault);
+  const decimalDefaultLiteral =
+    decimalDefault === "legacy" ? "undefined" : JSON.stringify(decimalDefault);
   const kyselyTemporalLiteral = kyselyTemporal ? '"true"' : "undefined";
   const kyselyDecimalLiteral = kyselyDecimal ? '"true"' : "undefined";
   return {
@@ -84,6 +102,7 @@ export function createPlatformBundleDefinePlugin(
         .replaceAll(WITHOUT_TEMPORAL_GATE, String(!representations.temporal))
         .replaceAll(WITHOUT_DECIMAL_GATE, String(!representations.decimal))
         .replaceAll(DATE_DEFAULT_GATE, dateDefaultLiteral)
+        .replaceAll(DECIMAL_DEFAULT_GATE, decimalDefaultLiteral)
         .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral)
         .replaceAll(KYSELY_DECIMAL_GATE, kyselyDecimalLiteral);
       return {

@@ -47,3 +47,9 @@ export type TailorEnv = keyof Env extends never ? Record<string, string | number
  * `defaultDateRepresentation` has been resolved. `"legacy"` keeps string values.
  */
 export type EffectiveDateDefault = "legacy" | "temporal" | "date";
+
+/**
+ * Representation applied to `t.decimal()` fields that omit `as`, after
+ * `defaultDecimalRepresentation` has been resolved. `"legacy"` keeps string values.
+ */
+export type EffectiveDecimalDefault = "legacy" | "decimal";

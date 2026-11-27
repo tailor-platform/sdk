@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, test, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createResolver } from "#/configure/services/resolver/resolver";
 import { t } from "#/configure/types/type";
 import { ResolverSchema } from "#/parser/service/resolver/schema";
@@ -391,6 +391,38 @@ describe("parseDateFields", () => {
         path: ["rows", "[0]", "day"],
       },
     ]);
+  });
+});
+
+describe("dateRepresentationOf for decimal fields", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("a decimal field following the default converts to Decimal under the decimal default", () => {
+    expect(dateRepresentationOf("decimal", "default", "legacy", "decimal")).toBe("decimal");
+  });
+
+  test("a decimal field following the default stays a string under the legacy default", () => {
+    expect(dateRepresentationOf("decimal", "default", "legacy", "legacy")).toBeUndefined();
+  });
+
+  test("an explicit `as` wins over the decimal default", () => {
+    expect(dateRepresentationOf("decimal", "string", "legacy", "decimal")).toBeUndefined();
+    expect(dateRepresentationOf("decimal", "decimal", "legacy", "legacy")).toBe("decimal");
+  });
+
+  test("a decimal field with no `as` stays a string even under the decimal default", () => {
+    expect(dateRepresentationOf("decimal", undefined, "legacy", "decimal")).toBeUndefined();
+  });
+
+  test("reads the decimal default from the bundle gate when none is passed", () => {
+    vi.stubEnv(GATE, "decimal");
+    expect(dateRepresentationOf("decimal", "default")).toBe("decimal");
+    vi.stubEnv(GATE, "");
+    expect(dateRepresentationOf("decimal", "default")).toBeUndefined();
   });
 });
 

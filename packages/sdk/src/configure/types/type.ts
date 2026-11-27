@@ -23,7 +23,10 @@ import type {
   FieldValidateInput,
   DateDefaultConflictMessage,
   DateRepresentationOption,
+  DecimalDefaultConflictMessage,
+  DecimalRepresentationOption,
   HasDateDefaultConflict,
+  HasDecimalDefaultConflict,
 } from "#/configure/types/field.types";
 import type { InferFieldsOutput, Prettify, TypeLevelError, output } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -43,6 +46,17 @@ type DateBuilderArgs<Opt extends FieldOptions & { as?: DateRepresentationOption 
       : [
           options: Opt & { as: DateRepresentationOption },
           conflict: TypeLevelError<DateDefaultConflictMessage>,
+        ]
+    : [options?: Opt];
+
+// Like DateBuilderArgs, for a decimal builder called without `as`.
+type DecimalBuilderArgs<Opt extends FieldOptions & { as?: DecimalRepresentationOption }> =
+  HasDecimalDefaultConflict extends true
+    ? Opt extends { as: DecimalRepresentationOption }
+      ? [options: Opt]
+      : [
+          options: Opt & { as: DecimalRepresentationOption },
+          conflict: TypeLevelError<DecimalDefaultConflictMessage>,
         ]
     : [options?: Opt];
 
@@ -377,16 +391,20 @@ function float<const Opt extends FieldOptions>(options?: Opt) {
 }
 
 /**
- * Create a decimal field for resolver input/output (a string unless `as: "decimal"`).
- * @param options - Field configuration options
+ * Create a decimal field for resolver input/output (a string unless `as: "decimal"` or `defaultDecimalRepresentation` is `"decimal"`).
+ * @param args - Field configuration options; `as` is required while the included `tailor.d.ts` files disagree on `defaultDecimalRepresentation`
  * @returns A decimal field
  * @example t.decimal()
  * @example t.decimal({ optional: true })
  * @example t.decimal({ as: "decimal" })
+ * @example t.decimal({ as: "string" })
  */
-function decimal<const Opt extends DecimalFieldOptions = FieldOptions>(options?: Opt) {
+function decimal<const Opt extends DecimalFieldOptions = FieldOptions>(
+  ...args: DecimalBuilderArgs<Opt>
+) {
+  const [options] = args;
   const field = createTailorField<"decimal", Opt, DecimalFieldValue<Opt["as"]>>("decimal", options);
-  if (options?.as === "decimal") field._metadata.as = "decimal";
+  field._metadata.as = options?.as ?? "default";
   return field;
 }
 

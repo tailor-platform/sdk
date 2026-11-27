@@ -9,11 +9,11 @@
 import { pathToFileURL } from "node:url";
 import { afterAll, beforeAll } from "vitest";
 import { readSecretEntry } from "#/utils/secret-entry";
-import { applyDateDefault } from "./date-representation";
+import { applyDateDefault, applyDecimalDefault } from "./date-representation";
 import { RUNTIME_FLAG_KEY, mockSecretmanager } from "./mock";
 import type { SecretsInput } from "#/types/secrets.generated";
 
-export { applyDateDefault };
+export { applyDateDefault, applyDecimalDefault };
 
 function isTailorRuntime(): boolean {
   return RUNTIME_FLAG_KEY in globalThis;
@@ -90,7 +90,17 @@ const restoreDateDefault =
   configuredDateDefault === "legacy"
     ? applyDateDefault(configuredDateDefault)
     : undefined;
-afterAll(() => restoreDateDefault?.());
+const configuredDecimalDefault = isTailorRuntime()
+  ? process.env.__TAILOR_RUNTIME_DECIMAL_DEFAULT
+  : undefined;
+const restoreDecimalDefault =
+  configuredDecimalDefault === "decimal" || configuredDecimalDefault === "legacy"
+    ? applyDecimalDefault(configuredDecimalDefault)
+    : undefined;
+afterAll(() => {
+  restoreDateDefault?.();
+  restoreDecimalDefault?.();
+});
 
 // Load secrets from tailor.config.ts if config path is provided via env var
 beforeAll(async () => {

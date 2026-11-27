@@ -3,7 +3,6 @@ import { dirname, isAbsolute, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBlockedModule, getBlockedMessage } from "./blocked-modules";
 import { loadConfigDefaultsFromConfig } from "./date-default-loader";
-import type { EffectiveDateDefault } from "#/runtime/types";
 import type { ConfigDefaults } from "./date-default-loader";
 import type { Plugin } from "vitest/config";
 
@@ -327,6 +326,7 @@ const CONFIG_ENV_VAR = "__TAILOR_RUNTIME_CONFIG";
 // the worker applies it without importing the config under the tailor-runtime
 // restrictions. Empty reads as "no config", like CONFIG_ENV_VAR.
 const DATE_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DATE_DEFAULT";
+const DECIMAL_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DECIMAL_DEFAULT";
 
 // The gate `getDB` of `@tailor-platform/sdk/plugin/kysely-type/db` reads, set from the `temporal`
 // option of the kysely type plugin in that config. It is set here, rather than in setup.ts, so it
@@ -339,16 +339,15 @@ const KYSELY_DECIMAL_ENV_VAR = "__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL";
 function setConfigEnv(
   target: Record<string, unknown> & { env?: Record<string, string> },
   configAbsPath: string,
-  dateDefault: EffectiveDateDefault | "",
-  kyselyTemporal: boolean | "",
-  kyselyDecimal: boolean | "",
+  defaults: ConfigDefaults | undefined,
 ): void {
   target.env = {
     ...target.env,
     [CONFIG_ENV_VAR]: configAbsPath,
-    [DATE_DEFAULT_ENV_VAR]: dateDefault,
-    [KYSELY_TEMPORAL_ENV_VAR]: kyselyTemporal === "" ? "" : String(kyselyTemporal),
-    [KYSELY_DECIMAL_ENV_VAR]: kyselyDecimal === "" ? "" : String(kyselyDecimal),
+    [DATE_DEFAULT_ENV_VAR]: defaults?.dateDefault ?? "",
+    [DECIMAL_DEFAULT_ENV_VAR]: defaults?.decimalDefault ?? "",
+    [KYSELY_TEMPORAL_ENV_VAR]: defaults ? String(defaults.kyselyTemporal) : "",
+    [KYSELY_DECIMAL_ENV_VAR]: defaults ? String(defaults.kyselyDecimal) : "",
   };
 }
 
@@ -445,7 +444,7 @@ export function createEnvironmentPlugin(
           if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
             // Blank the key so a project on another environment cannot pick up
             // the root's value through Vitest's root-into-project env merge.
-            if (options?.config) setConfigEnv(projectTest, "", "", "", "");
+            if (options?.config) setConfigEnv(projectTest, "", undefined);
             continue;
           }
           projectTest.environment = environmentPath;
@@ -462,15 +461,7 @@ export function createEnvironmentPlugin(
               config.root ??
               process.cwd();
             const projectConfigPath = resolve(projectRoot, options.config);
-            const { dateDefault, kyselyTemporal, kyselyDecimal } =
-              await configDefaultsOf(projectConfigPath);
-            setConfigEnv(
-              projectTest,
-              projectConfigPath,
-              dateDefault,
-              kyselyTemporal,
-              kyselyDecimal,
-            );
+            setConfigEnv(projectTest, projectConfigPath, await configDefaultsOf(projectConfigPath));
           }
         }
       }
@@ -486,13 +477,7 @@ export function createEnvironmentPlugin(
         const configRoot = (testConfig.root as string | undefined) ?? config.root ?? process.cwd();
         const rootConfigPath = rootSelectsTailorRuntime ? resolve(configRoot, options.config) : "";
         const rootDefaults = rootConfigPath ? await configDefaultsOf(rootConfigPath) : undefined;
-        setConfigEnv(
-          testConfig,
-          rootConfigPath,
-          rootDefaults?.dateDefault ?? "",
-          rootDefaults?.kyselyTemporal ?? "",
-          rootDefaults?.kyselyDecimal ?? "",
-        );
+        setConfigEnv(testConfig, rootConfigPath, rootDefaults);
       }
 
       // Normalize a user-provided string `setupFiles` into an array so Vite's

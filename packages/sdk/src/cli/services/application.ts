@@ -40,7 +40,7 @@ import {
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
-import { effectiveDateDefault } from "#/cli/shared/date-default";
+import { effectiveDateDefault, effectiveDecimalDefault } from "#/cli/shared/date-default";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError } from "#/cli/shared/errors";
 import { idpConfigList, isIdpConfigList } from "#/cli/shared/idp-config";
@@ -1250,6 +1250,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   const inlineSourcemapProjectSources = projectSourcesOf({ buildOptions, baseDir });
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(settings);
+  const decimalDefault = effectiveDecimalDefault(settings);
   const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
   const kyselyDecimal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.decimal ?? false;
 
@@ -1280,6 +1281,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      decimalDefault,
       kyselyTemporal,
       kyselyDecimal,
     });
@@ -1305,6 +1307,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      decimalDefault,
       kyselyTemporal,
       kyselyDecimal,
     });
@@ -1328,6 +1331,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       sdkBuilderAnnotationCache,
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
+      decimalDefault,
       kyselyTemporal,
       kyselyDecimal,
     },
@@ -1462,6 +1466,7 @@ async function reloadEnvDependentBundles(
       baseDir: path.dirname(settings.path),
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault: effectiveDateDefault(settings),
+      decimalDefault: effectiveDecimalDefault(settings),
     },
     previousUsedJobs: previous.workflowBuildResult,
   });

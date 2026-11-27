@@ -8,6 +8,7 @@ import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import {
   dateDefaultFromConfig,
+  decimalDefaultFromConfig,
   kyselyDecimalFromConfig,
   kyselyTemporalFromConfig,
 } from "./date-default-loader";
@@ -38,6 +39,25 @@ describe("dateDefaultFromConfig", () => {
     expect(() => dateDefaultFromConfig({ default: { defaultDateRepresentation: true } })).toThrow(
       /defaultDateRepresentation/,
     );
+  });
+});
+
+describe("decimalDefaultFromConfig", () => {
+  test("reads defaultDecimalRepresentation from the default export", () => {
+    expect(decimalDefaultFromConfig({ default: { defaultDecimalRepresentation: "decimal" } })).toBe(
+      "decimal",
+    );
+  });
+
+  test("an absent setting keeps the legacy representation", () => {
+    expect(decimalDefaultFromConfig({ default: {} })).toBe("legacy");
+    expect(decimalDefaultFromConfig({})).toBe("legacy");
+  });
+
+  test("a value the config schema rejects fails instead of silently keeping strings", () => {
+    expect(() =>
+      decimalDefaultFromConfig({ default: { defaultDecimalRepresentation: "string" } }),
+    ).toThrow(/defaultDecimalRepresentation.*"string"/);
   });
 });
 

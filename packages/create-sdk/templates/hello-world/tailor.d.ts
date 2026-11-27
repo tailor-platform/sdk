@@ -17,6 +17,9 @@ declare module "@tailor-platform/sdk" {
   interface DateRepresentationRegistry {
     "hello-world": "unset";
   }
+  interface DecimalRepresentationRegistry {
+    "hello-world": "unset";
+  }
 }
 
 export {};

@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { aroundAll, describe, expect, test } from "vitest";
-import { applyDateDefault, extractVaultStore, loadSecretsFromConfig } from "./setup";
+import {
+  applyDateDefault,
+  applyDecimalDefault,
+  extractVaultStore,
+  loadSecretsFromConfig,
+} from "./setup";
 
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
@@ -149,6 +154,29 @@ describe("applyDateDefault", () => {
       expect(process.env[GATE]).toBe("stale");
 
       const restoreLegacy = applyDateDefault("legacy");
+      expect(process.env[GATE]).toBeUndefined();
+      restoreLegacy();
+      expect(process.env[GATE]).toBe("stale");
+    } finally {
+      if (previous === undefined) delete process.env[GATE];
+      else process.env[GATE] = previous;
+    }
+  });
+});
+
+describe("applyDecimalDefault", () => {
+  const GATE = "__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT";
+
+  test("applyDecimalDefault sets the bundle gate for decimal, clears it for legacy, and restores", () => {
+    const previous = process.env[GATE];
+    try {
+      process.env[GATE] = "stale";
+      const restore = applyDecimalDefault("decimal");
+      expect(process.env[GATE]).toBe("decimal");
+      restore();
+      expect(process.env[GATE]).toBe("stale");
+
+      const restoreLegacy = applyDecimalDefault("legacy");
       expect(process.env[GATE]).toBeUndefined();
       restoreLegacy();
       expect(process.env[GATE]).toBe("stale");

@@ -86,4 +86,49 @@ describe("resolver Decimal representation bundles", () => {
       'Parsing fields declared with as: "decimal" needs parseDecimalFields, exported by "@tailor-platform/sdk/runtime".',
     );
   });
+
+  test("a decimal field that omits as is parsed to Decimal when the config sets defaultDecimalRepresentation", async () => {
+    using tmp = tempCwd("sdk-decimal-default-");
+    const scopeDir = path.join(tmp.dir, "node_modules/@tailor-platform");
+    fs.mkdirSync(scopeDir, { recursive: true });
+    fs.symlinkSync(path.resolve(__dirname, "../../../.."), path.join(scopeDir, "sdk"), "dir");
+    fs.writeFileSync(
+      path.join(tmp.dir, "resolver.mjs"),
+      `
+      import { createResolver, t } from "@tailor-platform/sdk";
+      import { Decimal } from "@tailor-platform/sdk/runtime";
+      const payload = t.object({ price: t.decimal(), label: t.decimal({ as: "string" }) });
+      export default createResolver({
+        name: "defaulted",
+        operation: "query",
+        input: { raw: t.string() },
+        body: async ({ input }) => {
+          const result = payload.parse({ value: JSON.parse(input.raw), data: undefined, invoker: null });
+          if (result.issues) throw new Error("issues");
+          return Decimal.isDecimal(result.value.price) && typeof result.value.label === "string";
+        },
+        output: t.bool(),
+      });
+    `,
+    );
+    const code = (
+      await bundleResolvers({
+        namespace: "decimal",
+        files: fs.globSync(path.resolve(tmp.dir, "./resolver.mjs")),
+        baseDir: tmp.dir,
+        decimalDefault: "decimal",
+      })
+    ).get("defaulted")!;
+    const bundlePath = path.join(tmp.dir, "bundle.mjs");
+    fs.writeFileSync(bundlePath, code);
+    const { main } = await import(pathToFileURL(bundlePath).href);
+
+    await expect(
+      main({
+        input: { raw: JSON.stringify({ price: "1.5", label: "2.50" }) },
+        caller: null,
+        env: {},
+      }),
+    ).resolves.toBe(true);
+  });
 });

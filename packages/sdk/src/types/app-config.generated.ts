@@ -50,6 +50,7 @@ export type AppConfigParsed = {
       }
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;
+  defaultDecimalRepresentation?: "decimal" | undefined;
   maintenanceMode?: "deploy" | "migration" | false | undefined;
   metadata?:
     | {
@@ -113,6 +114,7 @@ export type AppDefinitionParsed = {
       }
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;
+  defaultDecimalRepresentation?: "decimal" | undefined;
   maintenanceMode?: "deploy" | "migration" | false | undefined;
   metadata?:
     | {
@@ -180,6 +182,7 @@ export type WorkspaceConfigParsed = {
       }
     | undefined;
   defaultDateRepresentation?: "date" | "temporal" | undefined;
+  defaultDecimalRepresentation?: "decimal" | undefined;
   maintenanceMode?: "deploy" | "migration" | false | undefined;
   executor?: unknown;
   workflow?: unknown;

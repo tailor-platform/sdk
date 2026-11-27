@@ -23,6 +23,9 @@ declare module "@tailor-platform/sdk" {
   interface DateRepresentationRegistry {
     workflow: "unset";
   }
+  interface DecimalRepresentationRegistry {
+    workflow: "unset";
+  }
 }
 
 export {};

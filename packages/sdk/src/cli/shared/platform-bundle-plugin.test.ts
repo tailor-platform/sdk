@@ -22,6 +22,7 @@ describe("platformBundleDefinePlugin", () => {
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL",
   ])("preserves error positions after folding %s", async (gate) => {
@@ -37,7 +38,12 @@ describe("platformBundleDefinePlugin", () => {
       plugins: [
         createPlatformBundleDefinePlugin(
           { date: false, temporal: false, decimal: false },
-          { dateDefault: "date", kyselyTemporal: true, kyselyDecimal: true },
+          {
+            dateDefault: "date",
+            decimalDefault: "decimal",
+            kyselyTemporal: true,
+            kyselyDecimal: true,
+          },
         ),
       ],
       output: { format: "esm", sourcemap: true, minify: true },
@@ -144,6 +150,37 @@ describe("createPlatformBundleDefinePlugin date default", () => {
   });
 });
 
+describe("createPlatformBundleDefinePlugin decimal default", () => {
+  const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT);";
+
+  test("folds the decimal default gate to undefined unless a decimal default is configured", () => {
+    expect(run(code)).toBe("read(undefined);");
+    expect(
+      run(code, createPlatformBundleDefinePlugin(undefined, { decimalDefault: "legacy" })),
+    ).toBe("read(undefined);");
+  });
+
+  test("folds the decimal default gate to the configured representation literal", () => {
+    expect(
+      run(code, createPlatformBundleDefinePlugin(undefined, { decimalDefault: "decimal" })),
+    ).toBe('read("decimal");');
+  });
+
+  test("keeps the Decimal converter in a bundle that declares no representations when the default is decimal", () => {
+    const withoutDecimal =
+      "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL);";
+    expect(run(withoutDecimal, createPlatformBundleDefinePlugin(undefined, {}))).toBe(
+      "read(true);",
+    );
+    expect(
+      run(
+        withoutDecimal,
+        createPlatformBundleDefinePlugin(undefined, { decimalDefault: "decimal" }),
+      ),
+    ).toBe("read(false);");
+  });
+});
+
 describe("createPlatformBundleDefinePlugin kysely decimal", () => {
   const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL);";
 
@@ -225,6 +262,29 @@ describe("date default gate in the built runtime", () => {
     );
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT");
     expect(folded).toMatch(/="temporal";return \w+===`temporal`\|\|\w+===`date`\?\w+:`legacy`/);
+  });
+});
+
+describe("decimal default gate in the built runtime", () => {
+  // Same reason as the date default: a shape the regex misses would leave deployed functions
+  // reading strings while `tailor.d.ts` says Decimal.
+  test("the built chunk reads the gate in the exact shape the plugin folds", () => {
+    const distDir = join(import.meta.dirname, "..", "..", "..", "dist");
+    const chunk = readdirSync(distDir)
+      .filter((name) => name.endsWith(".mjs"))
+      .map((name) => readFileSync(join(distDir, name), "utf8"))
+      .find((code) => code.includes("function bundledDecimalDefault"));
+    expect(
+      chunk,
+      "run `pnpm build` first: dist has no chunk with bundledDecimalDefault",
+    ).toBeDefined();
+
+    const folded = run(
+      chunk!,
+      createPlatformBundleDefinePlugin(undefined, { decimalDefault: "decimal" }),
+    );
+    expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT");
+    expect(folded).toMatch(/="decimal";return \w+===`decimal`\?\w+:`legacy`/);
   });
 });
 

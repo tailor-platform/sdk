@@ -42,8 +42,8 @@ export type TailorToTs = {
 
 export interface FieldMetadata {
   /**
-   * Value representation. `"default"` follows the configured `defaultDateRepresentation`;
-   * `"decimal"` is for decimal fields only.
+   * Value representation. `"default"` follows the configured `defaultDateRepresentation`
+   * (or `defaultDecimalRepresentation` for a decimal field); `"decimal"` is for decimal fields only.
    */
   as?: "string" | "date" | "temporal" | "decimal" | "default";
   description?: string;
@@ -195,16 +195,61 @@ export type TimeFieldValueFor<As, Default> = TimeValueOf<ResolveDateRepresentati
 
 export type TimeFieldValue<As> = TimeFieldValueFor<As, DefaultDateRepresentation>;
 
+/**
+ * Registry of each application's `defaultDecimalRepresentation`. `tailor generate`
+ * writes one entry per application into `tailor.d.ts`, keyed by the app name:
+ * `declare module "@tailor-platform/sdk" { interface DecimalRepresentationRegistry { shop: "decimal" } }`.
+ * An app without the setting is recorded as `"unset"`. A workspace config is
+ * recorded under the key `workspace`, like {@link DateRepresentationRegistry}.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface DecimalRepresentationRegistry {}
+
+export type DecimalDefaultConflictMessage =
+  "defaultDecimalRepresentation differs between the tailor.config.ts files included in this TypeScript program; use the same value in each, or give each application its own tsconfig.json";
+
+// Distributes over the union of recorded settings.
+type DecimalDefaultOfValue<Value> = Value extends "decimal"
+  ? Value
+  : Value extends "unset"
+    ? undefined
+    : never;
+
+/**
+ * Resolve the default decimal representation declared by a registry: the single
+ * value every included app agrees on, or a type-level error when they differ.
+ */
+type DecimalDefaultOf<Registry> = [DecimalDefaultOfValue<Registry[keyof Registry]>] extends [never]
+  ? undefined
+  : IsUnion<DecimalDefaultOfValue<Registry[keyof Registry]>> extends true
+    ? TypeLevelError<DecimalDefaultConflictMessage>
+    : DecimalDefaultOfValue<Registry[keyof Registry]>;
+
+type DefaultDecimalRepresentation = DecimalDefaultOf<DecimalRepresentationRegistry>;
+
+export type HasDecimalDefaultConflict =
+  DefaultDecimalRepresentation extends TypeLevelError<string> ? true : false;
+
+/** Explicit `as` values a decimal field accepts. */
+export type DecimalRepresentationOption = "string" | "decimal";
+
 /** Options for a decimal field. */
 export type DecimalFieldOptions = FieldOptions & {
   /**
-   * Choose a string, or a `Decimal` from decimal.js. Defaults to string.
+   * Choose a string, or a `Decimal` from decimal.js. Defaults to
+   * `defaultDecimalRepresentation`, or string.
    */
-  as?: "string" | "decimal";
+  as?: DecimalRepresentationOption;
 };
 
 /** Value type of a decimal field. */
-export type DecimalFieldValue<As> = As extends "decimal" ? Decimal : string;
+export type DecimalFieldValue<As> = As extends DecimalRepresentationOption
+  ? As extends "decimal"
+    ? Decimal
+    : string
+  : DefaultDecimalRepresentation extends "decimal"
+    ? Decimal
+    : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;

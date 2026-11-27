@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { isSyntaxDiagnostic } from "#/utils/syntax-diagnostic";
 import { installTailordbClientStub } from "#/utils/tailordb-client-stub";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "#/runtime/types";
 
 /**
  * Read `defaultDateRepresentation` from an imported `tailor.config.ts` module.
@@ -31,10 +31,35 @@ export function dateDefaultFromConfig(configModule: unknown): EffectiveDateDefau
   );
 }
 
+/**
+ * Read `defaultDecimalRepresentation` from an imported `tailor.config.ts` module.
+ *
+ * Accepts exactly what the config schema accepts: absent or `"decimal"`.
+ * @param configModule - The imported module namespace
+ * @returns The representation `t.decimal()` fields without `as` follow
+ */
+export function decimalDefaultFromConfig(configModule: unknown): EffectiveDecimalDefault {
+  const appConfig =
+    configModule && typeof configModule === "object"
+      ? (configModule as { default?: unknown }).default
+      : undefined;
+  const value =
+    appConfig && typeof appConfig === "object"
+      ? (appConfig as { defaultDecimalRepresentation?: unknown }).defaultDecimalRepresentation
+      : undefined;
+  if (value === undefined) return "legacy";
+  if (value === "decimal") return value;
+  throw new Error(
+    `defaultDecimalRepresentation must be "decimal" or omitted, but tailor.config.ts sets ${JSON.stringify(value)}.`,
+  );
+}
+
 /** What the Vitest host reads from `tailor.config.ts` for the tailor-runtime environment. */
 export type ConfigDefaults = {
   /** The representation `t` date fields without `as` follow. */
   dateDefault: EffectiveDateDefault;
+  /** The representation `t.decimal()` fields without `as` follow. */
+  decimalDefault: EffectiveDecimalDefault;
   /** Whether the kyselyTypePlugin the config exports is configured with `temporal: true`. */
   kyselyTemporal: boolean;
   /** Whether the kyselyTypePlugin the config exports is configured with `decimal: true`. */
@@ -169,10 +194,16 @@ export async function loadConfigDefaultsFromConfig(configPath: string): Promise<
     console.warn(
       `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal" or "date", tests disagree with tailor.d.ts until the error is fixed: ${describeError(error)}`,
     );
-    return { dateDefault: "legacy", kyselyTemporal: false, kyselyDecimal: false };
+    return {
+      dateDefault: "legacy",
+      decimalDefault: "legacy",
+      kyselyTemporal: false,
+      kyselyDecimal: false,
+    };
   }
   return {
     dateDefault: dateDefaultFromConfig(configModule),
+    decimalDefault: decimalDefaultFromConfig(configModule),
     kyselyTemporal: kyselyTemporalFromConfig(configModule),
     kyselyDecimal: kyselyDecimalFromConfig(configModule),
   };
