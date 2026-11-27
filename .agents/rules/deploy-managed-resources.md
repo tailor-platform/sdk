@@ -41,6 +41,10 @@ consumer below; the guard named with it fails while one is missing.
   create-update apply with `writeLabelRefreshes`; add its case, or the reason it has none (guard:
   `satisfies Record`). The cases check only the apply, so also plan an owned unchanged resource
   with stale SDK labels in the planner's tests and expect its `labelRefresh`.
+- `drift-check-coverage.test.ts`'s `COVERAGE` — name the config whose redeploy checks the type
+  for planned changes: `example/` (the Workspace Deploy Test) or the fixture of
+  `e2e/redeploy-drift.test.ts`, with a predicate the loaded config must meet, or the reason
+  neither can create it (guard: `satisfies Record`). Configure the type there when neither does.
 
 ## Per plan kind
 
