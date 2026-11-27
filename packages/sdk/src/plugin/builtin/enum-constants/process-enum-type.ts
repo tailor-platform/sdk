@@ -46,11 +46,14 @@ function collectEnums(
   return enums;
 }
 
-// A namespace name is lowercase letters, digits and hyphens, so `shop-db` becomes `ShopDb`; one
-// starting with a digit gets a leading `_` to stay a valid identifier.
+// A namespace name is lowercase letters, digits and hyphens. A segment starting with a letter is
+// capitalized (`shop-db` is `ShopDb`) and any other gets a leading `_` (`db-2` is `Db_2`, `a--b` is
+// `A_B`, `2nd-crm` is `_2ndCrm`), so no two names collide and each is a valid identifier.
 function namespaceIdentifier(namespace: string): string {
-  const pascal = namespace.split("-").map(capitalizeFirst).join("");
-  return /^[0-9]/.test(pascal) ? `_${pascal}` : pascal;
+  return namespace
+    .split("-")
+    .map((segment) => (/^[a-z]/.test(segment) ? capitalizeFirst(segment) : `_${segment}`))
+    .join("");
 }
 
 /**

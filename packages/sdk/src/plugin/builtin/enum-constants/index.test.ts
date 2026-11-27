@@ -96,6 +96,24 @@ describe("EnumConstantsPlugin", () => {
     expect(content).toContain("export const OrderStatus = {");
   });
 
+  test.each([
+    ["a-b", "a--b"],
+    ["db-2", "db2"],
+  ])("names the constants of namespaces %j and %j apart", async (first, second) => {
+    const customer = parseTailorDBType(
+      toSchemaOutput(db.table("Customer", { tier: db.enum(["GOLD"]) })),
+    );
+
+    const [firstName, secondName] = await Promise.all(
+      [first, second].map(async (namespace) => {
+        const { enums } = await processEnumType(customer, namespace);
+        return enums[0]!.name;
+      }),
+    );
+
+    expect(firstName).not.toBe(secondName);
+  });
+
   describe("enum collection", () => {
     test("should collect top-level enum fields", async () => {
       const type = db.table("User", {
