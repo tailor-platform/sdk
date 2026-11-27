@@ -491,6 +491,7 @@ snapshots:
 				"date-fns": "4.4.0",
 				"eslint-plugin-zod": "5.3.0",
 				"graphql": "17.1.0",
+				"mootant": "0.2.0",
 				"oxfmt": "0.79.0",
 				"oxlint": "1.94.0",
 				"sonda": "0.14.0",
@@ -6067,6 +6068,11 @@ snapshots:
 			},
 		},
 
+		"lilconfig@3.1.5": {
+			"integrity": "sha512-aRAOI9Ia43ygL4o1EOmC/sc/0OFxrm7qcQngiIyWaqVnSnz932ybJ07zyCcgMNGSDP8Yxaf88Xj1zHEXmvQ4SA==",
+			"engines": {"node": ">=14"},
+		},
+
 		"line-column@1.0.2": {
 			"integrity": "sha512-Ktrjk5noGYlHsVnYWh62FLVs4hTb8A3e+vucNZMgPeAOITdshMSgv4cCZQeRDjm7+goqmo6+liZwTXo+U3sVww==",
 			"dependencies": {
@@ -6284,6 +6290,42 @@ snapshots:
 
 		"moo@0.5.3": {
 			"integrity": "sha512-m2fmM2dDm7GZQsY7KK2cme8agi+AAljILjQnof7p1ZMDe6dQ4bdnSMx0cPppudoeNv5hEFQirN6u+O4fDE0IWA==",
+		},
+
+		"mootant@0.2.0": {
+			"integrity": "sha512-sCOJwNHJVtTTCdR5DQPhO83lF9/ZWK5wvO3CGJ7wvv/IwOoqadr5jqrABbiAqXotGBzuniBDrQKfJ521YpVMiw==",
+			"engines": {"node": "^20.19.0 || >=22.12.0"},
+			"hasBin": true,
+			"peerDependencies": {
+				"@vue/compiler-dom": {
+					"specifier": "^3.5.0",
+					"version": "3.5.45",
+					"optional": true,
+				},
+				"jest": {
+					"specifier": "^29.7.0 || ^30.0.0",
+					"optional": true,
+				},
+				"jiti": {
+					"specifier": "^2.0.0",
+					"version": "2.7.0",
+					"optional": true,
+				},
+				"svelte": {
+					"specifier": "^5.0.0",
+					"optional": true,
+				},
+				"vitest": {
+					"specifier": "^5.0.0",
+					"version": "5.1.1",
+					"optional": true,
+				},
+			},
+			"dependencies": {
+				"@eslint-community/regexpp": "4.12.3",
+				"lilconfig": "3.1.5",
+				"oxc-parser": "0.159.0",
+			},
 		},
 
 		"mri@1.2.0": {

@@ -153,7 +153,13 @@
       }
     },
     {
-      "files": ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
+      "files": [
+        "src/**/*.ts",
+        "mootant.config.ts",
+        "tsdown.config.ts",
+        "vitest.config.ts",
+        "vitest.mutation.config.ts"
+      ],
       "rules": {
         "no-unused-vars": [
           "error",

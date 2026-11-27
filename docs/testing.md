@@ -21,6 +21,7 @@ pnpm test:unit                 # Unit only
 pnpm test:e2e                  # E2E only (most suites need Platform credentials)
 pnpm test path/to/file.test.ts # Single file
 pnpm test -t "pattern"         # Pattern match
+pnpm test:mutation <files>     # Mutation testing (see Mutation Testing)
 ```
 
 `-t` matches against the full test name; Vitest 5 joins nested `describe`/`test` names with `>` (e.g. `-t "describe name > test name"`).
@@ -72,6 +73,22 @@ Located in `packages/sdk/e2e/`. CI runs these only in the `sdk-e2e.yml` workflow
 - Give each CLI call an explicit budget (`CLI_BUDGET_MS` covers the common cases) and derive the test timeout from the budgets it spends with `cliTestTimeout`, adding `WORKSPACE_CREATION_ALLOWANCE_MS` when the test also creates a workspace, so a stuck call fails with its own output instead of a bare test timeout.
 - Before raising a budget, find which phase grew. The helper logs every CLI line with its elapsed time, reports each call's share of its budget, and emits an `E2E CLI budget` warning on GitHub Actions once a call uses 60% of it.
 - Let setup failures fail the suite. Do not substitute a placeholder for a failed lookup; it surfaces later as an unrelated-looking assertion failure.
+
+## Mutation Testing
+
+[Mootant](https://mootant.org/) changes one expression of a source file at a time (a mutant) and runs the unit tests against it. A mutant that no test fails on survives, which points to an assertion the tests are missing. Use it locally when refactoring or adding tests; CI does not run it.
+
+Run it in `packages/sdk/` on the source files you changed:
+
+```bash
+pnpm test:mutation --since origin/main $(git diff --name-only --relative --diff-filter=d $(git merge-base origin/main HEAD) -- 'src/*.ts' ':!*.test.ts' ':!*.test-d.ts' ':!src/*/test-helpers/*' ':!src/*/__test_fixtures__/*' ':!src/vitest/integration/*')
+```
+
+- `--since origin/main` limits the mutants to the lines changed since the merge base with `origin/main`, uncommitted changes included; without it, every line of the given files is mutated. `git diff` lists a new file once it is in the index (`git add -N` is enough).
+- Give it source files, not a directory. Before trying mutants, Mootant runs every `unit*` test that imports any of the given files (`vitest.mutation.config.ts` keeps it to those projects), so a file that many tests import takes a minute or more, and a directory such as `src/parser` several minutes. A directory also mutates files the `unit*` projects do not collect as tests, such as test helpers and fixtures, which the command above leaves out.
+- Each surviving mutant prints its change, a test file to extend, and an id; `pnpm test:mutation <file> --mutant <id>` re-checks it after you add a test. `--html` writes `.mootant/report.html`.
+- Mootant does not type-check, so a survivor can be a change TypeScript already rejects, which needs no test. Changed `.describe()` texts and Zod issue messages also survive unless a test asserts them; Mootant does not mutate the text of thrown errors.
+- Mootant runs `unit-core` with `isolate: true` and prints a `config-overridden` warning about it on every run.
 
 ## Conventions
 
