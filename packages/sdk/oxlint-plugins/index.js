@@ -681,22 +681,29 @@ export default {
         schema: [],
       },
       create(context) {
-        const flags = ["--profile", "--workspace-id", "--env-file", "--env-file-if-exists"];
+        const flags = [
+          "--profile",
+          "-p",
+          "--workspace-id",
+          "-w",
+          "--env-file",
+          "-e",
+          "--env-file-if-exists",
+        ];
         const flagEnd = new RegExp(`(^|\\s)(${flags.join("|")})[ =]$`);
-        const startsWithFlagValue = (text) => flags.some((flag) => text.startsWith(`${flag}=`));
+        const writesFlag = (text) =>
+          flags.includes(text) ||
+          flags.some((flag) => text.startsWith(`${flag}=`)) ||
+          flagEnd.test(text);
         return {
           Literal(node) {
-            if (typeof node.value !== "string") return;
-            if (flags.includes(node.value) || startsWithFlagValue(node.value)) {
+            if (typeof node.value === "string" && writesFlag(node.value)) {
               context.report({ node, messageId: "handBuilt" });
             }
           },
           TemplateLiteral(node) {
             const texts = node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);
-            if (
-              startsWithFlagValue(texts[0]) ||
-              texts.slice(0, -1).some((text) => flagEnd.test(text))
-            ) {
+            if (texts.some(writesFlag)) {
               context.report({ node, messageId: "handBuilt" });
             }
           },
