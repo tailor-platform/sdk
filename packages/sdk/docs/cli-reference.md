@@ -409,7 +409,7 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 - Later files override earlier files
 - `--env-file` files are loaded first, then `--env-file-if-exists` files
 - Loaded values fill options backed by an environment variable, such as `--config` from `TAILOR_CONFIG_PATH`
-- Commands the CLI suggests with the run's workspace or profile, and next-step hints, repeat these options with each file's absolute path
+- Commands the CLI suggests with the run's workspace or profile, and `Next:` commands (`error.next` in JSON output) such as `tailor login` when no token is found, repeat these options with each file's absolute path
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)
