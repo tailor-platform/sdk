@@ -216,11 +216,11 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     };
 
     expect(() =>
-      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "name"] }),
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items"] }),
     ).toThrow(".hooks() cannot be used on nested inner fields");
   });
 
-  test("throws on .default() on nested inner fields", () => {
+  test("throws on .default() on nested inner fields only", () => {
     const field = {
       type: "string" as const,
       fields: {},
@@ -231,9 +231,12 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     expect(() =>
       parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "status"] }),
     ).toThrow(".default() cannot be used on nested inner fields");
+    expect(() =>
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["status"] }),
+    ).not.toThrow();
   });
 
-  test("throws on .serial() on nested inner fields", () => {
+  test("throws on .serial() on nested inner fields only", () => {
     const field = {
       type: "integer" as const,
       fields: {},
@@ -244,6 +247,9 @@ describe("parseFieldConfig nested inner field restrictions", () => {
     expect(() =>
       parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["items", "number"] }),
     ).toThrow(".serial() cannot be used on nested inner fields");
+    expect(() =>
+      parseFieldConfig(field as never, { tableName: "Test", fieldPath: ["number"] }),
+    ).not.toThrow();
   });
 });
 

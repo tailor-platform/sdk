@@ -142,33 +142,46 @@ describe("parseTypes", () => {
   });
 
   describe("buildBackwardRelationships", () => {
-    test("should build backward relationships correctly", () => {
-      const employee = db.table("Employee", {
-        name: db.string(),
-      });
+    test.each([
+      ["without a description", undefined, ""],
+      ["with a description", "Employee reviews", "Employee reviews"],
+    ] as const)(
+      "should build backward relationships correctly from a source table %s",
+      (_label, description, expectedDescription) => {
+        const employee = db.table("Employee", {
+          name: db.string(),
+        });
 
-      const performanceReview = db.table("PerformanceReview", {
-        employeeId: db.uuid().relation({
-          type: "n-1",
-          toward: { table: employee },
-          backward: "performanceReviews",
-        }),
-      });
+        const fields = {
+          employeeId: db.uuid().relation({
+            type: "n-1",
+            toward: { table: employee },
+            backward: "performanceReviews",
+          }),
+        };
+        const performanceReview =
+          description === undefined
+            ? db.table("PerformanceReview", fields)
+            : db.table("PerformanceReview", description, fields);
 
-      const result = parseTypes(
-        toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
-        "test-namespace",
-      );
+        const result = parseTypes(
+          toSchemaOutputs({ Employee: employee, PerformanceReview: performanceReview }),
+          "test-namespace",
+        );
 
-      expect(result.Employee!.backwardRelationships).toHaveProperty("performanceReviews");
-      expect(result.Employee!.backwardRelationships.performanceReviews).toMatchObject({
-        name: "performanceReviews",
-        targetType: "PerformanceReview",
-        targetField: "employeeId",
-        sourceField: "id",
-        isArray: true,
-      });
-    });
+        expect(result.Employee!.backwardRelationships).toEqual({
+          performanceReviews: {
+            name: "performanceReviews",
+            targetType: "PerformanceReview",
+            targetField: "employeeId",
+            sourceField: "id",
+            isArray: true,
+            description: expectedDescription,
+          },
+        });
+        expect(result.PerformanceReview!.backwardRelationships).toEqual({});
+      },
+    );
 
     test("should throw error when backward relation names are duplicated", () => {
       const employee = db.table("Employee", {
@@ -340,7 +353,7 @@ describe("parseTypes", () => {
       ],
     ] as const)(
       "should throw error when backward name conflicts with %s named 'posts'",
-      (_label, buildUser) => {
+      (label, buildUser) => {
         const user = buildUser();
 
         // Post's backward relation will generate "posts" which conflicts
@@ -353,7 +366,9 @@ describe("parseTypes", () => {
 
         expect(() =>
           parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-        ).toThrow(/posts/);
+        ).toThrow(
+          `Backward relation name "posts" from Post.userId conflicts with ${label} "posts" on table "User"`,
+        );
       },
     );
   });
@@ -382,16 +397,22 @@ describe("parseTypes", () => {
         "test-namespace",
       );
 
-      expect(result.InventoryExecutionLine!.forwardRelationships).toMatchObject({
+      expect(result.InventoryExecutionLine!.forwardRelationships).toEqual({
         unit: {
           name: "unit",
           targetType: "Unit",
           targetField: "unitId",
+          sourceField: "id",
+          isArray: false,
+          description: "",
         },
         primaryUnit: {
           name: "primaryUnit",
           targetType: "Unit",
           targetField: "primaryUnitId",
+          sourceField: "id",
+          isArray: false,
+          description: "",
         },
       });
     });
@@ -400,6 +421,7 @@ describe("parseTypes", () => {
       ["assigneeID", "assignee"],
       ["assigneeId", "assignee"],
       ["assigneeid", "assignee"],
+      ["identityId", "identity"],
     ])("should strip a trailing ID suffix from %s", (fieldName, forwardName) => {
       const user = db.table("User", {
         name: db.string(),
@@ -957,74 +979,59 @@ describe("parseTypes", () => {
       expect(result.Profile!.fields.userId!.config.unique).toBe(true);
     });
 
-    test.each([
+    const nToOneRelationTypes = ["n-1", "manyToOne", "N-1"] as const;
+    type UniqueRelationType = (typeof nToOneRelationTypes)[number] | "keyOnly";
+    const uniqueRelationBuilders = [
       [
         "unique before relation",
-        (user: ReturnType<typeof db.table>) =>
+        (user: ReturnType<typeof db.table>, type: UniqueRelationType) =>
           db
             .uuid()
             .unique()
-            .relation({ type: "keyOnly", toward: { table: user } }),
+            .relation({ type, toward: { table: user } }),
       ],
       [
         "unique after relation",
-        (user: ReturnType<typeof db.table>) =>
+        (user: ReturnType<typeof db.table>, type: UniqueRelationType) =>
           db
             .uuid()
-            .relation({ type: "keyOnly", toward: { table: user } })
+            .relation({ type, toward: { table: user } })
             .unique(),
       ],
-    ] as const)("should keep unique=true for keyOnly relations (%s)", (_label, buildUserId) => {
-      const user = db.table("User", { name: db.string() });
-      const post = db.table("Post", { userId: buildUserId(user) });
+    ] as const;
 
-      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
-
-      expect(result.Post!.fields.userId!.config.unique).toBe(true);
-    });
-
-    test.each([
-      [
-        "unique before relation",
-        (user: ReturnType<typeof db.table>) =>
-          db
-            .uuid()
-            .unique()
-            .relation({
-              type: "n-1",
-              toward: { table: user },
-            }),
-      ],
-      [
-        "unique after relation",
-        (user: ReturnType<typeof db.table>) =>
-          db
-            .uuid()
-            .relation({
-              type: "n-1",
-              toward: { table: user },
-            })
-            .unique(),
-      ],
-    ] as const)(
-      "should throw error when unique is set on n-1 relation (%s)",
+    test.each(uniqueRelationBuilders)(
+      "should keep unique=true for keyOnly relations (%s)",
       (_label, buildUserId) => {
-        const user = db.table("User", {
-          name: db.string(),
-        });
+        const user = db.table("User", { name: db.string() });
+        const post = db.table("Post", { userId: buildUserId(user, "keyOnly") });
 
-        const employee = db.table("Employee", {
-          userID: buildUserId(user),
-        });
+        const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
 
-        expect(() =>
-          parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
-        ).toThrow(
-          'Field "userID" on table "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
-            "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
-        );
+        expect(result.Post!.fields.userId!.config.unique).toBe(true);
       },
     );
+
+    test.each(
+      nToOneRelationTypes.flatMap((type) =>
+        uniqueRelationBuilders.map(([label, build]) => [type, label, build] as const),
+      ),
+    )("should throw error when unique is set on %s relation (%s)", (type, _label, buildUserId) => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+
+      const employee = db.table("Employee", {
+        userID: buildUserId(user, type),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Employee: employee }), "test-namespace"),
+      ).toThrow(
+        'Field "userID" on table "Employee": cannot set unique on n-1 (manyToOne) relation. ' +
+          "Use 1-1 (oneToOne) relation instead, or remove the unique constraint.",
+      );
+    });
 
     test("should handle self-referencing relations", () => {
       const node = db.table("Node", {
@@ -1078,6 +1085,7 @@ describe("parseTypes", () => {
       const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
 
       expect(result.Order!.fields.info!.config.fields!.ownerID).toMatchObject({
+        type: "uuid",
         foreignKey: true,
         foreignKeyType: "User",
         foreignKeyField: "id",
@@ -1095,6 +1103,7 @@ describe("parseTypes", () => {
       const result = parseTypes(toSchemaOutputs({ User: user, Order: order }), "test-namespace");
 
       expect(result.Order!.fields.items!.config.fields!.ownerID).toMatchObject({
+        type: "uuid",
         foreignKey: true,
         foreignKeyType: "User",
       });
