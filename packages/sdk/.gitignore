@@ -9,6 +9,9 @@ attest-metrics.json
 attest-changes.md
 .attest/
 
+# Mutation testing report
+.mootant/
+
 # Integration test fixtures output
 src/cli/commands/deploy/__test_fixtures__/dist/
 src/cli/commands/deploy/__test_fixtures__/generated/

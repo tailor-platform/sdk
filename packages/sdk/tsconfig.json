@@ -17,6 +17,7 @@
     "./eslint-rules/**/*.ts",
     "./e2e/**/*.ts",
     "./knip.ts",
+    "./mootant.config.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",
     "./vitest.setup.ts",

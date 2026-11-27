@@ -4,7 +4,7 @@ import type { KnipConfig } from "knip";
 
 export default {
   tags: ["-lintignore"],
-  entry: [...entry],
+  entry: [...entry, "mootant.config.ts", "vitest.mutation.config.ts"],
   ignore: [
     "scripts/**",
     "e2e/fixtures/**",
