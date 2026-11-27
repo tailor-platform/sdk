@@ -351,8 +351,6 @@ function resolverNamespacesDefining(
     .map((service) => service.namespace);
 }
 
-// Resolver names were only namespace-unique before triggers could name a namespace, and a trigger
-// without one subscribed to the first namespace that defines the name; it still does.
 type SeveralDefiningNamespaces = "none" | "first";
 
 function pickLocalNamespace(
