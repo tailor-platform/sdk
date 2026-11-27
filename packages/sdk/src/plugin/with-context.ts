@@ -111,8 +111,8 @@ export type PluginRecord = { id: string } & Record<string, unknown>;
  *
  * export default withPluginContext<MyContext>((ctx) =>
  *   createExecutor({
- *     name: `${ctx.sourceTable.name.toLowerCase()}-on-create`,
- *     trigger: recordCreatedTrigger({ type: ctx.sourceTable }),
+ *     name: `${ctx.namespace}-${ctx.sourceTable.name.toLowerCase()}-on-create`,
+ *     trigger: recordCreatedTrigger({ type: ctx.sourceTable, namespace: ctx.namespace }),
  *     operation: {
  *       kind: "function",
  *       body: async (args) => {
