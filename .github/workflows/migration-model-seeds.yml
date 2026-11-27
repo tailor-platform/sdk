@@ -1,0 +1,53 @@
+name: Migration Model Seeds
+
+# Runs migration-model.test.ts with the run ID as its seed, so each run checks histories other than
+# those of seed 1, which pull request checks use.
+on:
+  schedule:
+    - cron: "0 4 * * *" # daily, 04:00 UTC
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  model:
+    name: Migration model test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      MODEL_SEED: ${{ github.run_id }}
+      MODEL_TEST: src/cli/commands/deploy/tailordb/migration-model.test.ts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: $/.github/actions/install-deps
+
+      # A step timeout fails the step, so the Slack step still runs; a job timeout cancels the job.
+      - name: Run the model test
+        id: model
+        working-directory: packages/sdk
+        timeout-minutes: 15
+        run: pnpm exec vitest run "$MODEL_TEST"
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+          MODEL_OUTCOME: ${{ steps.model.outcome }}
+        run: |
+          if [[ "$MODEL_OUTCOME" == "failure" ]]; then
+            text=":rotating_light: Migration model test <${RUN_URL}|failed> with MODEL_SEED=${MODEL_SEED} at ${COMMIT_SHA:0:9}. Reproduce at that commit in packages/sdk: \`MODEL_SEED=${MODEL_SEED} pnpm test ${MODEL_TEST}\`"
+          else
+            text=":rotating_light: Migration model seeds workflow <${RUN_URL}|failed> before the model test ran"
+          fi
+          jq -n --arg text "$text" '{text: $text}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

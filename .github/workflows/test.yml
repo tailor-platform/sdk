@@ -51,6 +51,7 @@ jobs:
               - .github/workflows/changeset-check.yml
               - .github/workflows/pkg-pr-new.yml
               - .github/workflows/securefix.yml
+              - .github/workflows/migration-model-seeds.yml
               - docs/telemetry.md
               - llm-challenge/**
               - scripts/**
