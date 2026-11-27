@@ -470,7 +470,7 @@ snapshots:
 				"temporal-polyfill": "1.0.8",
 				"temporal-spec": "1.0.1",
 				"ts-cron-validator": "1.1.5",
-				"type-fest": "5.10.0",
+				"type-fest": "6.0.3",
 				"vite": {
 					"specifier": "^6.0.0 || ^7.0.0 || ^8.0.0",
 					"version": "8.3.8",
@@ -7590,9 +7590,9 @@ snapshots:
 			},
 		},
 
-		"type-fest@5.10.0": {
-			"integrity": "sha512-NoSdpq/WEiAg5sjmBkmV/hfxv6HJH4NqPNrqjtSO5CwRmpsDfaf4begxW34KdJykH/l1yHtwBWQkCRdoXO8mPA==",
-			"engines": {"node": ">=20"},
+		"type-fest@6.0.3": {
+			"integrity": "sha512-MOJXegkac3h+sWdVb6VY/ACclsa71z3BprNpedGV8ljIzYCo+LRWgyIkWhidKNoiNJOb6kUds1pNCyzQ2p6hJQ==",
+			"engines": {"node": ">=22"},
 			"dependencies": {
 				"tagged-tag": "1.0.0",
 			},
