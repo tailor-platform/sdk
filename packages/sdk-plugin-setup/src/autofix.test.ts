@@ -189,6 +189,7 @@ describe("renderAutofixWorkflow", () => {
           "cancel-in-progress": true,
         });
         expect(agent?.steps.map((step) => step.id)).toEqual([
+          "tailor-env-check",
           "tailor-checkout",
           "tailor-download-patch",
           "tailor-download-prompt",
@@ -197,7 +198,9 @@ describe("renderAutofixWorkflow", () => {
           "tailor-codemod-agent-diff",
           "tailor-upload-patch",
         ]);
-        for (const step of agent?.steps ?? []) {
+        const [envCheck, ...rest] = agent?.steps ?? [];
+        expect(envCheck?.with?.["package-manager"]).toBeUndefined();
+        for (const step of rest) {
           expect(step.uses ?? "").not.toMatch(/^tailor-platform\/actions\//);
           expect(step.run ?? "").not.toContain("pnpm");
         }
@@ -209,7 +212,13 @@ describe("renderAutofixWorkflow", () => {
     ["github-token", ["tailor-checkout", "tailor-download-patch", "tailor-commit"]],
     [
       "github-app",
-      ["tailor-app-token", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
+      [
+        "tailor-env-check",
+        "tailor-app-token",
+        "tailor-checkout",
+        "tailor-download-patch",
+        "tailor-commit",
+      ],
     ],
     [
       "autofix-ci",
@@ -223,7 +232,13 @@ describe("renderAutofixWorkflow", () => {
     ],
     [
       "securefix",
-      ["tailor-checkout", "tailor-download-patch", "tailor-apply-patch", "tailor-securefix"],
+      [
+        "tailor-env-check",
+        "tailor-checkout",
+        "tailor-download-patch",
+        "tailor-apply-patch",
+        "tailor-securefix",
+      ],
     ],
   ] as const)(
     "%s, agents: commits the agent's patch, or the generate job's when no agent ran, from a job of its own",
@@ -451,7 +466,13 @@ describe("renderAutofixWorkflow", () => {
     ["github-token", ["tailor-checkout", "tailor-download-patch", "tailor-commit"]],
     [
       "github-app",
-      ["tailor-app-token", "tailor-checkout", "tailor-download-patch", "tailor-commit"],
+      [
+        "tailor-env-check",
+        "tailor-app-token",
+        "tailor-checkout",
+        "tailor-download-patch",
+        "tailor-commit",
+      ],
     ],
   ] as const)(
     "%s: commits from a separate job that installs and runs none of the project's code",

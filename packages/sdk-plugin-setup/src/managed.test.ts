@@ -394,6 +394,7 @@ describe("mergeUserContent", () => {
       "tailor-setup",
       "tailor-install",
       "Registry auth",
+      "tailor-env-check",
       "tailor-apply",
       "tailor-slack-prereq",
       "tailor-notify",

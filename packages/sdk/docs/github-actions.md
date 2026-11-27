@@ -577,7 +577,8 @@ Because the variable is scoped to a GitHub Environment, both the `plan` and
 
 If `TAILOR_PLATFORM_WORKSPACE_ID` is unset, `deploy` fails because the target
 workspace is not provisioned, and `plan` reports that the workspace is not
-provisioned yet instead of running a dry-run.
+provisioned yet instead of running a dry-run (see
+[Empty entries in a workflow run](#empty-entries-in-a-workflow-run)).
 
 If the target environment has required reviewers, that approval gate applies to
 the `plan` job as well as `deploy`, because `plan` must enter the environment to
@@ -1036,6 +1037,26 @@ values.
 
 `--environment` narrows the check the same way, leaving out the repository
 entries. `--check` cannot be combined with `--format terraform`.
+
+### Empty entries in a workflow run
+
+Each generated job that reads these entries checks them in a `tailor-env-check`
+step before it uses them: right after `tailor-install` in the deploy, plan,
+preview, cleanup, and migration test jobs, and before the step that needs them
+in the autofix workflow. The step receives only whether each entry is set, never
+its value.
+
+- When a required entry the job reads is empty, the step fails the job with one
+  error that names every empty entry and points to `tailor setup ci env --check`
+  and `tailor setup ci env`. In the jobs listed above it also prints the output of
+  `tailor setup ci env --environment <environment>` in its log.
+- The plan job and the autofix workflow's agent job only warn. A pull request
+  opened before the workspace exists does not fail on the empty
+  `TAILOR_PLATFORM_WORKSPACE_ID` alone, and the codemods' changes are still
+  committed when the agent cannot sign in.
+- Empty optional entries are listed on one line of the log, without failing.
+  The preview cleanup job counts `TAILOR_PLATFORM_ORGANIZATION_ID` among them,
+  since it needs the organization only to delete expired preview workspaces.
 
 ## GitHub Environments (approval gate)
 

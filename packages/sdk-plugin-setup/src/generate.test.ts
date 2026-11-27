@@ -1866,8 +1866,12 @@ describe("renderBranchWorkflow migration test job", () => {
         "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}",
     });
     expect(
-      steps.filter((step) => step.env?.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET),
-    ).toHaveLength(1);
+      steps
+        .filter((step) => step !== login && step.env?.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET)
+        .map((step) => [step.id, step.env?.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET]),
+    ).toEqual([
+      ["tailor-env-check", "${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET != '' }}"],
+    ]);
   });
 
   test("always removes the label as the last step, with minimal permissions", () => {
@@ -2011,6 +2015,7 @@ describe("Tailor Platform action pins", () => {
         "actions/checkout",
         "actions/setup-node",
         "actions/upload-artifact",
+        "tailor-platform/actions/env-check",
         "tailor-platform/actions/setup",
         "tailor-platform/actions/install",
       ]),
@@ -3332,6 +3337,7 @@ export default defineConfig({
           "Authenticate to the private registry",
           "tailor-setup",
           "tailor-install",
+          "tailor-env-check",
           "tailor-preview-cleanup",
         ]);
         expect(job?.steps.find((step) => step.id === "tailor-install")?.with).toMatchObject({
