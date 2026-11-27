@@ -453,6 +453,83 @@ export const user = db.table("User", {
     );
   });
 
+  test("rejects .replication() on a table a namespace plugin generates", async () => {
+    const plugin: Plugin = {
+      id: "audit-log",
+      description: "namespace generator",
+      importPath: "@example/audit-log",
+      onTailorDBNamespaceLoaded: () => ({
+        tables: {
+          auditLog: db
+            .table("AuditLog", { message: db.string() })
+            .permission(unsafeAllowAllTypePermission)
+            .gqlPermission(unsafeAllowAllGqlPermission)
+            .replication({}),
+        },
+      }),
+    };
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [] },
+      pluginManager: new PluginManager([plugin]),
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await service.loadTypes();
+    await expect(service.processNamespacePlugins()).rejects.toMatchObject({
+      code: "PLUGIN_TABLE_INVALID",
+      message:
+        'TailorDB table "AuditLog" generated as "auditLog" by plugin "audit-log" in TailorDB service "main" calls .replication(), which a plugin cannot call on a table it generates',
+      suggestion: expect.stringContaining(
+        "list it in the pluginTables of a replication in db.main.replications",
+      ),
+      context: {
+        namespace: "main",
+        issues: [{ path: ["metadata", "replication"], message: expect.any(String) }],
+      },
+    });
+  });
+
+  test("rejects .replication() on a table an attachment plugin generates", async () => {
+    const typeFile = writeTypeFile(
+      "with-replicating-plugin.ts",
+      `
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+export const user = db.table("User", {
+  name: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission).plugin({ archive: {} });
+`,
+    );
+    const plugin: Plugin = {
+      id: "archive",
+      description: "generates an archive table",
+      importPath: "@example/archive",
+      onTableLoaded: () => ({
+        tables: {
+          archive: db
+            .table("UserArchive", { message: db.string() })
+            .permission(unsafeAllowAllTypePermission)
+            .gqlPermission(unsafeAllowAllGqlPermission)
+            .replication({ excludeFields: ["message"] }),
+        },
+      }),
+    };
+    const service = createTailorDBService({
+      namespace: "main",
+      config: { files: [typeFile] },
+      pluginManager: new PluginManager([plugin]),
+      baseDir: process.cwd(),
+    });
+
+    using _logger = silenceLogger("error", "log");
+    await expect(service.loadTypes()).rejects.toMatchObject({
+      code: "PLUGIN_TABLE_INVALID",
+      message:
+        'TailorDB table "UserArchive" generated as "archive" by plugin "archive" in TailorDB service "main" calls .replication(), which a plugin cannot call on a table it generates',
+    });
+  });
+
   test("rejects a plugin-extended table that fails schema validation", async () => {
     const typeFile = writeTypeFile(
       "with-extending-plugin.ts",

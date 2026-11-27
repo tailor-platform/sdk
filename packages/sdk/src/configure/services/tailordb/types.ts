@@ -381,8 +381,9 @@ export type TailorDBOwnServiceConfigInput = Omit<
 > & {
   /**
    * Replications of this namespace's tables into BigQuery, keyed by replication name. A table
-   * takes part through `.replication()`. Set a replication to `undefined` to declare it without
-   * deploying it, for example outside production.
+   * takes part through `.replication()`, and a table a plugin generates through a replication's
+   * `pluginTables`. Set a replication to `undefined` to declare it without deploying it, for
+   * example outside production.
    */
   replications?: TailorDBReplicationsConfig;
   /**

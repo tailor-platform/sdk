@@ -23,9 +23,18 @@ export type TailorDBReplicationDestinationConfig = TailorDBReplicationDestinatio
   TailorDBReplicationDestinationDefinitionBrand;
 
 /** A replication of a TailorDB namespace's tables, keyed by its name in the namespace's `replications`. */
-export type TailorDBReplicationConfig = Omit<TailorDBReplicationSettingsInput, "destination"> & {
+export type TailorDBReplicationConfig = Omit<
+  TailorDBReplicationSettingsInput,
+  "destination" | "pluginTables"
+> & {
   /** Destination to write into, as returned by `defineTailorDBReplicationDestination()`. It is deployed with the replication. */
   destination: TailorDBReplicationDestinationConfig;
+  /**
+   * Tables that plugins generate in the namespace for this replication to copy, keyed by table
+   * name, with the fields to copy as in `.replication()`, e.g.
+   * `{ AuditLog: { excludeFields: ["ipAddress"] } }`. `{}` copies every field.
+   */
+  pluginTables?: Record<string, TailorDBTableReplicationFields<Record<string, unknown>>>;
 };
 
 /**

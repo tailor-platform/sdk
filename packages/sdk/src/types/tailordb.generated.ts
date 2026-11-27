@@ -1180,6 +1180,17 @@ export type TailorDBServiceConfigInput = {
               tablePrefix?: string | undefined;
               /** Whether the replication runs */
               enabled?: boolean | undefined;
+              /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+              pluginTables?:
+                | {
+                    [x: string]: {
+                      /** Replicate every field but these. Fields added later are replicated. */
+                      excludeFields?: string[] | undefined;
+                      /** Replicate only these fields. Fields added later are not replicated. */
+                      includeFields?: string[] | undefined;
+                    };
+                  }
+                | undefined;
             }
           | undefined;
       }
@@ -1227,6 +1238,17 @@ export type TailorDBServiceConfig = {
               tablePrefix?: string | undefined;
               /** Whether the replication runs */
               enabled: boolean;
+              /** Tables that plugins generate in the namespace for this replication to copy, keyed by table name, with the fields to copy */
+              pluginTables?:
+                | {
+                    [x: string]: {
+                      /** Replicate every field but these. Fields added later are replicated. */
+                      excludeFields?: string[] | undefined;
+                      /** Replicate only these fields. Fields added later are not replicated. */
+                      includeFields?: string[] | undefined;
+                    };
+                  }
+                | undefined;
             }
           | undefined;
       }

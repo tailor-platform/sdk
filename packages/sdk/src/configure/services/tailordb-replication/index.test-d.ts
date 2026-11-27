@@ -1,7 +1,7 @@
 import { assertType, describe, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
 import { db } from "#/configure/services/tailordb/schema";
-import { defineTailorDBReplicationDestination } from "./index";
+import { defineTailorDBReplicationDestination, type TailorDBReplicationConfig } from "./index";
 
 const table = db.table("User", {
   name: db.string(),
@@ -79,5 +79,45 @@ describe("namespace replications", () => {
         },
       }),
     );
+  });
+});
+
+describe("replication pluginTables", () => {
+  test("accept the field lists of .replication() without targets", () => {
+    assertType(
+      defineConfig({
+        name: "shop",
+        db: {
+          "main-db": {
+            files: [],
+            replications: {
+              analytics: {
+                destination: warehouse,
+                pluginTables: {
+                  AuditLog: { excludeFields: ["ip"] },
+                  Setting: { includeFields: ["name"] },
+                  DeletedOrder: {},
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+  });
+
+  test("reject both lists, targets, and a nested replication", () => {
+    const replication: TailorDBReplicationConfig = {
+      destination: warehouse,
+      pluginTables: {
+        // @ts-expect-error at most one of excludeFields and includeFields
+        AuditLog: { excludeFields: ["ip"], includeFields: ["action"] },
+        // @ts-expect-error a replication's pluginTables lists tables for that replication only
+        Setting: { targets: ["lake"] },
+        // @ts-expect-error an entry is a field list
+        DeletedOrder: { replication: false },
+      },
+    };
+    assertType(replication);
   });
 });

@@ -1,5 +1,5 @@
 ---
-description: "Replicate TailorDB tables into a BigQuery dataset you own with a namespace's replications config, .replication() on tables, and defineTailorDBReplicationDestination()."
+description: "Replicate TailorDB tables into a BigQuery dataset you own with a namespace's replications config, .replication() on tables, pluginTables for tables that plugins generate, and defineTailorDBReplicationDestination()."
 ---
 
 # TailorDB Replication
@@ -47,7 +47,7 @@ If your Google Cloud organization restricts IAM policy members to its own domain
 
 ## Replications
 
-Declare a namespace's replications in its `replications` config, keyed by replication name, and choose the tables to copy with `.replication()` on each table:
+Declare a namespace's replications in its `replications` config, keyed by replication name, and choose the tables to copy with `.replication()` on each table you define:
 
 ```typescript
 // tailor.config.ts
@@ -82,7 +82,7 @@ export const order = db.table("Order", { total: db.int() }).replication({});
 
 - A replication copies tables of the namespace that declares it. Replication names are unique across the workspace.
 - `destination` is the value `defineTailorDBReplicationDestination()` returned. Two different destinations cannot share a name.
-- A table without `.replication()` is not replicated. An entry without `targets` applies to every replication of the namespace.
+- A table without `.replication()` is not replicated. An entry without `targets` applies to every replication of the namespace. A table a plugin generates is replicated only by the replications whose `pluginTables` list it (see [Tables that plugins generate](#tables-that-plugins-generate)).
 - To copy a table differently per replication, pass one entry per replication and name it in `targets`:
 
   ```typescript
@@ -91,10 +91,9 @@ export const order = db.table("Order", { total: db.int() }).replication({});
     .replication({ targets: ["analytics"], excludeFields: ["note"] }, { targets: ["lake"] });
   ```
 
-  A target the namespace does not declare in `replications`, or a replication set by two entries of one table, fails when the config loads.
+  A target the namespace does not declare in `replications`, or a replication set by two entries of one table, fails deploying (`tailor deploy` and `tailor tailordb migration test`).
 
 - `enabled` defaults to `true`. Set `enabled: false` to pause a replication; while it is paused, its BigQuery tables stop changing, and enabling it again rewrites them.
-- Tables that plugins generate are replicated when the plugin calls `.replication()` on them.
 
 ### Deploying to some environments only
 
@@ -126,7 +125,37 @@ By default every field of a table is replicated. Pass at most one of:
 - `excludeFields`: replicate every field but these. Fields added to the table later are replicated.
 - `includeFields`: replicate only these fields. Fields added to the table later are not replicated.
 
-Field names are checked against the table's fields, per `.replication()` entry. The `id` field is always replicated.
+Field names are checked against the table's fields, per `.replication()` entry and per `pluginTables` entry. The `id` field is always replicated.
+
+### Tables that plugins generate
+
+A plugin can generate tables that you do not define yourself, such as an audit log table. A replication copies such a table only when its `pluginTables` lists it, keyed by the table's name, with the fields to copy as in `.replication()`; `{}` copies every field. Check the plugin's documentation for the tables it generates and the fields you may want to leave out:
+
+```typescript
+export default defineConfig({
+  name: "shop",
+  db: {
+    "main-db": {
+      files: ["./tailordb/*.ts"],
+      replications: {
+        analytics: {
+          destination: warehouse,
+          tablePrefix: "shop_",
+          pluginTables: { AuditLog: { excludeFields: ["ipAddress"] } },
+        },
+        lake: { destination: warehouse, tablePrefix: "lake_" },
+      },
+    },
+  },
+});
+```
+
+Here `analytics` copies `AuditLog` without `ipAddress`, and `lake` does not copy it.
+
+- A key that names no table a plugin generates in the namespace fails deploying (`tailor deploy` and `tailor tailordb migration test`), and the error lists the tables plugins generate there. Replicate tables you define with `.replication()` instead.
+- A replication added later copies no plugin table until its `pluginTables` lists it.
+- If the plugin runs only in some environments, list its tables in `pluginTables` only where it runs.
+- A plugin cannot call `.replication()` on a table it generates: if it does, commands that load TailorDB tables, such as `tailor generate`, fail with `PLUGIN_TABLE_INVALID`.
 
 ### Table names
 
