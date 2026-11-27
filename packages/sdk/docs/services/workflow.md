@@ -39,7 +39,7 @@ All workflow components must follow these rules:
 | `createWorkflowJob`'s `name`/`body` must be written directly in the call | Not as a reference to a variable or the result of another function — the build cannot see through that indirection and fails instead of silently leaving the job out                           |
 | `.start()` must be called from within the calling job's `body`           | A function defined inside `body` may call it too, but not a function defined outside `body` — the build cannot see through that indirection and fails instead of silently leaving the call out |
 | Call `<job>.start()`, not `execJobFunction` directly                     | Calling `tailor.workflow.execJobFunction(...)` (or the `workflow` value imported from `@tailor-platform/sdk/runtime`) directly is not detected as a dependency and fails the build             |
-| Started jobs must be in a file `files` includes                          | The build fails when code calls `.start()` on a job it imports from, or defines in, a file the workflow service's `files` does not include                                                     |
+| Started jobs and workflows must be in a file `files` includes            | The build fails when code calls `.start()` on a job or workflow it imports from, or defines in, a file the workflow service's `files` does not include                                         |
 
 ## Creating a Workflow Job
 
