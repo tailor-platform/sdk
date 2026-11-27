@@ -376,6 +376,26 @@ describe("planPipeline (resolver service level)", () => {
       expect(client.listPipelineResolvers).not.toHaveBeenCalled();
     });
 
+    test("names the namespace of a conflicting resolver that several namespaces define", async () => {
+      const application = createMockApplication([
+        { ...createResolverServiceWith(false), namespace: "shop-api" },
+        { ...createResolverServiceWith(undefined), namespace: "crm-api" },
+      ]);
+
+      await expect(
+        planPipeline({
+          client: createMockClient([]),
+          workspaceId,
+          application,
+          applications: [],
+          owner: applicationOwner(application),
+          forRemoval: false,
+          config: mockConfig,
+          executorUsedResolvers: namespacedNames([{ namespace: "shop-api", name: "myResolver" }]),
+        }),
+      ).rejects.toThrow('Resolver "myResolver" in namespace "shop-api" has "publishEvents: false"');
+    });
+
     test("turns a remote opt-in back off once nothing subscribes", async () => {
       const result = await planWith({ publishEvents: undefined, subscribed: false, remote: true });
 
