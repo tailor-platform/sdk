@@ -69,6 +69,7 @@ describe("buildTypeScripts", () => {
         name: db
           .string()
           .hooks({ create: ({ input, invoker }) => invoker?.type ?? input ?? "unknown" }),
+        code: db.string().validate(({ value }) => (value ? undefined : "required")),
       })
       .hooks({ create: ({ input }) => ({ name: `${input.name}-typed` }) })
       .validate(({ invoker }, issues) => {
@@ -92,7 +93,7 @@ describe("buildTypeScripts", () => {
     expect(created.name).toBe("machine_user-typed");
 
     const errors = new Function("_newRecord", "_oldRecord", "user", `return ${validateExpr}`)(
-      { name: "orig" },
+      { name: "orig", code: "c" },
       null,
       rawUser,
     );
@@ -169,6 +170,7 @@ describe("buildTypeScripts", () => {
         startDate: { type: "date", default: "now" },
         startTime: { type: "time", default: "now" },
         label: { type: "string", default: "now" },
+        dueDate: { type: "date", default: "2020-01-01" },
       };
 
       const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
@@ -182,6 +184,7 @@ describe("buildTypeScripts", () => {
         startDate: "2026-04-15",
         startTime: "23:30",
         label: "now",
+        dueDate: "2020-01-01",
       });
     } finally {
       vi.useRealTimers();
@@ -308,11 +311,14 @@ describe("buildTypeScripts", () => {
     expect(() => new Function("_newRecord", "fn", `return ${expr}`)(_newRecord, fn)).not.toThrow();
   });
 
-  test("skips nested array with no defaults or validators", () => {
+  test.each([
+    ["array", true],
+    ["object", false],
+  ])("skips a nested %s with no defaults or validators", (_label, array) => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {
         type: "nested",
-        array: true,
+        array,
         fields: {
           name: { type: "string" },
         },
@@ -509,11 +515,16 @@ describe("computeSourceScriptHash", () => {
     expect(computeSourceScriptHash({})).toBeUndefined();
   });
 
-  test("returns a 16-char hex string when scripts exist", () => {
-    const hash = computeSourceScriptHash({
-      name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
-    });
-    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+  test.each<[string, Record<string, ScriptFieldConfig>]>([
+    ["hooks", { name: { type: "string", hooks: { create: { expr: "_value.trim()" } } } }],
+    [
+      "validators",
+      {
+        age: { type: "integer", validate: [{ script: { expr: "_value >= 0" }, errorMessage: "" }] },
+      },
+    ],
+  ])("returns a 16-char hex string when %s exist", (_label, fields) => {
+    expect(computeSourceScriptHash(fields)).toMatch(/^[0-9a-f]{16}$/);
   });
 
   test("is deterministic for the same input", () => {
@@ -534,17 +545,14 @@ describe("computeSourceScriptHash", () => {
     expect(a).not.toBe(b);
   });
 
-  test("changes when typeHookExpr changes", () => {
-    const fields: Record<string, ScriptFieldConfig> = {};
-    const a = computeSourceScriptHash(fields, { typeHookExpr: { create: "exprA" } });
-    const b = computeSourceScriptHash(fields, { typeHookExpr: { create: "exprB" } });
-    expect(a).not.toBe(b);
-  });
-
-  test("changes when typeValidateExpr changes", () => {
-    const a = computeSourceScriptHash({}, { typeValidateExpr: "validateA" });
-    const b = computeSourceScriptHash({}, { typeValidateExpr: "validateB" });
-    expect(a).not.toBe(b);
+  test.each<[string, (expr: string) => Parameters<typeof computeSourceScriptHash>[1]]>([
+    ["typeHookExpr.create", (expr) => ({ typeHookExpr: { create: expr } })],
+    ["typeHookExpr.update", (expr) => ({ typeHookExpr: { update: expr } })],
+    ["typeValidateExpr", (expr) => ({ typeValidateExpr: expr })],
+  ])("changes when %s changes", (_label, options) => {
+    expect(computeSourceScriptHash({}, options("exprA"))).not.toBe(
+      computeSourceScriptHash({}, options("exprB")),
+    );
   });
 
   test("is insensitive to field insertion order", () => {
@@ -580,18 +588,21 @@ describe("computeSourceScriptHash", () => {
   });
 
   test("includes nested field scripts in hash", () => {
-    const withNested = computeSourceScriptHash({
-      profile: {
-        type: "nested",
-        fields: {
-          email: { type: "string", hooks: { create: { expr: "_value.toLowerCase()" } } },
+    const hashWithNestedValidator = (expr: string) =>
+      computeSourceScriptHash({
+        profile: {
+          type: "nested",
+          fields: {
+            email: { type: "string", validate: [{ script: { expr }, errorMessage: "" }] },
+          },
         },
-      },
-    });
+      });
     const withoutNested = computeSourceScriptHash({
       profile: { type: "nested", fields: { email: { type: "string" } } },
     });
-    expect(withNested).toBeDefined();
+    expect(hashWithNestedValidator('_value.includes("@")')).not.toBe(
+      hashWithNestedValidator("_value.length > 0"),
+    );
     expect(withoutNested).toBeUndefined();
   });
 });
