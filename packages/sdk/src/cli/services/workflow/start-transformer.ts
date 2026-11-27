@@ -292,7 +292,7 @@ function assertRewritableStartCalls(
     ...unlistedImports.keys(),
     ...unlistedLocals.keys(),
   ]);
-  const assertListedImport = (
+  const assertImportNotOutsideFiles = (
     calleeText: string,
     unlisted: UnlistedImport,
     importedName: string,
@@ -322,7 +322,7 @@ function assertRewritableStartCalls(
       }
       const unlisted = unlistedImports.get(namespaceCall.identifierName);
       if (unlisted && unlisted.importedName === undefined) {
-        assertListedImport(namespaceCall.calleeText, unlisted, namespaceCall.memberName);
+        assertImportNotOutsideFiles(namespaceCall.calleeText, unlisted, namespaceCall.memberName);
       }
     }
 
@@ -331,7 +331,7 @@ function assertRewritableStartCalls(
     const calleeText = `${startCall.identifierName}.start`;
     const unlisted = unlistedImports.get(startCall.identifierName);
     if (unlisted?.importedName !== undefined) {
-      assertListedImport(calleeText, unlisted, unlisted.importedName);
+      assertImportNotOutsideFiles(calleeText, unlisted, unlisted.importedName);
     }
     const local = unlistedLocals.get(startCall.identifierName);
     if (local && !isListedFile(context, currentFilePath)) {
