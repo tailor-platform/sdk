@@ -38,7 +38,7 @@ export type PublishEventsConflict = {
   subscribesTo?: string | undefined;
 };
 
-// Named only for a resource whose name several namespaces define.
+// Named for a resource whose name several namespaces define, or whose namespace a trigger names.
 function inNamespace(namespace: string | undefined): string {
   return namespace === undefined ? "" : ` in namespace "${namespace}"`;
 }

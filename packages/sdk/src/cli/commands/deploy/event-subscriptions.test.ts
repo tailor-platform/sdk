@@ -799,6 +799,113 @@ describe("collectEventSubscriptions and a resolver name the subscriber also decl
   });
 });
 
+describe("collectEventSubscriptions and a trigger that names another config's namespace", () => {
+  const kinds = [
+    {
+      kind: "tailordb",
+      declares: { types: ["Order"] },
+      sees: (namespaces: string[]) => ({
+        externalTailorDBNamespaces: namespaces.map((namespace) => `db-${namespace}`),
+      }),
+      trigger: (namespace: string) => ({
+        kind: "tailordb",
+        tableName: "Order",
+        namespace: `db-${namespace}`,
+      }),
+      key: (namespace: string) => `tailordb:db-${namespace}:type:Order`,
+    },
+    {
+      kind: "resolverExecuted",
+      declares: { resolvers: ["createLead"] },
+      sees: (namespaces: string[]) => ({
+        externalResolverNamespaces: namespaces.map((namespace) => `pipeline-${namespace}`),
+      }),
+      trigger: (namespace: string) => ({
+        kind: "resolverExecuted",
+        resolverName: "createLead",
+        namespace: `pipeline-${namespace}`,
+      }),
+      key: (namespace: string) => `pipeline:pipeline-${namespace}:resolver:createLead`,
+    },
+  ];
+
+  test.each(kinds)(
+    "resolves it to that config over the subscriber's own same-named resource ($kind)",
+    ({ declares, sees, trigger, key }) => {
+      const supplier = target({
+        configPath: "supplier/tailor.config.ts",
+        namespace: "supplier",
+        ...declares,
+      });
+      const buyer = target({
+        configPath: "buyer/tailor.config.ts",
+        namespace: "buyer",
+        ...declares,
+        ...sees(["supplier"]),
+        executors: { "sync-it": trigger("supplier") },
+      });
+
+      for (const targets of [
+        [supplier, buyer],
+        [buyer, supplier],
+      ]) {
+        expect(collectEventSubscriptions(targets)).toMatchObject([
+          { owner: supplier, key: key("supplier") },
+        ]);
+      }
+    },
+  );
+
+  test.each(kinds)(
+    "resolves it to that config among several the subscriber sees ($kind)",
+    ({ declares, sees, trigger, key }) => {
+      const peerB = target({ configPath: "b/tailor.config.ts", namespace: "b", ...declares });
+      const peerC = target({ configPath: "c/tailor.config.ts", namespace: "c", ...declares });
+      const shell = target({
+        configPath: "shell/tailor.config.ts",
+        ...sees(["b", "c"]),
+        executors: { "sync-it": trigger("c") },
+      });
+
+      expect(collectEventSubscriptions([peerB, peerC, shell])).toMatchObject([
+        { owner: peerC, key: key("c") },
+      ]);
+    },
+  );
+
+  test.each(kinds)(
+    "names the namespace when no config defines it ($kind)",
+    ({ declares, sees, trigger }) => {
+      const supplier = target({
+        configPath: "supplier/tailor.config.ts",
+        namespace: "supplier",
+        ...declares,
+      });
+      const subscriber = target({
+        configPath: "buyer/tailor.config.ts",
+        namespace: "buyer",
+        ...declares,
+        ...sees(["supplier"]),
+        executors: { "sync-it": trigger("typo") },
+      });
+
+      let error: unknown;
+      try {
+        collectEventSubscriptions([supplier, subscriber]);
+      } catch (thrown) {
+        error = thrown;
+      }
+
+      expect(error).toMatchObject({
+        code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+        message: expect.stringMatching(
+          /in namespace "(db|pipeline)-typo", which no config in this deploy declares\. This config declares nothing external that could hold it, so check the name\.$/,
+        ),
+      });
+    },
+  );
+});
+
 describe("collectEventSubscriptions and a disabled executor", () => {
   test.each([
     {
