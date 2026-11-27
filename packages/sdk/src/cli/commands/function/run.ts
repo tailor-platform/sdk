@@ -16,10 +16,8 @@ import {
   durationArg,
   formatConfigArg,
   parseDuration,
-  readEnvFileArgs,
   recoveryContextArgs,
   resolveMachineUserInputSource,
-  type EnvFileArgs,
   type MachineUserInputSource,
   workspaceArgs,
 } from "#/cli/shared/args";
@@ -287,7 +285,6 @@ Changes to \`tailor.config.ts\`, \`tsconfig.json\`, \`package.json\`, env files,
       isTimeoutFailure(result) && args.name === undefined && (await isWritableProfile(args.profile))
         ? asyncRunSuggestion({
             file: fileForHint(filePath, args.file),
-            ...readEnvFileArgs(process.argv.slice(2)),
             arg: args.arg,
             argFile: args["arg-file"],
             machineUser: args["machine-user"],
@@ -334,7 +331,7 @@ function isTimeoutFailure(result: ScriptExecutionResult): boolean {
   return !result.success && TIMEOUT_ERROR.test(result.error ?? "");
 }
 
-interface AsyncRunSuggestionParams extends EnvFileArgs {
+interface AsyncRunSuggestionParams {
   /** File given to the command, as the user can pass it again */
   file: string;
   arg: string | undefined;
@@ -358,8 +355,6 @@ function asyncRunSuggestion(params: AsyncRunSuggestionParams): string {
     "run",
     params.file,
     "--async",
-    ...params.envFiles.map((file) => `--env-file=${file}`),
-    ...params.envFilesIfExists.map((file) => `--env-file-if-exists=${file}`),
     ...(params.arg === undefined ? [] : [`--arg=${params.arg}`]),
     ...(params.argFile === undefined ? [] : [`--arg-file=${params.argFile}`]),
     ...(params.machineUser === undefined ? [] : [`--machine-user=${params.machineUser}`]),

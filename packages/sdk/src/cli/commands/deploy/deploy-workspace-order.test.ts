@@ -1,4 +1,6 @@
+import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 
 const mocks = vi.hoisted(() => ({
   resolveDeployWorkspace: vi.fn(),
@@ -79,43 +81,35 @@ describe("deploy workspace resolution", () => {
     mocks.resolveDeployWorkspace.mockRejectedValue(workspaceError);
     const configPath = "src/cli/commands/deploy/__test_fixtures__/tailor.config.ts";
 
+    using _argv = tailorArgv([
+      "-e",
+      ".env.base",
+      "deploy",
+      "--env-file=.env.workspace",
+      "--env-file-if-exists",
+      ".env.local",
+    ]);
+
     await expect(
-      deployFromCLI(
-        { configPath, profile: "staging" },
-        {
-          envFiles: [".env.base", ".env.workspace"],
-          envFilesIfExists: [".env.local"],
-          verbose: true,
-          json: true,
-        },
-      ),
+      deployFromCLI({ configPath, profile: "staging" }, { verbose: true, json: true }),
     ).rejects.toBe(workspaceError);
+    const envFileArgs = [
+      `--env-file=${path.resolve(".env.base")}`,
+      `--env-file=${path.resolve(".env.workspace")}`,
+      `--env-file-if-exists=${path.resolve(".env.local")}`,
+    ];
     expect(mocks.resolveDeployWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({
         deployArgs: [
           "deploy",
           "--config",
           expect.stringContaining("tailor.config.ts"),
-          "--env-file",
-          expect.stringMatching(/\/\.env\.base$/),
-          "--env-file",
-          expect.stringMatching(/\/\.env\.workspace$/),
-          "--env-file-if-exists",
-          expect.stringMatching(/\/\.env\.local$/),
+          ...envFileArgs,
           "--profile=staging",
           "--verbose",
           "--json",
         ],
-        workspaceCommandArgs: [
-          "--env-file",
-          expect.stringMatching(/\/\.env\.base$/),
-          "--env-file",
-          expect.stringMatching(/\/\.env\.workspace$/),
-          "--env-file-if-exists",
-          expect.stringMatching(/\/\.env\.local$/),
-          "--profile=staging",
-          "--verbose",
-        ],
+        workspaceCommandArgs: [...envFileArgs, "--profile=staging", "--verbose"],
         workspaceCommandJson: true,
       }),
     );

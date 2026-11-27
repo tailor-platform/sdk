@@ -25,6 +25,7 @@ import { getErrorDiagnostics } from "./error-diagnostics";
 import { CLIError } from "./errors";
 import { logger } from "./logger";
 import { detectedAgent, jsonMode } from "./test-helpers/json-mode";
+import { tailorArgv } from "./test-helpers/process-argv";
 import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
@@ -257,6 +258,26 @@ describe("recoveryContextArgs", () => {
 
   test("keeps a leading-hyphen profile bound as the option value", () => {
     expect(recoveryContextArgs({ profile: "-x" })).toEqual(["--profile=-x"]);
+  });
+
+  test("keeps the env files the run was given, in the order they are loaded", () => {
+    using _argv = tailorArgv([
+      "-e",
+      "a.env",
+      "workflow",
+      "prune",
+      "--env-file-if-exists=-b.env",
+      "--env-file",
+      "c.env",
+    ]);
+
+    expect(recoveryContextArgs({ workspaceId: "ws-1", profile: "dev" })).toEqual([
+      `--env-file=${path.resolve("a.env")}`,
+      `--env-file=${path.resolve("c.env")}`,
+      `--env-file-if-exists=${path.resolve("-b.env")}`,
+      "--workspace-id=ws-1",
+      "--profile=dev",
+    ]);
   });
 });
 

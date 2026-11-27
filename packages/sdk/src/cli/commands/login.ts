@@ -4,6 +4,7 @@ import { generateCodeVerifier } from "@badgateway/oauth2-client";
 import { arg } from "@politty/zod";
 import open from "open";
 import { z } from "zod";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { sendCallbackFailure, sendCallbackSuccess } from "#/cli/shared/callback-page";
 import {
   closeConnectionPool,
@@ -26,6 +27,7 @@ import { CLIError, profileNotFoundError, toError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
 import { printMutationResult } from "#/cli/shared/mutation-result";
 import { prompt } from "#/cli/shared/prompt";
+import { formatShellCommandLines } from "#/cli/shared/shell-quote";
 import { assertDefined } from "#/utils/assert";
 
 const redirectPort = 8085;
@@ -100,11 +102,15 @@ function retryInstruction(mismatch: ProfileUserMismatch) {
   if (mismatch.loginMode === "machine-user") {
     return "Then retry the original machine-user login command.";
   }
-  const profileArg = quoteCommandArg(mismatch.profile);
-  if (!profileArg) {
+  const loginLine = formatShellCommandLines([
+    "tailor",
+    "login",
+    ...recoveryContextArgs({ profile: mismatch.profile }),
+  ]);
+  if (loginLine.kind !== "shared") {
     return "Then retry the browser login with the same profile value.";
   }
-  return `Then run:\n  tailor login --profile ${profileArg}`;
+  return `Then run:\n  ${loginLine.commandLine}`;
 }
 
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {

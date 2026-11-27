@@ -36,10 +36,14 @@ export function tsHookPreamble(): string {
  */
 export function runWithTsHook(script: string, cwd: string): unknown {
   const preamble = tsHookPreamble();
-  const stdout = execFileSync(process.execPath, ["--input-type=module", "-e", preamble + script], {
-    cwd,
-    encoding: "utf8",
-    env: { ...process.env, NODE_NO_WARNINGS: "1" },
-  });
+  const stdout = execFileSync(
+    process.execPath,
+    ["--input-type=module", "--eval", preamble + script],
+    {
+      cwd,
+      encoding: "utf8",
+      env: { ...process.env, NODE_NO_WARNINGS: "1" },
+    },
+  );
   return JSON.parse(stdout.trim().split("\n").at(-1) ?? "{}");
 }

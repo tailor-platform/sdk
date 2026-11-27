@@ -152,25 +152,13 @@ describe("deployCommand", () => {
     );
   });
 
-  test("forwards global options needed to reproduce deploy", async () => {
-    const commandArgs = ["--env-file-if-exists", ".env.local", "--verbose", "--json"];
-    const originalArgv = process.argv;
-    process.argv = ["node", "tailor", "-e", ".env.before-deploy", "deploy", ...commandArgs];
-    try {
-      await runCommand(deployCommand, commandArgs, {
-        // strip unknown keys
-        globalArgs: z.object(commonArgs),
-      });
-    } finally {
-      process.argv = originalArgv;
-    }
+  test("forwards the output options needed to reproduce deploy", async () => {
+    await runCommand(deployCommand, ["--verbose", "--json"], {
+      // strip unknown keys
+      globalArgs: z.object(commonArgs),
+    });
 
-    const cliContext = {
-      envFiles: [".env.before-deploy"],
-      envFilesIfExists: [".env.local"],
-      verbose: true,
-      json: true,
-    };
+    const cliContext = { verbose: true, json: true };
     expect(mocks.deployFromCLI).toHaveBeenCalledWith(
       expect.not.objectContaining(cliContext),
       cliContext,

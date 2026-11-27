@@ -135,7 +135,9 @@ these fields:
 - `suggestion` — the remediation, as its own field.
 - `details` — supplementary prose that does not belong in `message`.
 - `next` — an executable recovery action (`{ command, args }`), so the caller can run it rather
-  than parse for it.
+  than parse for it. A suggested `tailor` command, here or in `formatCommandHint()`, takes the
+  run's env files, workspace, and profile from `recoveryContextArgs()`;
+  `local/no-hand-built-context-args` rejects writing those flags by hand, but not leaving them out.
 - `command` — the owning command path, serialized as an `error.help` action targeting its `--help`.
 - `context` — the machine-usable facts behind the failure (resource names, per-phase causes),
   never secrets. Values that name a kind or type reuse the stable identifier strings the code

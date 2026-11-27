@@ -213,7 +213,7 @@ describe("notification banner", () => {
     await run(["workspace", "list", "--profile", "staging"]);
 
     expect(stderr.text()).toContain(
-      "Run `tailor notification list --profile staging` for details.",
+      "Run `tailor notification list --profile=staging` for details.",
     );
   });
 

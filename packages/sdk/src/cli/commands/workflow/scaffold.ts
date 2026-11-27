@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import { arg } from "@politty/zod";
 import * as path from "pathe";
 import { z } from "zod";
+import { recoveryContextArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
@@ -85,7 +86,14 @@ Rename the jobs and the workflow and fill in the bodies; to deploy it, add the f
     logger.info(
       `Next: edit the workflow, then run ${formatCommandHint({
         command: "tailor",
-        args: ["workflow", "run", relPath, "--arg", '{"ids":["a","b"]}'],
+        args: [
+          "workflow",
+          "run",
+          relPath,
+          "--arg",
+          '{"ids":["a","b"]}',
+          ...recoveryContextArgs({}),
+        ],
       })}`,
     );
   },

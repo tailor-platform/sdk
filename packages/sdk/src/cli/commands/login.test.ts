@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { runCommand } from "@politty/zod";
+import * as path from "pathe";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import {
   closeConnectionPool,
@@ -12,6 +13,7 @@ import { getErrorDiagnostics } from "#/cli/shared/error-diagnostics";
 import { isCLIError } from "#/cli/shared/errors";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
@@ -125,7 +127,7 @@ describe("login --profile", () => {
     );
     expect(failureText(result)).toContain("tailor profile update --user 'machine-client' -- 'dev'");
     expect(failureText(result)).toContain("Then retry the original machine-user login command.");
-    expect(failureText(result)).not.toContain("tailor login --profile 'dev'");
+    expect(failureText(result)).not.toContain("tailor login --");
 
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
@@ -138,6 +140,7 @@ describe("login --profile", () => {
   });
 
   test("rejects a browser profile user mismatch with a profile update command", async () => {
+    using _argv = tailorArgv(["login", "--profile", "dev", "-e", ".env"]);
     getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
     getTokenFromCodeRedirectMock.mockResolvedValue({
       accessToken: "browser-token",
@@ -175,7 +178,9 @@ describe("login --profile", () => {
     expect(failureText(result)).toContain(
       "tailor profile update --user 'browser@example.com' -- 'dev'",
     );
-    expect(failureText(result)).toContain("Then run:\n  tailor login --profile 'dev'");
+    expect(failureText(result)).toContain(
+      `Then run:\n  tailor login --env-file=${path.resolve(".env")} --profile=dev`,
+    );
     expect(failureText(result)).not.toContain(
       "Then retry the original machine-user login command.",
     );
@@ -402,7 +407,7 @@ describe("login --profile", () => {
       expect(result.success).toBe(false);
       expect(failureText(result)).toContain("tailor profile update --user machine-client -- dev");
       expect(failureText(result)).toContain("Then retry the original machine-user login command.");
-      expect(failureText(result)).not.toContain("tailor login --profile dev");
+      expect(failureText(result)).not.toContain("tailor login --");
     } finally {
       if (platformDescriptor) {
         Object.defineProperty(process, "platform", platformDescriptor);

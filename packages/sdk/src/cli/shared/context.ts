@@ -1429,13 +1429,12 @@ export async function fetchLatestToken(
 }
 
 function loginFailureFor(profile: string | undefined): LoginFailure {
-  const loginArgs = profile ? ["--profile", profile] : [];
   return (code, message, suggestion) =>
     CLIError({
       code,
       message,
       suggestion,
-      next: { command: "tailor", args: ["login", ...loginArgs, "--help"] },
+      next: { command: "tailor", args: ["login", ...recoveryContextArgs({ profile }), "--help"] },
       context: { profile: profile ?? null },
     });
 }

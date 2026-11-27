@@ -26,7 +26,7 @@ import {
   type SchemaSnapshot,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { formatConfigArg } from "#/cli/shared/args";
+import { formatConfigArg, recoveryContextArgs } from "#/cli/shared/args";
 import { ownedNamespaces } from "#/cli/shared/config-file";
 import { CLIError, formatCommandHint, internalError } from "#/cli/shared/errors";
 import { loadTailorDBNamespaces, loadWorkspaceNamespaces } from "#/cli/shared/tailordb-namespaces";
@@ -356,8 +356,7 @@ function schemaDriftError(
   const configHint = formatConfigArg(options.configArgValue);
   const contextFlags = [
     ...(configHint !== undefined ? [configHint] : []),
-    `--workspace-id=${options.workspaceId}`,
-    ...(options.profileArgValue !== undefined ? [`--profile=${options.profileArgValue}`] : []),
+    ...recoveryContextArgs({ workspaceId: options.workspaceId, profile: options.profileArgValue }),
   ];
   const rescaffold = formatCommandHint({
     command: "tailor",

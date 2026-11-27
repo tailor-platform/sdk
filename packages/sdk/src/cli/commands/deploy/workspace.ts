@@ -114,6 +114,7 @@ function createDeployArgs(
 }
 
 function selectDeployArgs(options: ResolveDeployWorkspaceOptions): readonly string[] {
+  // oxlint-disable-next-line local/no-hand-built-context-args -- deployArgs already carries the run's env files and profile
   return [...deployArgs(options), "--workspace-id", "<workspace-id>"];
 }
 
@@ -213,10 +214,8 @@ async function rememberWorkspaceContext(
         message: "The workspace selection could not be saved for every configuration file.",
         details: error instanceof Error ? error.message : String(error),
         suggestion: "Fix project state permissions, then rerun deploy with the workspace ID.",
-        next: executableAction([
-          ...deployArgs(options),
-          ...recoveryContextArgs({ workspaceId: context.workspaceId }),
-        ]),
+        // oxlint-disable-next-line local/no-hand-built-context-args -- deployArgs already carries the run's env files and profile
+        next: executableAction([...deployArgs(options), `--workspace-id=${context.workspaceId}`]),
         context: {
           workspaceId: context.workspaceId,
           configPaths: options.contextTargets?.map(({ configPath }) => configPath),
@@ -224,6 +223,7 @@ async function rememberWorkspaceContext(
       });
     }
     logger.warn(
+      // oxlint-disable-next-line local/no-hand-built-context-args -- names the option for later runs, not a command to paste
       `Could not save the project workspace selection (${error instanceof Error ? error.message : String(error)}). Continue with --workspace-id ${context.workspaceId} on later runs.`,
     );
   }

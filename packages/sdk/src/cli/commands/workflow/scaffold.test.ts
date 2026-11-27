@@ -3,6 +3,7 @@ import { runCommand } from "@politty/zod";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { scaffoldCommand } from "./scaffold";
@@ -33,6 +34,20 @@ describe("workflow scaffold", () => {
 
     expect(info).toHaveBeenCalledWith(
       expect.stringContaining("tailor workflow run workflows/order.ts --arg"),
+    );
+    info.mockRestore();
+  });
+
+  test("keeps the env files it was given in the workflow run hint", async () => {
+    using _tmp = tempCwd("sdk-workflow-scaffold-");
+    using _success = silenceLogger("success", "warn");
+    using _argv = tailorArgv(["workflow", "scaffold", "workflows/order.ts", "-e", ".env"]);
+    const info = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    await runCommand(scaffoldCommand, ["workflows/order.ts"]);
+
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining(`--env-file=${path.resolve(".env")}\``),
     );
     info.mockRestore();
   });

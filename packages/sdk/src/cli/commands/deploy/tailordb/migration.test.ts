@@ -1399,7 +1399,7 @@ describe("migration", () => {
             ...createMockContext(),
             client: store.client,
             configPath: path.join(process.cwd(), "custom", "tailor.config.ts"),
-            migrationRecoveryArgs: ["--profile=staging"],
+            migrationRecoveryProfile: "staging",
           },
           [migration],
           checkpoints,

@@ -20,6 +20,7 @@ import {
   type OperatorClientMocks,
   withOperatorClientMocks,
 } from "#/cli/shared/test-helpers/operator-client";
+import { tailorArgv } from "#/cli/shared/test-helpers/process-argv";
 import { brandedDefault } from "#/cli/shared/test-helpers/workspace-config";
 import {
   emptyPlanResults,
@@ -463,6 +464,11 @@ describe("remove command", () => {
       vi.mocked(initOperatorClient).mockClear();
 
       const workspaceId = "33333333-3333-4333-8333-333333333333";
+      using _argv = tailorArgv(["remove", "-e", ".env"]);
+      const envFileArg = `--env-file=${path.resolve(".env")}`.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      );
 
       const result = await runCommand(removeCommand, [
         "--config",
@@ -478,7 +484,7 @@ describe("remove command", () => {
         code: "CONFIG_KIND_UNSUPPORTED",
         suggestion: expect.stringMatching(
           new RegExp(
-            `\`tailor deploy --workspace-id=${workspaceId} --profile=dev --config=[^\`]+\`.*\`tailor workspace delete --workspace-id=${workspaceId}\``,
+            `\`tailor deploy ${envFileArg} --workspace-id=${workspaceId} --profile=dev --config=[^\`]+\`.*\`tailor workspace delete ${envFileArg} --workspace-id=${workspaceId}\``,
             "s",
           ),
         ),

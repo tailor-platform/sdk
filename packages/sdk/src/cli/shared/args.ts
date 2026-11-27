@@ -399,7 +399,7 @@ function flagTokensOf(option: NamedOption): string[] {
 }
 
 /** Env file paths given on the command line, in the order given. */
-export interface EnvFileArgs {
+interface EnvFileArgs {
   envFiles: string[];
   envFilesIfExists: string[];
 }
@@ -551,17 +551,26 @@ export interface RecoveryContext {
 }
 
 /**
- * Arguments that make a hinted follow-up command select the same profile and
- * workspace as the current run. The `--option=<value>` form keeps a
- * leading-hyphen value bound as the option value.
+ * Arguments that make a hinted follow-up command load the same env files and
+ * select the same profile and workspace as the current run. The env files come
+ * from `process.argv`, since parsed values drop the occurrences given before
+ * the subcommand name, and are made absolute so they load from any directory.
+ * The `--option=<value>` form keeps a leading-hyphen value bound as the option
+ * value.
  * @param {RecoveryContext} context - Profile and workspace id the current run used
  * @returns {readonly string[]} Arguments to append to the hinted command
  */
 export function recoveryContextArgs(context: RecoveryContext): readonly string[] {
+  const { envFiles, envFilesIfExists } = readEnvFileArgs(process.argv.slice(2));
+  const absolute = (file: string) => path.resolve(process.cwd(), file);
+  // oxlint-disable local/no-hand-built-context-args -- the helper the rule points to
   return [
+    ...envFiles.map((file) => `--env-file=${absolute(file)}`),
+    ...envFilesIfExists.map((file) => `--env-file-if-exists=${absolute(file)}`),
     ...(context.workspaceId ? [`--workspace-id=${context.workspaceId}`] : []),
     ...(context.profile ? [`--profile=${context.profile}`] : []),
   ];
+  // oxlint-enable local/no-hand-built-context-args
 }
 
 /**

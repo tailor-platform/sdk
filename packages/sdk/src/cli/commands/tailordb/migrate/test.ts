@@ -1,7 +1,13 @@
 import { arg } from "@politty/zod";
 import { z } from "zod";
 import { ttlArg, ttlLimit } from "#/cli/commands/workspace/age";
-import { deploymentArgs, durationArg, locationIds, parseDuration } from "#/cli/shared/args";
+import {
+  deploymentArgs,
+  durationArg,
+  locationIds,
+  parseDuration,
+  recoveryContextArgs,
+} from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { defineAppCommand } from "#/cli/shared/command";
 import { CLIError, formatCommandHint } from "#/cli/shared/errors";
@@ -113,8 +119,7 @@ export async function runMigrationTest(
             "set",
             "--ttl",
             expiryTtl,
-            `--workspace-id=${workspace.id}`,
-            ...(options.profile ? [`--profile=${options.profile}`] : []),
+            ...recoveryContextArgs({ workspaceId: workspace.id, profile: options.profile }),
           ],
         })}.`,
       );
@@ -172,7 +177,7 @@ export async function runMigrationTest(
             : "Delete the temporary workspace manually.",
           next: {
             command: "tailor",
-            args: ["workspace", "delete", "--workspace-id", workspace.id],
+            args: ["workspace", "delete", ...recoveryContextArgs({ workspaceId: workspace.id })],
           },
           cause: cleanupError,
         });

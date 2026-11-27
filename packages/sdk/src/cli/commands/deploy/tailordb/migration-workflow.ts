@@ -22,6 +22,7 @@ import {
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import {
   formatNamespaceMigrationHint,
+  migrationSelectionArgs,
   type MigrationCommandContext,
 } from "#/cli/commands/tailordb/migrate/hints";
 import {
@@ -139,7 +140,7 @@ export function formatMigrationExecutionsHint(
       "executions",
       "--workflow-name",
       migrationWorkflowResourceName(namespace, migrationNumber),
-      ...(context.contextArgs ?? []),
+      ...migrationSelectionArgs(context),
     ],
   });
 }

@@ -31,8 +31,8 @@ export interface PlanContext {
   noSchemaCheck?: boolean | undefined;
   /** Steps of an in-progress multi-step migration to skip, keyed by namespace. */
   migrationSkipSteps?: ReadonlyMap<string, readonly string[]> | undefined;
-  /** Profile and env-file arguments of this deploy, kept in the migration commands it suggests. */
-  migrationRecoveryArgs?: readonly string[] | undefined;
+  /** Profile of this deploy, kept in the migration commands it suggests. */
+  migrationRecoveryProfile?: string | undefined;
   forceApplyAll?: boolean | undefined;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
