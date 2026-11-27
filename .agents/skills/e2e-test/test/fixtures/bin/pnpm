@@ -6,6 +6,10 @@ if [[ ${1:-} == "run" && ${2:-} == "test:e2e" ]]; then
   if [[ -n ${E2E_TEST_MARKER:-} ]]; then
     printf '%s\n' "${TAILOR_PLATFORM_E2E_RUN_ID:-}" >"$E2E_TEST_MARKER"
   fi
+  if [[ -n ${E2E_TEST_ARGS_MARKER:-} ]]; then
+    : >"$E2E_TEST_ARGS_MARKER"
+    (($# <= 2)) || printf '%s\n' "${@:3}" >"$E2E_TEST_ARGS_MARKER"
+  fi
   if [[ -n ${E2E_TEST_DELAY:-} ]]; then
     /bin/sleep "$E2E_TEST_DELAY" &
     child_pid=$!

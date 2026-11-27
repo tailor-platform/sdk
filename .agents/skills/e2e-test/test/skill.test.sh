@@ -154,7 +154,7 @@ run_runner() {
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
     TAILOR_PLATFORM_ORGANIZATION_ID="$organization_id" \
     TAILOR_PLATFORM_FOLDER_ID="$folder_id" \
-    /bin/bash "$runner"
+    /bin/bash "$runner" "$@"
 }
 
 printf '%s\n' \
@@ -163,6 +163,18 @@ printf '%s\n' \
 run_runner
 [[ $(<"$test_marker") == "$run_id" ]] || fail "runner did not pass its run ID to the suite"
 [[ $(<"$delete_log") == "$candidate_id" ]] || fail "runner did not clean its exact workspace"
+
+args_marker="$tmp_dir/args.marker"
+printf '%s\n' '[]' >"$state_file"
+E2E_TEST_ARGS_MARKER="$args_marker" run_runner e2e/one.test.ts --silent=false "name with space" >/dev/null 2>&1 ||
+  fail "runner failed when given suite arguments"
+[[ $(<"$args_marker") == $'e2e/one.test.ts\n--silent=false\nname with space' ]] ||
+  fail "runner did not pass its arguments to the suite"
+E2E_TEST_ARGS_MARKER="$args_marker" run_runner >/dev/null 2>&1 || fail "runner failed without suite arguments"
+[[ ! -s "$args_marker" ]] || fail "runner passed arguments it was not given"
+E2E_TEST_ARGS_MARKER="$args_marker" run_runner -- e2e/one.test.ts >/dev/null 2>&1 ||
+  fail "runner failed when its arguments start with --"
+[[ $(<"$args_marker") == e2e/one.test.ts ]] || fail "runner passed -- to the suite"
 
 printf '%s\n' '[]' >"$state_file"
 : >"$delete_log"

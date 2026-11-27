@@ -93,6 +93,13 @@ status 64 when neither IDs nor a saved default are available:
 /bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
+To run only some test files, append their paths (relative to `packages/sdk`) and any Vitest options
+to either command above, such as `e2e/deploy.test.ts --silent=false`; the wrapper hands them to
+`pnpm run test:e2e`. The suite runs the CLI from `packages/sdk/dist`, so build the checkout first.
+The wrapper runs the checkout that contains it: to test a worktree, run that worktree's copy, and
+pass the loader the existing `ids.local.env` by its path in the checkout that holds it, since the
+file is gitignored.
+
 The wrapper runs `pnpm run test:e2e` in `packages/sdk`, deletes only valid workspace IDs whose names
 start with its exact `e2e-ws-<run-id>-` namespace, and obtains a fresh workspace list afterward. It
 tries every matching deletion even when one fails. The cleanup result overrides the test result when
