@@ -23,6 +23,7 @@ import {
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
+  crmTypes: undefined as Record<string, unknown> | undefined,
   executors: {} as Record<string, unknown>,
   pluginExecutors: {} as Record<string, unknown>,
   pluginExecutorFiles: [] as string[],
@@ -75,6 +76,17 @@ vi.mock("#/cli/services/application", () => ({
           return state.localTypes;
         },
       },
+      ...(state.crmTypes
+        ? [
+            {
+              namespace: "crm-db",
+              config: {},
+              loadTypes: vi.fn().mockResolvedValue(undefined),
+              processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+              types: state.crmTypes,
+            },
+          ]
+        : []),
     ],
     executorService: {
       loadExecutors: vi.fn(() => Promise.resolve(state.executors)),
@@ -116,6 +128,7 @@ describe("tailordb migration sync", () => {
     // Local tables matching reconstruct(latest) so the pre-apply consistency
     // check passes by default.
     state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
+    state.crmTypes = undefined;
     state.executors = {};
     state.pluginExecutors = {};
     state.pluginExecutorFiles = [];
@@ -483,6 +496,24 @@ describe("tailordb migration sync", () => {
       tailordbType: { name: "Post", schema: { settings: { publishRecordEvents: false } } },
     });
   });
+
+  test.each([
+    ["crm-db", false],
+    ["tailordb", true],
+  ])(
+    "publishes a table another namespace also defines only for a trigger naming the synced one (%s: %s)",
+    async (namespace, expected) => {
+      state.crmTypes = { User: parsedType("User") };
+      state.executors = { onUser: { trigger: { kind: "tailordb", tableName: "User", namespace } } };
+
+      const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+      expect(result.success).toBe(true);
+      expect(client.updateTailorDBType.mock.calls[0]![0]).toMatchObject({
+        tailordbType: { name: "User", schema: { settings: { publishRecordEvents: expected } } },
+      });
+    },
+  );
 
   test("leaves publishRecordEvents off for a table only a disabled executor triggers on", async () => {
     state.executors = {
