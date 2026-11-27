@@ -45,7 +45,7 @@ import {
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
-import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { ApplyPhase, NamespacesByName, PlanContext } from "#/cli/commands/deploy/types";
 import type { ConfigServices } from "#/cli/services/application";
 import type {
   Executor,
@@ -301,36 +301,6 @@ export function formatExecutorChangeEntries(
   );
 }
 
-/**
- * Resolve a resource's namespace from same-run peer configs, throwing when the
- * name is claimed by more than one namespace in the deploy run.
- * @param sameRunNamespaces - Namespaces keyed by resource name across the deploy run
- * @param resource - Resource to resolve and the executor whose trigger names it
- * @returns The owning namespace, or undefined when the name is unknown
- */
-function resolveSameRunNamespace(
-  sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
-  resource: NamespacedResource,
-): string | undefined {
-  const { executor, label, name } = resource;
-  if (!sameRunNamespaces?.has(name)) {
-    return undefined;
-  }
-  const namespace = sameRunNamespaces.get(name);
-  if (!namespace) {
-    throw locatedCLIError(
-      { file: executor.file },
-      {
-        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-        message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces in this deploy run define.`,
-        suggestion: "Move the trigger to the application that owns it, or use unique names.",
-        context: { executor: executor.name, resource: name },
-      },
-    );
-  }
-  return namespace;
-}
-
 function tailorDBNamespacesDefining(
   application: Readonly<Pick<ConfigServices, "tailorDBServices">>,
   tableName: string,
@@ -422,8 +392,53 @@ type ResolveNamespaceParams = {
   /** Local namespaces that define the resource. */
   definingNamespaces: ReadonlyArray<string>;
   whenSeveral: SeveralDefiningNamespaces;
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
+  sameRunNamespaces?: NamespacesByName | undefined;
 };
+
+function ambiguousNamespaceError(
+  resource: NamespacedResource,
+  namespaces: ReadonlyArray<string>,
+): CLIError {
+  const { executor, label, name } = resource;
+  return locatedCLIError(
+    { file: executor.file },
+    {
+      code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+      message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces define: ${namespaces.join(", ")}.`,
+      suggestion:
+        "Name the namespace with the trigger's `namespace` option. For an executor a plugin generates, the plugin has to set it.",
+      context: { executor: executor.name, resource: name, namespaces: [...namespaces] },
+    },
+  );
+}
+
+/**
+ * Resolve a resource's namespace among the namespaces of the deploy run that the config sees.
+ * @param sameRunNamespaces - Namespaces keyed by the names of the resources they define
+ * @param resource - Resource to resolve and the executor whose trigger names it
+ * @param namedNamespace - Namespace the trigger names, when it names one
+ * @returns The namespace, or undefined when none of them defines the resource there
+ * @throws CLIError coded `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS` when the trigger names no namespace
+ * and several define the resource
+ */
+function resolveSameRunNamespace(
+  sameRunNamespaces: NamespacesByName | undefined,
+  resource: NamespacedResource,
+  namedNamespace: string | undefined,
+): string | undefined {
+  const defining = sameRunNamespaces?.get(resource.name);
+  if (defining === undefined) {
+    return undefined;
+  }
+  if (namedNamespace !== undefined) {
+    return defining.has(namedNamespace) ? namedNamespace : undefined;
+  }
+  if (defining.size > 1) {
+    throw ambiguousNamespaceError(resource, [...defining]);
+  }
+  const [namespace] = defining;
+  return namespace;
+}
 
 function notFoundInNamespaceError(resource: NamespacedResource, namespace: string): CLIError {
   const { executor, label, name } = resource;
@@ -457,33 +472,21 @@ function resolveNamespace(params: ResolveNamespaceParams): string {
     return localNamespace;
   }
   if (namedNamespace === undefined && definingNamespaces.length > 1) {
-    throw locatedCLIError(
-      { file: executor.file },
-      {
-        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-        message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces define: ${definingNamespaces.join(", ")}.`,
-        suggestion:
-          "Name the namespace with the trigger's `namespace` option. For an executor a plugin generates, the plugin has to set it.",
-        context: { executor: executor.name, resource: name, namespaces: [...definingNamespaces] },
-      },
-    );
+    throw ambiguousNamespaceError(resource, definingNamespaces);
   }
   if (namedNamespace !== undefined && localNamespaces.includes(namedNamespace)) {
     throw notFoundInNamespaceError(resource, namedNamespace);
   }
-  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resource);
+  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resource, namedNamespace);
   if (sameRunNamespace !== undefined) {
-    if (namedNamespace === undefined || namedNamespace === sameRunNamespace) {
-      return sameRunNamespace;
-    }
-    throw notFoundInNamespaceError(resource, namedNamespace);
+    return sameRunNamespace;
   }
   if (namedNamespace !== undefined) {
     throw notFoundInNamespaceError(resource, namedNamespace);
   }
-  const sameRunAvailableNamespaces = sameRunNamespaces
-    ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
-    : [];
+  const sameRunAvailableNamespaces = new Set(
+    [...(sameRunNamespaces?.values() ?? [])].flatMap((namespaces) => [...namespaces]),
+  );
   const available = [...localNamespaces, ...sameRunAvailableNamespaces];
   throw locatedCLIError(
     { file: executor.file },
@@ -499,7 +502,7 @@ function resolveTailorDBNamespace(
   application: Readonly<ConfigServices>,
   executor: DefinitionRef,
   trigger: TailorDBTriggerTarget,
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+  sameRunNamespaces?: NamespacesByName,
 ): string {
   return resolveNamespace({
     resource: { executor, label: "TailorDB table", name: trigger.tableName },
@@ -515,7 +518,7 @@ function resolveResolverNamespace(
   application: Readonly<ConfigServices>,
   executor: DefinitionRef,
   trigger: ResolverTriggerTarget,
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+  sameRunNamespaces?: NamespacesByName,
 ): string {
   return resolveNamespace({
     resource: { executor, label: "Resolver", name: trigger.resolverName },

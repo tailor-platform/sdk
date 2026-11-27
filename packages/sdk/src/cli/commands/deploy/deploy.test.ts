@@ -476,7 +476,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleTailorDBTypeNamespaces(current, [current, sharedOwner, unrelated]);
 
-    expect(result.get("User")).toBe("shared");
+    expect(result.get("User")).toEqual(new Set(["shared"]));
   });
 
   test("ignores resolvers in namespaces not visible to the current app", () => {
@@ -502,7 +502,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleResolverNamespaces(current, [current, sharedOwner, unrelated]);
 
-    expect(result.get("findUser")).toBe("shared-pipeline");
+    expect(result.get("findUser")).toEqual(new Set(["shared-pipeline"]));
   });
 
   test("sees the resolver namespaces every application of the current config exposes", () => {
@@ -521,7 +521,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleResolverNamespaces(current, [current, peer]);
 
-    expect(result.get("listUsers")).toBe("admin-pipeline");
+    expect(result.get("listUsers")).toEqual(new Set(["admin-pipeline"]));
   });
 
   test("collects IdP names declared by peer configs when the current app references them", () => {

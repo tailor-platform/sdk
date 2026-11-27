@@ -147,7 +147,7 @@ resolverExecutedTrigger({
 });
 ```
 
-When several resolver namespaces of the config define a resolver with the same name, the trigger subscribes to the first of them and `deploy` warns; name the namespace with `namespace` to choose one.
+When several resolver namespaces of the config define a resolver with the same name, the trigger subscribes to the first of them and `deploy` warns. When the config defines no resolver of that name and other configs in the same `deploy` define it in several resolver namespaces that it declares `external`, `deploy` stops with `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS`. Name the namespace with `namespace` to choose one.
 
 ### IdP User Triggers
 

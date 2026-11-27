@@ -8,6 +8,9 @@ import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
 
+/** Every namespace a config sees that defines a resource, keyed by the resource's name. */
+export type NamespacesByName = ReadonlyMap<string, ReadonlySet<string>>;
+
 export interface TailorDBMigrationTestBaseline {
   migrationNumber: number;
   snapshot: NormalizedSchemaSnapshot;
@@ -51,10 +54,10 @@ export interface PlanContext {
   externalAuthIdpConfigNames?: ReadonlyMap<string, string | undefined> | undefined;
   /** Machine user names that every config in the same deploy run defines, keyed by Auth namespace. */
   plannedMachineUsers?: ReadonlyMap<string, ReadonlySet<string>> | undefined;
-  /** TailorDB namespaces keyed by type name for same-run external trigger resolution. */
-  tailorDBTypeNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
-  /** Pipeline namespaces keyed by resolver name for same-run external trigger resolution. */
-  resolverNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
+  /** TailorDB namespaces in the deploy run keyed by the table names they define, for trigger resolution. */
+  tailorDBTypeNamespaces?: NamespacesByName | undefined;
+  /** Pipeline namespaces in the deploy run keyed by the resolver names they define, for trigger resolution. */
+  resolverNamespaces?: NamespacesByName | undefined;
   /** IdP names known to the current deploy run. */
   idpNames?: ReadonlySet<string> | undefined;
   /** Stable ids of every application taking part in the current deploy run. */

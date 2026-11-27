@@ -16,10 +16,12 @@ import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
+  soleNamespace,
 } from "./visible-resources";
 import type { Executor } from "#/types/executor.generated";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { DependentAppsByResource, DeployDependencyReason } from "./label";
+import type { NamespacesByName } from "./types";
 import type { WorkflowEventSubscribers } from "./workflow";
 
 type SubscribedIdpNameTrigger = { idp?: string | undefined };
@@ -377,12 +379,11 @@ type PublishingTrigger = Extract<
 
 /**
  * What one subscribing config can see, in the same terms the executor's own
- * namespace resolution uses. A namespace maps to `undefined` when the subscriber
- * sees the name in more than one place.
+ * namespace resolution uses.
  */
 type SubscriberVisibility = {
-  tailorDBTypes: ReadonlyMap<string, string | undefined>;
-  resolvers: ReadonlyMap<string, string | undefined>;
+  tailorDBTypes: NamespacesByName;
+  resolvers: NamespacesByName;
   idps: ReadonlySet<string>;
 };
 
@@ -563,7 +564,7 @@ function pinsEveryJobOfWorkflow(target: BuiltDeploymentTarget, workflowName: str
 
 type NarrowByVisibleNamespaceParams = {
   candidates: ReadonlyArray<BuiltDeploymentTarget>;
-  visible: ReadonlyMap<string, string | undefined>;
+  visible: NamespacesByName;
   resourceKey: string;
   declaresIn: (target: BuiltDeploymentTarget, namespace: string) => boolean;
 };
@@ -574,7 +575,7 @@ type NarrowByVisibleNamespaceParams = {
 function narrowByVisibleNamespace(params: NarrowByVisibleNamespaceParams): OwnerCandidates {
   const { candidates, visible, resourceKey, declaresIn } = params;
   if (!visible.has(resourceKey)) return [];
-  const namespace = visible.get(resourceKey);
+  const namespace = soleNamespace(visible.get(resourceKey));
   if (namespace === undefined) return "ambiguous";
   return candidates.filter((target) => declaresIn(target, namespace));
 }
@@ -622,7 +623,7 @@ function eventSourceLookup(
       const namespace =
         localTailorDBTriggerNamespace(subscriber.application, trigger) ??
         namedNamespace ??
-        visibility.tailorDBTypes.get(trigger.tableName);
+        soleNamespace(visibility.tailorDBTypes.get(trigger.tableName));
       return {
         resource: publishEventsConflict.tailorDBType(trigger.tableName).resource,
         trigger,
@@ -660,7 +661,7 @@ function eventSourceLookup(
       const namespace =
         localResolverTriggerNamespace(subscriber.application, trigger) ??
         namedNamespace ??
-        visibility.resolvers.get(trigger.resolverName);
+        soleNamespace(visibility.resolvers.get(trigger.resolverName));
       return {
         resource: publishEventsConflict.resolver(trigger.resolverName).resource,
         trigger,

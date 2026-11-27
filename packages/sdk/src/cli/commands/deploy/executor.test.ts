@@ -1290,7 +1290,7 @@ describe("planExecutor", () => {
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
-        tailorDBTypeNamespaces: new Map([["User", "shared-db"]]),
+        tailorDBTypeNamespaces: new Map([["User", new Set(["shared-db"])]]),
       });
 
       const typedConfig = getEventConfig(result);
@@ -1355,7 +1355,7 @@ describe("planExecutor", () => {
         owner: applicationOwner(application),
         forRemoval: false,
         config: mockConfig,
-        resolverNamespaces: new Map([["myResolver", "shared-pipeline"]]),
+        resolverNamespaces: new Map([["myResolver", new Set(["shared-pipeline"])]]),
       });
 
       const typedConfig = getEventConfig(result);
@@ -1500,17 +1500,19 @@ describe("planExecutor", () => {
 
       const error = await planError(
         buildPlanContext(application, {
-          tailorDBTypeNamespaces: new Map([["Order", undefined]]),
+          tailorDBTypeNamespaces: new Map([["Order", new Set(["shop-db", "crm-db"])]]),
         }),
       );
 
       expect(error).toMatchObject({
         code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
         message:
-          'Executor "on-record-created" triggers on TailorDB table "Order", which several namespaces in this deploy run define.',
+          'Executor "on-record-created" triggers on TailorDB table "Order", which several namespaces define: shop-db, crm-db.',
+        suggestion: expect.stringContaining("`namespace`"),
         context: {
           executor: "on-record-created",
           resource: "Order",
+          namespaces: ["shop-db", "crm-db"],
           file: executorFile("on-record-created"),
         },
       });
@@ -1606,7 +1608,7 @@ describe("planExecutor", () => {
           { tailorDBNamespaces: sharedTables },
         );
         return buildPlanContext(application, {
-          tailorDBTypeNamespaces: new Map([["Invoice", "shared-db"]]),
+          tailorDBTypeNamespaces: new Map([["Invoice", new Set(["shared-db"])]]),
         });
       }
 
@@ -1621,6 +1623,43 @@ describe("planExecutor", () => {
           code: "DEPLOY_RESOURCE_NOT_FOUND",
           context: { resource: "Invoice", namespace: "other-db" },
         });
+      });
+
+      function peerResolverContext(localResolvers: Record<string, readonly string[]>): PlanContext {
+        const application = createMockApplication([resolverTriggerExecutor("crm-api")], {
+          resolverNamespaces: localResolvers,
+        });
+        return buildPlanContext(application, {
+          resolverNamespaces: new Map([
+            ["createLead", new Set([...Object.keys(localResolvers), "shop-api", "crm-api"])],
+          ]),
+        });
+      }
+
+      test("resolverExecuted subscribes in the namespace it names among other configs' namespaces", async () => {
+        const result = await planExecutor(peerResolverContext({}));
+
+        expect(getEventConfig(result).value.namespaceName).toBe("crm-api");
+      });
+
+      test("resolverExecuted subscribes to another config's resolver it names over its own", async () => {
+        const result = await planExecutor(peerResolverContext({ "buyer-api": ["createLead"] }));
+
+        expect(getEventConfig(result).value.namespaceName).toBe("crm-api");
+      });
+
+      test("recordCreated subscribes in the namespace it names among other configs' namespaces", async () => {
+        const application = createMockApplication([
+          recordTriggerExecutor({ tableName: "Order", namespace: "crm-db" }),
+        ]);
+
+        const result = await planExecutor(
+          buildPlanContext(application, {
+            tailorDBTypeNamespaces: new Map([["Order", new Set(["shop-db", "crm-db"])]]),
+          }),
+        );
+
+        expect(getEventConfig(result).value.namespaceName).toBe("crm-db");
       });
 
       test("resolverExecuted subscribes in the namespace the trigger names", async () => {
@@ -1677,6 +1716,30 @@ describe("planExecutor", () => {
       });
       expect(getErrorDiagnostics(error).location).toEqual({
         file: executorFile("on-resolver-exec"),
+      });
+    });
+
+    test("resolverExecuted lists the deploy run's namespaces among the available ones", async () => {
+      const executor: Executor = {
+        name: "on-resolver-exec",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "resolverExecuted", resolverName: "unknown" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        resolverNames: { myResolver: "my-pipeline" },
+      });
+
+      const error = await planError(
+        buildPlanContext(application, {
+          resolverNamespaces: new Map([["createLead", new Set(["shop-api", "crm-api"])]]),
+        }),
+      );
+
+      expect(error).toMatchObject({
+        code: "DEPLOY_RESOURCE_NOT_FOUND",
+        context: { available: ["my-pipeline", "shop-api", "crm-api"] },
       });
     });
 
