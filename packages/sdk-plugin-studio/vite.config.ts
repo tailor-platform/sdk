@@ -8,8 +8,5 @@ export default defineConfig({
   build: {
     outDir: "../dist/client",
     emptyOutDir: true,
-    rolldownOptions: {
-      input: { index: "client/index.html", "function-run": "client/function-run.html" },
-    },
   },
 });

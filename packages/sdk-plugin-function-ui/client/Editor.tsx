@@ -5,7 +5,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, placeholder as placeholderExtension } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
-import { changedByEditor, fromProps } from "../../src/function-run/editor-sync";
+import { changedByEditor, fromProps } from "../src/editor-sync";
 
 const typescriptSupport = javascript({ typescript: true });
 

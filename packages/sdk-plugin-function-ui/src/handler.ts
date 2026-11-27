@@ -1,10 +1,12 @@
 import { normalizeArg } from "./arg";
-import type { UiHandler } from "../shell-handler";
+import { serveAsset } from "./assets";
 import type { createSyncedFiles, FileChange } from "./files";
 import type { createRunSession } from "./session";
 
 export interface FunctionRunHandlerOptions {
   loadPage: () => Promise<string>;
+  /** Directory the page's `assets/` files are served from. */
+  assetsDir?: string;
   files: ReturnType<typeof createSyncedFiles>;
   session: ReturnType<typeof createRunSession>;
   /** Where the files are: relative to the project for showing, absolute for copying. */
@@ -19,7 +21,10 @@ interface FilePaths {
 
 export type FunctionRunPaths = FilePaths & { absolute?: FilePaths };
 
-export type FunctionRunHandler = UiHandler & { close: () => void };
+/** A Web-standard request handler: the shell mounts it at a path of its own, the standalone server at `/`. */
+export type FunctionRunHandler = ((request: Request) => Response | Promise<Response>) & {
+  close: () => void;
+};
 
 const encoder = new TextEncoder();
 
@@ -105,7 +110,7 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
     });
   }
 
-  const handler: UiHandler = async (request) => {
+  const handler = async (request: Request): Promise<Response> => {
     const { pathname } = new URL(request.url);
     const method = request.method.toUpperCase();
 
@@ -122,6 +127,11 @@ export function createFunctionRunHandler(options: FunctionRunHandlerOptions): Fu
       return new Response(method === "HEAD" ? null : page, {
         headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
       });
+    }
+
+    if (pathname.startsWith("/assets/") && options.assetsDir !== undefined) {
+      if (method !== "GET" && method !== "HEAD") return methodNotAllowed("GET, HEAD");
+      return serveAsset(options.assetsDir, pathname.slice("/assets/".length));
     }
 
     if (pathname === "/events") {

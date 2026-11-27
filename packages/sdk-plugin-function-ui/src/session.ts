@@ -1,7 +1,10 @@
+import {
+  selectionArgs,
+  selectionEnv,
+  type WorkspaceSelection,
+} from "@tailor-platform/shared/workspace-selection";
 import * as path from "pathe";
-import { selectionArgs, selectionEnv } from "../workspace-context";
 import { HISTORY_LIMIT } from "./history";
-import type { WorkspaceSelection } from "../workspace-context";
 import type { RunEvent, RunHandle, RunInput } from "./run-types";
 import type { SessionMessage } from "./stream";
 

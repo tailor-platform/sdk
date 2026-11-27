@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import * as os from "node:os";
+import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { createSyncedFiles } from "./files";
 import { formatTypeScript } from "./format";
@@ -13,12 +14,12 @@ import { createResultWriter } from "./result";
 import { createRunSession } from "./session";
 import { STARTER_ARG, STARTER_CODE } from "./starter";
 import { startWatchWorker } from "./watch-worker";
-import type { Tab } from "../shell-handler";
-import type { WorkspaceSelection } from "../workspace-context";
 import type { RunHandle, RunInput } from "./run-types";
+import type { WorkspaceSelection } from "@tailor-platform/shared/workspace-selection";
 
 const FILE_POLL_MS = 300;
-const WORKER_FILE = new URL("./function-run/worker.js", import.meta.url);
+const PAGE_FILE = fileURLToPath(new URL("./client/index.html", import.meta.url));
+const WORKER_FILE = new URL("./worker.js", import.meta.url);
 
 function canonicalPath(file: string): string {
   try {
@@ -28,7 +29,7 @@ function canonicalPath(file: string): string {
   }
 }
 
-export interface FunctionRunTabOptions {
+export interface FunctionRunOptions {
   projectDir: string;
   /** Edit this existing file instead of the scratch function. */
   file?: string;
@@ -36,25 +37,24 @@ export interface FunctionRunTabOptions {
   watch: boolean;
   getSelection: () => WorkspaceSelection;
   onSelectionChange: (listener: () => void) => () => void;
-  pageFile: string;
+  /** The built page; its `assets/` directory is served next to it. */
+  pageFile?: string;
   startRun?: (input: RunInput) => RunHandle;
 }
 
-export interface FunctionRunTab {
-  tab: Extract<Tab, { state: "mounted" }>;
+export interface FunctionRun {
+  handler: FunctionRunHandler;
   /** Where the function and its argument are, relative to the project. */
   paths: FunctionRunPaths & { resultFile: string };
   close: () => void;
 }
 
 /**
- * Set up the Function run tab: the files it edits, the watch it owns and its handler.
+ * Set up Function run: the files it edits, the watch it owns and the handler that serves its page.
  * @param options - The project, which file to edit and whether to start watching
- * @returns The tab, where its files are and a function that shuts it down
+ * @returns The handler, where the files are and a function that shuts it down
  */
-export async function createFunctionRunTab(
-  options: FunctionRunTabOptions,
-): Promise<FunctionRunTab> {
+export async function createFunctionRun(options: FunctionRunOptions): Promise<FunctionRun> {
   const studioDir = path.join(options.projectDir, ".tailor", "studio");
   const editsScratch = options.file === undefined;
   const file = editsScratch
@@ -101,8 +101,10 @@ export async function createFunctionRunTab(
     resultFile: relative(resultFile),
     absolute: { file, argFile, resultFile },
   };
+  const pageFile = options.pageFile ?? PAGE_FILE;
   const handler: FunctionRunHandler = createFunctionRunHandler({
-    loadPage: () => readFile(options.pageFile, "utf8"),
+    loadPage: () => readFile(pageFile, "utf8"),
+    assetsDir: path.join(path.dirname(pageFile), "assets"),
     files,
     session,
     paths,
@@ -118,7 +120,7 @@ export async function createFunctionRunTab(
   }
 
   return {
-    tab: { id: "function-run", title: "Function run", state: "mounted", handler },
+    handler,
     paths,
     close: () => {
       stopWatchingSelection();

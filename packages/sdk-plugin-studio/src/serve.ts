@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { createFunctionRun } from "@tailor-platform/sdk-plugin-function-ui";
 import {
   arg,
   defineAppCommand,
@@ -6,14 +7,13 @@ import {
   platformConfigFromEnv,
   workspaceArgs,
 } from "@tailor-platform/sdk/cli";
+import { startServer } from "@tailor-platform/shared/local-server";
 import * as path from "pathe";
 import { z } from "zod";
 import { createAccounts } from "./accounts";
 import { discoverTab, type TabSpec } from "./discover-tab";
-import { createFunctionRunTab } from "./function-run/tab";
 import { openBrowser } from "./open-browser";
 import { createSelectionStore, projectDirectory } from "./selection-store";
-import { startServer } from "./server";
 import { createShellHandler } from "./shell-handler";
 import { createWorkspaceContext, listProfiles } from "./workspace-context";
 
@@ -66,17 +66,21 @@ export const uiCommand = defineAppCommand({
         ),
     });
     await workspace.restore();
-    const functionRun = await createFunctionRunTab({
+    const functionRun = await createFunctionRun({
       projectDir,
       file: args["function-file"],
       watch: args["function-watch"],
       getSelection: () => workspace.selection(),
       onSelectionChange: (listener) => workspace.subscribe(listener),
-      pageFile: path.join(clientDir, "function-run.html"),
     });
     const tabs = [
       ...(await Promise.all(DEFAULT_TABS.map((spec) => discoverTab(spec, projectDir)))),
-      functionRun.tab,
+      {
+        id: "function-run",
+        title: "Function run",
+        state: "mounted" as const,
+        handler: functionRun.handler,
+      },
     ];
     const server = await startServer({
       port: args.port,

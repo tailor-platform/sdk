@@ -1,5 +1,5 @@
-import type { WorkspaceSelection } from "../workspace-context";
 import type { RunRecord } from "./stream";
+import type { WorkspaceSelection } from "@tailor-platform/shared/workspace-selection";
 
 export type RunEvent =
   | { type: "ready" }

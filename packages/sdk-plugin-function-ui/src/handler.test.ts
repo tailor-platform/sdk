@@ -8,11 +8,6 @@ import { createRunSession } from "./session";
 import type { RunEvent, RunHandle, RunInput } from "./run-types";
 
 const root = "http://127.0.0.1:7777";
-const context = {
-  basePath: "/plugins/function-run/",
-  getSelection: () => ({}),
-  onSelectionChange: () => () => {},
-};
 const pageTemplate = "<html><head><title>Function run</title></head></html>";
 
 let base: string;
@@ -135,7 +130,7 @@ describe("GET /", () => {
   test("serves the page", async () => {
     const { handler } = await setup();
 
-    const response = await handler(new Request(`${root}/`), context);
+    const response = await handler(new Request(`${root}/`));
 
     expect([
       response.headers.get("content-type"),
@@ -147,7 +142,7 @@ describe("GET /", () => {
   test("answers HEAD without a body", async () => {
     const { handler } = await setup();
 
-    const response = await handler(new Request(`${root}/`, { method: "HEAD" }), context);
+    const response = await handler(new Request(`${root}/`, { method: "HEAD" }));
 
     expect([response.status, await response.text()]).toEqual([200, ""]);
   });
@@ -163,7 +158,7 @@ describe("GET /", () => {
       paths: { file: "f", argFile: "a" },
     });
 
-    const response = await handler(new Request(`${root}/`), context);
+    const response = await handler(new Request(`${root}/`));
 
     expect([response.status, await response.text()]).toEqual([500, "page missing\n"]);
   });
@@ -171,7 +166,7 @@ describe("GET /", () => {
   test("answers 404 for a path it does not serve", async () => {
     const { handler } = await setup();
 
-    const response = await handler(new Request(`${root}/other`), context);
+    const response = await handler(new Request(`${root}/other`));
 
     expect(response.status).toBe(404);
   });
@@ -181,7 +176,7 @@ describe("GET /events", () => {
   test("starts with the state: where the files are, what they hold and whether it is watching", async () => {
     const { handler } = await setup();
 
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const [first] = await readFrames(response, (frames) => frames.length >= 1);
 
     expect([response.headers.get("content-type"), first!.split("\n")[0], dataOf(first!)]).toEqual([
@@ -216,7 +211,7 @@ describe("GET /events", () => {
       },
     });
 
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const [first] = await readFrames(response, (frames) => frames.length >= 1);
 
     expect(dataOf(first!)).toMatchObject({
@@ -235,7 +230,7 @@ describe("GET /events", () => {
     run.push({ type: "note", text: "a warning" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const pending = readFrames(response, (frames) => frames.length >= 3);
     run.push({ type: "finished", record: { success: true, result: "3" } });
     const frames = await pending;
@@ -250,11 +245,11 @@ describe("GET /events", () => {
 
   test("tells a page that the watch started and stopped", async () => {
     const { handler } = await setup();
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const pending = readFrames(response, (frames) => frames.length >= 4);
 
-    await handler(send("POST", "/start"), context);
-    await handler(send("POST", "/stop"), context);
+    await handler(send("POST", "/start"));
+    await handler(send("POST", "/stop"));
     const frames = await pending;
 
     expect(eventNames(frames)).toEqual([
@@ -268,7 +263,7 @@ describe("GET /events", () => {
 
   test("tells a page what was changed in the files from outside", async () => {
     const { handler, files } = await setup();
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const pending = readFrames(response, (frames) => frames.length >= 2);
 
     fs.writeFileSync(path.join(dir, "studio", "function.ts"), "edited elsewhere");
@@ -285,10 +280,10 @@ describe("GET /events", () => {
 describe("PUT /file announcements", () => {
   test("tells every page what one page wrote, with the origin that sent it", async () => {
     const { handler } = await setup();
-    const response = await handler(events(), context);
+    const response = await handler(events());
     const pending = readFrames(response, (frames) => frames.length >= 2);
 
-    await handler(send("PUT", "/file", { code: "typed", origin: "page-1" }), context);
+    await handler(send("PUT", "/file", { code: "typed", origin: "page-1" }));
     const frames = await pending;
 
     expect([frames[1]!.split("\n")[0], dataOf(frames[1]!)]).toEqual([
@@ -300,7 +295,7 @@ describe("PUT /file announcements", () => {
   test("rejects an origin that is not a string", async () => {
     const { handler, files } = await setup();
 
-    const response = await handler(send("PUT", "/file", { code: "typed", origin: 1 }), context);
+    const response = await handler(send("PUT", "/file", { code: "typed", origin: 1 }));
 
     expect([response.status, files.read().code]).toEqual([400, "export default 1;\n"]);
   });
@@ -310,7 +305,7 @@ describe("PUT /file", () => {
   test("writes the code and the argument", async () => {
     const { handler, files } = await setup();
 
-    const response = await handler(send("PUT", "/file", { code: "typed", arg: "{a: 1}" }), context);
+    const response = await handler(send("PUT", "/file", { code: "typed", arg: "{a: 1}" }));
 
     expect([response.status, files.read()]).toEqual([204, { code: "typed", arg: "{a: 1}" }]);
   });
@@ -318,7 +313,7 @@ describe("PUT /file", () => {
   test("writes only what it is given", async () => {
     const { handler, files } = await setup();
 
-    await handler(send("PUT", "/file", { arg: "{a: 1}" }), context);
+    await handler(send("PUT", "/file", { arg: "{a: 1}" }));
 
     expect(files.read()).toEqual({ code: "export default 1;\n", arg: "{a: 1}" });
   });
@@ -332,7 +327,7 @@ describe("PUT /file", () => {
   ])("rejects %s with 400 and writes nothing", async (_name, body) => {
     const { handler, files } = await setup();
 
-    const response = await handler(send("PUT", "/file", body), context);
+    const response = await handler(send("PUT", "/file", body));
 
     expect([response.status, files.read()]).toEqual([
       400,
@@ -343,7 +338,7 @@ describe("PUT /file", () => {
   test("is 405 unless it is a PUT", async () => {
     const { handler } = await setup();
 
-    const response = await handler(send("POST", "/file", {}), context);
+    const response = await handler(send("POST", "/file", {}));
 
     expect([response.status, response.headers.get("allow")]).toEqual([405, "PUT"]);
   });
@@ -353,7 +348,7 @@ describe("POST /start and /stop", () => {
   test("starts the watch against the workspace selected in the shell", async () => {
     const { handler, startRun } = await setup();
 
-    const response = await handler(send("POST", "/start"), context);
+    const response = await handler(send("POST", "/start"));
 
     expect([response.status, startRun.mock.calls[0]![0].workspace]).toEqual([
       204,
@@ -364,7 +359,7 @@ describe("POST /start and /stop", () => {
   test("asks for a workspace with 409 and starts nothing while none is selected", async () => {
     const { handler, startRun } = await setup({ selection: {} });
 
-    const response = await handler(send("POST", "/start"), context);
+    const response = await handler(send("POST", "/start"));
 
     expect([response.status, await response.text(), startRun.mock.calls.length]).toEqual([
       409,
@@ -375,9 +370,9 @@ describe("POST /start and /stop", () => {
 
   test("stops the watch", async () => {
     const { handler, run } = await setup();
-    await handler(send("POST", "/start"), context);
+    await handler(send("POST", "/start"));
 
-    const response = await handler(send("POST", "/stop"), context);
+    const response = await handler(send("POST", "/stop"));
 
     expect([response.status, run.stop.mock.calls.length]).toEqual([204, 1]);
   });
@@ -385,7 +380,7 @@ describe("POST /start and /stop", () => {
   test("is 405 unless it is a POST", async () => {
     const { handler } = await setup();
 
-    const response = await handler(new Request(`${root}/start`), context);
+    const response = await handler(new Request(`${root}/start`));
 
     expect([response.status, response.headers.get("allow")]).toEqual([405, "POST"]);
   });
@@ -394,7 +389,7 @@ describe("POST /start and /stop", () => {
 describe("close", () => {
   test("stops the watch", async () => {
     const { handler, run } = await setup();
-    await handler(send("POST", "/start"), context);
+    await handler(send("POST", "/start"));
 
     handler.close();
 

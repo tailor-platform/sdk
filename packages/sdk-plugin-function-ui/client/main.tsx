@@ -14,12 +14,12 @@ import {
   type RefObject,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { locateArgPath, normalizeArg } from "../../src/function-run/arg";
-import { HISTORY_LIMIT, prependEntry } from "../../src/function-run/history";
-import { createSaver } from "../../src/function-run/saver";
-import { parseEventFrame, splitFrames, type RunRecord } from "../../src/function-run/stream";
-import { parseTailorErrors, type TailorErrorItem } from "../../src/function-run/tailor-errors";
-import { scopeTheme } from "../../src/function-run/theme";
+import { locateArgPath, normalizeArg } from "../src/arg";
+import { HISTORY_LIMIT, prependEntry } from "../src/history";
+import { createSaver } from "../src/saver";
+import { parseEventFrame, splitFrames, type RunRecord } from "../src/stream";
+import { parseTailorErrors, type TailorErrorItem } from "../src/tailor-errors";
+import { scopeTheme } from "../src/theme";
 import { Editor } from "./Editor";
 import "./style.css";
 

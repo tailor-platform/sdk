@@ -1,7 +1,8 @@
-import { guardRequest } from "./request-guard";
+import { guardRequest } from "@tailor-platform/shared/request-guard";
 import { serveStatic } from "./static-files";
-import type { WorkspaceContext, WorkspaceSelection } from "./workspace-context";
+import type { WorkspaceContext } from "./workspace-context";
 import type { PlatformClientConfig } from "@tailor-platform/sdk/cli";
+import type { WorkspaceSelection } from "@tailor-platform/shared/workspace-selection";
 
 export interface UiHandlerContext {
   basePath: string;

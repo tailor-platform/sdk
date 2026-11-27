@@ -11,7 +11,10 @@
     "./resource-name": "./src/resource-name.ts",
     "./workflow-policy": "./src/workflow-policy.ts",
     "./plugin-error": "./src/plugin-error.ts",
-    "./seed-order": "./src/seed-order.ts"
+    "./seed-order": "./src/seed-order.ts",
+    "./local-server": "./src/local-server.ts",
+    "./request-guard": "./src/request-guard.ts",
+    "./workspace-selection": "./src/workspace-selection.ts"
   },
   "scripts": {
     "lint": "oxlint --type-aware .",

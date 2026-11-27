@@ -2,13 +2,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createFunctionRunTab } from "./tab";
+import { createFunctionRun } from "./function-run";
 import type { RunEvent, RunHandle } from "./run-types";
 
 let base: string;
 
 beforeAll(() => {
-  base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "studio-tab-")));
+  base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "function-run-")));
 });
 
 afterAll(() => {
@@ -43,7 +43,7 @@ function idleRun(): RunHandle {
 describe("close", () => {
   test("leaves the result file saying the watch stopped because the server shut down", async () => {
     const projectDir = fs.mkdtempSync(path.join(base, "project-"));
-    const tab = await createFunctionRunTab({
+    const tab = await createFunctionRun({
       projectDir,
       watch: true,
       getSelection: () => ({ profile: "test" }),
@@ -75,7 +75,7 @@ describe("a function file that is a symbolic link", () => {
     fs.writeFileSync(target, "export default 1;\n");
     const link = path.join(projectDir, "link.ts");
     fs.symlinkSync(target, link);
-    const tab = await createFunctionRunTab({
+    const tab = await createFunctionRun({
       projectDir,
       file: "link.ts",
       watch: false,
@@ -85,17 +85,12 @@ describe("a function file that is a symbolic link", () => {
       startRun: idleRun,
     });
 
-    await tab.tab.handler(
+    await tab.handler(
       new Request("http://127.0.0.1:7777/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ code: "export default 2;\n" }),
       }),
-      {
-        basePath: "/plugins/function-run/",
-        getSelection: () => ({}),
-        onSelectionChange: () => () => {},
-      },
     );
     tab.close();
 

@@ -1,8 +1,8 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/cli.ts", "src/index.ts", "src/function-run/worker.ts"],
-  dts: true,
+  entry: ["src/cli.ts", "src/index.ts"],
+  dts: { tsc: { eager: true } },
   format: ["esm"],
   target: "node22",
   platform: "node",

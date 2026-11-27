@@ -1,6 +1,6 @@
 import * as net from "node:net";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { startServer, type RunningServer } from "./server";
+import { startServer, type RunningServer } from "./local-server";
 
 const running: RunningServer[] = [];
 const occupied: net.Server[] = [];

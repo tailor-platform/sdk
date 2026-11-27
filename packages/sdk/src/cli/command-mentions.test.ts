@@ -23,6 +23,7 @@ const PLUGIN_ENTRIES = [
   "sdk-plugin-setup/src/cli.ts",
   "sdk-plugin-seed/src/index.ts",
   "sdk-plugin-tailordb-erd/src/cli.ts",
+  "sdk-plugin-function-ui/src/cli.ts",
   "sdk-plugin-studio/src/cli.ts",
 ];
 
