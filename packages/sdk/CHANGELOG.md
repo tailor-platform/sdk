@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 2.50.0
+
+### Minor Changes
+
+- [#3327](https://github.com/tailor-platform/sdk/pull/3327) [`3fd7c58`](https://github.com/tailor-platform/sdk/commit/3fd7c588c4de6fd2903beb412057a6b544650718) Thanks [@dqn](https://github.com/dqn)! - **Breaking change (beta)**: A plugin can no longer call `.replication()` on a table it generates. Every command that loads TailorDB tables, such as `tailor generate`, `tailor deploy`, `tailor seed`, `tailor tailordb erd`, and `tailor remove`, fails with `PLUGIN_TABLE_INVALID` for such a plugin, even in a namespace without replications. To keep replicating the table, update the plugin and, in the same deploy, list the table in the `pluginTables` of each replication that copies it, with the `excludeFields` or `includeFields` the plugin passed to `.replication()`; a deploy that removes the table from a replication stops writing its BigQuery table and keeps the data already there.
+
+- [#3327](https://github.com/tailor-platform/sdk/pull/3327) [`28185db`](https://github.com/tailor-platform/sdk/commit/28185db6c46f878f92a76eadfe221cf529002708) Thanks [@dqn](https://github.com/dqn)! - Replicate tables that plugins generate by listing them in a replication's `pluginTables`, keyed by table name, with the fields to copy as in `.replication()` (`{}` copies every field). Deploying (`tailor deploy` and `tailor tailordb migration test`) fails when a key names no table a plugin generates in the namespace.
+
+### Patch Changes
+
+- [#3325](https://github.com/tailor-platform/sdk/pull/3325) [`ae75361`](https://github.com/tailor-platform/sdk/commit/ae75361b2cf34918b9b5bb640cde2c59a07444f4) Thanks [@dqn](https://github.com/dqn)! - Keep `--env-file` and `--env-file-if-exists` in the `tailor` commands the CLI suggests with the run's workspace or profile and in `Next:` commands, such as the `tailor function logs` and `tailor workflow prune` commands printed when `tailor function run --async` stops waiting, or `tailor login` when no token is found. Most of them used to leave them out, so pasting one skipped the env files and could fail to authenticate when the token came from one. Each env file is named by its absolute path, so it still loads when the command runs from another directory.
+
 ## 2.49.0
 
 ### Minor Changes
