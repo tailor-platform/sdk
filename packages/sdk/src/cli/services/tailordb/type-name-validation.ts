@@ -55,15 +55,28 @@ interface AssertUniqueTailorDBTypeNamesArgs {
   uniqueAcross?: string | undefined;
 }
 
+/** The TailorDB namespaces an application of a workspace config lists. */
+interface TailorDBTypeNameGroup {
+  /** Name of the application. */
+  application: string;
+  /** TailorDB namespaces the application lists. */
+  namespaces: ReadonlyArray<string>;
+}
+
 export interface AssertUniqueLocalTailorDBTypeNamesArgs extends CollectLocalTailorDBTypeNameSourcesArgs {
-  /** Whether the services are an application's or a whole workspace's. Defaults to `"application"`. */
-  scope?: "application" | "workspace" | undefined;
+  /**
+   * The applications of a workspace config, each of whose namespaces must not share a type name.
+   * Undefined for a `defineConfig()` config, whose namespaces all belong to its one application.
+   */
+  groups: ReadonlyArray<TailorDBTypeNameGroup> | undefined;
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
   extends CollectLocalTailorDBTypeNameSourcesArgs, FetchExternalTailorDBTypeNameSourcesArgs {
   /** External TailorDB services planned in the same deploy run. */
   plannedExternalTailorDBServices?: ReadonlyArray<LocalTailorDBService> | undefined;
+  /** See {@link AssertUniqueLocalTailorDBTypeNamesArgs.groups}. */
+  groups?: ReadonlyArray<TailorDBTypeNameGroup> | undefined;
 }
 
 export interface TailorDBTypeDefinitionSource {
@@ -229,10 +242,24 @@ function assertUniqueTailorDBTypeNames(args: AssertUniqueTailorDBTypeNamesArgs):
 export function assertUniqueLocalTailorDBTypeNames(
   args: AssertUniqueLocalTailorDBTypeNamesArgs,
 ): void {
-  assertUniqueTailorDBTypeNames({
-    sources: collectLocalTailorDBTypeNameSources(args),
-    uniqueAcross: `all TailorDB namespaces in the ${args.scope ?? "application"}`,
-  });
+  assertUniqueTailorDBTypeNamesPerGroup(collectLocalTailorDBTypeNameSources(args), args.groups);
+}
+
+function assertUniqueTailorDBTypeNamesPerGroup(
+  sources: ReadonlyArray<TailorDBTypeNameSource>,
+  groups: ReadonlyArray<TailorDBTypeNameGroup> | undefined,
+): void {
+  if (groups === undefined) {
+    assertUniqueTailorDBTypeNames({ sources });
+    return;
+  }
+  for (const { application, namespaces } of groups) {
+    const listed = new Set(namespaces);
+    assertUniqueTailorDBTypeNames({
+      sources: sources.filter((source) => listed.has(source.namespace)),
+      uniqueAcross: `all TailorDB namespaces of application "${application}"`,
+    });
+  }
 }
 
 /**
@@ -265,7 +292,8 @@ export async function assertUniqueTailorDBTypeNamesWithExternal(
         })
       : [];
 
-  assertUniqueTailorDBTypeNames({
-    sources: [...localSources, ...plannedExternalSources, ...externalSources],
-  });
+  assertUniqueTailorDBTypeNamesPerGroup(
+    [...localSources, ...plannedExternalSources, ...externalSources],
+    args.groups,
+  );
 }

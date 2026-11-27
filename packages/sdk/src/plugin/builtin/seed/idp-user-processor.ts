@@ -10,6 +10,8 @@ export interface IdpUserMetadata {
   schema: {
     usernameField: string;
     userTableName: string;
+    /** TailorDB namespace of the user profile table. */
+    userTableNamespace?: string | undefined;
   };
 }
 
@@ -24,7 +26,7 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
     return undefined;
   }
 
-  const { tableName, usernameField } = auth.userProfile;
+  const { tableName, usernameField, namespace } = auth.userProfile;
 
   return {
     name: "_User",
@@ -34,6 +36,7 @@ export function processIdpUser(auth: GeneratorAuthInput): IdpUserMetadata | unde
     schema: {
       usernameField,
       userTableName: tableName,
+      userTableNamespace: namespace,
     },
   };
 }

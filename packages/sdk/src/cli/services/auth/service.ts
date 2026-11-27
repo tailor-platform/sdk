@@ -85,15 +85,28 @@ export function createAuthService(
             ? config.userProfile.type.name
             : undefined;
 
-        if (userProfileTypeName) {
-          for (const service of tailorDBServices) {
-            const types = service.types;
-            if (Object.prototype.hasOwnProperty.call(types, userProfileTypeName)) {
-              userProfileNamespace = service.namespace;
-              break;
-            }
-          }
+        const definingNamespaces = userProfileTypeName
+          ? tailorDBServices
+              .filter((service) => Object.hasOwn(service.types, userProfileTypeName))
+              .map((service) => service.namespace)
+          : [];
+        if (definingNamespaces.length > 1) {
+          throw configIssuesError({
+            file: configPath,
+            exportName: "default",
+            subject: "Tailor config",
+            service: { configKey: "auth", name: config.name },
+            issues: [
+              {
+                path: [...configKeyPath, "userProfile", "namespace"],
+                message: `Type "${config.userProfile.type.name}" is defined in several TailorDB namespaces: ${definingNamespaces.join(", ")}`,
+              },
+            ],
+            suggestion:
+              "Set `userProfile.namespace` to the namespace that owns the user profile table.",
+          });
         }
+        userProfileNamespace = definingNamespaces[0];
 
         if (!userProfileNamespace) {
           throw configIssuesError({

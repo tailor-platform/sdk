@@ -37,4 +37,44 @@ describe("generatePluginTableFiles", () => {
 
     expect(log).toHaveBeenCalledWith(expect.stringContaining("Plugin Table File:"));
   });
+
+  function generatedTable(namespace: string) {
+    return {
+      pluginId: "audit-plugin",
+      pluginImportPath: "@example/audit-plugin",
+      sourceTableName: "Customer",
+      kind: "auditLog",
+      table: { name: "CustomerAudit", fields: {} },
+      namespace,
+    };
+  }
+
+  test("writes a table that several namespaces generate once per namespace", () => {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-table-generator-"));
+    tempDirs.push(outputDir);
+    vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    const result = generatePluginTableFiles(
+      [generatedTable("shop-db"), generatedTable("crm-db")],
+      outputDir,
+    );
+
+    expect(result.generatedFiles).toEqual([
+      path.join(outputDir, "audit-plugin", "types", "shop-db", "customer-audit.ts"),
+      path.join(outputDir, "audit-plugin", "types", "crm-db", "customer-audit.ts"),
+    ]);
+    expect(result.tableFilePaths.get("crm-db")?.get("CustomerAudit")).toBe(
+      path.join("audit-plugin", "types", "crm-db", "customer-audit.ts"),
+    );
+  });
+
+  test("rejects a table that one namespace generates twice", () => {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-table-generator-"));
+    tempDirs.push(outputDir);
+    vi.spyOn(logger, "log").mockImplementation(() => {});
+
+    expect(() =>
+      generatePluginTableFiles([generatedTable("shop-db"), generatedTable("shop-db")], outputDir),
+    ).toThrow(expect.objectContaining({ code: "PLUGIN_TABLE_NAME_DUPLICATE" }));
+  });
 });

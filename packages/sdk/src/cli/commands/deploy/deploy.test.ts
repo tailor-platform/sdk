@@ -11,6 +11,7 @@ import { collectHttpAdapterScripts, mergeBundledScripts } from "./bundled-script
 import {
   adjustApplicationForMigrationTest,
   assertEnvResolvedAfterRebuild,
+  assertUniqueTargetTailorDBTypeNames,
   confirmDeploymentPlans,
   collectExpectedLocalStaticWebsiteNamesFromConfigs,
   collectExternalAuthIdpConfigNames,
@@ -475,7 +476,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleTailorDBTypeNamespaces(current, [current, sharedOwner, unrelated]);
 
-    expect(result.get("User")).toBe("shared");
+    expect(result.get("User")).toEqual(new Set(["shared"]));
   });
 
   test("ignores resolvers in namespaces not visible to the current app", () => {
@@ -501,7 +502,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleResolverNamespaces(current, [current, sharedOwner, unrelated]);
 
-    expect(result.get("findUser")).toBe("shared-pipeline");
+    expect(result.get("findUser")).toEqual(new Set(["shared-pipeline"]));
   });
 
   test("sees the resolver namespaces every application of the current config exposes", () => {
@@ -520,7 +521,7 @@ describe("visible same-run namespaces", () => {
 
     const result = collectVisibleResolverNamespaces(current, [current, peer]);
 
-    expect(result.get("listUsers")).toBe("admin-pipeline");
+    expect(result.get("listUsers")).toEqual(new Set(["admin-pipeline"]));
   });
 
   test("collects IdP names declared by peer configs when the current app references them", () => {
@@ -2741,6 +2742,49 @@ describe("collectPlannedMachineUsers", () => {
     } as unknown as Parameters<typeof collectPlannedMachineUsers>[0][number];
 
     expect(collectPlannedMachineUsers([externalOnly]).size).toBe(0);
+  });
+});
+
+describe("assertUniqueTargetTailorDBTypeNames", () => {
+  type Target = Parameters<typeof assertUniqueTargetTailorDBTypeNames>[0]["target"];
+
+  const customerIn = (namespace: string) => ({
+    namespace,
+    types: { Customer: {} },
+    typeSourceInfo: {
+      Customer: { filePath: `/app/${namespace}/customer.ts`, exportName: "customer" },
+    },
+  });
+
+  function assertWorkspace(apps: Record<string, string[]>) {
+    const tailorDBServices = [customerIn("shop-db"), customerIn("crm-db")];
+    const target = {
+      source: {
+        kind: "workspace",
+        workspace: {
+          apps: Object.fromEntries(Object.entries(apps).map(([name, db]) => [name, { db }])),
+        },
+      },
+      application: { tailorDBServices, externalTailorDBNamespaces: [] },
+    } as unknown as Target;
+    return assertUniqueTargetTailorDBTypeNames({
+      client: mockOperatorClient({}),
+      workspaceId: "workspace-id",
+      target,
+      targets: [target],
+      tailorDBServices: target.application.tailorDBServices,
+    });
+  }
+
+  test("accepts a table name that namespaces of different applications of a workspace config share", async () => {
+    await expect(assertWorkspace({ shop: ["shop-db"], crm: ["crm-db"] })).resolves.toBeUndefined();
+  });
+
+  test("rejects a table name that namespaces of one application of a workspace config share", async () => {
+    await expect(assertWorkspace({ shop: ["shop-db", "crm-db"] })).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
+      suggestion: expect.stringContaining('application "shop"'),
+    });
   });
 });
 

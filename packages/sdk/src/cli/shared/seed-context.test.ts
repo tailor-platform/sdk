@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { getErrorDiagnostics } from "./error-diagnostics";
@@ -102,6 +104,84 @@ describe("loadSeedContext", () => {
     });
 
     await expect(loadSeedContext()).rejects.toThrow(/User/);
+  });
+
+  describe("a workspace whose applications' namespaces share a table name", () => {
+    function mockSharedWorkspace(configPath = "/proj/tailor.config.ts"): void {
+      loadConfigFileNamespaces.mockResolvedValue({
+        loaded: {
+          kind: "workspace",
+          workspace: {
+            path: configPath,
+            auth: {},
+            apps: { shop: { db: ["shop-db"] }, crm: { db: ["crm-db"] } },
+          },
+          plugins: [seedPluginInstance({ distPath: "./seed" })],
+        },
+        services: {
+          tailorDBServices: [
+            fakeService("shop-db", ["Customer", "Order"]),
+            fakeService("crm-db", ["Customer"]),
+          ],
+          authServices: [],
+        },
+        namespaces: [
+          fakeNamespace("shop-db", [
+            fakeType("Customer", { code: { config: { serial: {} } } }),
+            fakeType("Order", {
+              customer: { config: {}, relation: { targetType: "Customer", key: "code" } },
+            }),
+          ]),
+          fakeNamespace("crm-db", [fakeType("Customer", { code: { config: { serial: {} } } })]),
+        ],
+      } as unknown as LoadedConfigFileNamespaces);
+    }
+
+    test("names each table after its namespace for a caller that reads entity names", async () => {
+      mockSharedWorkspace();
+
+      const context = await loadSeedContext({ allowSharedTableNames: true });
+
+      expect(context.namespaces).toMatchObject([
+        { namespace: "shop-db", entityNames: { Customer: "shop-db.Customer" } },
+        { namespace: "crm-db", entityNames: { Customer: "crm-db.Customer" } },
+      ]);
+    });
+
+    test("keeps a serial field only on the table a relation of its own namespace keys to", async () => {
+      mockSharedWorkspace();
+
+      const context = await loadSeedContext({ allowSharedTableNames: true });
+
+      expect(context.namespaces.map((ns) => ns.omitFields?.["Customer"])).toEqual([[], ["code"]]);
+    });
+
+    test("asks a caller that does not read entity names to upgrade", async () => {
+      mockSharedWorkspace();
+
+      await expect(loadSeedContext()).rejects.toMatchObject({
+        code: "SEED_SHARED_TABLE_NAMES_UNSUPPORTED",
+        suggestion: expect.stringContaining("@tailor-platform/sdk-plugin-seed"),
+      });
+    });
+
+    test("stops when the seed data still holds such a table's rows under its own name", async () => {
+      const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "seed-context-"));
+      try {
+        fs.mkdirSync(path.join(projectDir, "seed", "data"), { recursive: true });
+        fs.writeFileSync(path.join(projectDir, "seed", "data", "Customer.jsonl"), '{"id":"c1"}\n');
+        mockSharedWorkspace(path.join(projectDir, "tailor.config.ts"));
+
+        await expect(loadSeedContext({ allowSharedTableNames: true })).rejects.toMatchObject({
+          code: "SEED_DATA_FILE_SHARED_TABLE_NAME",
+          message: `${path.join(projectDir, "seed", "data", "Customer.jsonl")} holds rows for table "Customer", which several namespaces define.`,
+          suggestion:
+            "Move each row to the data file of its namespace's table: shop-db.Customer.jsonl, crm-db.Customer.jsonl.",
+        });
+      } finally {
+        fs.rmSync(projectDir, { recursive: true, force: true });
+      }
+    });
   });
 
   test("throws when seedPlugin has no distPath", async () => {

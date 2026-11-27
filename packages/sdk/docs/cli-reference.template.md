@@ -306,7 +306,7 @@ read them:
 - `MIGRATION_TEST_SNAPSHOT_NOT_FOUND`: the schema of the latest migration could not be rebuilt from
   the migration files.
 - `MIGRATION_TEST_SNAPSHOT_INVALID`: the migration schemas to deploy to the target name a namespace
-  that is not in the config, or define the same table name in two namespaces.
+  that is not in the config.
 - `MIGRATION_TEST_CLONE_UNAVAILABLE`: data cloning is not enabled on the Platform.
 - `MIGRATION_TEST_CLONE_FAILED`: cloning the source data failed.
 - `MIGRATION_TEST_CLONE_TIMEOUT`: cloning the source data did not finish within `--clone-timeout`.

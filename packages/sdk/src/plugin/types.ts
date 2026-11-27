@@ -267,6 +267,8 @@ interface PluginRecordTriggerConfig {
     | "tailordb.type_record.deleted"
   )[];
   tableName: string;
+  /** TailorDB namespace of the table. Required when several namespaces define a table of its name. */
+  namespace?: string;
 }
 
 interface PluginScheduleTriggerConfig {

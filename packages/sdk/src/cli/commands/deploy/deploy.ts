@@ -1,7 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { type ConfigServices } from "#/cli/services/application";
-import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
+import {
+  assertUniqueTailorDBTypeNamesWithExternal,
+  type AssertUniqueTailorDBTypeNamesWithExternalArgs,
+} from "#/cli/services/tailordb/type-name-validation";
 import { recoveryContextArgs } from "#/cli/shared/args";
 import {
   getOrNull,
@@ -10,7 +13,7 @@ import {
   staticWebsiteNameFromPlaceholder,
   type OperatorClient,
 } from "#/cli/shared/client";
-import { type LoadedConfigFile } from "#/cli/shared/config-loader";
+import { type LoadedConfigFile, tailorDBTypeNameGroupsOf } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { CLIError, internalError } from "#/cli/shared/errors";
 import { logger } from "#/cli/shared/logger";
@@ -443,6 +446,39 @@ function collectPlannedExternalTailorDBServices(
   );
 }
 
+type AssertUniqueTargetTailorDBTypeNamesParams = {
+  client: OperatorClient;
+  workspaceId: string;
+  target: BuiltDeploymentTarget;
+  targets: ReadonlyArray<BuiltDeploymentTarget>;
+  /** The target's TailorDB services, with a migration test's snapshot tables in place of the local ones. */
+  tailorDBServices: AssertUniqueTailorDBTypeNamesWithExternalArgs["tailorDBServices"];
+};
+
+/**
+ * Assert a target's TailorDB table names are unique where its config requires: across every
+ * namespace a `defineConfig()` config sees, or across the namespaces each application of a
+ * workspace config lists.
+ * @param params - The target, the run's targets, and the services to check
+ * @returns Resolves when the names are unique
+ */
+export async function assertUniqueTargetTailorDBTypeNames(
+  params: AssertUniqueTargetTailorDBTypeNamesParams,
+): Promise<void> {
+  const { client, workspaceId, target, targets, tailorDBServices } = params;
+  await assertUniqueTailorDBTypeNamesWithExternal({
+    client,
+    workspaceId,
+    tailorDBServices,
+    externalTailorDBNamespaces: target.application.externalTailorDBNamespaces,
+    plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
+    groups:
+      target.source.kind === "workspace"
+        ? tailorDBTypeNameGroupsOf(target.source.workspace)
+        : undefined,
+  });
+}
+
 export function collectExternalAuthIdpConfigNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): ReadonlyMap<string, string | undefined> {
@@ -531,12 +567,12 @@ async function planDeploymentTarget(
   });
   if (!(skip?.has("tailorDB") && previous)) {
     await withSpan("plan.validateTailorDBTypeNames", () =>
-      assertUniqueTailorDBTypeNamesWithExternal({
+      assertUniqueTargetTailorDBTypeNames({
         client,
         workspaceId,
+        target,
+        targets,
         tailorDBServices: migrationTestServices,
-        externalTailorDBNamespaces: application.externalTailorDBNamespaces,
-        plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
       }),
     );
   }

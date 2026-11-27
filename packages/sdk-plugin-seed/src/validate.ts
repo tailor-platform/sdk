@@ -15,6 +15,7 @@ import {
   noBaseArg,
   selectDatasets,
 } from "./datasets";
+import { entityNameOf, keyedByEntityName } from "./entity-names";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import type { DatasetSelection } from "./datasets";
 
@@ -60,18 +61,25 @@ export const seedValidateCommand = defineAppCommand({
     if (args.path) {
       targetPath = path.resolve(process.cwd(), args.path);
     } else {
-      const context = await loadSeedContext({ configPath: args.config });
+      const context = await loadSeedContext({
+        configPath: args.config,
+        allowSharedTableNames: true,
+      });
       targetPath = path.join(context.distPath, "data");
       datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
       if (args.upsert) {
         assertSeedDataDirectory(targetPath);
         const dataDirs = [...(args["no-base"] ? [] : [targetPath]), ...datasets.dirs];
         for (const namespace of context.namespaces) {
-          loadSeedData(dataDirs, namespace.types, {
-            requireId: true,
-            requiredFieldsByType: namespace.requiredFields,
-            warnAboutStrayWhitespace: false,
-          });
+          loadSeedData(
+            dataDirs,
+            namespace.types.map((type) => entityNameOf(namespace, type)),
+            {
+              requireId: true,
+              requiredFieldsByType: keyedByEntityName(namespace, namespace.requiredFields),
+              warnAboutStrayWhitespace: false,
+            },
+          );
         }
       }
     }

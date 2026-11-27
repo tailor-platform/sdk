@@ -19,6 +19,8 @@ import { type ResolverService } from "#/cli/services/resolver/service";
 import { type ApplicationEnv, fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import {
   assertNoPublishEventsConflict,
+  namespacedNames,
+  type NamespacedNames,
   publishEventsConflict,
   resolvePublishEvents,
   subscribesToEvents,
@@ -26,9 +28,11 @@ import {
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { omitUndefined } from "#/utils/omit-undefined";
+import { namesSharedAcrossNamespaces } from "#/utils/tailordb-type-names";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { defineRequestComparison, isRequestUnchanged } from "./compare";
 import { applicationsListing } from "./deploy-application";
+import { localResolverTriggerNamespace } from "./executor";
 import { resolverFunctionName } from "./function-registry";
 import {
   formatChangeEntriesWithFunctionRegistry,
@@ -203,7 +207,7 @@ export async function planPipeline(
     workspaceId,
     pipelines,
     executors,
-    context.executorUsedResolvers ?? new Set<string>(),
+    context.executorUsedResolvers ?? namespacedNames([]),
     deletedServices,
     (namespace) => ({ ...application.env, ...context.envOverrides?.resolver[namespace] }),
     invokerScope,
@@ -368,7 +372,7 @@ async function planResolvers(
   workspaceId: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   executors: ReadonlyArray<Executor>,
-  initialExecutorUsedResolvers: ReadonlySet<string>,
+  initialExecutorUsedResolvers: NamespacedNames,
   deletedServices: ReadonlyArray<string>,
   envOf: (namespace: string) => ApplicationEnv,
   invokerScope: InvokerScope,
@@ -425,21 +429,31 @@ async function planResolvers(
   // replan's own return value can seed a further reuse the same way.
   const existingResolversByNamespace = new Map<string, PreviousPipelineNamespaceResolvers>();
 
-  const executorUsedResolvers = new Set(initialExecutorUsedResolvers);
-  for (const executor of executors) {
-    if (!subscribesToEvents(executor)) continue;
-    if (executor.trigger.kind === "resolverExecuted") {
-      executorUsedResolvers.add(executor.trigger.resolverName);
-    }
-  }
+  const executorUsedResolvers = namespacedNames([
+    ...initialExecutorUsedResolvers.entries,
+    ...executors.flatMap((executor) => {
+      if (!subscribesToEvents(executor) || executor.trigger.kind !== "resolverExecuted") return [];
+      const namespace = localResolverTriggerNamespace(
+        { resolverServices: pipelines },
+        executor.trigger,
+      );
+      return namespace === undefined ? [] : [{ namespace, name: executor.trigger.resolverName }];
+    }),
+  ]);
 
   // Reject a conflicting opt-out before any request, not partway through.
+  const sharedResolverNames = namesSharedAcrossNamespaces(
+    pipelines.map((pipeline) => Object.values(pipeline.resolvers).map((resolver) => resolver.name)),
+  );
   for (const pipeline of pipelines) {
     for (const resolver of Object.values(pipeline.resolvers)) {
       assertNoPublishEventsConflict({
         explicit: resolver.publishEvents,
-        subscribed: executorUsedResolvers.has(resolver.name),
-        conflict: publishEventsConflict.resolver(resolver.name),
+        subscribed: executorUsedResolvers.has(pipeline.namespace, resolver.name),
+        conflict: publishEventsConflict.resolver(
+          resolver.name,
+          sharedResolverNames.has(resolver.name) ? pipeline.namespace : undefined,
+        ),
       });
     }
   }
@@ -558,7 +572,7 @@ function processResolver(
   namespace: string,
   resolver: Resolver,
   file: string,
-  executorUsedResolvers: ReadonlySet<string>,
+  executorUsedResolvers: NamespacedNames,
   env: ApplicationEnv,
   invokerScope: InvokerScope,
 ): MessageInitShape<typeof PipelineResolverSchema> {
@@ -603,7 +617,7 @@ function processResolver(
 
   const publishExecutionEvents = resolvePublishEvents({
     explicit: resolver.publishEvents,
-    subscribed: executorUsedResolvers.has(resolver.name),
+    subscribed: executorUsedResolvers.has(namespace, resolver.name),
     conflict: publishEventsConflict.resolver(resolver.name),
   });
 

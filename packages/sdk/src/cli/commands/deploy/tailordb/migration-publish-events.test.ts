@@ -8,8 +8,13 @@ import { describe, test, expect, vi, beforeEach } from "vitest";
 import { reconstructSnapshotFromMigrations } from "#/cli/commands/tailordb/migrate/snapshot";
 import { errorToJson } from "#/cli/shared/error-json";
 import { logger } from "#/cli/shared/logger";
+import { namespacedNames } from "#/cli/shared/publish-events";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import * as migrationModule from "./migration";
+import {
+  generateMigrationPhaseManifest,
+  resolveMigrationSnapshotSettings,
+} from "./migration-execution";
 import {
   createPlanResult,
   createRemoteCheckpoint,
@@ -26,6 +31,7 @@ import {
   typeEntry,
 } from "./test-helpers/migration-apply";
 import { applyTailorDB, type MaintenanceModeRelease } from "./index";
+import type { TailorDBDeployInput } from "#/cli/commands/tailordb/migrate/schema-checks";
 import type { TailorDBSnapshotType } from "#/cli/commands/tailordb/migrate/snapshot";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
@@ -143,7 +149,9 @@ describe("migration flow: namespace restrictions while migrations run", () => {
           snapshotTable(name, { status: { type: "string", required: true } }),
         ),
       context: {
-        executorUsedTables: new Set<string>(options.subscribedTables ?? []),
+        executorUsedTables: namespacedNames(
+          (options.subscribedTables ?? []).map((name) => ({ namespace: "test-ns", name })),
+        ),
         config: {
           ...mockConfig,
           maintenanceMode: "maintenanceMode" in options ? options.maintenanceMode : "migration",
@@ -1858,5 +1866,41 @@ describe("migration flow: namespace restrictions while migrations run", () => {
       expect(lastOrderSettings(client)).toEqual(expect.objectContaining(released));
       expect(lastOrderSettings(client)).not.toHaveProperty("disableGqlOperations");
     });
+  });
+});
+
+describe("migration flow: publishing a table that several namespaces define", () => {
+  const customer = snapshotTable("Customer", { name: { type: "string", required: true } });
+  const executorUsedTables = namespacedNames([{ namespace: "crm-db", name: "Customer" }]);
+  const deployInput = (namespace: string): TailorDBDeployInput => ({
+    namespace,
+    config: { files: [] },
+    types: { Customer: customer },
+  });
+
+  test.each([
+    ["shop-db", false],
+    ["crm-db", true],
+  ])("a migration phase writes %s's Customer with publishing %s", (namespace, expected) => {
+    const manifest = generateMigrationPhaseManifest(customer, namespace, {
+      tailorDBInputs: [deployInput("shop-db"), deployInput("crm-db")],
+      executorUsedTables,
+      restricted: false,
+    });
+
+    expect(manifest.schema?.settings?.publishRecordEvents).toBe(expected);
+  });
+
+  test.each([
+    ["shop-db", false],
+    ["crm-db", true],
+  ])("the restore writes %s's Customer with publishing %s", (namespace, expected) => {
+    const settings = resolveMigrationSnapshotSettings(
+      { ...snapshotAt({ 0: { Customer: customer } }), namespace },
+      deployInput(namespace),
+      executorUsedTables,
+    );
+
+    expect(settings.get("Customer")?.publishRecordEvents).toBe(expected);
   });
 });

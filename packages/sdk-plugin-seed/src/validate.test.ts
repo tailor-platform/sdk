@@ -169,6 +169,28 @@ describe("seedValidateCommand", () => {
     expect(logger.out).toHaveBeenCalledWith({ valid: true, path: dataDir });
   });
 
+  test("checks a table several namespaces define in the file named after its namespace", async () => {
+    const context = await sdk.loadSeedContext();
+    context.namespaces = ["tailordb", "archive"].map((namespace) => ({
+      namespace,
+      types: ["Item"],
+      dependencies: { Item: [] },
+      selfRefTypes: [],
+      requiredFields: { Item: ["name"] },
+      entityNames: { Item: `${namespace}.Item` },
+    }));
+    writeLines(path.join(dataDir, "tailordb.Item.jsonl"), [{ id: "i1", name: "kept" }]);
+    writeLines(path.join(dataDir, "archive.Item.jsonl"), [{ id: "i2", name: null }]);
+
+    const result = await runValidate(["--upsert"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(sdk.loadSeedContext).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSharedTableNames: true }),
+    );
+    expect(errorToJson(result.error).error.message).toContain("archive.Item.jsonl:1");
+  });
+
   test("rejects --upsert together with a path", async () => {
     const result = await runValidate(["--upsert", dataDir]);
     expect(result.exitCode).toBe(1);

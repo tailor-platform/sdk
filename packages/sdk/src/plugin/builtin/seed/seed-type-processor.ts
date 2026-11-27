@@ -1,5 +1,9 @@
 import { assertDefined } from "#/utils/assert";
 import { collectForeignKeyReferences } from "#/utils/foreign-key-targets";
+import {
+  namesSharedAcrossNamespaces,
+  qualifiedTailorDBTypeName,
+} from "#/utils/tailordb-type-names";
 import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { TailorDBNamespaceData } from "#/plugin/types";
@@ -90,6 +94,12 @@ export interface SeedNamespaceConfig {
    * instead of assuming `id`. Keyed by the same names as `selfRefFields`.
    */
   selfRefKeys?: Record<string, Record<string, string>>;
+  /**
+   * The name a table goes by in seed data files and on the `tailor seed` command line, for a table
+   * whose name several namespaces define: `<namespace>.<Table>`. A table not listed goes by its
+   * own name.
+   */
+  entityNames?: Record<string, string>;
 }
 
 /**
@@ -109,9 +119,10 @@ function collectRelationTargetKeys(tailordb: TailorDBNamespaceData[]): Map<strin
     for (const type of Object.values(ns.tables)) {
       const addTarget = (targetType: string | undefined, key: string | undefined): void => {
         if (!targetType || !key) return;
-        const keys = targetKeysByType.get(targetType) ?? new Set<string>();
+        const typeKey = relationTargetKey(ns.namespace, targetType);
+        const keys = targetKeysByType.get(typeKey) ?? new Set<string>();
         keys.add(key);
-        targetKeysByType.set(targetType, keys);
+        targetKeysByType.set(typeKey, keys);
       };
       for (const field of Object.values(type.fields)) {
         addTarget(
@@ -127,6 +138,11 @@ function collectRelationTargetKeys(tailordb: TailorDBNamespaceData[]): Map<strin
   return targetKeysByType;
 }
 
+// A relation targets a table of its own namespace.
+function relationTargetKey(namespace: string, typeName: string): string {
+  return JSON.stringify([namespace, typeName]);
+}
+
 /**
  * Build per-namespace seed ordering information from TailorDB namespace data.
  * @param tailordb - TailorDB namespaces with their tables
@@ -136,6 +152,7 @@ export function buildSeedNamespaceConfigs(
   tailordb: TailorDBNamespaceData[],
 ): SeedNamespaceConfig[] {
   const relationTargetKeys = collectRelationTargetKeys(tailordb);
+  const sharedTypeNames = namesSharedAcrossNamespaces(tailordb.map((ns) => Object.keys(ns.tables)));
 
   return tailordb.map((ns) => {
     const types: string[] = [];
@@ -161,7 +178,9 @@ export function buildSeedNamespaceConfigs(
         `source info missing for table: ${tableName}`,
       );
       const linesDb = processLinesDb(type, source);
-      const keptRelationKeys = relationTargetKeys.get(typeInfo.name);
+      const keptRelationKeys = relationTargetKeys.get(
+        relationTargetKey(ns.namespace, typeInfo.name),
+      );
       omitFields[typeInfo.name] = keptRelationKeys
         ? linesDb.omitFields.filter((fieldName) => !keptRelationKeys.has(fieldName))
         : linesDb.omitFields;
@@ -175,6 +194,14 @@ export function buildSeedNamespaceConfigs(
         .map(([fieldName]) => fieldName);
     }
 
+    const entityNames = Object.fromEntries(
+      types
+        .filter((typeName) => sharedTypeNames.has(typeName))
+        .map((typeName) => [
+          typeName,
+          qualifiedTailorDBTypeName(ns.namespace, typeName, sharedTypeNames),
+        ]),
+    );
     return {
       namespace: ns.namespace,
       types,
@@ -184,6 +211,7 @@ export function buildSeedNamespaceConfigs(
       selfRefKeys,
       requiredFields,
       omitFields,
+      ...(Object.keys(entityNames).length > 0 ? { entityNames } : {}),
     };
   });
 }

@@ -14,7 +14,8 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { type ApplicationEnv, type OperatorClient } from "#/cli/shared/client";
-import { internalError, locatedCLIError } from "#/cli/shared/errors";
+import { type CLIError, internalError, locatedCLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
@@ -44,9 +45,13 @@ import {
   writeMetadataLabels,
 } from "./label";
 import { createOwnershipTracker, fetchExistingResourcesWithLabels } from "./owned-resource";
-import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { ApplyPhase, NamespacesByName, PlanContext } from "#/cli/commands/deploy/types";
 import type { ConfigServices } from "#/cli/services/application";
-import type { Executor } from "#/types/executor.generated";
+import type {
+  Executor,
+  ResolverExecutedTrigger,
+  TailorDBTrigger,
+} from "#/types/executor.generated";
 import type { DeployApplication } from "./deploy-application";
 
 type ExistingExecutors = WithLabel<
@@ -296,63 +301,79 @@ export function formatExecutorChangeEntries(
   );
 }
 
-/**
- * Resolve a resource's namespace from same-run peer configs, throwing when the
- * name is claimed by more than one namespace in the deploy run.
- * @param sameRunNamespaces - Namespaces keyed by resource name across the deploy run
- * @param resource - Resource to resolve and the executor whose trigger names it
- * @returns The owning namespace, or undefined when the name is unknown
- */
-function resolveSameRunNamespace(
-  sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
-  resource: NamespacedResource,
-): string | undefined {
-  const { executor, label, name } = resource;
-  if (!sameRunNamespaces?.has(name)) {
-    return undefined;
-  }
-  const namespace = sameRunNamespaces.get(name);
-  if (!namespace) {
-    throw locatedCLIError(
-      { file: executor.file },
-      {
-        code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
-        message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces in this deploy run define.`,
-        suggestion: "Move the trigger to the application that owns it, or use unique names.",
-        context: { executor: executor.name, resource: name },
-      },
-    );
-  }
-  return namespace;
-}
-
-/**
- * Find the local TailorDB namespace that declares the given table.
- * @param application - Services the config defines
- * @param tableName - TailorDB table name to look up
- * @returns The declaring namespace, or undefined when no local service has it
- */
-function findTailorDBNamespace(
-  application: Readonly<ConfigServices>,
+function tailorDBNamespacesDefining(
+  application: Readonly<Pick<ConfigServices, "tailorDBServices">>,
   tableName: string,
+): string[] {
+  return application.tailorDBServices
+    .filter((service) => Object.hasOwn(service.types, tableName))
+    .map((service) => service.namespace);
+}
+
+function resolverNamespacesDefining(
+  application: Readonly<Pick<ConfigServices, "resolverServices">>,
+  resolverName: string,
+): string[] {
+  return application.resolverServices
+    .filter((service) =>
+      Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+    )
+    .map((service) => service.namespace);
+}
+
+type SeveralDefiningNamespaces = "none" | "first";
+
+function pickLocalNamespace(
+  definingNamespaces: ReadonlyArray<string>,
+  namedNamespace: string | undefined,
+  whenSeveral: SeveralDefiningNamespaces,
 ): string | undefined {
-  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, tableName))
-    ?.namespace;
+  if (namedNamespace !== undefined) {
+    return definingNamespaces.includes(namedNamespace) ? namedNamespace : undefined;
+  }
+  return definingNamespaces.length === 1 || whenSeveral === "first"
+    ? definingNamespaces[0]
+    : undefined;
+}
+
+type TailorDBTriggerTarget = Pick<TailorDBTrigger, "tableName" | "namespace">;
+
+type ResolverTriggerTarget = Pick<ResolverExecutedTrigger, "resolverName" | "namespace">;
+
+/**
+ * Find the local TailorDB namespace a TailorDB trigger subscribes in.
+ * @param application - Services the config defines
+ * @param trigger - The table the trigger names, and its namespace when it names one
+ * @returns The namespace the trigger names when it defines the table, else the one local namespace
+ * that defines it; undefined when there is no such namespace
+ */
+export function localTailorDBTriggerNamespace(
+  application: Readonly<Pick<ConfigServices, "tailorDBServices">>,
+  trigger: TailorDBTriggerTarget,
+): string | undefined {
+  return pickLocalNamespace(
+    tailorDBNamespacesDefining(application, trigger.tableName),
+    trigger.namespace,
+    "none",
+  );
 }
 
 /**
- * Find the local resolver namespace that declares the given resolver.
+ * Find the local resolver namespace a resolverExecuted trigger subscribes in.
  * @param application - Services the config defines
- * @param resolverName - Resolver name to look up
- * @returns The declaring namespace, or undefined when no local service has it
+ * @param trigger - The resolver the trigger names, and its namespace when it names one
+ * @returns The namespace the trigger names when it defines the resolver, else the first local
+ * namespace that defines it; undefined when there is no such namespace
  */
-export function findResolverNamespace(
-  application: Readonly<ConfigServices>,
-  resolverName: string,
+export function localResolverTriggerNamespace(
+  application: Readonly<Pick<ConfigServices, "resolverServices">>,
+  trigger: ResolverTriggerTarget,
 ): string | undefined {
-  return application.resolverServices.find((service) =>
-    Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
-  )?.namespace;
+  return pickLocalNamespace(
+    resolverNamespacesDefining(application, trigger.resolverName),
+    trigger.namespace,
+    "first",
+  );
 }
 
 /** A TailorDB table or resolver an executor trigger names. */
@@ -365,26 +386,108 @@ type NamespacedResource = {
 
 type ResolveNamespaceParams = {
   resource: NamespacedResource;
+  /** Namespace the trigger names, when it names one. */
+  namedNamespace: string | undefined;
   localNamespaces: ReadonlyArray<string>;
-  findLocalNamespace: () => string | undefined;
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined> | undefined;
+  /** Local namespaces that define the resource. */
+  definingNamespaces: ReadonlyArray<string>;
+  whenSeveral: SeveralDefiningNamespaces;
+  sameRunNamespaces?: NamespacesByName | undefined;
 };
 
+function ambiguousNamespaceError(
+  resource: NamespacedResource,
+  namespaces: ReadonlyArray<string>,
+): CLIError {
+  const { executor, label, name } = resource;
+  return locatedCLIError(
+    { file: executor.file },
+    {
+      code: "DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS",
+      message: `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces define: ${namespaces.join(", ")}.`,
+      suggestion:
+        "Name the namespace with the trigger's `namespace` option. For an executor a plugin generates, the plugin has to set it.",
+      context: { executor: executor.name, resource: name, namespaces: [...namespaces] },
+    },
+  );
+}
+
+/**
+ * Resolve a resource's namespace among the namespaces of the deploy run that the config sees.
+ * @param sameRunNamespaces - Namespaces keyed by the names of the resources they define
+ * @param resource - Resource to resolve and the executor whose trigger names it
+ * @param namedNamespace - Namespace the trigger names, when it names one
+ * @returns The namespace, or undefined when none of them defines the resource there
+ * @throws CLIError coded `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS` when the trigger names no namespace
+ * and several define the resource
+ */
+function resolveSameRunNamespace(
+  sameRunNamespaces: NamespacesByName | undefined,
+  resource: NamespacedResource,
+  namedNamespace: string | undefined,
+): string | undefined {
+  const defining = sameRunNamespaces?.get(resource.name);
+  if (defining === undefined) {
+    return undefined;
+  }
+  if (namedNamespace !== undefined) {
+    return defining.has(namedNamespace) ? namedNamespace : undefined;
+  }
+  if (defining.size > 1) {
+    throw ambiguousNamespaceError(resource, [...defining]);
+  }
+  const [namespace] = defining;
+  return namespace;
+}
+
+function notFoundInNamespaceError(resource: NamespacedResource, namespace: string): CLIError {
+  const { executor, label, name } = resource;
+  return locatedCLIError(
+    { file: executor.file },
+    {
+      code: "DEPLOY_RESOURCE_NOT_FOUND",
+      message: `Executor "${executor.name}" triggers on ${label} "${name}" in namespace "${namespace}", which does not define it.`,
+      context: { executor: executor.name, resource: name, namespace },
+    },
+  );
+}
+
 function resolveNamespace(params: ResolveNamespaceParams): string {
-  const { resource, localNamespaces, findLocalNamespace, sameRunNamespaces } = params;
-  const localNamespace = findLocalNamespace();
+  const {
+    resource,
+    namedNamespace,
+    localNamespaces,
+    definingNamespaces,
+    whenSeveral,
+    sameRunNamespaces,
+  } = params;
+  const { executor, label, name } = resource;
+  const localNamespace = pickLocalNamespace(definingNamespaces, namedNamespace, whenSeveral);
   if (localNamespace !== undefined) {
+    if (namedNamespace === undefined && definingNamespaces.length > 1) {
+      logger.warn(
+        `Executor "${executor.name}" triggers on ${label} "${name}", which several namespaces define: ${definingNamespaces.join(", ")}. It subscribes to the one in "${localNamespace}"; name another with the trigger's \`namespace\` option.`,
+      );
+    }
     return localNamespace;
   }
-  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resource);
+  if (namedNamespace === undefined && definingNamespaces.length > 1) {
+    throw ambiguousNamespaceError(resource, definingNamespaces);
+  }
+  if (namedNamespace !== undefined && localNamespaces.includes(namedNamespace)) {
+    throw notFoundInNamespaceError(resource, namedNamespace);
+  }
+  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resource, namedNamespace);
   if (sameRunNamespace !== undefined) {
     return sameRunNamespace;
   }
-  const sameRunAvailableNamespaces = sameRunNamespaces
-    ? [...new Set([...sameRunNamespaces.values()].filter((value) => value !== undefined))]
-    : [];
+  if (namedNamespace !== undefined) {
+    throw notFoundInNamespaceError(resource, namedNamespace);
+  }
+  const sameRunAvailableNamespaces = new Set(
+    [...(sameRunNamespaces?.values() ?? [])].flatMap((namespaces) => [...namespaces]),
+  );
   const available = [...localNamespaces, ...sameRunAvailableNamespaces];
-  const { executor, label, name } = resource;
   throw locatedCLIError(
     { file: executor.file },
     {
@@ -398,13 +501,15 @@ function resolveNamespace(params: ResolveNamespaceParams): string {
 function resolveTailorDBNamespace(
   application: Readonly<ConfigServices>,
   executor: DefinitionRef,
-  typeName: string,
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+  trigger: TailorDBTriggerTarget,
+  sameRunNamespaces?: NamespacesByName,
 ): string {
   return resolveNamespace({
-    resource: { executor, label: "TailorDB table", name: typeName },
+    resource: { executor, label: "TailorDB table", name: trigger.tableName },
+    namedNamespace: trigger.namespace,
     localNamespaces: application.tailorDBServices.map((service) => service.namespace),
-    findLocalNamespace: () => findTailorDBNamespace(application, typeName),
+    definingNamespaces: tailorDBNamespacesDefining(application, trigger.tableName),
+    whenSeveral: "none",
     sameRunNamespaces,
   });
 }
@@ -412,13 +517,15 @@ function resolveTailorDBNamespace(
 function resolveResolverNamespace(
   application: Readonly<ConfigServices>,
   executor: DefinitionRef,
-  resolverName: string,
-  sameRunNamespaces?: ReadonlyMap<string, string | undefined>,
+  trigger: ResolverTriggerTarget,
+  sameRunNamespaces?: NamespacesByName,
 ): string {
   return resolveNamespace({
-    resource: { executor, label: "Resolver", name: resolverName },
+    resource: { executor, label: "Resolver", name: trigger.resolverName },
+    namedNamespace: trigger.namespace,
     localNamespaces: application.resolverServices.map((service) => service.namespace),
-    findLocalNamespace: () => findResolverNamespace(application, resolverName),
+    definingNamespaces: resolverNamespacesDefining(application, trigger.resolverName),
+    whenSeveral: "first",
     sameRunNamespaces,
   });
 }
@@ -602,7 +709,7 @@ function protoExecutor(
           namespaceName: resolveTailorDBNamespace(
             application,
             definition,
-            trigger.tableName,
+            trigger,
             context.tailorDBTypeNamespaces,
           ),
           typeName: trigger.tableName,
@@ -621,7 +728,7 @@ function protoExecutor(
           namespaceName: resolveResolverNamespace(
             application,
             definition,
-            trigger.resolverName,
+            trigger,
             context.resolverNamespaces,
           ),
           resolverName: trigger.resolverName,

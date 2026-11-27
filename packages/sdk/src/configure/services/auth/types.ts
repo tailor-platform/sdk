@@ -176,7 +176,8 @@ type UserProfile<
    * TailorDB namespace where the user table is defined.
    *
    * Usually auto-resolved, so you don't need to specify this.
-   * Required only when multiple TailorDBs exist and the table is in an external TailorDB.
+   * Required when multiple TailorDBs exist and the table is in an external TailorDB, or when
+   * several TailorDB namespaces define a table with the user table's name.
    */
   namespace?: string;
   type: User;

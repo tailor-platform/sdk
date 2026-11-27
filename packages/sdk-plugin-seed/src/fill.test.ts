@@ -395,6 +395,14 @@ describe("seedFillCommand", () => {
     });
   }
 
+  test("loads a seed context that accepts tables several namespaces define", async () => {
+    expect((await runFill([])).exitCode).toBe(0);
+
+    expect(sdk.loadSeedContext).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSharedTableNames: true }),
+    );
+  });
+
   test.each([["--dataset", "preview"], ["--all-datasets"]])(
     "fills only dataset rows with %j, using the base schema files",
     async (...selection) => {

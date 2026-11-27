@@ -1,19 +1,27 @@
 import { CLIError, locatedCLIError } from "#/cli/shared/errors";
 import {
   eventSourceLabel,
+  namespacedNames,
   publishEventsConflict,
   subscribesToEvents,
+  type NamespacedNames,
 } from "#/cli/shared/publish-events";
-import { collectConfigIdpNames, findResolverNamespace } from "./executor";
+import {
+  collectConfigIdpNames,
+  localResolverTriggerNamespace,
+  localTailorDBTriggerNamespace,
+} from "./executor";
 import { applicationIdOf, dependedByAppLabelKey, eventSourceKey } from "./label";
 import {
   collectVisibleIdpNames,
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
+  soleNamespace,
 } from "./visible-resources";
 import type { Executor } from "#/types/executor.generated";
 import type { BuiltDeploymentTarget } from "./deployment-target";
 import type { DependentAppsByResource, DeployDependencyReason } from "./label";
+import type { NamespacesByName } from "./types";
 import type { WorkflowEventSubscribers } from "./workflow";
 
 type SubscribedIdpNameTrigger = { idp?: string | undefined };
@@ -53,6 +61,8 @@ export type EventSubscription = {
   resource: string;
   /** Stable identity of the subscribed resource, keying its dependency records. */
   key: string | undefined;
+  /** Namespace of a subscribed TailorDB table or resolver, when it resolves to one. */
+  namespace: string | undefined;
   /**
    * Whether the owner declares `publishEvents` on the subscribed resource, which
    * pins the value and leaves nothing for a dependency record to protect.
@@ -128,6 +138,7 @@ export function collectEventSubscriptions(
         subscriber,
         executorName: executor.name,
         resource: lookup.resource,
+        namespace: lookup.namespace,
         disabled: !subscribesToEvents(executor),
         trigger: lookup.trigger,
       };
@@ -227,14 +238,16 @@ function publishingSubscriptions(
 /**
  * Collect the TailorDB tables subscribed to among the given subscriptions.
  * @param subscriptions - Subscriptions owned by the target being planned
- * @returns Subscribed table names
+ * @returns Subscribed tables with their namespaces
  */
 export function subscribedTailorDBTables(
   subscriptions: ReadonlyArray<EventSubscription>,
-): ReadonlySet<string> {
-  return new Set(
-    publishingSubscriptions(subscriptions).flatMap((subscription) =>
-      subscription.trigger.kind === "tailordb" ? [subscription.trigger.tableName] : [],
+): NamespacedNames {
+  return namespacedNames(
+    publishingSubscriptions(subscriptions).flatMap(({ trigger, namespace }) =>
+      trigger.kind === "tailordb" && namespace !== undefined
+        ? [{ namespace, name: trigger.tableName }]
+        : [],
     ),
   );
 }
@@ -242,14 +255,16 @@ export function subscribedTailorDBTables(
 /**
  * Collect the resolvers subscribed to among the given subscriptions.
  * @param subscriptions - Subscriptions owned by the target being planned
- * @returns Subscribed resolver names
+ * @returns Subscribed resolvers with their namespaces
  */
 export function subscribedResolvers(
   subscriptions: ReadonlyArray<EventSubscription>,
-): ReadonlySet<string> {
-  return new Set(
-    publishingSubscriptions(subscriptions).flatMap((subscription) =>
-      subscription.trigger.kind === "resolverExecuted" ? [subscription.trigger.resolverName] : [],
+): NamespacedNames {
+  return namespacedNames(
+    publishingSubscriptions(subscriptions).flatMap(({ trigger, namespace }) =>
+      trigger.kind === "resolverExecuted" && namespace !== undefined
+        ? [{ namespace, name: trigger.resolverName }]
+        : [],
     ),
   );
 }
@@ -364,12 +379,11 @@ type PublishingTrigger = Extract<
 
 /**
  * What one subscribing config can see, in the same terms the executor's own
- * namespace resolution uses. A namespace maps to `undefined` when the subscriber
- * sees the name in more than one place.
+ * namespace resolution uses.
  */
 type SubscriberVisibility = {
-  tailorDBTypes: ReadonlyMap<string, string | undefined>;
-  resolvers: ReadonlyMap<string, string | undefined>;
+  tailorDBTypes: NamespacesByName;
+  resolvers: NamespacesByName;
   idps: ReadonlySet<string>;
 };
 
@@ -393,7 +407,15 @@ type EventSourceLookup = {
   resource: string;
   /** The trigger, narrowed to a kind that names a publishing resource. */
   trigger: PublishingTrigger;
-  /** Whether `target` declares the resource. */
+  /** Namespace of a TailorDB table or resolver, when the subscriber resolves it to one. */
+  namespace?: string | undefined;
+  /**
+   * Whether `target` declares the resource, or the namespace the trigger names for it.
+   *
+   * Matching a namespaced resource on its name alone would count a same-named
+   * resource in a namespace the subscriber does not resolve it to, and drop the
+   * subscription as ambiguous or give it to the wrong owner.
+   */
   declaredBy: (target: BuiltDeploymentTarget) => boolean | undefined;
   /**
    * Whether `target` declares `publishEvents` on the resource, so the value does
@@ -405,13 +427,7 @@ type EventSourceLookup = {
    * dependency records. Undefined when the owner does not declare it after all.
    */
   keyIn: (owner: BuiltDeploymentTarget) => string | undefined;
-  /**
-   * Narrow peer configs to the ones the subscriber's own view resolves to.
-   *
-   * Matching on the name alone would count a same-named resource in a namespace
-   * the subscriber cannot see, and drop the subscription as ambiguous even though
-   * the executor resolves it to exactly one owner.
-   */
+  /** Narrow peer configs to the ones the subscriber's own view resolves to. */
   narrowOwners: (candidates: ReadonlyArray<BuiltDeploymentTarget>) => OwnerCandidates;
   /**
    * What `target` declares as owned elsewhere that could hold this resource,
@@ -465,15 +481,6 @@ function describeExternal(kind: string, names: ReadonlyArray<string>): string | 
   return `external ${plural} ${names.map((name) => `"${name}"`).join(", ")}`;
 }
 
-function declaresTailorDBType(
-  target: BuiltDeploymentTarget,
-  tableName: string,
-): boolean | undefined {
-  return (
-    target.application.tailorDBServices.some((service) => service.types[tableName]) || undefined
-  );
-}
-
 function declaresResolver(
   target: BuiltDeploymentTarget,
   resolverName: string,
@@ -500,12 +507,16 @@ function declaresWorkflow(
 // A resource that declares publishEvents keeps that value whatever the run covers,
 // so nothing about it needs recording. An explicit `false` with a subscriber is
 // rejected by assertNoPublishEventsConflict, which explains that case on its own.
-function pinsTailorDBType(target: BuiltDeploymentTarget, tableName: string): boolean {
-  for (const service of target.application.tailorDBServices) {
-    const type = service.types[tableName];
-    if (type) return type.settings.publishEvents !== undefined;
-  }
-  return false;
+function pinsTailorDBTypeIn(
+  target: BuiltDeploymentTarget,
+  namespace: string,
+  tableName: string,
+): boolean {
+  return target.application.tailorDBServices.some(
+    (service) =>
+      service.namespace === namespace &&
+      service.types[tableName]?.settings.publishEvents !== undefined,
+  );
 }
 
 // Resolver names are only namespace-unique, so the namespace the subscriber sees
@@ -551,29 +562,37 @@ function pinsEveryJobOfWorkflow(target: BuiltDeploymentTarget, workflowName: str
   return jobNames.length > 0 && jobNames.every((jobName) => declared.has(jobName));
 }
 
-function tailorDBTypeNamespaceIn(
-  target: BuiltDeploymentTarget,
-  tableName: string,
-): string | undefined {
-  return target.application.tailorDBServices.find((service) => service.types[tableName])?.namespace;
-}
-
-type NarrowByVisibleNamespaceParams = {
-  candidates: ReadonlyArray<BuiltDeploymentTarget>;
-  visible: ReadonlyMap<string, string | undefined>;
-  resourceKey: string;
+type NamespacedDeclarationParams = {
+  /** Namespace the trigger names, when it names one. */
+  namedNamespace: string | undefined;
+  /** Namespace the subscriber resolves the resource to, when it resolves one. */
+  namespace: string | undefined;
+  definesNamespace: (target: BuiltDeploymentTarget, namespace: string) => boolean;
   declaresIn: (target: BuiltDeploymentTarget, namespace: string) => boolean;
+  declaresAnywhere: (target: BuiltDeploymentTarget) => boolean | undefined;
 };
 
-// A namespaced resource is owned by whichever config declares it in the one
-// namespace the subscriber sees it through. An absent key means the subscriber
-// cannot see the name at all, which the missing-owner error explains.
-function narrowByVisibleNamespace(params: NarrowByVisibleNamespaceParams): OwnerCandidates {
-  const { candidates, visible, resourceKey, declaresIn } = params;
-  if (!visible.has(resourceKey)) return [];
-  const namespace = visible.get(resourceKey);
-  if (namespace === undefined) return "ambiguous";
-  return candidates.filter((target) => declaresIn(target, namespace));
+// A trigger that names its namespace belongs to the config defining that namespace, which leaves
+// a table or resolver missing there to the executor plan's error.
+function declaresNamespacedResource(
+  params: NamespacedDeclarationParams,
+): EventSourceLookup["declaredBy"] {
+  const { namedNamespace, namespace, definesNamespace, declaresIn, declaresAnywhere } = params;
+  if (namedNamespace !== undefined) return (target) => definesNamespace(target, namedNamespace);
+  if (namespace !== undefined) return (target) => declaresIn(target, namespace);
+  return declaresAnywhere;
+}
+
+// `declaredBy` has already matched the namespace the subscriber resolves. Without one, a name the
+// subscriber sees is held by several namespaces, and a name it cannot see at all is left to the
+// missing-owner error.
+function ownersOfNamespacedResource(
+  candidates: ReadonlyArray<BuiltDeploymentTarget>,
+  namespace: string | undefined,
+  visibleNamespaces: ReadonlySet<string> | undefined,
+): OwnerCandidates {
+  if (namespace !== undefined) return [...candidates];
+  return visibleNamespaces === undefined ? [] : "ambiguous";
 }
 
 function declaresTailorDBTypeIn(
@@ -612,27 +631,47 @@ function eventSourceLookup(
 ): EventSourceLookup | undefined {
   const { trigger } = executor;
   switch (trigger.kind) {
-    case "tailordb":
+    case "tailordb": {
+      // Resolved in the same order as the resolver case below; a trigger that names
+      // its namespace skips the search.
+      const namedNamespace = trigger.namespace;
+      const namespace =
+        localTailorDBTriggerNamespace(subscriber.application, trigger) ??
+        namedNamespace ??
+        soleNamespace(visibility.tailorDBTypes.get(trigger.tableName));
       return {
-        resource: publishEventsConflict.tailorDBType(trigger.tableName).resource,
+        resource: eventSourceLabel.tailorDBType(trigger.tableName, namedNamespace),
         trigger,
-        declaredBy: (target) => declaresTailorDBType(target, trigger.tableName),
-        pinned: (target) => pinsTailorDBType(target, trigger.tableName),
-        keyIn: (owner) => {
-          const namespace = tailorDBTypeNamespaceIn(owner, trigger.tableName);
-          return namespace && eventSourceKey.tailorDBType(namespace, trigger.tableName);
-        },
+        namespace,
+        declaredBy: declaresNamespacedResource({
+          namedNamespace,
+          namespace,
+          definesNamespace: (target, name) =>
+            target.application.tailorDBServices.some((service) => service.namespace === name),
+          declaresIn: (target, name) => declaresTailorDBTypeIn(target, name, trigger.tableName),
+          declaresAnywhere: (target) =>
+            target.application.tailorDBServices.some((service) =>
+              Boolean(service.types[trigger.tableName]),
+            ),
+        }),
+        pinned: (target) =>
+          namespace !== undefined && pinsTailorDBTypeIn(target, namespace, trigger.tableName),
+        keyIn: () => namespace && eventSourceKey.tailorDBType(namespace, trigger.tableName),
         narrowOwners: (candidates) =>
-          narrowByVisibleNamespace({
+          ownersOfNamespacedResource(
             candidates,
-            visible: visibility.tailorDBTypes,
-            resourceKey: trigger.tableName,
-            declaresIn: (target, namespace) =>
-              declaresTailorDBTypeIn(target, namespace, trigger.tableName),
-          }),
+            namespace,
+            visibility.tailorDBTypes.get(trigger.tableName),
+          ),
         externalHint: (target) =>
-          describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
+          describeExternal(
+            "TailorDB namespace",
+            externalTailorDBNamespaces(target).filter(
+              (name) => namedNamespace === undefined || name === namedNamespace,
+            ),
+          ),
       };
+    }
     case "resolverExecuted": {
       // The namespace the subscriber resolves the name through, in the same order
       // the trigger itself resolves it: a locally declared resolver wins, and only
@@ -640,26 +679,39 @@ function eventSourceLookup(
       // name would pick whichever namespace comes first instead, and reading only
       // the visible map would call a local name ambiguous because an external
       // namespace happens to hold it too.
+      const namedNamespace = trigger.namespace;
       const namespace =
-        findResolverNamespace(subscriber.application, trigger.resolverName) ??
-        visibility.resolvers.get(trigger.resolverName);
+        localResolverTriggerNamespace(subscriber.application, trigger) ??
+        namedNamespace ??
+        soleNamespace(visibility.resolvers.get(trigger.resolverName));
       return {
-        resource: publishEventsConflict.resolver(trigger.resolverName).resource,
+        resource: eventSourceLabel.resolver(trigger.resolverName, namedNamespace),
         trigger,
-        declaredBy: (target) => declaresResolver(target, trigger.resolverName),
+        namespace,
+        declaredBy: declaresNamespacedResource({
+          namedNamespace,
+          namespace,
+          definesNamespace: (target, name) =>
+            target.application.resolverServices.some((service) => service.namespace === name),
+          declaresIn: (target, name) => declaresResolverIn(target, name, trigger.resolverName),
+          declaresAnywhere: (target) => declaresResolver(target, trigger.resolverName),
+        }),
         pinned: (target) =>
           namespace !== undefined && pinsResolverIn(target, namespace, trigger.resolverName),
         keyIn: () => namespace && eventSourceKey.resolver(namespace, trigger.resolverName),
         narrowOwners: (candidates) =>
-          narrowByVisibleNamespace({
+          ownersOfNamespacedResource(
             candidates,
-            visible: visibility.resolvers,
-            resourceKey: trigger.resolverName,
-            declaresIn: (target, namespace) =>
-              declaresResolverIn(target, namespace, trigger.resolverName),
-          }),
+            namespace,
+            visibility.resolvers.get(trigger.resolverName),
+          ),
         externalHint: (target) =>
-          describeExternal("resolver namespace", externalResolverNamespaces(target)),
+          describeExternal(
+            "resolver namespace",
+            externalResolverNamespaces(target).filter(
+              (name) => namedNamespace === undefined || name === namedNamespace,
+            ),
+          ),
       };
     }
     case "idpUser": {

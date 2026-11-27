@@ -59,7 +59,10 @@ export const seedFillCommand = defineAppCommand({
     if (args.path) {
       targetPath = path.resolve(process.cwd(), args.path);
     } else {
-      const context = await loadSeedContext({ configPath: args.config });
+      const context = await loadSeedContext({
+        configPath: args.config,
+        allowSharedTableNames: true,
+      });
       targetPath = path.join(context.distPath, "data");
       datasets = selectDatasets(context, args.dataset, args["all-datasets"]);
     }

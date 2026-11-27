@@ -1191,7 +1191,7 @@ describe("v3/config-to-workspace", () => {
       file: "b/db/user.ts",
       line: 1,
       message:
-        "Namespaces a and b both define User, and a workspace config needs TailorDB type names to be unique across its namespaces. Rename one of them.",
+        "Namespaces a and b both define User, so a record trigger or `userProfile` that names User without `namespace` fails, and seedPlugin names its data files a.User.jsonl and b.User.jsonl. Add `namespace` where they name User, and move any seed data to those files.",
     });
   });
 
@@ -1213,7 +1213,7 @@ describe("v3/config-to-workspace", () => {
           file: "b/resolvers/getUser.ts",
           line: 1,
           message:
-            "Namespaces a and b both define getUser, and an executor's resolverExecutedTrigger() names a resolver only by its name, so it subscribes to one of them. Rename one of them.",
+            "Namespaces a and b both define getUser, so a resolverExecutedTrigger() that names getUser without `namespace` subscribes to the first of them. Add `namespace` to it.",
         },
       ],
     ],

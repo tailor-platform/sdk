@@ -65,6 +65,10 @@ tailor seed studio
 tailor seed studio --dataset cogs
 ```
 
+### Tables several namespaces define
+
+When several TailorDB namespaces define a table with the same name, each goes by `<namespace>.<Table>`: its files are `seed/data/shop-db.Customer.jsonl` and `seed/data/shop-db.Customer.schema.ts`, the commands take that name as an entity (`tailor seed apply shop-db.Customer`), and `--json` results key it that way. A table whose name only one namespace defines keeps its own name. The commands stop when `seed/data/Customer.jsonl` still holds rows for such a table; move each row to the file of its namespace's table.
+
 ## Datasets
 
 The JSONL files in `<distPath>/data/` are the base seed data, applied to every environment. A **dataset** is a directory under it holding more rows for some of the tables — the rows only one scenario needs, or the rows that differ per environment — so they can sit next to the base data instead of being copied in and out of it:

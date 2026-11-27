@@ -85,6 +85,12 @@ recordUpdatedTrigger({
 });
 ```
 
+A trigger subscribes to the table in the TailorDB namespace that defines it. When several namespaces define a table with the same name, which namespaces of different applications in a [`defineWorkspace()` config](../workspace.md#services-and-applications) (Beta) can, name the namespace with `namespace`; without it, `deploy` stops with `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS`. `recordTrigger()` takes `namespace` too:
+
+```typescript
+recordCreatedTrigger({ type: crmCustomer, namespace: "crm-db" });
+```
+
 ### Schedule Trigger
 
 Fires on a cron schedule:
@@ -140,6 +146,8 @@ resolverExecutedTrigger({
   condition: (args) => args.success && !!args.result.order,
 });
 ```
+
+When several resolver namespaces of the config define a resolver with the same name, the trigger subscribes to the first of them and `deploy` warns. When the config defines no resolver of that name and other configs in the same `deploy` define it in several resolver namespaces that it declares `external`, `deploy` stops with `DEPLOY_RESOURCE_NAMESPACE_AMBIGUOUS`. Name the namespace with `namespace` to choose one.
 
 ### IdP User Triggers
 

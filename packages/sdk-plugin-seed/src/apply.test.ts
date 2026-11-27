@@ -1322,3 +1322,78 @@ describe("seedApplyCommand", () => {
     ).toBe(true);
   });
 });
+
+describe("seedApplyCommand with a table name several namespaces define", () => {
+  beforeEach(() => {
+    sdk.loadSeedContext.mockResolvedValue({
+      config: { path: "/workspace/tailor.config.ts" },
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: ["shop-db", "crm-db"].map((namespace) => ({
+        dependencies: { Customer: [] },
+        namespace,
+        requiredFields: { Customer: [] },
+        selfRefTypes: [],
+        types: ["Customer"],
+        entityNames: { Customer: `${namespace}.Customer` },
+      })),
+    });
+    jsonl.loadSeedData.mockImplementation((_dataDirs: string[], entities: string[]) =>
+      Object.fromEntries(entities.map((entity) => [entity, [{ id: entity }]])),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["Customer"],
+    });
+    sdk.chunkSeedData.mockImplementation(({ data, order }: { data: unknown; order: string[] }) => [
+      { index: 0, data, order },
+    ]);
+    workflow.runScript.mockResolvedValue({
+      error: undefined,
+      logs: "",
+      result:
+        '{"success":true,"processed":{"Customer":{"inserted":1,"updated":0,"skipped":0}},"errors":[]}',
+      success: true,
+    });
+  });
+
+  test("seeds each namespace's table from its own data file", async () => {
+    await runApply(["--json"]);
+
+    expect(sdk.loadSeedContext).toHaveBeenCalledWith(
+      expect.objectContaining({ allowSharedTableNames: true }),
+    );
+    expect(workflow.runScript).toHaveBeenCalledWith({
+      name: "tailor-seed-tailordb--crm-db",
+      arg: expect.objectContaining({ data: { Customer: [{ id: "crm-db.Customer" }] } }),
+    });
+    expect(logger.out).toHaveBeenCalledWith({
+      success: true,
+      processed: { "shop-db.Customer": 1, "crm-db.Customer": 1 },
+    });
+  });
+
+  test("seeds only the table an entity name selects", async () => {
+    await runApply(["crm-db.Customer"]);
+
+    expect(workflow.runScript).toHaveBeenCalledTimes(1);
+    expect(workflow.runScript).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "tailor-seed-tailordb--crm-db" }),
+    );
+  });
+
+  test("truncates the tables of the entities it is given in their own namespaces", async () => {
+    await runApply(["--truncate", "--yes", "crm-db.Customer"]);
+
+    expect(sdk.truncate).toHaveBeenCalledTimes(1);
+    expect(sdk.truncate).toHaveBeenCalledWith({
+      configPath: undefined,
+      profile: undefined,
+      workspaceId: undefined,
+      namespace: "crm-db",
+      tables: ["Customer"],
+    });
+  });
+});

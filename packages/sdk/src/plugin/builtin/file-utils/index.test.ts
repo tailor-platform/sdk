@@ -66,6 +66,33 @@ describe("FileUtilsPlugin", () => {
     });
   });
 
+  test("keys a table several namespaces define by its namespace", async () => {
+    const customer = (field: string) =>
+      parseTailorDBType(
+        toSchemaOutput(db.table("Customer", { name: db.string() }).files({ [field]: "file" })),
+      );
+    const order = parseTailorDBType(
+      toSchemaOutput(db.table("Order", { name: db.string() }).files({ receipt: "receipt" })),
+    );
+    const plugin = fileUtilsPlugin({ distPath: testDistPath });
+
+    const result = await plugin.onTailorDBReady!(
+      createCtx([
+        { namespace: "shop-db", tables: { Customer: customer("avatar"), Order: order } },
+        { namespace: "crm-db", tables: { Customer: customer("contract") } },
+      ]),
+    );
+
+    const content = result.files[0]!.content;
+    expect(content).toContain('  "shop-db.Customer": {\n    fields: "avatar";\n  };');
+    expect(content).toContain('  "crm-db.Customer": {\n    fields: "contract";\n  };');
+    expect(content).toContain('  "crm-db.Customer": { namespace: "crm-db", type: "Customer" }');
+    expect(content).toContain('  Order: { namespace: "shop-db", type: "Order" }');
+    expect(content).toContain(
+      "return await file.download(tables[type].namespace, tables[type].type, field, recordId);",
+    );
+  });
+
   describe("generateUnifiedFileUtils", () => {
     test("should merge types from single namespace", () => {
       const namespaceData = [

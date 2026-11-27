@@ -1,6 +1,7 @@
 import { collectConfigIdpNames } from "./executor";
 import type { ConfigServices } from "#/cli/services/application";
 import type { DeployApplication } from "./deploy-application";
+import type { NamespacesByName } from "./types";
 
 /** A config in the deploy run: the services it defines and the applications exposing them. */
 type VisibleConfig = {
@@ -8,18 +9,24 @@ type VisibleConfig = {
   applications: ReadonlyArray<Pick<DeployApplication, "subgraphs">>;
 };
 
-function addPossiblyAmbiguousNamespace(
-  namespaces: Map<string, string | undefined>,
-  key: string,
-  namespace: string,
-): void {
-  if (namespaces.has(key)) {
-    if (namespaces.get(key) !== namespace) {
-      namespaces.set(key, undefined);
-    }
-    return;
+function addNamespace(namespaces: Map<string, Set<string>>, key: string, namespace: string): void {
+  const defining = namespaces.get(key);
+  if (defining) {
+    defining.add(namespace);
+  } else {
+    namespaces.set(key, new Set([namespace]));
   }
-  namespaces.set(key, namespace);
+}
+
+/**
+ * Pick the namespace of a resource that exactly one namespace defines.
+ * @param namespaces - Namespaces that define the resource
+ * @returns The one namespace, or undefined for none or several
+ */
+export function soleNamespace(namespaces: ReadonlySet<string> | undefined): string | undefined {
+  if (namespaces?.size !== 1) return undefined;
+  const [namespace] = namespaces;
+  return namespace;
 }
 
 type VisibleResource = {
@@ -69,14 +76,14 @@ function* tailorDBTypeResources(services: Readonly<ConfigServices>): Iterable<Vi
 export function collectVisibleTailorDBTypeNamespaces(
   config: VisibleConfig,
   configs: ReadonlyArray<VisibleConfig>,
-): ReadonlyMap<string, string | undefined> {
+): NamespacesByName {
   return collectVisibleResources({
     config,
     configs,
     visibleKeysOf: collectConfigTailorDBNamespaces,
     resourcesOf: tailorDBTypeResources,
-    createResult: () => new Map<string, string | undefined>(),
-    addResource: addPossiblyAmbiguousNamespace,
+    createResult: () => new Map<string, Set<string>>(),
+    addResource: addNamespace,
   });
 }
 
@@ -113,13 +120,13 @@ function* resolverResources(services: Readonly<ConfigServices>): Iterable<Visibl
 export function collectVisibleResolverNamespaces(
   config: VisibleConfig,
   configs: ReadonlyArray<VisibleConfig>,
-): ReadonlyMap<string, string | undefined> {
+): NamespacesByName {
   return collectVisibleResources({
     config,
     configs,
     visibleKeysOf: collectConfigResolverNamespaces,
     resourcesOf: resolverResources,
-    createResult: () => new Map<string, string | undefined>(),
-    addResource: addPossiblyAmbiguousNamespace,
+    createResult: () => new Map<string, Set<string>>(),
+    addResource: addNamespace,
   });
 }

@@ -2160,7 +2160,7 @@ function collectLocalDefinitionWrites(flow: MigrationFlow): LocalDefinitionWrite
     const settledTables = migrationSnapshotCache.load(lastMigration).tables;
     const manifest = (type: TailorDBSnapshotType) =>
       generateTailorDBTypeManifestFromSnapshot(type, {
-        subscribed: migrationContext.executorUsedTables.has(type.name),
+        subscribed: migrationContext.executorUsedTables.has(namespaceName, type.name),
         namespaceGqlOperations: input.config.gqlOperations,
       });
     const differing = Object.entries(input.types).filter(([tableName, localType]) => {

@@ -34,6 +34,8 @@ type TargetSpec = {
    * holds the same name twice.
    */
   extraResolverNamespace?: { namespace: string; resolvers: string[]; pinned?: string[] };
+  /** A second TailorDB namespace on this config, listed before the one `types` builds. */
+  extraTailorDBNamespace?: { namespace: string; types: string[]; pinned?: string[] };
   externalTailorDBNamespaces?: string[];
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
@@ -62,6 +64,24 @@ function targetServices(spec: TargetSpec) {
       id: spec.appId,
       name: spec.configPath.split("/")[0],
       tailorDBServices: [
+        ...(spec.extraTailorDBNamespace
+          ? [
+              {
+                namespace: spec.extraTailorDBNamespace.namespace,
+                types: Object.fromEntries(
+                  spec.extraTailorDBNamespace.types.map((name) => [
+                    name,
+                    {
+                      name,
+                      settings: spec.extraTailorDBNamespace?.pinned?.includes(name)
+                        ? { publishEvents: true }
+                        : {},
+                    },
+                  ]),
+                ),
+              },
+            ]
+          : []),
         {
           namespace: `db${suffix}`,
           // settings is a required field on TailorDBType, so the fixture carries it.
@@ -779,6 +799,113 @@ describe("collectEventSubscriptions and a resolver name the subscriber also decl
   });
 });
 
+describe("collectEventSubscriptions and a trigger that names another config's namespace", () => {
+  const kinds = [
+    {
+      kind: "tailordb",
+      declares: { types: ["Order"] },
+      sees: (namespaces: string[]) => ({
+        externalTailorDBNamespaces: namespaces.map((namespace) => `db-${namespace}`),
+      }),
+      trigger: (namespace: string) => ({
+        kind: "tailordb",
+        tableName: "Order",
+        namespace: `db-${namespace}`,
+      }),
+      key: (namespace: string) => `tailordb:db-${namespace}:type:Order`,
+    },
+    {
+      kind: "resolverExecuted",
+      declares: { resolvers: ["createLead"] },
+      sees: (namespaces: string[]) => ({
+        externalResolverNamespaces: namespaces.map((namespace) => `pipeline-${namespace}`),
+      }),
+      trigger: (namespace: string) => ({
+        kind: "resolverExecuted",
+        resolverName: "createLead",
+        namespace: `pipeline-${namespace}`,
+      }),
+      key: (namespace: string) => `pipeline:pipeline-${namespace}:resolver:createLead`,
+    },
+  ];
+
+  test.each(kinds)(
+    "resolves it to that config over the subscriber's own same-named resource ($kind)",
+    ({ declares, sees, trigger, key }) => {
+      const supplier = target({
+        configPath: "supplier/tailor.config.ts",
+        namespace: "supplier",
+        ...declares,
+      });
+      const buyer = target({
+        configPath: "buyer/tailor.config.ts",
+        namespace: "buyer",
+        ...declares,
+        ...sees(["supplier"]),
+        executors: { "sync-it": trigger("supplier") },
+      });
+
+      for (const targets of [
+        [supplier, buyer],
+        [buyer, supplier],
+      ]) {
+        expect(collectEventSubscriptions(targets)).toMatchObject([
+          { owner: supplier, key: key("supplier") },
+        ]);
+      }
+    },
+  );
+
+  test.each(kinds)(
+    "resolves it to that config among several the subscriber sees ($kind)",
+    ({ declares, sees, trigger, key }) => {
+      const peerB = target({ configPath: "b/tailor.config.ts", namespace: "b", ...declares });
+      const peerC = target({ configPath: "c/tailor.config.ts", namespace: "c", ...declares });
+      const shell = target({
+        configPath: "shell/tailor.config.ts",
+        ...sees(["b", "c"]),
+        executors: { "sync-it": trigger("c") },
+      });
+
+      expect(collectEventSubscriptions([peerB, peerC, shell])).toMatchObject([
+        { owner: peerC, key: key("c") },
+      ]);
+    },
+  );
+
+  test.each(kinds)(
+    "names the namespace when no config defines it ($kind)",
+    ({ declares, sees, trigger }) => {
+      const supplier = target({
+        configPath: "supplier/tailor.config.ts",
+        namespace: "supplier",
+        ...declares,
+      });
+      const subscriber = target({
+        configPath: "buyer/tailor.config.ts",
+        namespace: "buyer",
+        ...declares,
+        ...sees(["supplier"]),
+        executors: { "sync-it": trigger("typo") },
+      });
+
+      let error: unknown;
+      try {
+        collectEventSubscriptions([supplier, subscriber]);
+      } catch (thrown) {
+        error = thrown;
+      }
+
+      expect(error).toMatchObject({
+        code: "EVENT_SUBSCRIPTION_OWNER_NOT_FOUND",
+        message: expect.stringMatching(
+          /in namespace "(db|pipeline)-typo", which no config in this deploy declares\. This config declares nothing external that could hold it, so check the name\.$/,
+        ),
+      });
+    },
+  );
+});
+
 describe("collectEventSubscriptions and a disabled executor", () => {
   test.each([
     {
@@ -822,12 +949,62 @@ describe("collectEventSubscriptions and a disabled executor", () => {
 
     // ...but it contributes nothing to any publishEvents flag.
     const owned = ownedSubscriptions(subscriptions, subscriber);
-    expect(subscribedTailorDBTables(owned)).toEqual(new Set());
-    expect(subscribedResolvers(owned)).toEqual(new Set());
+    expect(subscribedTailorDBTables(owned).entries).toEqual([]);
+    expect(subscribedResolvers(owned).entries).toEqual([]);
     expect(subscribedIdps(owned)).toEqual(new Set());
     const workflows = subscribedWorkflows(owned);
     expect(workflows.execution.workflowNames).toEqual(new Set());
     expect(workflows.jobExecution.workflowNames).toEqual(new Set());
+  });
+
+  test("a TailorDB trigger that names its namespace subscribes to the table there", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      types: ["Order"],
+      extraTailorDBNamespace: { namespace: "db-archive", types: ["Order"], pinned: ["Order"] },
+      executors: { "on-order": { kind: "tailordb", tableName: "Order", namespace: "db" } },
+    });
+    const subscriptions = collectEventSubscriptions([subscriber]);
+
+    expect(subscriptions).toMatchObject([
+      { key: "tailordb:db:type:Order", namespace: "db", pinned: false },
+    ]);
+    expect(subscribedTailorDBTables(subscriptions).entries).toEqual([
+      { namespace: "db", name: "Order" },
+    ]);
+  });
+
+  test("leaves a TailorDB trigger that names a namespace lacking the table to the executor plan", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      types: ["Order"],
+      extraTailorDBNamespace: { namespace: "db-archive", types: ["Customer"] },
+      executors: { "on-order": { kind: "tailordb", tableName: "Order", namespace: "db-archive" } },
+    });
+
+    expect(collectEventSubscriptions([subscriber])).toMatchObject([
+      { executorName: "on-order", owner: subscriber },
+    ]);
+  });
+
+  test("a resolver trigger that names its namespace subscribes to the resolver there", () => {
+    const subscriber = target({
+      configPath: "buyer/tailor.config.ts",
+      resolvers: ["createLead"],
+      extraResolverNamespace: {
+        namespace: "crm-api",
+        resolvers: ["createLead"],
+        pinned: ["createLead"],
+      },
+      executors: {
+        "on-lead": { kind: "resolverExecuted", resolverName: "createLead", namespace: "pipeline" },
+      },
+    });
+    const subscriptions = collectEventSubscriptions([subscriber]);
+
+    expect(subscriptions).toMatchObject([
+      { key: "pipeline:pipeline:resolver:createLead", namespace: "pipeline", pinned: false },
+    ]);
   });
 
   test("an enabled executor still subscribes alongside a disabled one", () => {
@@ -839,7 +1016,7 @@ describe("collectEventSubscriptions and a disabled executor", () => {
     });
     const owned = ownedSubscriptions(collectEventSubscriptions([subscriber]), subscriber);
 
-    expect(subscribedTailorDBTables(owned)).toEqual(new Set(["Order"]));
+    expect(subscribedTailorDBTables(owned).entries).toEqual([{ namespace: "db", name: "Order" }]);
   });
 
   test.each([

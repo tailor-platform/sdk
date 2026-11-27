@@ -36,6 +36,7 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
   test("allows unique type names across local namespaces", () => {
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
+        groups: undefined,
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["Event"])],
       }),
     ).not.toThrow();
@@ -44,6 +45,7 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
   test("rejects duplicate type names across local namespaces", () => {
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
+        groups: undefined,
         tailorDBServices: [localService("main", ["User"]), localService("analytics", ["User"])],
       }),
     ).toThrow(
@@ -77,6 +79,7 @@ describe("assertUniqueLocalTailorDBTypeNames", () => {
   test("reports every duplicated type name in one error", () => {
     expect(() =>
       assertUniqueLocalTailorDBTypeNames({
+        groups: undefined,
         tailorDBServices: [
           localService("main", ["User", "Order", "Event"]),
           localService("analytics", ["User", "Order"]),

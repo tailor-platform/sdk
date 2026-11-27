@@ -13,7 +13,7 @@ import { getAuthInput } from "#/cli/shared/auth-input";
 import {
   isLoadedWorkspaceConfig,
   loadConfigFile,
-  tailorDBTypeNameScopeOf,
+  tailorDBTypeNameGroupsOf,
   type LoadedConfig,
   type LoadedWorkspaceConfig,
 } from "#/cli/shared/config-loader";
@@ -338,7 +338,7 @@ export function createGenerationManager(params: CreateGenerationManagerParams): 
         try {
           assertUniqueLocalTailorDBTypeNames({
             tailorDBServices: configServices.tailorDBServices,
-            scope: tailorDBTypeNameScopeOf(config),
+            groups: tailorDBTypeNameGroupsOf(config),
           });
         } catch (error) {
           logger.error("Error validating TailorDB table names");

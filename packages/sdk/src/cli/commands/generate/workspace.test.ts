@@ -41,7 +41,10 @@ const RECORDING_PLUGIN = `{
 const AUTH = (name: string) =>
   `${JSON.stringify(name)}: defineAuth(${JSON.stringify(name)}, { machineUserAttributes: {}, machineUsers: {} })`;
 
-function workspaceConfig(auths: string[]): string {
+function workspaceConfig(
+  auths: string[],
+  apps = '{ shop: { db: ["customer-db", "order-db"] } }',
+): string {
   return `import { defineAuth, definePlugins } from "@tailor-platform/sdk";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 ${brandedDefault(
@@ -49,7 +52,7 @@ ${brandedDefault(
   `{
   db: ${WORKSPACE_DB_SOURCE},
   auth: { ${auths.map(AUTH).join(", ")} },
-  apps: { shop: { db: ["customer-db", "order-db"] } },
+  apps: ${apps},
 }`,
 )}
 export const plugins = definePlugins(
@@ -101,13 +104,43 @@ describe("generate with a workspace config", () => {
     expect(fs.readFileSync(path.join(dir, "tailor.d.ts"), "utf8")).toContain('workspace: "unset";');
   });
 
-  test("asks for table names unique across the workspace when two namespaces share one", async () => {
+  test("accepts a table name that namespaces of different applications share", async () => {
+    fs.writeFileSync(path.join(dir, "db", "ledger", "table.ts"), TABLE("Customer"));
+    fs.writeFileSync(
+      configPath,
+      workspaceConfig(
+        ["corp-auth"],
+        '{ shop: { db: ["customer-db", "order-db"] }, books: { db: ["ledger-db"] } }',
+      ),
+    );
+
+    await generate({ configPath });
+
+    const types = fs.readFileSync(path.join(dir, "generated", "db.ts"), "utf8");
+    expect(types.match(/Customer: \{/g)).toHaveLength(2);
+  });
+
+  test("accepts a table name that a namespace no application lists shares", async () => {
     fs.writeFileSync(path.join(dir, "db", "ledger", "table.ts"), TABLE("Customer"));
     fs.writeFileSync(configPath, workspaceConfig(["corp-auth"]));
 
+    await expect(generate({ configPath })).resolves.toBeUndefined();
+  });
+
+  test("asks for table names unique across the namespaces of one application", async () => {
+    fs.writeFileSync(path.join(dir, "db", "order", "table.ts"), TABLE("Customer"));
+    fs.writeFileSync(
+      configPath,
+      workspaceConfig(
+        ["corp-auth"],
+        '{ shop: { db: ["customer-db"] }, books: { db: ["order-db", "customer-db"] } }',
+      ),
+    );
+
     await expect(generate({ configPath })).rejects.toMatchObject({
+      code: "DEFINITION_NAME_DUPLICATE",
       suggestion:
-        "Give each TailorDB type a name that is unique across all TailorDB namespaces in the workspace.",
+        'Give each TailorDB type a name that is unique across all TailorDB namespaces of application "books".',
     });
   });
 

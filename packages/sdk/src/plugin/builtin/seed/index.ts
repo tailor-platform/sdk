@@ -2,6 +2,10 @@ import * as path from "pathe";
 import { assertDefined } from "#/utils/assert";
 import { PluginValidationError } from "#/utils/plugin-validation-error";
 import {
+  namesSharedAcrossNamespaces,
+  qualifiedTailorDBTypeName,
+} from "#/utils/tailordb-type-names";
+import {
   processIdpUser,
   generateIdpUserSchemaFile,
   type IdpUserMetadata,
@@ -126,19 +130,35 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
       const idpUser = soleIdpUser(ctx.auths);
       const idpUserSyncFKs = resolveIdpUserSyncFKs(ctx.pluginConfig.disableIdpUserSync);
 
+      const sharedTypeNames = namesSharedAcrossNamespaces(
+        ctx.tailordb.map((ns) => Object.keys(ns.tables)),
+      );
+
       for (const ns of ctx.tailordb) {
+        const fileStemOf = (typeName: string) =>
+          qualifiedTailorDBTypeName(ns.namespace, typeName, sharedTypeNames);
         for (const [tableName, type] of Object.entries(ns.tables)) {
           const source = assertDefined(
             ns.sourceInfo.get(tableName),
             `source info missing for table: ${tableName}`,
           );
           const linesDb = processLinesDb(type, source);
+          linesDb.foreignKeys = linesDb.foreignKeys.map((foreignKey) => ({
+            ...foreignKey,
+            references: {
+              ...foreignKey.references,
+              table: fileStemOf(foreignKey.references.table),
+            },
+          }));
+          const fileStem = fileStemOf(tableName);
 
           // Add reverse FK from userProfile table to _User (opt-out via disableIdpUserSync.userToIdp: true)
           if (
             idpUserSyncFKs.emitUserToIdpFK &&
             idpUser &&
-            tableName === idpUser.schema.userTableName
+            tableName === idpUser.schema.userTableName &&
+            (idpUser.schema.userTableNamespace === undefined ||
+              idpUser.schema.userTableNamespace === ns.namespace)
           ) {
             linesDb.foreignKeys.push({
               column: idpUser.schema.usernameField,
@@ -151,12 +171,12 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(outputDir, "data", `${linesDb.tableName}.jsonl`),
+            path: path.join(outputDir, "data", `${fileStem}.jsonl`),
             content: "",
             skipIfExists: true,
           });
 
-          const schemaOutputPath = path.join(outputDir, "data", `${linesDb.tableName}.schema.ts`);
+          const schemaOutputPath = path.join(outputDir, "data", `${fileStem}.schema.ts`);
 
           // Plugin-generated table: use getGeneratedTable API
           if (linesDb.pluginSource && linesDb.pluginSource.pluginImportPath) {
@@ -178,6 +198,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
             const params: PluginSchemaParams = {
               configImportPath,
               originalImportPath,
+              namespace: ns.namespace,
             };
 
             const schemaContent = generateLinesDbSchemaFileWithPluginAPI(linesDb, params);
@@ -224,7 +245,14 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           path: path.join(outputDir, "data", `${idpUser.name}.schema.ts`),
           content: generateIdpUserSchemaFile({
             usernameField: idpUser.schema.usernameField,
-            userTableName: idpUser.schema.userTableName,
+            userTableName:
+              idpUser.schema.userTableNamespace === undefined
+                ? idpUser.schema.userTableName
+                : qualifiedTailorDBTypeName(
+                    idpUser.schema.userTableNamespace,
+                    idpUser.schema.userTableName,
+                    sharedTypeNames,
+                  ),
             includeUserProfileFK: idpUserSyncFKs.emitIdpToUserFK,
           }),
         });
