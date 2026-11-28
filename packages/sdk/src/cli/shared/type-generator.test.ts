@@ -615,6 +615,7 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: "temporal",
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain("interface DateRepresentationRegistry {");
     expect(result).toContain('    example: "temporal";');
@@ -632,6 +633,7 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const unset = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: undefined,
+      defaultDecimalRepresentation: undefined,
     });
     expect(unset).toContain('interface DecimalRepresentationRegistry {\n    example: "unset";');
   });
@@ -640,6 +642,7 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: undefined,
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain('    example: "unset";');
   });
@@ -648,6 +651,7 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const result = generateTypeDefinition(...base, {
       appName: "my-app",
       defaultDateRepresentation: "temporal",
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain('    "my-app": "temporal";');
   });

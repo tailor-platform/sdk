@@ -232,6 +232,17 @@ describe("loadConfigDefaultsFromConfig: date default", { timeout: 60_000 }, () =
     expect(outcome.warnings).toHaveLength(1);
     expect(outcome.warnings[0]).toMatch(/string values.*tailor\.d\.ts.*missing env/s);
   });
+
+  test("the warning for a config that throws names defaultDecimalRepresentation and its value", () => {
+    const configPath = fixture("throws-decimal", {
+      "tailor.config.ts": `if (!process.env.TAILOR_TEST_UNSET_VARIABLE) throw new Error("missing env");\nexport default { name: "app", defaultDecimalRepresentation: "decimal" };\n`,
+    });
+    const outcome = run(configPath);
+    expect(outcome.warnings).toHaveLength(1);
+    expect(outcome.warnings[0]).toMatch(
+      /defaultDecimalRepresentation.*t\.decimal\(\).*"decimal".*tailor\.d\.ts/s,
+    );
+  });
 });
 
 describe("loadConfigDefaultsFromConfig: kysely temporal", { timeout: 60_000 }, () => {
