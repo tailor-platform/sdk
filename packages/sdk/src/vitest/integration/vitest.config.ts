@@ -20,6 +20,7 @@ export default defineConfig({
     env: {
       __TAILOR_RUNTIME_CONFIG: resolve(here, "fixtures/tailor.config.ts"),
       __TAILOR_RUNTIME_DATE_DEFAULT: "temporal",
+      __TAILOR_RUNTIME_DECIMAL_DEFAULT: "decimal",
       __TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL: "true",
     },
   },
