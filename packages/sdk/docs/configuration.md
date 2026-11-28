@@ -618,8 +618,6 @@ The generated table types then give each decimal column the type `Decimal` when 
 
 With `contentMapper: true`, set `decimal: true` the same way; the `getDB` you import from `@tailor-platform/sdk/plugin/kysely-type/db` then returns `Decimal` values, and TypeScript derives the `Decimal` column types through the content mapper.
 
-The option works with `distPath` only; combining it with `contentMapper: true` is rejected.
-
 `kyselyTypePlugin` requires either `distPath` or `contentMapper: true`, and accepts only one of them. With `contentMapper: true`, `tailor generate` writes no types file, and you import `getDB()` from the SDK instead:
 
 ```typescript
@@ -630,7 +628,7 @@ kyselyTypePlugin({ contentMapper: true });
 import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
 ```
 
-TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, `getDB()` accepts no namespace name, so every call fails to type-check; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
+TypeScript 7.1 or later derives the types of that `getDB()` from your TailorDB definitions and the plugin options, `temporal` and `decimal` included, when the SDK is enabled as a content mapper for `.tailor` files as described in [Type Definitions Without `tailor generate`](#type-definitions-without-tailor-generate). Without the mapper, `getDB()` accepts no namespace name, so every call fails to type-check; use `distPath` instead of `contentMapper: true` so `tailor generate` writes the types file, and import `getDB()` from that file.
 
 To let some of your code reach only some namespaces, create a `getDB` narrowed to them with `createScopedGetDB` from the same module, and import that one in place of the SDK's:
 
