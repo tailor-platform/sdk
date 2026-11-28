@@ -85,9 +85,11 @@ class MockQueryResult {
   command: string;
   rowCount: number;
   rows: unknown[];
+  fields?: readonly unknown[];
 
   constructor(rows: unknown[]) {
     this.command = "";
+    this.fields = [];
     this.rowCount = rows.length;
     this.rows = rows;
   }

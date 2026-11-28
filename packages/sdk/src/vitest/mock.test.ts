@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { Decimal } from "decimal.js";
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createWorkflowJob } from "../configure/services/workflow/job";
 import { createWorkflow } from "../configure/services/workflow/workflow";
+import { withDecimal } from "../kysely/decimal-client";
 import {
   mockTailordb,
   mockWorkflow,
@@ -36,6 +38,16 @@ describe("mock", () => {
         { query: "SELECT * FROM users WHERE id = $1", params: ["1"] },
       ]);
       expect(db.createdClients).toMatchObject([{ namespace: "test", ended: true }]);
+    });
+
+    test("results carry an empty column list so a decimal client can read them", async () => {
+      using db = mockTailordb();
+      db.onQuery(/FROM items/).returnsRows([{ price: "1.5" }]);
+      const client = withDecimal(new (globalThis as any).tailordb.Client({}), Decimal);
+
+      const result = await client.queryObject("SELECT price FROM items");
+
+      expect(result.rows).toEqual([{ price: "1.5" }]);
     });
 
     test("setQueryResolver provides content-based responses", async () => {
