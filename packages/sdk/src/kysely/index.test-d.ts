@@ -356,6 +356,17 @@ describe("temporal option", () => {
     }>();
   });
 
+  test("maps a field to the union of both mappings when given boolean", () => {
+    const fields = { day: db.date(), at: db.time() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, boolean>["day"]>().toEqualTypeOf<
+      Date | Temporal.PlainDate
+    >();
+    expectTypeOf<TailorDBSelectable<typeof fields, boolean>["at"]>().toEqualTypeOf<
+      string | Temporal.PlainTime
+    >();
+  });
+
   test("defaults to false, keeping today's Date/string mapping", () => {
     const fields = { day: db.date(), when: db.datetime(), at: db.time() };
 
@@ -407,6 +418,14 @@ describe("temporal option", () => {
 });
 
 describe("decimal option", () => {
+  test("maps a decimal field to the union of both mappings when given boolean", () => {
+    const fields = { price: db.decimal() };
+
+    expectTypeOf<TailorDBSelectable<typeof fields, false, boolean>["price"]>().toEqualTypeOf<
+      string | Decimal
+    >();
+  });
+
   test("maps decimal fields to Decimal when the third parameter is true", () => {
     const fields = { price: db.decimal(), discount: db.decimal({ optional: true }) };
 

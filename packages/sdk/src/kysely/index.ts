@@ -239,9 +239,9 @@ type NestedColumn<F, M extends ColumnModes> =
 
 type DateColumn<
   Type extends "date" | "datetime" | "time",
-  M extends ColumnModes,
+  IsTemporal extends boolean,
   IsNested extends boolean,
-> = M["temporal"] extends true
+> = IsTemporal extends true
   ? Type extends "date"
     ? TemporalDate
     : Type extends "datetime"
@@ -253,17 +253,19 @@ type DateColumn<
     ? Timestamp
     : string;
 
+type DecimalColumn<F, IsDecimal extends boolean, IsNested extends boolean> = IsNested extends true
+  ? ElementOutput<F>
+  : IsDecimal extends true
+    ? DecimalValue
+    : ElementOutput<F>;
+
 type ElementColumn<F, M extends ColumnModes, IsNested extends boolean> =
   DBFieldType<F> extends "nested"
     ? NestedColumn<F, M>
     : DBFieldType<F> extends "date" | "datetime" | "time"
-      ? DateColumn<DBFieldType<F>, M, IsNested>
+      ? DateColumn<DBFieldType<F>, M["temporal"], IsNested>
       : DBFieldType<F> extends "decimal"
-        ? IsNested extends true
-          ? ElementOutput<F>
-          : M["decimal"] extends true
-            ? DecimalValue
-            : ElementOutput<F>
+        ? DecimalColumn<F, M["decimal"], IsNested>
         : ElementOutput<F>;
 
 // A ColumnType cannot sit inside an array — Kysely only unwraps it at the top level of a
