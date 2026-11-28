@@ -4,9 +4,11 @@ description: "List, read and dismiss the platform notifications sent to you from
 
 # Notification Commands
 
-Commands for reading the platform notifications addressed to you: alerts you must act on,
-incidents, maintenance notices and announcements. The inbox is per user, so these commands take a
-profile (for its login) but no workspace. Marking a notification read or dismissing it in the CLI
+Commands for reading the platform notifications addressed to you: notices about your own
+resources or account, incidents, maintenance and announcements. Tables and `read` show the `alert`
+category as "your resources"; `--category` and JSON output use `alert`.
+
+The inbox is per user, so these commands take a profile (for its login) but no workspace. Marking a notification read or dismissing it in the CLI
 also changes it in the Console, which shows the same inbox.
 
 When no subcommand is provided, defaults to `list`.
@@ -67,16 +69,16 @@ tailor notification list [options]
 
 **Options**
 
-| Option                                      | Alias | Description                                                     | Required | Default  | Env                       |
-| ------------------------------------------- | ----- | --------------------------------------------------------------- | -------- | -------- | ------------------------- |
-| `--order <ORDER>`                           | -     | Sort order (asc or desc)                                        | No       | `"desc"` | -                         |
-| `--limit <LIMIT>`                           | `-l`  | Maximum number of items to return (0: unlimited)                | No       | `50`     | -                         |
-| `--profile <PROFILE>`                       | `-p`  | Workspace profile                                               | No       | -        | `TAILOR_PLATFORM_PROFILE` |
-| `--category <CATEGORY>`                     | -     | Only this category (alert, incident, maintenance, announcement) | No       | -        | -                         |
-| `--severity <SEVERITY>`                     | -     | Only this severity or higher (info, warning, critical)          | No       | -        | -                         |
-| `--unread`                                  | -     | Only unread notifications                                       | No       | `false`  | -                         |
-| `--scope-workspace <SCOPE_WORKSPACE>`       | -     | Only notifications about this workspace ID                      | No       | -        | -                         |
-| `--scope-organization <SCOPE_ORGANIZATION>` | -     | Only notifications about this organization ID                   | No       | -        | -                         |
+| Option                                      | Alias | Description                                                                                         | Required | Default  | Env                       |
+| ------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------- | -------- | -------- | ------------------------- |
+| `--order <ORDER>`                           | -     | Sort order (asc or desc)                                                                            | No       | `"desc"` | -                         |
+| `--limit <LIMIT>`                           | `-l`  | Maximum number of items to return (0: unlimited)                                                    | No       | `50`     | -                         |
+| `--profile <PROFILE>`                       | `-p`  | Workspace profile                                                                                   | No       | -        | `TAILOR_PLATFORM_PROFILE` |
+| `--category <CATEGORY>`                     | -     | Only this category (alert, incident, maintenance, announcement; alert is shown as "your resources") | No       | -        | -                         |
+| `--severity <SEVERITY>`                     | -     | Only this severity or higher (info, warning, critical)                                              | No       | -        | -                         |
+| `--unread`                                  | -     | Only unread notifications                                                                           | No       | `false`  | -                         |
+| `--scope-workspace <SCOPE_WORKSPACE>`       | -     | Only notifications about this workspace ID                                                          | No       | -        | -                         |
+| `--scope-organization <SCOPE_ORGANIZATION>` | -     | Only notifications about this organization ID                                                       | No       | -        | -                         |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

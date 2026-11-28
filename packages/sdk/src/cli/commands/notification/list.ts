@@ -12,7 +12,7 @@ import { fetchWithinLimit, reportTruncation } from "#/cli/shared/limit";
 import { logger } from "#/cli/shared/logger";
 import { omitUndefined } from "#/utils/omit-undefined";
 import { createNotificationClient } from "./client";
-import { transformNotification, type NotificationInfo } from "./transform";
+import { categoryDisplayLabel, transformNotification, type NotificationInfo } from "./transform";
 
 const CATEGORY_FLAG = {
   alert: NotificationCategory.ALERT,
@@ -37,7 +37,7 @@ export const listCommand = defineAppCommand({
     ...pagedLogArgs,
     profile: workspaceArgs.profile,
     category: arg(z.enum(categoryNames).optional(), {
-      description: `Only this category (${categoryNames.join(", ")})`,
+      description: `Only this category (${categoryNames.join(", ")}; alert is shown as "your resources")`,
     }),
     severity: arg(z.enum(severityNames).optional(), {
       description: `Only this severity or higher (${severityNames.join(", ")})`,
@@ -96,6 +96,7 @@ export const listCommand = defineAppCommand({
       display: {
         scopes: null,
         expiresAt: null,
+        category: (value) => categoryDisplayLabel(value as string),
         arrivedAt: (value) => humanizeRelativeTime(value as Date | null),
         readAt: (value) => (value === null ? "unread" : humanizeRelativeTime(value as Date)),
       },
