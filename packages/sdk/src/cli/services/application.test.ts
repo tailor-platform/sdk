@@ -1211,6 +1211,45 @@ export default createExecutor({
     expect(withoutTemporal).toMatch(/temporal:\s*(?:false|!1)/);
   });
 
+  test("bundles decimal.js into getDB only when the plugin's decimal option is on", async () => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, incomingWebhookTrigger } from "@tailor-platform/sdk";
+import { getDB } from "@tailor-platform/sdk/plugin/kysely-type/db";
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => getDB },
+});
+`,
+    );
+    const config = {
+      ...defineConfig({ name: "testApp", executor: { files: [executorFile] } }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+    const bundle = async (decimal: boolean) =>
+      [
+        ...(
+          await loadApplication({
+            config,
+            pluginManager: new PluginManager(
+              definePlugins(kyselyTypePlugin({ distPath: "./db.ts", decimal })),
+            ),
+          })
+        ).bundledScripts.executors.values(),
+      ].join("\n");
+
+    const withDecimal = await bundle(true);
+    const withoutDecimal = await bundle(false);
+
+    expect(withDecimal).toContain("[DecimalError]");
+    expect(withoutDecimal).not.toContain("[DecimalError]");
+  });
+
   test("folds the gate to follow the plugin's temporal option in what it bundles", async () => {
     const withTemporal = await bundledExecutor({ temporal: true });
     const withoutTemporal = await bundledExecutor({});

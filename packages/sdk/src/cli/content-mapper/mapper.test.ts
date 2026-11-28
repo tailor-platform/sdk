@@ -189,6 +189,24 @@ describe("content mapper", () => {
     expect(result.text).toContain("createGetDB<Namespace>({ temporal: true })");
   });
 
+  test("types db.tailor with Decimal columns when kyselyTypePlugin is configured with decimal", async () => {
+    using p = projectWithOrderTable();
+    fs.writeFileSync(p.config, ORDER_TABLE_CONFIG.replace("temporal: true", "decimal: true"));
+    fs.writeFileSync(
+      path.join(p.dir, "tailordb", "order.ts"),
+      ORDER_TABLE.replace('status: db.enum(["PAID", "OPEN"])', "total: db.decimal()"),
+    );
+    const handlers = createContentMapperHandlers(evaluateConfigInProcess);
+    await handlers.initialize({ positionEncodings: ["utf-16"] });
+    await open(handlers, p.tsconfig);
+
+    const result = await transform(handlers, "", DB_FILE);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.text).toContain("total: DecimalValue;");
+    expect(result.text).toContain("createGetDB<Namespace>({ decimal: Decimal })");
+  });
+
   test("types db.tailor and registry.tailor from a workspace config, with every namespace it declares", async () => {
     using p = workspaceProject();
     const handlers = createContentMapperHandlers(evaluateConfigInProcess);

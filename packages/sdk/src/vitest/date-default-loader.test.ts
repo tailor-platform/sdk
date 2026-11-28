@@ -6,7 +6,11 @@ import { aroundAll, describe, expect, test } from "vitest";
 import { runWithTsHook } from "#/cli/shared/test-helpers/ts-hook-child";
 import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
-import { dateDefaultFromConfig, kyselyTemporalFromConfig } from "./date-default-loader";
+import {
+  dateDefaultFromConfig,
+  kyselyDecimalFromConfig,
+  kyselyTemporalFromConfig,
+} from "./date-default-loader";
 
 describe("dateDefaultFromConfig", () => {
   test("reads defaultDateRepresentation from the default export", () => {
@@ -55,6 +59,25 @@ describe("kyselyTemporalFromConfig", () => {
     expect(kyselyTemporalFromConfig({ plugins: [{ id: "other", pluginConfig: {} }] })).toBe(false);
     expect(kyselyTemporalFromConfig({ default: {} })).toBe(false);
     expect(kyselyTemporalFromConfig(undefined)).toBe(false);
+  });
+});
+
+describe("kyselyDecimalFromConfig", () => {
+  test("reads decimal from the config of the kysely type plugin the config exports", () => {
+    expect(
+      kyselyDecimalFromConfig({
+        plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts", decimal: true })),
+      }),
+    ).toBe(true);
+  });
+
+  test("is false when the plugin leaves decimal off or the config does not use the plugin", () => {
+    expect(
+      kyselyDecimalFromConfig({
+        plugins: definePlugins(kyselyTypePlugin({ distPath: "./db.ts" })),
+      }),
+    ).toBe(false);
+    expect(kyselyDecimalFromConfig({ default: {} })).toBe(false);
   });
 });
 

@@ -59,6 +59,8 @@ export interface FunctionBundleSettings {
   dateDefault?: EffectiveDateDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
   kyselyTemporal?: boolean | undefined;
+  /** Whether `kyselyTypePlugin` is configured with `decimal: true`, which the bundled `getDB` follows */
+  kyselyDecimal?: boolean | undefined;
 }
 
 interface RuntimeGlobalsCheck {
@@ -125,6 +127,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     sdkBuilderAnnotationCache,
     dateDefault = "legacy",
     kyselyTemporal = false,
+    kyselyDecimal = false,
   } = options;
 
   const absoluteSourcePath = path.resolve(sourceFile);
@@ -140,6 +143,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       entrySource,
       dateDefault,
       kyselyTemporal,
+      kyselyDecimal,
     ]),
     tsconfig,
     inlineSourcemap,
@@ -171,7 +175,12 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           createStartTransformPlugin(startContext, hookFailures),
         ]),
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(representations, dateDefault, kyselyTemporal),
+        createPlatformBundleDefinePlugin(
+          representations,
+          dateDefault,
+          kyselyTemporal,
+          kyselyDecimal,
+        ),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       ];

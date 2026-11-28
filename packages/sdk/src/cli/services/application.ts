@@ -177,6 +177,7 @@ interface ReusableBuildState {
   readonly inlineSourcemapProjectSources: ProjectSourcesFilter;
   readonly bundleLogLevel: LogLevel;
   readonly kyselyTemporal: boolean;
+  readonly kyselyDecimal: boolean;
 }
 
 /**
@@ -1578,6 +1579,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
   const bundleLogLevel = resolveBundleLogLevel(buildOptions.logLevel);
   const dateDefault = effectiveDateDefault(settings);
   const kyselyTemporal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.temporal ?? false;
+  const kyselyDecimal = pluginManager?.getPluginConfig(KyselyGeneratorID)?.decimal ?? false;
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -1607,6 +1609,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
       kyselyTemporal,
+      kyselyDecimal,
     });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -1631,6 +1634,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
       kyselyTemporal,
+      kyselyDecimal,
     });
   }
 
@@ -1653,6 +1657,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
       dateDefault,
       kyselyTemporal,
+      kyselyDecimal,
     },
   });
   if (workflowBuildResult) {
@@ -1728,6 +1733,7 @@ async function loadServices(params: LoadServicesParams): Promise<LoadedServices>
       inlineSourcemapProjectSources,
       bundleLogLevel,
       kyselyTemporal,
+      kyselyDecimal,
     },
   };
 }

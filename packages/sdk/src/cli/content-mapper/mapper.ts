@@ -80,6 +80,7 @@ async function kyselyTypesOf(
     return {
       kyselyTypes: await generateContentMappedKyselyTypes(namespaces, {
         temporal: options.temporal,
+        decimal: options.decimal,
       }),
     };
   } catch (error) {

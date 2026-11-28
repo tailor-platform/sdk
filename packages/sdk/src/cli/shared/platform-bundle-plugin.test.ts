@@ -23,6 +23,7 @@ describe("platformBundleDefinePlugin", () => {
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT",
     "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL",
+    "globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL",
   ])("preserves error positions after folding %s", async (gate) => {
     using tmp = tempDir("platform-sourcemap-");
     const sourceLines = [
@@ -37,6 +38,7 @@ describe("platformBundleDefinePlugin", () => {
         createPlatformBundleDefinePlugin(
           { date: false, temporal: false, decimal: false },
           "date",
+          true,
           true,
         ),
       ],
@@ -138,6 +140,23 @@ describe("createPlatformBundleDefinePlugin date default", () => {
   });
 });
 
+describe("createPlatformBundleDefinePlugin kysely decimal", () => {
+  const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL);";
+
+  test("folds the kysely decimal gate to undefined unless the plugin is configured with decimal", () => {
+    expect(run(code)).toBe("read(undefined);");
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false, false))).toBe(
+      "read(undefined);",
+    );
+  });
+
+  test("folds the kysely decimal gate to the string true when the plugin is configured with decimal", () => {
+    expect(run(code, createPlatformBundleDefinePlugin(undefined, "legacy", false, true))).toBe(
+      'read("true");',
+    );
+  });
+});
+
 describe("createPlatformBundleDefinePlugin kysely temporal", () => {
   const code = "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL);";
 
@@ -198,6 +217,27 @@ describe("kysely temporal gate in the built runtime", () => {
 
     const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", true));
     expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL");
+    expect(folded).toContain('"true"===`true`');
+  });
+
+  test("the built db module reads the decimal gate in the exact shape the plugin folds", () => {
+    const built = readFileSync(
+      join(
+        import.meta.dirname,
+        "..",
+        "..",
+        "..",
+        "dist",
+        "plugin",
+        "builtin",
+        "kysely-type",
+        "db.mjs",
+      ),
+      "utf8",
+    );
+
+    const folded = run(built, createPlatformBundleDefinePlugin(undefined, "legacy", false, true));
+    expect(folded).not.toContain("__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL");
     expect(folded).toContain('"true"===`true`');
   });
 });

@@ -37,9 +37,26 @@ export type ConfigDefaults = {
   dateDefault: EffectiveDateDefault;
   /** Whether the kyselyTypePlugin the config exports is configured with `temporal: true`. */
   kyselyTemporal: boolean;
+  /** Whether the kyselyTypePlugin the config exports is configured with `decimal: true`. */
+  kyselyDecimal: boolean;
 };
 
 const KYSELY_TYPE_PLUGIN_ID = "@tailor-platform/kysely-type";
+
+function kyselyTypePluginOptionOf(configModule: unknown, option: "temporal" | "decimal"): boolean {
+  const plugins =
+    configModule && typeof configModule === "object"
+      ? (configModule as { plugins?: unknown }).plugins
+      : undefined;
+  if (!Array.isArray(plugins)) return false;
+  const plugin = plugins.find(
+    (candidate): candidate is { pluginConfig?: Record<string, unknown> } =>
+      typeof candidate === "object" &&
+      candidate !== null &&
+      (candidate as { id?: unknown }).id === KYSELY_TYPE_PLUGIN_ID,
+  );
+  return plugin?.pluginConfig?.[option] === true;
+}
 
 /**
  * Read the `temporal` option of the kyselyTypePlugin a config module exports in `plugins`.
@@ -47,18 +64,16 @@ const KYSELY_TYPE_PLUGIN_ID = "@tailor-platform/kysely-type";
  * @returns Whether the plugin is configured with `temporal: true`
  */
 export function kyselyTemporalFromConfig(configModule: unknown): boolean {
-  const plugins =
-    configModule && typeof configModule === "object"
-      ? (configModule as { plugins?: unknown }).plugins
-      : undefined;
-  if (!Array.isArray(plugins)) return false;
-  const plugin = plugins.find(
-    (candidate): candidate is { pluginConfig?: { temporal?: unknown } } =>
-      typeof candidate === "object" &&
-      candidate !== null &&
-      (candidate as { id?: unknown }).id === KYSELY_TYPE_PLUGIN_ID,
-  );
-  return plugin?.pluginConfig?.temporal === true;
+  return kyselyTypePluginOptionOf(configModule, "temporal");
+}
+
+/**
+ * Read the `decimal` option of the kyselyTypePlugin a config module exports in `plugins`.
+ * @param configModule - The imported module namespace
+ * @returns Whether the plugin is configured with `decimal: true`
+ */
+export function kyselyDecimalFromConfig(configModule: unknown): boolean {
+  return kyselyTypePluginOptionOf(configModule, "decimal");
 }
 
 type TsHookModule = {
@@ -154,10 +169,11 @@ export async function loadConfigDefaultsFromConfig(configPath: string): Promise<
     console.warn(
       `tailor-runtime could not load ${configPath} to read defaultDateRepresentation; t date fields use string values in this run. If the config sets "temporal" or "date", tests disagree with tailor.d.ts until the error is fixed: ${describeError(error)}`,
     );
-    return { dateDefault: "legacy", kyselyTemporal: false };
+    return { dateDefault: "legacy", kyselyTemporal: false, kyselyDecimal: false };
   }
   return {
     dateDefault: dateDefaultFromConfig(configModule),
     kyselyTemporal: kyselyTemporalFromConfig(configModule),
+    kyselyDecimal: kyselyDecimalFromConfig(configModule),
   };
 }

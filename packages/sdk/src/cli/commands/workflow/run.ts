@@ -164,6 +164,7 @@ When the wait stops (\`--timeout\` elapsed), the run keeps going and its tempora
       jobName: detected.name,
       config,
       kyselyTemporal: resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false,
+      kyselyDecimal: resolvePluginConfig(plugins, KyselyGeneratorID)?.decimal ?? false,
       client,
       workspaceId,
       authNamespace,

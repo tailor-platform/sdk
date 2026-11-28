@@ -12,13 +12,6 @@ type KyselyTypePluginOptions = (
       /** Output file path for generated types. */
       distPath: string;
       contentMapper?: never;
-      /**
-       * When `true`, generated tables map decimal fields to `Decimal` columns instead of strings,
-       * and the generated `getDB` reads them back as `Decimal` values from decimal.js and accepts
-       * `Decimal` as a query parameter. A decimal field inside an object remains a string.
-       * Not available with `contentMapper`. Defaults to `false`.
-       */
-      decimal?: boolean;
     }
   | {
       /**
@@ -27,7 +20,6 @@ type KyselyTypePluginOptions = (
        */
       contentMapper: true;
       distPath?: never;
-      decimal?: never;
     }
 ) & {
   pgliteSchemaPath?: string;
@@ -38,6 +30,12 @@ type KyselyTypePluginOptions = (
    * Temporal values. Nested time fields remain strings. Defaults to `false`.
    */
   temporal?: boolean;
+  /**
+   * When `true`, generated tables map decimal fields to `Decimal` columns instead of strings,
+   * and `getDB` reads them back as `Decimal` values from decimal.js and accepts `Decimal` as a
+   * query parameter. A decimal field inside an object remains a string. Defaults to `false`.
+   */
+  decimal?: boolean;
 };
 
 // Register this plugin's config type under its own id, via the package's
@@ -67,17 +65,15 @@ export const DEFAULT_KYSELY_TYPES_DIST_PATH = "./generated/tailordb.ts";
  * `Temporal.PlainTime` counterparts instead of `Date`/`string`. Nested time fields
  * remain strings. Defaults to `false`.
  * @param options.decimal - When `true`, generated tables map decimal fields to `Decimal`
- * columns instead of strings. A decimal field inside an object remains a string. Not available
- * with `contentMapper`. Defaults to `false`.
+ * columns instead of strings. A decimal field inside an object remains a string. Defaults to `false`.
  * @returns Plugin instance with onTailorDBReady hook
  */
 export function kyselyTypePlugin(
   options: KyselyTypePluginOptions,
 ): Plugin<unknown, KyselyTypePluginOptions> {
-  const { distPath, contentMapper, decimal } = options as {
+  const { distPath, contentMapper } = options as {
     distPath?: string;
     contentMapper?: boolean;
-    decimal?: boolean;
   };
   if (distPath !== undefined && contentMapper !== undefined) {
     throw new Error("kyselyTypePlugin accepts either distPath or contentMapper: true, not both.");
@@ -87,11 +83,6 @@ export function kyselyTypePlugin(
   }
   if (distPath === undefined && contentMapper !== true) {
     throw new Error("kyselyTypePlugin requires either distPath or contentMapper: true.");
-  }
-  if (contentMapper === true && decimal !== undefined) {
-    throw new Error(
-      "kyselyTypePlugin does not support decimal with contentMapper: true; set distPath instead.",
-    );
   }
   return {
     id: KyselyGeneratorID,

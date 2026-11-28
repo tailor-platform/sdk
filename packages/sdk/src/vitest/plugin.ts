@@ -332,6 +332,7 @@ const DATE_DEFAULT_ENV_VAR = "__TAILOR_RUNTIME_DATE_DEFAULT";
 // option of the kysely type plugin in that config. It is set here, rather than in setup.ts, so it
 // exists before a user setup file imports `getDB`. Empty reads as "no config".
 const KYSELY_TEMPORAL_ENV_VAR = "__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL";
+const KYSELY_DECIMAL_ENV_VAR = "__TAILOR_PLATFORM_BUNDLE_KYSELY_DECIMAL";
 
 // An empty value reads as "no config" in setup.ts and, unlike omitting the
 // key, overrides a stale value inherited from the root `test.env`.
@@ -340,12 +341,14 @@ function setConfigEnv(
   configAbsPath: string,
   dateDefault: EffectiveDateDefault | "",
   kyselyTemporal: boolean | "",
+  kyselyDecimal: boolean | "",
 ): void {
   target.env = {
     ...target.env,
     [CONFIG_ENV_VAR]: configAbsPath,
     [DATE_DEFAULT_ENV_VAR]: dateDefault,
     [KYSELY_TEMPORAL_ENV_VAR]: kyselyTemporal === "" ? "" : String(kyselyTemporal),
+    [KYSELY_DECIMAL_ENV_VAR]: kyselyDecimal === "" ? "" : String(kyselyDecimal),
   };
 }
 
@@ -442,7 +445,7 @@ export function createEnvironmentPlugin(
           if (!inheritsRootEnvironment && !selectsTailorRuntime(projectTest.environment)) {
             // Blank the key so a project on another environment cannot pick up
             // the root's value through Vitest's root-into-project env merge.
-            if (options?.config) setConfigEnv(projectTest, "", "", "");
+            if (options?.config) setConfigEnv(projectTest, "", "", "", "");
             continue;
           }
           projectTest.environment = environmentPath;
@@ -459,8 +462,15 @@ export function createEnvironmentPlugin(
               config.root ??
               process.cwd();
             const projectConfigPath = resolve(projectRoot, options.config);
-            const { dateDefault, kyselyTemporal } = await configDefaultsOf(projectConfigPath);
-            setConfigEnv(projectTest, projectConfigPath, dateDefault, kyselyTemporal);
+            const { dateDefault, kyselyTemporal, kyselyDecimal } =
+              await configDefaultsOf(projectConfigPath);
+            setConfigEnv(
+              projectTest,
+              projectConfigPath,
+              dateDefault,
+              kyselyTemporal,
+              kyselyDecimal,
+            );
           }
         }
       }
@@ -481,6 +491,7 @@ export function createEnvironmentPlugin(
           rootConfigPath,
           rootDefaults?.dateDefault ?? "",
           rootDefaults?.kyselyTemporal ?? "",
+          rootDefaults?.kyselyDecimal ?? "",
         );
       }
 
