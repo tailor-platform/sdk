@@ -615,15 +615,34 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: "temporal",
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain("interface DateRepresentationRegistry {");
     expect(result).toContain('    example: "temporal";');
+  });
+
+  test("keys the app's decimal setting in its own registry, and records an unset app as unset", () => {
+    const set = generateTypeDefinition(...base, {
+      appName: "example",
+      defaultDateRepresentation: undefined,
+      defaultDecimalRepresentation: "decimal",
+    });
+    expect(set).toContain("interface DecimalRepresentationRegistry {");
+    expect(set).toContain('    example: "decimal";');
+
+    const unset = generateTypeDefinition(...base, {
+      appName: "example",
+      defaultDateRepresentation: undefined,
+      defaultDecimalRepresentation: undefined,
+    });
+    expect(unset).toContain('interface DecimalRepresentationRegistry {\n    example: "unset";');
   });
 
   test("records an unset app under the unset key so it follows the SDK default", () => {
     const result = generateTypeDefinition(...base, {
       appName: "example",
       defaultDateRepresentation: undefined,
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain('    example: "unset";');
   });
@@ -632,6 +651,7 @@ describe("generateTypeDefinition DateRepresentationRegistry", () => {
     const result = generateTypeDefinition(...base, {
       appName: "my-app",
       defaultDateRepresentation: "temporal",
+      defaultDecimalRepresentation: undefined,
     });
     expect(result).toContain('    "my-app": "temporal";');
   });

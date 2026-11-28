@@ -392,7 +392,7 @@ async function bundleScriptTarget(args: BundleScriptTargetArgs): Promise<string>
     plugins: [
       entry.plugin,
       createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
-      createPlatformBundleDefinePlugin(undefined, dateDefault),
+      createPlatformBundleDefinePlugin(undefined, { dateDefault }),
     ],
     input: entry.input,
     write: false,

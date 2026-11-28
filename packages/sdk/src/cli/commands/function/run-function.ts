@@ -4,7 +4,7 @@ import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_p
 import * as path from "pathe";
 import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
-import { effectiveDateDefault } from "#/cli/shared/date-default";
+import { effectiveDateDefault, effectiveDecimalDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
 import { functionEnv } from "#/cli/shared/function-env";
 import { logger, styles } from "#/cli/shared/logger";
@@ -221,6 +221,7 @@ export async function prepareFunction(options: PrepareFunctionOptions): Promise<
     logLevel: buildOptions.logLevel,
     treeshake: buildOptions.treeshake,
     dateDefault: effectiveDateDefault(config),
+    decimalDefault: effectiveDecimalDefault(config),
     kyselyTemporal: target.kyselyTemporal ?? false,
     kyselyDecimal: target.kyselyDecimal ?? false,
     machineUser: target.machineUser,

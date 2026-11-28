@@ -327,6 +327,25 @@ describe("AppConfigSchema defaultDateRepresentation", () => {
   });
 });
 
+describe("AppConfigSchema defaultDecimalRepresentation", () => {
+  test('accepts "decimal"', () => {
+    expect(
+      AppConfigSchema.safeParse({ name: "my-app", defaultDecimalRepresentation: "decimal" })
+        .success,
+    ).toBe(true);
+  });
+
+  test.each(["string", "legacy", true])("rejects %j", (value) => {
+    const result = AppConfigSchema.safeParse({
+      name: "my-app",
+      defaultDecimalRepresentation: value,
+    });
+    expect(result.success).toBe(false);
+    if (result.success) throw new Error("Expected AppConfigSchema parsing to fail");
+    expect(result.error.issues[0]?.path).toEqual(["defaultDecimalRepresentation"]);
+  });
+});
+
 describe("AppConfigSchema maintenanceMode", () => {
   test.each([false, "migration", "deploy"])("accepts %j", (value) => {
     expect(AppConfigSchema.safeParse({ name: "my-app", maintenanceMode: value }).success).toBe(

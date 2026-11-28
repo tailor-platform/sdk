@@ -2,7 +2,7 @@ import { Decimal } from "./decimal";
 import { isStorableDecimal } from "./decimal-range";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
-import type { EffectiveDateDefault } from "./types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "./types";
 import type { Temporal } from "temporal-spec";
 
 /**
@@ -114,11 +114,18 @@ function bundledDateDefault(): EffectiveDateDefault {
   return gate === "temporal" || gate === "date" ? gate : "legacy";
 }
 
+function bundledDecimalDefault(): EffectiveDecimalDefault {
+  const gate = (globalThis as MaybeProcessGlobal).process?.env
+    .__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT;
+  return gate === "decimal" ? gate : "legacy";
+}
+
 /**
  * Get the Date, Temporal, or Decimal representation a field converts its values to.
  * @param type - Field type
  * @param as - The field's `as` option
- * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
+ * @param defaultRepresentation - Representation for date fields whose `as` is `"default"`; read from the bundle when omitted
+ * @param decimalDefault - Representation for decimal fields whose `as` is `"default"`; read from the bundle when omitted
  * @returns The representation, or undefined when values stay strings
  * @internal
  */
@@ -126,8 +133,11 @@ export function dateRepresentationOf(
   type: TailorFieldType,
   as: FieldMetadata["as"],
   defaultRepresentation: EffectiveDateDefault = bundledDateDefault(),
+  decimalDefault: EffectiveDecimalDefault = bundledDecimalDefault(),
 ): DateRepresentation | undefined {
-  if (type === "decimal") return as === "decimal" ? "decimal" : undefined;
+  if (type === "decimal") {
+    return (as === "default" ? decimalDefault : as) === "decimal" ? "decimal" : undefined;
+  }
   if (type !== "date" && type !== "datetime" && type !== "time") return undefined;
   const resolved = as === "default" ? defaultRepresentation : as;
   return resolved === "date" || resolved === "temporal" ? resolved : undefined;
@@ -137,8 +147,14 @@ function isDateRepresentationField(
   field: DateRepresentationField,
   representation?: DateRepresentation,
   defaultRepresentation?: EffectiveDateDefault,
+  decimalDefault?: EffectiveDecimalDefault,
 ): boolean {
-  const as = dateRepresentationOf(field.type, field.metadata.as, defaultRepresentation);
+  const as = dateRepresentationOf(
+    field.type,
+    field.metadata.as,
+    defaultRepresentation,
+    decimalDefault,
+  );
   return as !== undefined && (representation === undefined || as === representation);
 }
 
@@ -254,7 +270,8 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
  * Check whether a field or any of its nested fields uses a Date, Temporal, or Decimal representation.
  * @param field - Field to inspect
  * @param representation - Only match fields using this representation
- * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
+ * @param defaultRepresentation - Representation for date fields whose `as` is `"default"`; read from the bundle when omitted
+ * @param decimalDefault - Representation for decimal fields whose `as` is `"default"`; read from the bundle when omitted
  * @returns Whether serializeDateFields would convert any value of the field
  * @internal
  */
@@ -262,11 +279,12 @@ export function hasDateRepresentationFields(
   field: DateRepresentationField,
   representation?: DateRepresentation,
   defaultRepresentation?: EffectiveDateDefault,
+  decimalDefault?: EffectiveDecimalDefault,
 ): boolean {
   return (
-    isDateRepresentationField(field, representation, defaultRepresentation) ||
+    isDateRepresentationField(field, representation, defaultRepresentation, decimalDefault) ||
     Object.values(field.fields).some((child) =>
-      hasDateRepresentationFields(child, representation, defaultRepresentation),
+      hasDateRepresentationFields(child, representation, defaultRepresentation, decimalDefault),
     )
   );
 }

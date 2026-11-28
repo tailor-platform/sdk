@@ -115,7 +115,7 @@ GraphQL still accepts and returns `YYYY-MM-DD` strings. The SDK converts input t
 
 This option also works in nested objects and with `array: true` or `optional: true`. Input must be a valid calendar date, and output must be a valid `Date` with a 4-digit UTC year (0000-9999). Both deployed resolvers and `tailor function run` perform these conversions.
 
-A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use; with [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings), the Temporal conversion is always included. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
+A resolver bundle only includes the conversion code for the representations (`as: "date"` or `as: "temporal"`) its `input` and `output` use; with [`defaultDateRepresentation: "temporal"`](../configuration.md#application-settings), the Temporal conversion is always included, and with [`defaultDecimalRepresentation: "decimal"`](../configuration.md#application-settings), the Decimal conversion is. To parse other values with such fields inside `body`, for example an external API response, use `parseDateFields` instead of `.parse()`. It takes the same arguments and returns the same result as `.parse()`. Calling `.parse()` on a field whose representation the bundle leaves out throws an error that points to `parseDateFields`.
 
 ```typescript
 import { parseDateFields } from "@tailor-platform/sdk/runtime";
@@ -219,7 +219,9 @@ const price: Decimal = new Decimal("12.34");
 
 Arithmetic on `Decimal` rounds results to 20 significant digits by default (decimal.js's default precision), so `new Decimal("12345678901234567890.123456789").plus(1)` becomes `12345678901234567891`. Parsing and output do not round. If your values need more digits, raise the precision before calculating, for example `Decimal.set({ precision: 40 })` at the top of the resolver file.
 
-A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`. To parse other values with such fields inside `body`, use `parseDecimalFields`, exported by `@tailor-platform/sdk/runtime`. It takes the same arguments and returns the same result as `.parse()`, and converts decimal fields even when the bundle would not. `parseDecimalFields` also converts `as: "date"` and `as: "temporal"` fields in the same schema. `parseDateFields` does not convert decimal fields; it throws an error that points to `parseDecimalFields`.
+To use `Decimal` values without writing `as: "decimal"` on every field, set [`defaultDecimalRepresentation: "decimal"`](../configuration.md#application-settings) in `defineConfig()`. Fields that omit `as` then use `Decimal`, and `as: "string"` opts a single field back to strings. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+
+A resolver bundle only includes decimal.js when its `input` or `output` declares a field with `as: "decimal"`, or when [`defaultDecimalRepresentation`](../configuration.md#application-settings) is `"decimal"`. To parse other values with such fields inside `body`, use `parseDecimalFields`, exported by `@tailor-platform/sdk/runtime`. It takes the same arguments and returns the same result as `.parse()`, and converts decimal fields even when the bundle would not. `parseDecimalFields` also converts `as: "date"` and `as: "temporal"` fields in the same schema. `parseDateFields` does not convert decimal fields; it throws an error that points to `parseDecimalFields`.
 
 ### Custom Type Name (`typeName`)
 

@@ -38,7 +38,7 @@ import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput, TreeshakeOptions } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
 
@@ -80,6 +80,8 @@ interface BundleForRunOptions {
   defaultPermission?: Resolver["permission"] | undefined;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault | undefined;
+  /** Representation applied to `t.decimal()` fields that omit `as` */
+  decimalDefault?: EffectiveDecimalDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
   kyselyTemporal?: boolean | undefined;
   /** Whether `kyselyTypePlugin` is configured with `decimal: true`, which the bundled `getDB` follows */
@@ -109,6 +111,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     machineUser,
     workspaceId,
     dateDefault = "legacy",
+    decimalDefault = "legacy",
     kyselyTemporal = false,
     kyselyDecimal = false,
   } = options;
@@ -130,6 +133,7 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
     workspaceId,
     defaultPermission: options.defaultPermission,
     dateDefault,
+    decimalDefault,
   });
   fs.writeFileSync(entryPath, entryContent);
 
@@ -145,11 +149,9 @@ export async function bundleForRun(options: BundleForRunOptions): Promise<Bundle
         createTsconfigPathsPlugin(),
         createPlatformBundleDefinePlugin(
           detected.type === "resolver"
-            ? resolverDateRepresentations(detected.fields, dateDefault)
-            : { date: true, temporal: true, decimal: false },
-          dateDefault,
-          kyselyTemporal,
-          kyselyDecimal,
+            ? resolverDateRepresentations(detected.fields, dateDefault, decimalDefault)
+            : undefined,
+          { dateDefault, decimalDefault, kyselyTemporal, kyselyDecimal },
         ),
         createSdkBuilderPurePlugin(),
       ],
@@ -210,6 +212,8 @@ type GenerateEntryOptions = {
   defaultPermission?: Resolver["permission"] | undefined;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault: EffectiveDateDefault;
+  /** Representation applied to `t.decimal()` fields that omit `as` */
+  decimalDefault: EffectiveDecimalDefault;
 };
 
 /**
@@ -218,8 +222,16 @@ type GenerateEntryOptions = {
  * @returns Entry file content string
  */
 function generateEntry(options: GenerateEntryOptions): string {
-  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission, dateDefault } =
-    options;
+  const {
+    detected,
+    sourceFile,
+    env,
+    machineUser,
+    workspaceId,
+    defaultPermission,
+    dateDefault,
+    decimalDefault,
+  } = options;
   const absoluteSourcePath = path.resolve(sourceFile);
 
   switch (detected.type) {
@@ -248,6 +260,7 @@ function generateEntry(options: GenerateEntryOptions): string {
       const { importStatement, resultExpr } = buildResolverResultSerialization(
         detected.fields?.output,
         dateDefault,
+        decimalDefault,
       );
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";

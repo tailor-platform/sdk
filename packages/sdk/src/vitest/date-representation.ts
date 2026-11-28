@@ -1,7 +1,8 @@
 import type { DateRepresentationOption } from "#/configure/types/field.types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "#/runtime/types";
 
 const DATE_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT";
+const DECIMAL_DEFAULT_GATE = "__TAILOR_PLATFORM_BUNDLE_DECIMAL_DEFAULT";
 
 /**
  * Expose the date default to `t` date fields in this worker, the way the
@@ -19,6 +20,25 @@ export function applyDateDefault(dateDefault: EffectiveDateDefault): () => void 
   return () => {
     if (previous === undefined) delete process.env[DATE_DEFAULT_GATE];
     else process.env[DATE_DEFAULT_GATE] = previous;
+  };
+}
+
+/**
+ * Expose the decimal default to `t.decimal()` fields in this worker, the way the
+ * define plugin folds it into deployed bundles.
+ * @param decimalDefault - The representation `t.decimal()` fields without `as` follow
+ * @returns A function that restores the previous value
+ */
+export function applyDecimalDefault(decimalDefault: EffectiveDecimalDefault): () => void {
+  const previous = process.env[DECIMAL_DEFAULT_GATE];
+  if (decimalDefault === "legacy") {
+    delete process.env[DECIMAL_DEFAULT_GATE];
+  } else {
+    process.env[DECIMAL_DEFAULT_GATE] = decimalDefault;
+  }
+  return () => {
+    if (previous === undefined) delete process.env[DECIMAL_DEFAULT_GATE];
+    else process.env[DECIMAL_DEFAULT_GATE] = previous;
   };
 }
 

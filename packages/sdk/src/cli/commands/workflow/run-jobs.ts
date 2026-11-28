@@ -8,7 +8,7 @@ import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { createWorkflowService, type CollectedJob } from "#/cli/services/workflow/service";
 import { buildOptionsOf, projectSourcesOf } from "#/cli/shared/build-options";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
-import { effectiveDateDefault } from "#/cli/shared/date-default";
+import { effectiveDateDefault, effectiveDecimalDefault } from "#/cli/shared/date-default";
 import { CLIError } from "#/cli/shared/errors";
 import { functionEnv } from "#/cli/shared/function-env";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
@@ -183,6 +183,7 @@ export async function bundleWorkflowRunJobs(
     allowedRuntimeGlobals: buildOptions.allowedRuntimeGlobals,
     tsconfigCache,
     dateDefault: effectiveDateDefault(config),
+    decimalDefault: effectiveDecimalDefault(config),
     kyselyTemporal: target.kyselyTemporal ?? false,
     kyselyDecimal: target.kyselyDecimal ?? false,
   });

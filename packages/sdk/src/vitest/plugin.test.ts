@@ -62,6 +62,7 @@ function applyConfig(plugin: ReturnType<typeof createEnvironmentPlugin>, userCon
 const legacyLoader = async () => ({
   dateDefault: "legacy" as const,
   kyselyTemporal: false,
+  decimalDefault: "legacy" as const,
   kyselyDecimal: false,
 });
 
@@ -798,12 +799,26 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
       dateDefault: "temporal",
       kyselyTemporal: false,
+      decimalDefault: "legacy" as const,
       kyselyDecimal: false,
     }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
     await applyConfig(plugin, userConfig);
 
     expect(userConfig.test.env.__TAILOR_RUNTIME_DATE_DEFAULT).toBe("temporal");
+  });
+
+  test("passes the decimal default the host read from the config to the root test env", async () => {
+    const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
+      dateDefault: "legacy",
+      decimalDefault: "decimal",
+      kyselyTemporal: false,
+      kyselyDecimal: false,
+    }));
+    const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
+    await applyConfig(plugin, userConfig);
+
+    expect(userConfig.test.env.__TAILOR_RUNTIME_DECIMAL_DEFAULT).toBe("decimal");
   });
 
   test("reads each project's config once and seeds its own date default", async () => {
@@ -813,6 +828,7 @@ describe("createEnvironmentPlugin", () => {
       return {
         dateDefault: path.includes("/temporal/") ? "temporal" : "legacy",
         kyselyTemporal: false,
+        decimalDefault: "legacy" as const,
         kyselyDecimal: false,
       };
     });
@@ -843,6 +859,7 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async () => ({
       dateDefault: "legacy",
       kyselyTemporal: true,
+      decimalDefault: "legacy" as const,
       kyselyDecimal: true,
     }));
     const userConfig: any = { root: "/proj", test: { environment: "tailor-runtime" } };
@@ -856,6 +873,7 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" }, async (path) => ({
       dateDefault: "legacy",
       kyselyTemporal: path.includes("/temporal/"),
+      decimalDefault: "legacy" as const,
       kyselyDecimal: false,
     }));
     const userConfig: any = {

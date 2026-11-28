@@ -31,7 +31,7 @@ import {
 } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import type { AllowedRuntimeGlobals, LogLevel, TreeshakeOptions } from "#/configure/config/types";
-import type { EffectiveDateDefault } from "#/runtime/types";
+import type { EffectiveDateDefault, EffectiveDecimalDefault } from "#/runtime/types";
 
 /**
  * Bundle settings shared by every function built in one CLI run
@@ -57,6 +57,8 @@ export interface FunctionBundleSettings {
   sdkBuilderAnnotationCache?: SdkBuilderAnnotationCache | undefined;
   /** Representation applied to `t` date fields that omit `as` */
   dateDefault?: EffectiveDateDefault | undefined;
+  /** Representation applied to `t.decimal()` fields that omit `as` */
+  decimalDefault?: EffectiveDecimalDefault | undefined;
   /** Whether `kyselyTypePlugin` is configured with `temporal: true`, which the bundled `getDB` follows */
   kyselyTemporal?: boolean | undefined;
   /** Whether `kyselyTypePlugin` is configured with `decimal: true`, which the bundled `getDB` follows */
@@ -126,6 +128,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
     tsconfigCache,
     sdkBuilderAnnotationCache,
     dateDefault = "legacy",
+    decimalDefault = "legacy",
     kyselyTemporal = false,
     kyselyDecimal = false,
   } = options;
@@ -142,6 +145,7 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
       serializeStartContext(startContext),
       entrySource,
       dateDefault,
+      decimalDefault,
       kyselyTemporal,
       kyselyDecimal,
     ]),
@@ -175,12 +179,12 @@ export async function buildFunctionBundle(options: BuildFunctionBundleOptions): 
           createStartTransformPlugin(startContext, hookFailures),
         ]),
         createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
-        createPlatformBundleDefinePlugin(
-          representations,
+        createPlatformBundleDefinePlugin(representations, {
           dateDefault,
+          decimalDefault,
           kyselyTemporal,
           kyselyDecimal,
-        ),
+        }),
         createSdkBuilderPurePlugin(sdkBuilderAnnotationCache),
         ...cachePlugins,
       ];

@@ -32,7 +32,7 @@ async function buildEntry(
     plugins: [
       createGeneratedEntryResolverPlugin(entryPath, projectDir),
       createTsconfigPathsPlugin(),
-      createPlatformBundleDefinePlugin(undefined, dateDefault),
+      createPlatformBundleDefinePlugin(undefined, { dateDefault }),
     ],
     input: entryPath,
     write: false,

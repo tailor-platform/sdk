@@ -54,6 +54,7 @@ export async function bundleResolvers(
     defaultPermission,
     allowedRuntimeGlobals,
     dateDefault = "legacy",
+    decimalDefault = "legacy",
   } = options;
   const bundledCode = new Map<string, string>();
   if (files.length === 0) {
@@ -97,7 +98,8 @@ export async function bundleResolvers(
       sourceFile: resolver.sourceFile,
       tsconfig,
       dateDefault,
-      representations: resolverDateRepresentations(resolver, dateDefault),
+      decimalDefault,
+      representations: resolverDateRepresentations(resolver, dateDefault, decimalDefault),
       runtimeGlobals: { label: `Resolver "${resolver.name}"`, allowed: allowedRuntimeGlobals },
       entry: (absoluteSourcePath) => {
         const validatedInputExpr = buildResolverValidatedInputExpr({
@@ -107,6 +109,7 @@ export async function bundleResolvers(
         const { importStatement, resultExpr } = buildResolverResultSerialization(
           resolver.output,
           dateDefault,
+          decimalDefault,
         );
         return ml /* js */ `
           import _internalResolver from "${absoluteSourcePath}";

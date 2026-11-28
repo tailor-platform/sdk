@@ -8,6 +8,7 @@ import { definePlugins } from "#/configure/config/index";
 import { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
 import {
   dateDefaultFromConfig,
+  decimalDefaultFromConfig,
   kyselyDecimalFromConfig,
   kyselyTemporalFromConfig,
 } from "./date-default-loader";
@@ -38,6 +39,25 @@ describe("dateDefaultFromConfig", () => {
     expect(() => dateDefaultFromConfig({ default: { defaultDateRepresentation: true } })).toThrow(
       /defaultDateRepresentation/,
     );
+  });
+});
+
+describe("decimalDefaultFromConfig", () => {
+  test("reads defaultDecimalRepresentation from the default export", () => {
+    expect(decimalDefaultFromConfig({ default: { defaultDecimalRepresentation: "decimal" } })).toBe(
+      "decimal",
+    );
+  });
+
+  test("an absent setting keeps the legacy representation", () => {
+    expect(decimalDefaultFromConfig({ default: {} })).toBe("legacy");
+    expect(decimalDefaultFromConfig({})).toBe("legacy");
+  });
+
+  test("a value the config schema rejects fails instead of silently keeping strings", () => {
+    expect(() =>
+      decimalDefaultFromConfig({ default: { defaultDecimalRepresentation: "string" } }),
+    ).toThrow(/defaultDecimalRepresentation.*"string"/);
   });
 });
 
@@ -211,6 +231,17 @@ describe("loadConfigDefaultsFromConfig: date default", { timeout: 60_000 }, () =
     expect(outcome.value).toBe("legacy");
     expect(outcome.warnings).toHaveLength(1);
     expect(outcome.warnings[0]).toMatch(/string values.*tailor\.d\.ts.*missing env/s);
+  });
+
+  test("the warning for a config that throws names defaultDecimalRepresentation and its value", () => {
+    const configPath = fixture("throws-decimal", {
+      "tailor.config.ts": `if (!process.env.TAILOR_TEST_UNSET_VARIABLE) throw new Error("missing env");\nexport default { name: "app", defaultDecimalRepresentation: "decimal" };\n`,
+    });
+    const outcome = run(configPath);
+    expect(outcome.warnings).toHaveLength(1);
+    expect(outcome.warnings[0]).toMatch(
+      /defaultDecimalRepresentation.*t\.decimal\(\).*"decimal".*tailor\.d\.ts/s,
+    );
   });
 });
 

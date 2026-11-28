@@ -105,6 +105,11 @@ const appConfigObjectSchema = z.strictObject({
       message: `'defaultDateRepresentation' must be "temporal" or "date".`,
     })
     .optional(),
+  defaultDecimalRepresentation: z
+    .literal("decimal", {
+      message: `'defaultDecimalRepresentation' must be "decimal".`,
+    })
+    .optional(),
   maintenanceMode: z
     .union([z.literal(false), z.enum(["migration", "deploy"])], {
       message: `'maintenanceMode' must be false, "migration", or "deploy".`,
@@ -278,6 +283,7 @@ export const WorkspaceConfigSchema = appConfigObjectSchema
     env: true,
     buildOptions: true,
     defaultDateRepresentation: true,
+    defaultDecimalRepresentation: true,
     maintenanceMode: true,
     executor: true,
     workflow: true,

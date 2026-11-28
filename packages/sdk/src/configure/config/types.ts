@@ -342,6 +342,16 @@ export interface AppConfig<
    */
   defaultDateRepresentation?: "temporal" | "date";
   /**
+   * Value representation of `t.decimal()` fields that omit `as`. `"decimal"`
+   * gives them `Decimal` values from decimal.js; a field's own `as` takes
+   * precedence, so `as: "string"` keeps one field a string. Applied in every
+   * bundled function and in the `tailor-runtime` Vitest environment. TailorDB
+   * fields are not affected. Run `tailor generate` after changing it so
+   * `tailor.d.ts` updates the field types.
+   * @example defaultDecimalRepresentation: "decimal"
+   */
+  defaultDecimalRepresentation?: "decimal";
+  /**
    * Whether `deploy` puts the TailorDB namespaces that have pending migrations
    * into maintenance mode while it applies them. In maintenance mode, the
    * generated GraphQL create, update, delete, and bulk upsert operations of
@@ -381,6 +391,7 @@ export type WorkspaceSettings = Pick<
   | "secrets"
   | "buildOptions"
   | "defaultDateRepresentation"
+  | "defaultDecimalRepresentation"
   | "maintenanceMode"
 >;
 

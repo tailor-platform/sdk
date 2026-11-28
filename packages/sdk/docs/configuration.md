@@ -120,6 +120,17 @@ The default applies wherever the SDK parses or serializes `t` fields on your beh
 
 The setting is per `tailor.config.ts`, but the field types are declared through `tailor.d.ts`, which TypeScript merges across every file in a program. If one `tsconfig.json` includes the `tailor.d.ts` of several applications, they must agree on `defaultDateRepresentation`. When they differ, `t.date()`, `t.datetime()`, and `t.time()` called without `as` fail to type-check in that program until the configs are aligned or each application gets its own `tsconfig.json`.
 
+**Decimal Representation** (`defaultDecimalRepresentation`): Sets the value representation of `t.decimal()` fields that omit `as`. With `"decimal"`, those fields carry [`Decimal`](https://mikemcl.github.io/decimal.js/) values from decimal.js instead of strings, so a project that uses `Decimal` everywhere does not have to repeat `as: "decimal"` on every field. A field's own `as` still wins, including `as: "string"`. The setting applies to the `t` fields of resolvers, executors, workflows, and auth hooks; TailorDB fields are not affected. Run `tailor generate` after changing the setting so `tailor.d.ts` updates the field types.
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  defaultDecimalRepresentation: "decimal",
+});
+```
+
+As with `defaultDateRepresentation`, one `tsconfig.json` that includes the `tailor.d.ts` of several applications requires them to agree on `defaultDecimalRepresentation`. When they differ, `t.decimal()` called without `as` fails to type-check in that program until the configs are aligned or each application gets its own `tsconfig.json`.
+
 **Maintenance Mode** (`maintenanceMode`, Beta): Whether `deploy` restricts the TailorDB namespaces it migrates while it applies pending migrations: `"migration"` (the default) restricts them until the migrations complete, `"deploy"` until the whole deploy completes, and `false` does not restrict them. See [Maintenance mode](./services/tailordb/migration.md#maintenance-mode) for what is restricted and what concurrent requests can observe without it.
 
 ```typescript

@@ -622,7 +622,7 @@ describe("bundleResolvers decimal", () => {
     `  output: { type: "decimal", metadata: { ${as} }, fields: {} },\n` +
     `};\n`;
 
-  const bundle = async (source: string) => {
+  const bundle = async (source: string, decimalDefault?: "decimal") => {
     using tmp = tempCwd("sdk-bundler-decimal-");
     writeSdkDependency(tmp.dir);
     fs.writeFileSync(path.join(tmp.dir, "resolver.ts"), source);
@@ -630,6 +630,7 @@ describe("bundleResolvers decimal", () => {
       namespace: "prices",
       files: fs.globSync(path.resolve(tmp.dir, "./resolver.ts")),
       baseDir: tmp.dir,
+      ...(decimalDefault ? { decimalDefault } : {}),
     });
     return assertDefined(result.get("price"), "price bundle missing");
   };
@@ -640,6 +641,20 @@ describe("bundleResolvers decimal", () => {
 
   test("keeps the Decimal converter in a resolver that uses as: decimal", async () => {
     expect(await bundle(gateResolver('as: "decimal"'))).toMatch(/body:async\(\)=>(?:false|!1)\b/);
+  });
+
+  test("keeps the Decimal converter in a resolver whose field follows a decimal default", async () => {
+    expect(await bundle(gateResolver('as: "default"'), "decimal")).toMatch(
+      /body:async\(\)=>(?:false|!1)\b/,
+    );
+  });
+
+  test("leaves the Decimal converter out of a resolver whose field follows the legacy default", async () => {
+    expect(await bundle(gateResolver('as: "default"'))).toMatch(/body:async\(\)=>(?:true|!0)\b/);
+  });
+
+  test("keeps the Decimal converter under a decimal default even when no field declares it", async () => {
+    expect(await bundle(gateResolver(""), "decimal")).toMatch(/body:async\(\)=>(?:false|!1)\b/);
   });
 });
 

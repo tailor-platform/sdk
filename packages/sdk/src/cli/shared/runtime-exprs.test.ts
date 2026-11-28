@@ -544,6 +544,51 @@ describe("buildResolverResultSerialization", () => {
   });
 });
 
+describe("decimal default in resolver bundles", () => {
+  const field = (
+    type: TailorField["type"],
+    metadata: TailorField["metadata"] = {},
+  ): TailorField => ({ type, metadata, fields: {} });
+
+  test("fields following a decimal default need the Decimal converter and output serialization", () => {
+    const resolver = {
+      input: { price: field("decimal", { as: "default" }) },
+      output: field("decimal", { as: "default" }),
+    };
+    expect(resolverDateRepresentations(resolver, "legacy", "decimal")).toEqual({
+      date: false,
+      temporal: false,
+      decimal: true,
+    });
+    expect(buildResolverResultSerialization(resolver.output, "legacy", "decimal").resultExpr).toBe(
+      "serializeDateFields(_internalResolver.output, result)",
+    );
+  });
+
+  test("fields following the legacy default need no decimal converter", () => {
+    const resolver = {
+      input: { price: field("decimal", { as: "default" }) },
+      output: field("decimal", { as: "default" }),
+    };
+    expect(resolverDateRepresentations(resolver, "legacy", "legacy").decimal).toBe(false);
+    expect(buildResolverResultSerialization(resolver.output, "legacy", "legacy").resultExpr).toBe(
+      "result",
+    );
+  });
+
+  test("a decimal default keeps the Decimal converter for fields parsed inside the body", () => {
+    const resolver = { input: { name: field("string") }, output: field("string") };
+    expect(resolverDateRepresentations(resolver, "legacy", "decimal").decimal).toBe(true);
+  });
+
+  test('an explicit `as: "string"` output is not serialized under a decimal default', () => {
+    expect(
+      buildResolverResultSerialization(field("decimal", { as: "string" }), "legacy", "decimal")
+        .resultExpr,
+    ).toBe("result");
+  });
+});
+
 describe("date default in resolver bundles", () => {
   const field = (
     type: TailorField["type"],
