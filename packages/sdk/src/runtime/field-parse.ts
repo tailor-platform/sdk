@@ -1,4 +1,5 @@
 import { dateRepresentationOf, formatDate } from "./date";
+import { parseDecimal } from "./decimal";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
@@ -298,6 +299,7 @@ type DateParser = (type: TailorFieldType, text: string) => unknown;
 type DateParsers = {
   readonly date: DateParser | undefined;
   readonly temporal: DateParser | undefined;
+  readonly decimal: DateParser | undefined;
 };
 
 function rejectLeapSecond(type: TailorFieldType, text: string): void {
@@ -333,7 +335,23 @@ function parseAsTemporal(type: TailorFieldType, text: string): unknown {
   return Temporal.PlainTime.from(text);
 }
 
-const allDateParsers: DateParsers = { date: parseAsDate, temporal: parseAsTemporal };
+function parseAsDecimal(_type: TailorFieldType, text: string): unknown {
+  return parseDecimal(text);
+}
+
+// parseDateFields keeps decimal.js out of bundles that only parse dates, so a decimal
+// field reaching it fails loudly instead of staying a string.
+function rejectDecimal(): never {
+  throw new Error(
+    'Parsing fields declared with as: "decimal" needs parseDecimalFields, exported by "@tailor-platform/sdk/runtime".',
+  );
+}
+
+const allDateParsers: DateParsers = {
+  date: parseAsDate,
+  temporal: parseAsTemporal,
+  decimal: rejectDecimal,
+};
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
 
@@ -345,6 +363,9 @@ const bundledDateParsers: DateParsers = {
     .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
     ? undefined
     : parseAsTemporal,
+  decimal: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL
+    ? undefined
+    : parseAsDecimal,
 };
 
 function deserializeDates(
@@ -360,7 +381,7 @@ function deserializeDates(
       const parse = dateParsers[as];
       if (!parse) {
         throw new Error(
-          `Parsing fields declared with as: "${as}" is not included in this bundle. Parse them with parseDateFields, exported by "@tailor-platform/sdk/runtime".`,
+          `Parsing fields declared with as: "${as}" is not included in this bundle. Parse them with ${as === "decimal" ? "parseDecimalFields" : "parseDateFields"}, exported by "@tailor-platform/sdk/runtime".`,
         );
       }
       try {
@@ -441,4 +462,21 @@ export function parseDateFields<Output>(
   args: FieldParseArgs,
 ): StandardSchemaV1.Result<Output> {
   return parseInternal({ ...args, field, pathArray: [] }, allDateParsers);
+}
+
+/**
+ * Parse a value like `field.parse`, converting fields declared with `as: "decimal"`, `as: "date"`,
+ * or `as: "temporal"` even in bundles that leave that conversion out of `field.parse`.
+ * @param field - Field defining the value's shape
+ * @param args - Value to parse, with the context data and invoker passed to validators
+ * @returns Validation result with Decimal, Date, and Temporal fields converted
+ */
+export function parseDecimalFields<Output>(
+  field: ParsableField<Output>,
+  args: FieldParseArgs,
+): StandardSchemaV1.Result<Output> {
+  return parseInternal(
+    { ...args, field, pathArray: [] },
+    { ...allDateParsers, decimal: parseAsDecimal },
+  );
 }

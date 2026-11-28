@@ -27,6 +27,8 @@ const WITHOUT_DATE_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE\b/g;
 const WITHOUT_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL\b/g;
+const WITHOUT_DECIMAL_GATE =
+  /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL\b/g;
 // Read at call time by `dateRepresentationOf`; folded to the configured literal here.
 const DATE_DEFAULT_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_DATE_DEFAULT\b/g;
@@ -36,22 +38,23 @@ const KYSELY_TEMPORAL_GATE =
   /(?<![\w$.])globalThis\.process\?\.env\.__TAILOR_PLATFORM_BUNDLE_KYSELY_TEMPORAL\b/g;
 
 /**
- * Date representations whose conversion code a bundle keeps.
+ * Value representations (`as: "date"`, `"temporal"`, `"decimal"`) whose conversion code a bundle keeps.
  */
-export type BundledDateRepresentations = {
+export type BundledRepresentations = {
   date: boolean;
   temporal: boolean;
+  decimal: boolean;
 };
 
 /**
  * Create the platform bundle define plugin.
- * @param dateRepresentations - Date representations whose conversion code the bundle keeps
+ * @param representations - Value representations whose conversion code the bundle keeps
  * @param dateDefault - Representation applied to `t` date fields that omit `as`
  * @param kyselyTemporal - Whether `kyselyTypePlugin` is configured with `temporal: true`
  * @returns Rolldown plugin folding the platform bundle gates
  */
 export function createPlatformBundleDefinePlugin(
-  dateRepresentations: BundledDateRepresentations = { date: true, temporal: true },
+  representations: BundledRepresentations = { date: true, temporal: true, decimal: false },
   dateDefault: EffectiveDateDefault = "legacy",
   kyselyTemporal = false,
 ): rolldown.Plugin {
@@ -63,8 +66,9 @@ export function createPlatformBundleDefinePlugin(
       if (!code.includes("__TAILOR_PLATFORM_BUNDLE")) return null;
       const source = new RolldownMagicString(code)
         .replaceAll(GATE, "true")
-        .replaceAll(WITHOUT_DATE_GATE, String(!dateRepresentations.date))
-        .replaceAll(WITHOUT_TEMPORAL_GATE, String(!dateRepresentations.temporal))
+        .replaceAll(WITHOUT_DATE_GATE, String(!representations.date))
+        .replaceAll(WITHOUT_TEMPORAL_GATE, String(!representations.temporal))
+        .replaceAll(WITHOUT_DECIMAL_GATE, String(!representations.decimal))
         .replaceAll(DATE_DEFAULT_GATE, dateDefaultLiteral)
         .replaceAll(KYSELY_TEMPORAL_GATE, kyselyTemporalLiteral);
       return {

@@ -1,3 +1,4 @@
+import type { Decimal } from "decimal.js";
 import type { Temporal } from "temporal-spec";
 
 export type Prettify<T> = {
@@ -23,6 +24,7 @@ export type IsUnion<T, U extends T = T> = T extends unknown
 /** @lintignore exported for the type-checked source in temporal-types.test.ts */
 export type DeepWritable<T> = T extends
   | Date
+  | Decimal
   | Temporal.PlainDate
   | Temporal.Instant
   | Temporal.PlainTime
@@ -36,6 +38,7 @@ export type DeepWritable<T> = T extends
 
 export type DeepReadonly<T> = T extends
   | Date
+  | Decimal
   | Temporal.PlainDate
   | Temporal.Instant
   | Temporal.PlainTime
@@ -52,7 +55,7 @@ export type DeepReadonly<T> = T extends
 export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never;
 
 /**
- * Replace `Date` and supported Temporal values with `string` throughout a type.
+ * Replace `Date`, `Decimal` and supported Temporal values with `string` throughout a type.
  *
  * Values that reach user code as a parsed JSON payload cannot carry a `Date`
  * or Temporal instance, so a type describing such a payload must
@@ -61,6 +64,7 @@ export type output<T> = T extends { _output: infer U } ? DeepWritable<U> : never
  */
 export type SerializeDates<T> = T extends
   | Date
+  | Decimal
   | Temporal.PlainDate
   | Temporal.Instant
   | Temporal.PlainTime

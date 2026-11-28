@@ -26,7 +26,7 @@ describe("controlplane", async () => {
       namespaceName,
       pipelineResolverView: PipelineResolverView.FULL,
     });
-    expect(pipelineResolvers.length).toBe(10);
+    expect(pipelineResolvers.length).toBe(11);
 
     const temporalRoundTrip = pipelineResolvers.find((e) => e.name === "temporalRoundTrip");
     expect(temporalRoundTrip).toMatchObject({
@@ -214,6 +214,28 @@ describe("dataplane", () => {
         eventDatetimeString: "2026-03-14T09:30:00Z",
         eventTimeString: "09:30:00",
       },
+    });
+  });
+
+  test("adds decimals without losing precision and writes them without an exponent", async () => {
+    const query = gql`
+      query {
+        decimalEcho(a: "0.1", b: "0.2") {
+          sum
+          isDecimal
+        }
+        tiny: decimalEcho(a: "1e-7", b: "0") {
+          sum
+        }
+      }
+    `;
+
+    const result = await graphQLClient.rawRequest(query);
+
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({
+      decimalEcho: { sum: "0.3", isDecimal: true },
+      tiny: { sum: "0.0000001" },
     });
   });
 

@@ -4,6 +4,7 @@
 // references, importable type-only from any layer.
 
 import type { IsUnion, TypeLevelError } from "#/types/helpers";
+import type { Decimal } from "decimal.js";
 import type { Temporal } from "temporal-spec";
 
 export interface EnumValue {
@@ -40,8 +41,11 @@ export type TailorToTs = {
 } & Record<TailorFieldType, unknown>;
 
 export interface FieldMetadata {
-  /** Date value representation. `"default"` follows the configured `defaultDateRepresentation`. */
-  as?: "string" | "date" | "temporal" | "default";
+  /**
+   * Value representation. `"default"` follows the configured `defaultDateRepresentation`;
+   * `"decimal"` is for decimal fields only.
+   */
+  as?: "string" | "date" | "temporal" | "decimal" | "default";
   description?: string;
   required?: boolean;
 
@@ -190,6 +194,17 @@ type TimeValueOf<R> = R extends "date"
 export type TimeFieldValueFor<As, Default> = TimeValueOf<ResolveDateRepresentation<As, Default>>;
 
 export type TimeFieldValue<As> = TimeFieldValueFor<As, DefaultDateRepresentation>;
+
+/** Options for a decimal field. */
+export type DecimalFieldOptions = FieldOptions & {
+  /**
+   * Choose a string, or a `Decimal` from decimal.js. Defaults to string.
+   */
+  as?: "string" | "decimal";
+};
+
+/** Value type of a decimal field. */
+export type DecimalFieldValue<As> = As extends "decimal" ? Decimal : string;
 
 // Return Output type based on FieldOptions.
 export type FieldOutput<T, O extends FieldOptions> = OptionalFieldOutput<ArrayFieldOutput<T, O>, O>;

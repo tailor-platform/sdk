@@ -556,6 +556,7 @@ describe("date default in resolver bundles", () => {
     expect(resolverDateRepresentations(resolver, "temporal")).toEqual({
       date: false,
       temporal: true,
+      decimal: false,
     });
     expect(
       buildResolverResultSerialization(field("date", { as: "default" }), "temporal").resultExpr,
@@ -570,6 +571,7 @@ describe("date default in resolver bundles", () => {
     expect(resolverDateRepresentations(resolver, "legacy")).toEqual({
       date: false,
       temporal: false,
+      decimal: false,
     });
     expect(buildResolverResultSerialization(resolver.output, "legacy").resultExpr).toBe("result");
   });
@@ -579,6 +581,7 @@ describe("date default in resolver bundles", () => {
     expect(resolverDateRepresentations(resolver, "temporal")).toEqual({
       date: false,
       temporal: true,
+      decimal: false,
     });
     expect(buildResolverResultSerialization(resolver.output, "temporal").resultExpr).toBe("result");
   });
@@ -590,10 +593,28 @@ describe("date default in resolver bundles", () => {
 
   test("a date default keeps the Date converter and serializes a date output", () => {
     const resolver = { input: { name: field("string") }, output: field("date", { as: "default" }) };
-    expect(resolverDateRepresentations(resolver, "date")).toEqual({ date: true, temporal: false });
+    expect(resolverDateRepresentations(resolver, "date")).toEqual({
+      date: true,
+      temporal: false,
+      decimal: false,
+    });
     expect(buildResolverResultSerialization(resolver.output, "date").resultExpr).toBe(
       "serializeDateFields(_internalResolver.output, result)",
     );
+  });
+
+  test('only fields declared with `as: "decimal"` keep the Decimal converter', () => {
+    const plain = { input: { price: field("decimal") }, output: field("decimal") };
+    expect(resolverDateRepresentations(plain, "legacy").decimal).toBe(false);
+    const asDecimal = {
+      input: { price: field("decimal", { as: "decimal" }) },
+      output: field("string"),
+    };
+    expect(resolverDateRepresentations(asDecimal, "legacy").decimal).toBe(true);
+    expect(buildResolverResultSerialization(field("decimal", { as: "decimal" })).resultExpr).toBe(
+      "serializeDateFields(_internalResolver.output, result)",
+    );
+    expect(buildResolverResultSerialization(field("decimal")).resultExpr).toBe("result");
   });
 
   test("a temporal default still leaves the Date converter out", () => {

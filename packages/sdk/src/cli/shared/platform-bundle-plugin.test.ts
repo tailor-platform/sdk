@@ -33,7 +33,13 @@ describe("platformBundleDefinePlugin", () => {
     writeFileSync(sourceFile, sourceLines.join("\n"));
     const result = await build({
       input: sourceFile,
-      plugins: [createPlatformBundleDefinePlugin({ date: false, temporal: false }, "date", true)],
+      plugins: [
+        createPlatformBundleDefinePlugin(
+          { date: false, temporal: false, decimal: false },
+          "date",
+          true,
+        ),
+      ],
       output: { format: "esm", sourcemap: true, minify: true },
       write: false,
     });
@@ -72,19 +78,25 @@ describe("platformBundleDefinePlugin", () => {
 
 describe("createPlatformBundleDefinePlugin", () => {
   const code =
-    "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL);";
+    "read(globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL, globalThis.process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL);";
 
-  test("keeps both date representations by default", () => {
-    expect(run(code)).toBe("read(false, false);");
+  test("keeps both date representations and leaves decimal out by default", () => {
+    expect(run(code)).toBe("read(false, false, true);");
+  });
+
+  test("folds the decimal gate to false only when the bundle keeps decimal", () => {
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true, decimal: true })),
+    ).toBe("read(false, false, false);");
   });
 
   test("folds the gates of representations the bundle leaves out to true", () => {
-    expect(run(code, createPlatformBundleDefinePlugin({ date: false, temporal: true }))).toBe(
-      "read(true, false);",
-    );
-    expect(run(code, createPlatformBundleDefinePlugin({ date: true, temporal: false }))).toBe(
-      "read(false, true);",
-    );
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: false, temporal: true, decimal: false })),
+    ).toBe("read(true, false, true);");
+    expect(
+      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: false, decimal: false })),
+    ).toBe("read(false, true, true);");
   });
 });
 
@@ -94,16 +106,28 @@ describe("createPlatformBundleDefinePlugin date default", () => {
   test("folds the date default gate to undefined when the bundle keeps the legacy default", () => {
     expect(run(code)).toBe("read(undefined);");
     expect(
-      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "legacy")),
+      run(
+        code,
+        createPlatformBundleDefinePlugin({ date: true, temporal: true, decimal: false }, "legacy"),
+      ),
     ).toBe("read(undefined);");
   });
 
   test("folds the date default gate to the configured representation literal", () => {
     expect(
-      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "temporal")),
+      run(
+        code,
+        createPlatformBundleDefinePlugin(
+          { date: true, temporal: true, decimal: false },
+          "temporal",
+        ),
+      ),
     ).toBe('read("temporal");');
     expect(
-      run(code, createPlatformBundleDefinePlugin({ date: true, temporal: true }, "date")),
+      run(
+        code,
+        createPlatformBundleDefinePlugin({ date: true, temporal: true, decimal: false }, "date"),
+      ),
     ).toBe('read("date");');
   });
 

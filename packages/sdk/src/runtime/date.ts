@@ -1,3 +1,4 @@
+import { Decimal, isStorableDecimal } from "./decimal";
 import { getTemporal } from "./temporal";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { EffectiveDateDefault } from "./types";
@@ -100,7 +101,7 @@ function describeReceivedValue(value: unknown): string {
   return `a ${type} (${truncateForDescription(String(value))})`;
 }
 
-type DateRepresentation = "date" | "temporal";
+type DateRepresentation = "date" | "temporal" | "decimal";
 
 type MaybeProcessGlobal = { process?: { env: Record<string, string | undefined> } };
 
@@ -113,7 +114,7 @@ function bundledDateDefault(): EffectiveDateDefault {
 }
 
 /**
- * Get the Date or Temporal representation a field converts its values to.
+ * Get the Date, Temporal, or Decimal representation a field converts its values to.
  * @param type - Field type
  * @param as - The field's `as` option
  * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
@@ -125,6 +126,7 @@ export function dateRepresentationOf(
   as: FieldMetadata["as"],
   defaultRepresentation: EffectiveDateDefault = bundledDateDefault(),
 ): DateRepresentation | undefined {
+  if (type === "decimal") return as === "decimal" ? "decimal" : undefined;
   if (type !== "date" && type !== "datetime" && type !== "time") return undefined;
   const resolved = as === "default" ? defaultRepresentation : as;
   return resolved === "date" || resolved === "temporal" ? resolved : undefined;
@@ -183,6 +185,26 @@ function serializeAsTemporal(type: TailorFieldType, value: unknown, path: string
   }
 }
 
+// toFixed() prints plain notation, never an exponent, so the Platform receives the digits as written.
+function serializeAsDecimal(_type: TailorFieldType, value: unknown, path: string): string {
+  if (!Decimal.isDecimal(value)) {
+    throw new TypeError(
+      `Expected a Decimal instance at ${describePathTarget(path)}, but received ${describeReceivedValue(value)}`,
+    );
+  }
+  if (!value.isFinite()) {
+    throw new RangeError(
+      `Expected a finite Decimal at ${describePathTarget(path)}, but received ${value.toString()}`,
+    );
+  }
+  if (!isStorableDecimal(value)) {
+    throw new RangeError(
+      `Expected a Decimal at ${describePathTarget(path)} within the range the Platform stores, but the value is out of range`,
+    );
+  }
+  return value.toFixed();
+}
+
 const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = {
   date: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DATE
     ? undefined
@@ -191,6 +213,9 @@ const dateSerializers: Record<DateRepresentation, DateSerializer | undefined> = 
     .__TAILOR_PLATFORM_BUNDLE_WITHOUT_TEMPORAL
     ? undefined
     : serializeAsTemporal,
+  decimal: (globalThis as MaybeProcessGlobal).process?.env.__TAILOR_PLATFORM_BUNDLE_WITHOUT_DECIMAL
+    ? undefined
+    : serializeAsDecimal,
 };
 
 function serializeValue(field: DateField, value: unknown, path: string): unknown {
@@ -225,7 +250,7 @@ function serializeValue(field: DateField, value: unknown, path: string): unknown
 }
 
 /**
- * Check whether a field or any of its nested fields uses a Date or Temporal representation.
+ * Check whether a field or any of its nested fields uses a Date, Temporal, or Decimal representation.
  * @param field - Field to inspect
  * @param representation - Only match fields using this representation
  * @param defaultRepresentation - Representation for fields whose `as` is `"default"`; read from the bundle when omitted
@@ -246,10 +271,10 @@ export function hasDateRepresentationFields(
 }
 
 /**
- * Convert fields using Date or Temporal representations to date, datetime, or time strings.
+ * Convert fields using Date, Temporal, or Decimal representations to their date, datetime, time, or decimal strings.
  * @param field - Field defining the value's shape
  * @param value - Value to serialize
- * @returns Value with Date and Temporal fields converted to strings
+ * @returns Value with Date, Temporal, and Decimal fields converted to strings
  * @internal
  */
 export function serializeDateFields(field: DateField, value: unknown): unknown {
