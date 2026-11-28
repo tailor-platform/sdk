@@ -119,6 +119,17 @@ describe("KyselyTypePlugin integration tests", () => {
       );
     });
 
+    test("rejects decimal with contentMapper, whose getDB does not read Decimal values", () => {
+      // @ts-expect-error decimal is only available together with distPath
+      expect(() => kyselyTypePlugin({ contentMapper: true, decimal: true })).toThrow(
+        "kyselyTypePlugin does not support decimal with contentMapper: true; set distPath instead.",
+      );
+    });
+
+    test("accepts decimal with distPath", () => {
+      expect(() => kyselyTypePlugin({ distPath: "./db.ts", decimal: true })).not.toThrow();
+    });
+
     test("rejects an empty distPath, which would generate no types and enable no content mapper", () => {
       expect(() => kyselyTypePlugin({ distPath: "" })).toThrow(/distPath must not be empty/);
     });
@@ -253,6 +264,48 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(content).toContain("export const getDB = createGetDB<Namespace>({ temporal: true });");
       expect(content).not.toContain("GetDBConfig");
       expect(content).not.toContain("export const getDB = createGetDB<Namespace>();");
+    });
+
+    test("bakes decimal: Decimal into the generated getDB when configured", async () => {
+      const table = db.table("Item", { price: db.decimal(), note: db.string() });
+      const plugin = kyselyTypePlugin({ distPath: testDistPath, decimal: true });
+
+      const result = await plugin.onTailorDBReady!(
+        createCtx(
+          [
+            {
+              namespace: "test-namespace",
+              tables: { Item: parseTailorDBType(toSchemaOutput(table)) },
+            },
+          ],
+          undefined,
+          { distPath: testDistPath, decimal: true },
+        ),
+      );
+
+      const content = result.files[0]!.content;
+      expect(content).toContain("type DecimalValue");
+      expect(content).toContain("price: DecimalValue;");
+      expect(content).toContain("note: string;");
+      expect(content).toContain('import { Decimal } from "@tailor-platform/sdk/runtime";');
+      expect(content).toContain(
+        "export const getDB = createGetDB<Namespace>({ decimal: Decimal });",
+      );
+    });
+
+    test("keeps decimal fields as strings when decimal is not configured", async () => {
+      const table = db.table("Item", { price: db.decimal() });
+
+      const result = await runOnTailorDBReady([
+        {
+          namespace: "test-namespace",
+          tables: { Item: parseTailorDBType(toSchemaOutput(table)) },
+        },
+      ]);
+
+      const content = result.files[0]!.content;
+      expect(content).toContain("price: string;");
+      expect(content).not.toContain("Decimal");
     });
 
     test("complete integration test with multiple types", async () => {

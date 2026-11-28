@@ -2,8 +2,8 @@ import * as inflection from "inflection";
 import { CLIError } from "#/cli/shared/errors";
 import {
   type DiffChangeKind,
+  MAX_SUPPORTED_MIGRATION_FILE_VERSION,
   MIN_SUPPORTED_MIGRATION_FILE_VERSION,
-  SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import {
   type NormalizedSchemaSnapshot,
@@ -27,14 +27,14 @@ export function assertSupportedMigrationFileVersion(filePath: string, raw: unkno
   if (
     Number.isInteger(version) &&
     version >= MIN_SUPPORTED_MIGRATION_FILE_VERSION &&
-    version <= SCHEMA_SNAPSHOT_VERSION
+    version <= MAX_SUPPORTED_MIGRATION_FILE_VERSION
   ) {
     return;
   }
 
-  const supportedRange = `${MIN_SUPPORTED_MIGRATION_FILE_VERSION}-${SCHEMA_SNAPSHOT_VERSION}`;
+  const supportedRange = `${MIN_SUPPORTED_MIGRATION_FILE_VERSION}-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`;
   let guidance: string;
-  if (version > SCHEMA_SNAPSHOT_VERSION) {
+  if (version > MAX_SUPPORTED_MIGRATION_FILE_VERSION) {
     guidance = `Upgrade to an SDK that supports migration file format version ${version}.`;
   } else if (version < MIN_SUPPORTED_MIGRATION_FILE_VERSION) {
     guidance =

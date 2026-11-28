@@ -25,6 +25,18 @@ import {
  */
 export const SCHEMA_SNAPSHOT_VERSION = 8 as const;
 
+/**
+ * Format version of a migration whose `db.ts` uses `Decimal` column types. Only such a migration
+ * is written with it, so projects that do not use `Decimal` keep producing files older SDKs read.
+ */
+export const DECIMAL_MIGRATION_FILE_VERSION = 9 as const;
+
+/** Newest migration file format this SDK can replay. */
+export const MAX_SUPPORTED_MIGRATION_FILE_VERSION: number = Math.max(
+  SCHEMA_SNAPSHOT_VERSION,
+  DECIMAL_MIGRATION_FILE_VERSION,
+);
+
 /** Oldest migration file format this SDK can replay. */
 export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
 
@@ -336,6 +348,11 @@ export interface MigrationDiff {
    * means `false`.
    */
   temporal?: boolean | undefined;
+  /**
+   * Whether this migration's `db.ts` was generated with `Decimal` column types, so its
+   * script reads and writes `Decimal` values. Absent means `false`.
+   */
+  decimal?: boolean | undefined;
   /**
    * The `defaultDateRepresentation` in effect when this migration's script was
    * generated. The script keeps running with it, whatever the config says later.

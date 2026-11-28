@@ -86,7 +86,9 @@ describe("db-types-generator", () => {
     temporal = false,
   ): Promise<{ filePath: string; content: string }> {
     createMigrationDir(testDir, migrationNumber);
-    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff, [], temporal);
+    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff, [], {
+      temporal,
+    });
     const content = fs.readFileSync(filePath, "utf-8");
     return { filePath, content };
   }
@@ -326,7 +328,7 @@ describe("db-types-generator", () => {
             after: { type: "string", required: false },
           },
         ],
-        true,
+        { temporal: true },
       );
       const content = fs.readFileSync(filePath, "utf-8");
 
@@ -370,6 +372,133 @@ describe("db-types-generator", () => {
       expect(content).toContain(
         "eventDate: ColumnType<Temporal.PlainDate | null, Temporal.PlainDate | string, Temporal.PlainDate | string>;",
       );
+    });
+  });
+
+  describe("writeDbTypesFile with decimal option", () => {
+    async function generateWithDecimal(
+      snapshot: SchemaSnapshot,
+      diff?: MigrationDiff,
+      expandPlans: Parameters<typeof writeDbTypesFile>[4] = [],
+      options: Parameters<typeof writeDbTypesFile>[5] = { decimal: true },
+    ): Promise<string> {
+      createMigrationDir(testDir, 1);
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff, expandPlans, options);
+      return fs.readFileSync(filePath, "utf-8");
+    }
+
+    const itemSnapshot = () =>
+      createMockSnapshot({
+        Item: {
+          fields: {
+            price: { type: "decimal", required: true },
+            discount: { type: "decimal", required: false },
+            history: { type: "decimal", required: true, array: true },
+          },
+        },
+      });
+
+    test("maps decimal fields to DecimalValue and imports it", async () => {
+      const content = await generateWithDecimal(itemSnapshot());
+
+      expect(content).toContain("type DecimalValue");
+      expect(content).toContain("price: DecimalValue;");
+      expect(content).toContain("discount: DecimalValue | null;");
+      expect(content).toContain("history: ArrayColumnType<DecimalValue>;");
+    });
+
+    test("leaves decimal fields as strings when decimal is not set", async () => {
+      const content = await generateWithDecimal(itemSnapshot(), undefined, [], {});
+
+      expect(content).toContain("price: string;");
+      expect(content).not.toContain("Decimal");
+    });
+
+    test("imports the Decimal type for a cleared decimal field carried through expand-contract", async () => {
+      const snapshot = createMockSnapshot({
+        Item: { fields: { price: { type: "decimal", required: false } } },
+      });
+
+      const content = await generateWithDecimal(snapshot, undefined, [
+        {
+          tableName: "Item",
+          fieldName: "price",
+          tempFieldName: "priceTmp",
+          before: { type: "decimal", required: false },
+          after: { type: "string", required: false },
+        },
+      ]);
+
+      expect(content).toContain(
+        'type Generated, type Decimal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).toContain(
+        "price: ColumnType<Decimal | null, Decimal | string | null, Decimal | string | null>;",
+      );
+    });
+
+    test("imports the Decimal type for a field changing from optional to required", async () => {
+      const snapshot = createMockSnapshot({
+        Item: { fields: { price: { type: "decimal", required: false } } },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            tableName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: false },
+            after: { type: "decimal", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const content = await generateWithDecimal(snapshot, diff);
+
+      expect(content).toContain(
+        'type Generated, type Decimal } from "@tailor-platform/sdk/kysely";',
+      );
+      expect(content).toContain(
+        "price: ColumnType<Decimal | null, Decimal | string, Decimal | string>;",
+      );
+    });
+
+    test("imports Temporal and Decimal together when both are in use", async () => {
+      const snapshot = createMockSnapshot({
+        Item: {
+          fields: {
+            price: { type: "decimal", required: false },
+            day: { type: "date", required: false },
+          },
+        },
+      });
+
+      const content = await generateWithDecimal(
+        snapshot,
+        undefined,
+        [
+          {
+            tableName: "Item",
+            fieldName: "price",
+            tempFieldName: "priceTmp",
+            before: { type: "decimal", required: false },
+            after: { type: "string", required: false },
+          },
+          {
+            tableName: "Item",
+            fieldName: "day",
+            tempFieldName: "dayTmp",
+            before: { type: "date", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        { temporal: true, decimal: true },
+      );
+
+      expect(content).toMatch(/type Temporal\b/);
+      expect(content).toMatch(/type Decimal\b/);
     });
   });
 

@@ -4,6 +4,7 @@ import { parseTypes } from "#/parser/service/tailordb/index";
 import { toSchemaOutput } from "#/utils/test/internal";
 import {
   generateKyselyTypesSource,
+  generateUnifiedKyselyTypes,
   processKyselyFields,
   processKyselyType,
 } from "./type-processor";
@@ -17,13 +18,15 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
 }
 
 async function getTypeDef(type: TailorAnyDBType, temporal = false) {
-  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), temporal);
+  const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)), { temporal });
   return result.typeDef;
 }
 
 describe("generateKyselyTypesSource", () => {
   test("exports getDB over no namespaces when no table is defined, so importing it still type-checks", async () => {
-    const source = await generateKyselyTypesSource([{ namespace: "main", tables: {} }], false);
+    const source = await generateKyselyTypesSource([{ namespace: "main", tables: {} }], {
+      temporal: false,
+    });
 
     expect(source).toContain("export interface Namespace {}");
     expect(source).toContain("export const getDB = createGetDB<Namespace>();");
@@ -195,7 +198,7 @@ describe("Kysely TypeProcessor", () => {
             }),
           ),
         ),
-        true,
+        { temporal: true },
       );
 
       expect(result.usedUtilityTypes).toEqual({
@@ -203,10 +206,94 @@ describe("Kysely TypeProcessor", () => {
         TemporalDate: true,
         TemporalInstant: true,
         TemporalTime: true,
+        DecimalValue: false,
         Serial: false,
         ObjectColumnType: false,
         ArrayColumnType: false,
       });
+    });
+  });
+
+  describe("decimal option", () => {
+    const table = db.table("Item", {
+      price: db.decimal(),
+      discount: db.decimal({ optional: true }),
+      history: db.decimal({ array: true }),
+      meta: db.object({ cost: db.decimal() }),
+    });
+
+    async function typeDefWith(decimal: boolean) {
+      const result = await processKyselyType(parseTailorDBType(toSchemaOutput(table)), {
+        decimal,
+      });
+      return result;
+    }
+
+    test("maps decimal fields to DecimalValue, including nullable and array ones", async () => {
+      const { typeDef } = await typeDefWith(true);
+
+      expect(typeDef).toContain("price: DecimalValue;");
+      expect(typeDef).toContain("discount: DecimalValue | null;");
+      expect(typeDef).toContain("history: ArrayColumnType<DecimalValue>;");
+    });
+
+    test("keeps a decimal field inside an object a string, which the runtime cannot convert", async () => {
+      const { typeDef } = await typeDefWith(true);
+
+      expect(typeDef).toContain("cost: string;");
+      expect(typeDef).not.toContain("ObjectColumnType<");
+    });
+
+    test("leaves decimal fields as strings when false (the default)", async () => {
+      const { typeDef, usedUtilityTypes } = await typeDefWith(false);
+
+      expect(typeDef).toContain("price: string;");
+      expect(typeDef).not.toContain("DecimalValue");
+      expect(usedUtilityTypes.DecimalValue).toBe(false);
+    });
+
+    test("tracks DecimalValue as a used utility type", async () => {
+      expect((await typeDefWith(true)).usedUtilityTypes.DecimalValue).toBe(true);
+    });
+
+    test("generates a getDB that reads the same Decimal class the tables are typed with", async () => {
+      const source = generateUnifiedKyselyTypes(
+        [{ namespace: "main", types: [await typeDefWith(true)] }],
+        { decimal: true },
+      );
+
+      expect(source).toContain("type DecimalValue,");
+      expect(source).toContain(
+        '} from "@tailor-platform/sdk/kysely";\nimport { Decimal } from "@tailor-platform/sdk/runtime";\n\nexport interface Namespace',
+      );
+      expect(source).toContain(
+        "export const getDB = createGetDB<Namespace>({ decimal: Decimal });",
+      );
+    });
+
+    test("passes temporal and decimal together", async () => {
+      const source = generateUnifiedKyselyTypes([], { temporal: true, decimal: true });
+
+      expect(source).toContain(
+        "export const getDB = createGetDB<Namespace>({ temporal: true, decimal: Decimal });",
+      );
+    });
+
+    test("leaves the generated file exactly as before when the option is off", async () => {
+      const source = generateUnifiedKyselyTypes([], {});
+
+      expect(source).toContain(
+        '} from "@tailor-platform/sdk/kysely";\n\nexport interface Namespace {}',
+      );
+    });
+
+    test("imports no Decimal when the option is off", async () => {
+      const source = generateUnifiedKyselyTypes(
+        [{ namespace: "main", types: [await typeDefWith(false)] }],
+        {},
+      );
+
+      expect(source).not.toContain("Decimal");
     });
   });
 
@@ -424,6 +511,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -437,6 +525,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -450,6 +539,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: true,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -466,6 +556,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: true,
           ObjectColumnType: false,
           ArrayColumnType: false,
@@ -481,6 +572,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: true,
           ArrayColumnType: false,
@@ -494,6 +586,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: true,
@@ -509,6 +602,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: true,
           ArrayColumnType: true,
@@ -527,6 +621,7 @@ describe("Kysely TypeProcessor", () => {
           TemporalDate: false,
           TemporalInstant: false,
           TemporalTime: false,
+          DecimalValue: false,
           Serial: false,
           ObjectColumnType: false,
           ArrayColumnType: false,

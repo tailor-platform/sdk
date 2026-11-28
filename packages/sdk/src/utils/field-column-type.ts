@@ -6,14 +6,23 @@ export type FieldColumnType =
   | "Timestamp"
   | "TemporalDate"
   | "TemporalInstant"
-  | "TemporalTime";
+  | "TemporalTime"
+  | "DecimalValue";
+
+/** The opt-in column representations generated code uses instead of the defaults. */
+export type ColumnTypeOptions = {
+  /** Resolve date/datetime/time fields to their Temporal column types. */
+  temporal?: boolean | undefined;
+  /** Resolve decimal fields to `Decimal` column types. */
+  decimal?: boolean | undefined;
+};
 
 /**
  * Map a scalar TailorDB field type to the column type generated code uses for it.
  *
- * With `temporal: false` (the default), `date`/`datetime` resolve to `Timestamp` and
+ * Without `options.temporal` (the default), `date`/`datetime` resolve to `Timestamp` and
  * `time` to `string`, because that's what the function runtime hands back for them by
- * default. With `temporal: true`, `date`/`datetime`/`time` resolve to their
+ * default. With `options.temporal`, `date`/`datetime`/`time` resolve to their
  * `Temporal.PlainDate`/`Temporal.Instant`/`Temporal.PlainTime` counterparts instead,
  * matching a `getDB` created with `createGetDB({ temporal: true })`.
  *
@@ -21,17 +30,22 @@ export type FieldColumnType =
  * before reaching here; passing either is a caller bug rather than a `string`
  * column.
  * @param fieldType - TailorDB scalar field type name
- * @param temporal - Whether to map date/datetime/time fields to their Temporal column
- * types instead of their `Date`/`string` defaults
+ * @param options - Which opt-in representations to map to, such as Temporal column types
+ * instead of the `Date`/`string` defaults
  * @returns The column type for the field, defaulting to `string`
  * @throws If given `enum` or `nested`
  */
-export function mapFieldTypeToColumnType(fieldType: string, temporal = false): FieldColumnType {
+export function mapFieldTypeToColumnType(
+  fieldType: string,
+  options: ColumnTypeOptions = {},
+): FieldColumnType {
+  const temporal = options.temporal === true;
   switch (fieldType) {
     case "uuid":
     case "string":
-    case "decimal":
       return "string";
+    case "decimal":
+      return options.decimal === true ? "DecimalValue" : "string";
     case "integer":
     case "float":
       return "number";
@@ -60,7 +74,15 @@ export type ColumnTypeAliasExpansion = {
   readonly select: string;
   /** Type the alias accepts on insert and update. */
   readonly write: string;
+  /**
+   * The type from `@tailor-platform/sdk/kysely` that the expansion names, which a file
+   * spelling the expansion out instead of using the alias has to import itself.
+   */
+  readonly spelledType?: SpelledColumnType;
 };
+
+/** A type from `@tailor-platform/sdk/kysely` that an alias expansion names. */
+export type SpelledColumnType = "Temporal" | "Decimal";
 
 /**
  * Column types whose alias expands to a `ColumnType`, mapped to that expansion.
@@ -79,9 +101,31 @@ export const COLUMN_TYPE_ALIASES: ReadonlyMap<string, ColumnTypeAliasExpansion> 
   ColumnTypeAliasExpansion
 >([
   ["Timestamp", { select: "Date", write: "Date | string" }],
-  ["TemporalDate", { select: "Temporal.PlainDate", write: "Temporal.PlainDate | string" }],
-  ["TemporalInstant", { select: "Temporal.Instant", write: "Temporal.Instant | string" }],
-  ["TemporalTime", { select: "Temporal.PlainTime", write: "Temporal.PlainTime | string" }],
+  [
+    "TemporalDate",
+    {
+      select: "Temporal.PlainDate",
+      write: "Temporal.PlainDate | string",
+      spelledType: "Temporal",
+    },
+  ],
+  [
+    "TemporalInstant",
+    {
+      select: "Temporal.Instant",
+      write: "Temporal.Instant | string",
+      spelledType: "Temporal",
+    },
+  ],
+  [
+    "TemporalTime",
+    {
+      select: "Temporal.PlainTime",
+      write: "Temporal.PlainTime | string",
+      spelledType: "Temporal",
+    },
+  ],
+  ["DecimalValue", { select: "Decimal", write: "Decimal | string", spelledType: "Decimal" }],
 ]);
 
 /** The settings of a TailorDB field that let the platform fill it on create. */

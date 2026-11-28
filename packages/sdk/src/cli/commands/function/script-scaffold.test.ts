@@ -87,7 +87,7 @@ describe("generateScriptDbTypes", () => {
   });
 
   test("emits Temporal column types and a Temporal getDB when temporal is enabled", () => {
-    const content = generateScriptDbTypes(makeSnapshot(), true);
+    const content = generateScriptDbTypes(makeSnapshot(), { temporal: true });
 
     expect(content).toContain("export const getDB = createGetDB<Namespace>({ temporal: true });");
     expect(content).toContain("shippedAt: TemporalInstant | null;");

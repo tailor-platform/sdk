@@ -1,3 +1,4 @@
+import { Decimal } from "decimal.js";
 import { describe, expect, test, vi } from "vitest";
 import { createGetDB } from "#/kysely/index";
 import { Temporal } from "#/runtime/temporal";
@@ -477,5 +478,60 @@ describe("mockTailordbWithPGlite", () => {
 
     expect(row.at).toBeInstanceOf(Temporal.Instant);
     expect(row.at.toString()).toBe("2026-03-14T09:30:00.123Z");
+  });
+
+  describe("column types", () => {
+    const priceFake = () =>
+      createFakePGlite((query) =>
+        query.startsWith("select")
+          ? {
+              rows: [{ p: "9.990000", len: 2.5 }],
+              fields: [
+                { name: "p", dataTypeID: 1700 },
+                { name: "len", dataTypeID: 701 },
+              ],
+              command: "SELECT",
+              rowCount: 1,
+            }
+          : undefined,
+      );
+
+    test("reports each column's PostgreSQL type name next to the rows, as the Platform does", async () => {
+      const fake = priceFake();
+      using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+      const client = new tailordb.Client({ namespace: "main" });
+
+      const result = await client.queryObject("select price as p, length as len from t");
+
+      expect(result.fields).toEqual([
+        { name: "p", typeName: "numeric" },
+        { name: "len", typeName: "float8" },
+      ]);
+    });
+
+    test("reports fields for a statement that returns no columns", async () => {
+      const fake = priceFake();
+      using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+      const client = new tailordb.Client({ namespace: "main" });
+
+      expect((await client.queryObject("delete from t")).fields).toEqual([]);
+    });
+
+    test("reads numeric columns back as Decimal for a decimal getDB", async () => {
+      const fake = priceFake();
+      using _mock = mockTailordbWithPGlite({ namespaces: { main: fake.client } });
+      const decimalGetDB = createGetDB<{ main: { Item: { p: string; len: number } } }>({
+        decimal: Decimal,
+      });
+
+      const row = await decimalGetDB("main")
+        .selectFrom("Item")
+        .select(["p", "len"])
+        .executeTakeFirstOrThrow();
+
+      expect(Decimal.isDecimal(row.p)).toBe(true);
+      expect(String(row.p)).toBe("9.99");
+      expect(row.len).toBe(2.5);
+    });
   });
 });

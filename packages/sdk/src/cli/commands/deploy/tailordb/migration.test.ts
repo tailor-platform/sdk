@@ -98,6 +98,7 @@ vi.mock("#/cli/shared/spinner", () => ({
 const bundleMigrationScriptMock = vi.fn();
 type BundleStepsOptions = {
   temporal?: boolean;
+  decimal?: boolean;
   dateDefault?: "legacy" | "temporal";
   skipSteps?: readonly string[];
 };
@@ -2166,7 +2167,26 @@ describe("migration", () => {
 
       await executeMigrations(createMockContext(), migrations, checkpoints);
 
-      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5])).toEqual([true, false]);
+      expect(
+        bundleMigrationScriptMock.mock.calls.map((call) => call[5]?.temporal === true),
+      ).toEqual([true, false]);
+    });
+
+    test("runs each migration script with the decimal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          hasScript: true,
+          diff: createMockMigrationDiff({ decimal: true }),
+        }),
+        createMockMigration({ number: 2, hasScript: true }),
+      ];
+
+      await executeMigrations(createMockContext(), migrations, checkpoints);
+
+      expect(bundleMigrationScriptMock.mock.calls.map((call) => call[5]?.decimal === true)).toEqual(
+        [true, false],
+      );
     });
 
     test("runs each migration script with the date default recorded in its diff", async () => {
@@ -2210,10 +2230,37 @@ describe("migration", () => {
 
       await executeMigrations(stepsContext(), migrations, checkpoints);
 
-      expect(bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal)).toEqual([
-        true,
-        false,
-      ]);
+      expect(
+        bundleMigrationStepsMock.mock.calls.map(([options]) => options.temporal === true),
+      ).toEqual([true, false]);
+    });
+
+    test("runs each steps script with the decimal mode recorded in its diff", async () => {
+      const migrations = [
+        createMockMigration({
+          number: 1,
+          scriptForm: stepsForm,
+          diff: createMockMigrationDiff({ decimal: true }),
+        }),
+        createMockMigration({ number: 2, scriptForm: stepsForm }),
+      ];
+      const completed = {
+        success: true,
+        logs: "",
+        completedSteps: ["backfill"],
+        failedSteps: [],
+        stepsMayHaveCommitted: true,
+      };
+      bundleMigrationStepsMock.mockClear();
+      executeMigrationStepsAsWorkflowMock
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(completed);
+
+      await executeMigrations(stepsContext(), migrations, checkpoints);
+
+      expect(
+        bundleMigrationStepsMock.mock.calls.map(([options]) => options.decimal === true),
+      ).toEqual([true, false]);
     });
 
     test("runs each steps script with the date default recorded in its diff", async () => {

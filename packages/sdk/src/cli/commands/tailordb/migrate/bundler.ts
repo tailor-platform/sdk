@@ -15,6 +15,7 @@ import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 
 async function buildEntry(
   entryPath: string,
@@ -62,6 +63,37 @@ async function buildEntry(
   return result.output[0].code;
 }
 
+/**
+ * The imports and `getDB` definition a migration entry module starts with. Without
+ * `decimal`, `getDB` builds the client by hand; with it, `createGetDB` builds the client
+ * that reads and writes `Decimal`.
+ * @param columnTypes - Which opt-in column representations the migration's `db.ts` uses
+ * @returns Source of the imports and of `getDB`
+ */
+function migrationKyselySource(columnTypes: ColumnTypeOptions): { imports: string; getDB: string } {
+  const temporal = JSON.stringify(columnTypes.temporal === true);
+  if (columnTypes.decimal !== true) {
+    return {
+      imports: 'import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";',
+      getDB: [
+        "function getDB(namespace) {",
+        `  const client = new tailordb.Client({ namespace, temporal: ${temporal} });`,
+        "  return new Kysely({",
+        "    dialect: new TailordbDialect(client),",
+        "  });",
+        "}",
+      ].join("\n"),
+    };
+  }
+  return {
+    imports: [
+      'import { createGetDB } from "@tailor-platform/sdk/kysely";',
+      'import { Decimal } from "@tailor-platform/sdk/runtime";',
+    ].join("\n"),
+    getDB: `const getDB = createGetDB({ temporal: ${temporal}, decimal: Decimal });`,
+  };
+}
+
 /** **Beta:** This API may change in future releases. */
 export interface MigrationBundleResult {
   namespace: string;
@@ -84,9 +116,8 @@ export interface MigrationBundleResult {
  * @param {number} migrationNumber - Migration number
  * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
  * @param {string} [baseDir] - Directory to resolve the bundler's tsconfig against; defaults to the migration script's directory
- * @param {boolean} [temporal] - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`; matches
- * the `tailordb.Client` this script runs against to the Temporal column types its `db.ts` was generated with.
- * Defaults to `false`.
+ * @param columnTypes - Which opt-in column representations, such as Temporal or Decimal, the script's
+ * `db.ts` was generated with; the client this script runs against matches them. Defaults to none.
  * @param dateDefault - Representation applied to `t` date fields that omit `as`, as recorded in the
  * migration's `diff.json` when it was generated. Defaults to `"legacy"`.
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
@@ -97,7 +128,7 @@ export async function bundleMigrationScript(
   migrationNumber: number,
   env: Record<string, string | number | boolean> = {},
   baseDir?: string,
-  temporal = false,
+  columnTypes: ColumnTypeOptions = {},
   dateDefault: EffectiveDateDefault = "legacy",
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor (relative to project root)
@@ -111,16 +142,12 @@ export async function bundleMigrationScript(
 
   // Create entry file that wraps migration in a transaction
   // getDB function is defined inline to avoid dependency on generated types
+  const kysely = migrationKyselySource(columnTypes);
   const entryContent = ml /* js */ `
     import { main as _migrationMain } from "${absoluteSourcePath}";
-    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+    ${kysely.imports}
 
-    function getDB(namespace) {
-      const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
-      return new Kysely({
-        dialect: new TailordbDialect(client),
-      });
-    }
+    ${kysely.getDB}
 
     export async function main(input) {
       const env = ${JSON.stringify(env)};
@@ -145,7 +172,7 @@ export async function bundleMigrationScript(
   };
 }
 
-export interface BundleSingleStepMigrationOptions {
+export interface BundleSingleStepMigrationOptions extends ColumnTypeOptions {
   /** Path to the migration script exporting `steps`. */
   sourceFile: string;
   namespace: string;
@@ -156,8 +183,6 @@ export interface BundleSingleStepMigrationOptions {
   step: string;
   /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
   baseDir?: string | undefined;
-  /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`, as recorded in `diff.json`. Defaults to `"legacy"`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }
@@ -172,15 +197,7 @@ export interface BundleSingleStepMigrationOptions {
 export async function bundleSingleStepMigration(
   options: BundleSingleStepMigrationOptions,
 ): Promise<MigrationBundleResult> {
-  const {
-    sourceFile,
-    namespace,
-    migrationNumber,
-    env,
-    step,
-    temporal = false,
-    dateDefault = "legacy",
-  } = options;
+  const { sourceFile, namespace, migrationNumber, env, step, dateDefault = "legacy" } = options;
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
   const entryPath = path.join(
@@ -189,16 +206,12 @@ export async function bundleSingleStepMigration(
   );
   const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
 
+  const kysely = migrationKyselySource(options);
   const entryContent = ml /* js */ `
     import { steps as _migrationSteps } from ${JSON.stringify(absoluteSourcePath)};
-    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+    ${kysely.imports}
 
-    function getDB(namespace) {
-      const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
-      return new Kysely({
-        dialect: new TailordbDialect(client),
-      });
-    }
+    ${kysely.getDB}
 
     export async function main(input) {
       const env = ${JSON.stringify(env)};
@@ -218,7 +231,7 @@ export async function bundleSingleStepMigration(
   return { namespace, migrationNumber, bundledCode };
 }
 
-export interface BundleMigrationStepsOptions {
+export interface BundleMigrationStepsOptions extends ColumnTypeOptions {
   /** Path to the migration script exporting `steps`. */
   sourceFile: string;
   namespace: string;
@@ -233,8 +246,6 @@ export interface BundleMigrationStepsOptions {
   skipSteps?: readonly string[] | undefined;
   /** Directory to resolve the bundler's tsconfig against; defaults to the script's directory. */
   baseDir?: string | undefined;
-  /** Whether the script's `db.ts` uses Temporal column types. Defaults to `false`. */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`, as recorded in the migration's `diff.json`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }
@@ -259,7 +270,6 @@ export async function bundleMigrationSteps(
     order,
     runnerJobFunctionName,
     skipSteps = [],
-    temporal = false,
     dateDefault = "legacy",
   } = options;
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -270,20 +280,16 @@ export async function bundleMigrationSteps(
   );
   const absoluteSourcePath = path.resolve(sourceFile).replace(/\\/g, "/");
 
+  const kysely = migrationKyselySource(options);
   const entryContent = ml /* js */ `
     import { steps as _migrationSteps } from ${JSON.stringify(absoluteSourcePath)};
-    import { Kysely, TailordbDialect } from "@tailor-platform/sdk/kysely";
+    ${kysely.imports}
 
     const STEP_ORDER = ${JSON.stringify(order)};
     const RUNNER_JOB_FUNCTION = ${JSON.stringify(runnerJobFunctionName)};
     const SKIP_STEPS = ${JSON.stringify(skipSteps)};
 
-    function getDB(namespace) {
-      const client = new tailordb.Client({ namespace, temporal: ${JSON.stringify(temporal)} });
-      return new Kysely({
-        dialect: new TailordbDialect(client),
-      });
-    }
+    ${kysely.getDB}
 
     export async function main(input) {
       const step = input && input.step;

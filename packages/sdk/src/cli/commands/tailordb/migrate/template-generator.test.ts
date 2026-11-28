@@ -7,7 +7,7 @@ import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
 import { runMigrationSteps } from "#/vitest/migration-steps";
 import { createKyselyPGlite } from "#/vitest/pglite-kysely";
-import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import { DECIMAL_MIGRATION_FILE_VERSION, SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { analyzeMigrationScriptSource, countUnresolvedTodos } from "./script-form";
 import {
   SCHEMA_FILE_NAME,
@@ -178,6 +178,47 @@ describe("template-generator", () => {
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed.temporal).toBe(true);
+    });
+
+    test("records decimal: true in diff.json and writes it as a format version older SDKs refuse", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot: createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: { price: { type: "decimal", required: true } },
+          },
+        }),
+        decimal: true,
+      });
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed.decimal).toBe(true);
+      expect(parsed.version).toBe(DECIMAL_MIGRATION_FILE_VERSION);
+      expect(await fs.readFile(result.dbTypesFilePath, "utf-8")).toContain("price: DecimalValue;");
+    });
+
+    test("keeps the baseline format version and records no decimal when decimal is off", async () => {
+      const result = await generateDataOnlyMigrationFiles({
+        diff: createMockMigrationDiff({ requiresMigrationScript: true }),
+        migrationsDir: tempDir,
+        migrationNumber: 1,
+        snapshot: createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: { price: { type: "decimal", required: true } },
+          },
+        }),
+      });
+
+      const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
+      expect(parsed).not.toHaveProperty("decimal");
+      expect(parsed.version).toBe(SCHEMA_SNAPSHOT_VERSION);
+      expect(await fs.readFile(result.dbTypesFilePath, "utf-8")).toContain("price: string;");
     });
 
     test("records the date default in diff.json so the script keeps running with it", async () => {
@@ -927,7 +968,7 @@ describe("template-generator", () => {
         previousSnapshot,
         undefined,
         [],
-        true,
+        { temporal: true },
       );
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
@@ -942,7 +983,7 @@ describe("template-generator", () => {
         previousSnapshot,
         undefined,
         [],
-        false,
+        { temporal: false },
         "temporal",
       );
       expect(JSON.parse(await fs.readFile(pinned.diffFilePath, "utf-8")).dateRepresentation).toBe(
@@ -974,15 +1015,9 @@ describe("template-generator", () => {
         ],
       });
 
-      const result = await generateDiffFiles(
-        diff,
-        tempDir,
-        1,
-        previousSnapshot,
-        undefined,
-        [],
-        true,
-      );
+      const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot, undefined, [], {
+        temporal: true,
+      });
 
       const parsed = JSON.parse(await fs.readFile(result.diffFilePath, "utf-8"));
       expect(parsed).not.toHaveProperty("temporal");
@@ -3048,6 +3083,29 @@ describe("template-generator", () => {
         "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true });",
       );
       expect(script).toContain("tailor-runtime");
+    });
+
+    test("reads Decimal values from PGlite for a migration recorded as decimal", () => {
+      const script = generateMigrationPgliteTestScript(createMockMigrationDiff({ decimal: true }));
+
+      expect(script).toContain('import { Decimal } from "@tailor-platform/sdk/runtime";');
+      expect(script).toContain(
+        "const db = createKyselyPGlite<Unmigrated<Database>>(pglite, { decimal: Decimal });",
+      );
+    });
+
+    test("passes temporal and decimal together for a migration recorded as both", () => {
+      const script = generateMigrationPgliteTestScript(
+        createMockMigrationDiff({ temporal: true, decimal: true }),
+      );
+
+      expect(script).toContain(
+        "createKyselyPGlite<Unmigrated<Database>>(pglite, { temporal: true, decimal: Decimal });",
+      );
+    });
+
+    test("imports no Decimal for a migration that is not recorded as decimal", () => {
+      expect(generateMigrationPgliteTestScript(createMockMigrationDiff())).not.toContain("Decimal");
     });
 
     test("applies the recorded date representation before running a temporal-default migration", () => {

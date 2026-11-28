@@ -120,6 +120,10 @@ Negative values follow the same rule based on absolute magnitude:
 | `"1.123456"`  | 6     | `"1.123456"` |
 | `"1.1234567"` | 6     | `"1.123457"` |
 
+To work with [`Decimal`](https://mikemcl.github.io/decimal.js/) values from decimal.js instead of
+strings, use `t.decimal({ as: "decimal" })` in a [resolver](../resolver.md#decimal-values) and the
+[`decimal` option of `kyselyTypePlugin`](../../configuration.md#plugins-beta) for Kysely queries.
+
 ### Enum Fields
 
 Enum fields must define at least one allowed value. Empty arrays are rejected during `tailor deploy` and `tailor tailordb migration generate`.

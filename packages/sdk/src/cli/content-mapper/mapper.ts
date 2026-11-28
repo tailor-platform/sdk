@@ -78,7 +78,9 @@ async function kyselyTypesOf(
         ? await loadWorkspaceNamespaces(loaded.workspace, plugins, loadOptions)
         : (await loadConfigNamespaces(loaded.config, plugins, undefined, loadOptions)).namespaces;
     return {
-      kyselyTypes: await generateContentMappedKyselyTypes(namespaces, options.temporal ?? false),
+      kyselyTypes: await generateContentMappedKyselyTypes(namespaces, {
+        temporal: options.temporal,
+      }),
     };
   } catch (error) {
     return { kyselyError: errorSummary(error) };

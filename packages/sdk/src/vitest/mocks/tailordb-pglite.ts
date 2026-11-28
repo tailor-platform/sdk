@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { toQueryFields } from "../pglite-decimal";
 import { deserializeTemporalRows, serializeTemporalParams } from "../pglite-temporal";
 import { tailordbRoot, withDispose } from "./shared";
 import type { PGliteClient, PGliteQueryResult } from "../pglite-kysely";
@@ -73,6 +74,7 @@ function toQueryObjectResult(result: PGliteQueryResult, temporal: boolean) {
     command: result.command ?? (result.affectedRows ? "UPDATE" : "SELECT"),
     rowCount: result.rowCount ?? (result.affectedRows || result.rows.length),
     rows: temporal ? deserializeTemporalRows(result.rows, result.fields) : result.rows,
+    fields: toQueryFields(result.fields),
   };
 }
 

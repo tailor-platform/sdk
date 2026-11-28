@@ -11,7 +11,7 @@ import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow
 import * as path from "pathe";
 import { assert, describe, test, expect, vi, aroundEach } from "vitest";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
-import { SCHEMA_SNAPSHOT_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import { MAX_SUPPORTED_MIGRATION_FILE_VERSION } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
   applyPreMigrationIndexAdjustments,
@@ -1735,7 +1735,7 @@ describe("planTailorDB (service level)", () => {
           1,
           {},
           migrationsDir,
-          false,
+          {},
           "legacy",
         );
       });
@@ -3207,7 +3207,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       path.join(migrationDir, "diff.json"),
       JSON.stringify({
         ...createMockMigrationDiff({ namespace: "test-tailordb" }),
-        version: SCHEMA_SNAPSHOT_VERSION + 1,
+        version: MAX_SUPPORTED_MIGRATION_FILE_VERSION + 1,
       }),
     );
     const planResult = makePlanResult(true);
@@ -3217,7 +3217,9 @@ describe("applyTailorDB migration label reconciliation", () => {
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toMatchObject({
       code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
       details: expect.stringMatching(
-        new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+        new RegExp(
+          `supports migration file format versions 1-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`,
+        ),
       ),
     });
     expect(client.createTailorDBService).not.toHaveBeenCalled();

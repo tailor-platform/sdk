@@ -2,6 +2,10 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test, aroundEach, aroundAll } from "vitest";
 import {
+  DECIMAL_MIGRATION_FILE_VERSION,
+  MAX_SUPPORTED_MIGRATION_FILE_VERSION,
+} from "./diff-calculator";
+import {
   loadSnapshot,
   loadDiff,
   getMigrationFiles,
@@ -830,7 +834,11 @@ describe("snapshot", () => {
       const filePath = path.join(testDir, "future_diff.json");
       fs.writeFileSync(
         filePath,
-        JSON.stringify({ version: SCHEMA_SNAPSHOT_VERSION + 1, namespace, changes: [] }),
+        JSON.stringify({
+          version: MAX_SUPPORTED_MIGRATION_FILE_VERSION + 1,
+          namespace,
+          changes: [],
+        }),
       );
 
       expect(() => loadDiff(filePath)).toThrow(
@@ -839,6 +847,30 @@ describe("snapshot", () => {
           message: expect.stringContaining("Unsupported migration file format version"),
         }),
       );
+    });
+
+    test("loads a diff written as a decimal migration and keeps its decimal record", () => {
+      const filePath = path.join(testDir, "decimal_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: DECIMAL_MIGRATION_FILE_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          changes: [],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          hasWarnings: false,
+          warnings: [],
+          requiresMigrationScript: true,
+          decimal: true,
+        }),
+      );
+
+      const diff = loadDiff(filePath);
+
+      expect(diff.decimal).toBe(true);
+      expect(diff.version).toBe(DECIMAL_MIGRATION_FILE_VERSION);
     });
 
     test("keeps a recorded empty warnings array authoritative over changes", () => {
@@ -1107,7 +1139,9 @@ describe("snapshot", () => {
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
           details: expect.stringMatching(
-            new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+            new RegExp(
+              `supports migration file format versions 1-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`,
+            ),
           ),
           suggestion: expect.stringMatching(
             /re-baseline with an SDK that still supports this migration history, then upgrade/i,
@@ -1117,7 +1151,7 @@ describe("snapshot", () => {
     });
 
     test("rejects snapshot formats newer than the supported window", () => {
-      const version = SCHEMA_SNAPSHOT_VERSION + 1;
+      const version = MAX_SUPPORTED_MIGRATION_FILE_VERSION + 1;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
@@ -1125,7 +1159,9 @@ describe("snapshot", () => {
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
           details: expect.stringMatching(
-            new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+            new RegExp(
+              `supports migration file format versions 1-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`,
+            ),
           ),
           suggestion: expect.stringMatching(
             new RegExp(
@@ -1447,7 +1483,9 @@ describe("snapshot", () => {
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
           details: expect.stringMatching(
-            new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+            new RegExp(
+              `supports migration file format versions 1-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`,
+            ),
           ),
           suggestion: expect.stringMatching(
             /re-baseline with an SDK that still supports this migration history, then upgrade/i,
@@ -1457,7 +1495,7 @@ describe("snapshot", () => {
     });
 
     test("rejects diff formats newer than the supported window", () => {
-      const version = SCHEMA_SNAPSHOT_VERSION + 1;
+      const version = MAX_SUPPORTED_MIGRATION_FILE_VERSION + 1;
       const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
       fs.writeFileSync(filePath, JSON.stringify({ version }));
 
@@ -1465,7 +1503,9 @@ describe("snapshot", () => {
         expect.objectContaining({
           code: "MIGRATION_FILE_VERSION_UNSUPPORTED",
           details: expect.stringMatching(
-            new RegExp(`supports migration file format versions 1-${SCHEMA_SNAPSHOT_VERSION}`),
+            new RegExp(
+              `supports migration file format versions 1-${MAX_SUPPORTED_MIGRATION_FILE_VERSION}`,
+            ),
           ),
           suggestion: expect.stringMatching(
             new RegExp(

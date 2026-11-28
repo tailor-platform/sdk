@@ -34,6 +34,7 @@ import {
 } from "./snapshot";
 import { collectBreakingNestedMemberChanges } from "./snapshot-comparison";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 import type {
   MigrationDiff,
   DiffChange,
@@ -125,9 +126,8 @@ export async function generateSchemaFile(
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot (for db.ts generation)
  * @param {string} [description] - Optional description for the migration
  * @param expandPlans - Field changes carried through temporary fields
- * @param temporal - Whether date/datetime/time fields in db.ts resolve to their Temporal
- * column types instead of their `Date`/`string` defaults. Should match whatever
- * `kyselyTypePlugin` was configured with. Defaults to `false`.
+ * @param columnTypes - Which opt-in column representations, such as Temporal, `db.ts` uses
+ * instead of the defaults. Should match whatever `kyselyTypePlugin` was configured with.
  * @param dateDefault - Representation applied to `t` date fields that omit `as`; recorded in `diff.json`
  * @param finishedExpansions - Conversions whose temporary field this migration renames back; every row already holds a value there
  * @returns {Promise<GenerateDiffResult>} Generated file info
@@ -139,7 +139,7 @@ export async function generateDiffFiles(
   previousSnapshot: SchemaSnapshot,
   description?: string,
   expandPlans: readonly ExpandContractPlan[] = [],
-  temporal = false,
+  columnTypes: ColumnTypeOptions = {},
   dateDefault: EffectiveDateDefault = "legacy",
   finishedExpansions: readonly ExpandContractPlan[] = [],
 ): Promise<GenerateDiffResult> {
@@ -189,7 +189,7 @@ export async function generateDiffFiles(
       migrationsDir,
       migrationNumber,
       expandPlans,
-      temporal,
+      ...columnTypes,
       dateDefault,
     });
     result.dbTypesFilePath = typeFiles.dbTypesPath;
@@ -201,7 +201,7 @@ export async function generateDiffFiles(
 }
 
 /** Inputs for {@link generateDataOnlyMigrationFiles}. */
-interface GenerateDataOnlyFilesOptions {
+interface GenerateDataOnlyFilesOptions extends ColumnTypeOptions {
   /** Empty diff marked as requiring a migration script. */
   diff: MigrationDiff;
   migrationsDir: string;
@@ -209,12 +209,6 @@ interface GenerateDataOnlyFilesOptions {
   /** Schema the migration runs against, used for db.ts generation. */
   snapshot: SchemaSnapshot;
   description?: string | undefined;
-  /**
-   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
-   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
-   * was configured with. Defaults to `false`.
-   */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }
@@ -240,14 +234,7 @@ interface GenerateDataOnlyFilesResult {
 export async function generateDataOnlyMigrationFiles(
   options: GenerateDataOnlyFilesOptions,
 ): Promise<GenerateDataOnlyFilesResult> {
-  const {
-    migrationsDir,
-    migrationNumber,
-    snapshot,
-    description,
-    temporal = false,
-    dateDefault = "legacy",
-  } = options;
+  const { migrationsDir, migrationNumber, snapshot, description, dateDefault = "legacy" } = options;
   const migrationDir = getMigrationDirPath(migrationsDir, migrationNumber);
   await fs.mkdir(migrationDir, { recursive: true });
 
@@ -268,7 +255,8 @@ export async function generateDataOnlyMigrationFiles(
     diff,
     migrationsDir,
     migrationNumber,
-    temporal,
+    temporal: options.temporal,
+    decimal: options.decimal,
     dateDefault,
   });
 
@@ -754,6 +742,11 @@ export function generateMigrationPgliteTestScript(
     ? `pgliteSchema.${diff.namespace}`
     : `pgliteSchema[${JSON.stringify(diff.namespace)}]`;
   const temporalDefault = diff.dateRepresentation === "temporal";
+  const clientOptions = [
+    ...(diff.temporal ? ["temporal: true"] : []),
+    ...(diff.decimal ? ["decimal: Decimal"] : []),
+  ];
+  const pgliteClientOptions = clientOptions.length > 0 ? `, { ${clientOptions.join(", ")} }` : "";
   return `/**
  * PGlite test for the ${diff.namespace} migration script.
  *
@@ -777,10 +770,12 @@ import { PGlite } from "@electric-sql/pglite";
 import { applyDateRepresentation, createKyselyPGlite, prepareFixtures${isSteps ? ", runMigrationSteps" : ""}, type Unmigrated } from "@tailor-platform/sdk/vitest";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import type { Database } from "./db";
-import { pgliteSchema } from "./db.pglite";
+import { pgliteSchema } from "./db.pglite";${
+    diff.decimal ? '\nimport { Decimal } from "@tailor-platform/sdk/runtime";' : ""
+  }
 ${dateRepresentationPin(diff, isSteps ? "steps" : "main")}
 const pglite = new PGlite();
-const db = createKyselyPGlite<Unmigrated<Database>>(pglite${diff.temporal ? ", { temporal: true }" : ""});
+const db = createKyselyPGlite<Unmigrated<Database>>(pglite${pgliteClientOptions});
 
 // PGlite loads Postgres on first use, which can take longer than the default hook timeout.
 beforeAll(async () => {

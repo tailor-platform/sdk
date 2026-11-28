@@ -105,6 +105,7 @@ import type { Application, ServiceSettings } from "#/cli/services/application";
 import type { Spinner } from "#/cli/shared/spinner";
 import type { AuthInvokerObject } from "#/types/auth.generated";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 
 // ============================================================================
 // Types
@@ -448,7 +449,10 @@ async function bundlePendingMigration(
 ): Promise<MigrationBundleResult> {
   const { env, configDir, resumed, skipSteps } = options;
   const form = migration.scriptForm;
-  const temporal = migration.diff.temporal ?? false;
+  const columnTypes: ColumnTypeOptions = {
+    temporal: migration.diff.temporal,
+    decimal: migration.diff.decimal,
+  };
   const dateDefault = migration.diff.dateRepresentation ?? "legacy";
   try {
     if (form?.kind !== "steps") {
@@ -458,7 +462,7 @@ async function bundlePendingMigration(
         migration.number,
         env,
         configDir,
-        temporal,
+        columnTypes,
         dateDefault,
       );
     }
@@ -468,7 +472,7 @@ async function bundlePendingMigration(
       migrationNumber: migration.number,
       env,
       baseDir: configDir,
-      temporal,
+      ...columnTypes,
       dateDefault,
     };
     return usesStepRunner(form, resumed)

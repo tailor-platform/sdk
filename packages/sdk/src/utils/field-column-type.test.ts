@@ -27,13 +27,15 @@ describe("mapFieldTypeToColumnType", () => {
     ["datetime", "TemporalInstant"],
     ["time", "TemporalTime"],
   ] as const)("maps %s to %s when temporal is true", (fieldType, expected) => {
-    expect(mapFieldTypeToColumnType(fieldType, true)).toBe(expected);
+    expect(mapFieldTypeToColumnType(fieldType, { temporal: true })).toBe(expected);
   });
 
   test.each(["uuid", "string", "decimal", "integer", "float", "bool", "boolean"])(
     "leaves %s unaffected when temporal is true",
     (fieldType) => {
-      expect(mapFieldTypeToColumnType(fieldType, true)).toBe(mapFieldTypeToColumnType(fieldType));
+      expect(mapFieldTypeToColumnType(fieldType, { temporal: true })).toBe(
+        mapFieldTypeToColumnType(fieldType),
+      );
     },
   );
 });
@@ -45,6 +47,7 @@ describe("COLUMN_TYPE_ALIASES", () => {
       "TemporalDate",
       "TemporalInstant",
       "TemporalTime",
+      "DecimalValue",
     ]);
   });
 
@@ -63,6 +66,32 @@ describe("COLUMN_TYPE_ALIASES", () => {
     expect(COLUMN_TYPE_ALIASES.get(alias)).toEqual({
       select: temporalType,
       write: `${temporalType} | string`,
+      spelledType: "Temporal",
     });
   });
+
+  test("expands DecimalValue to the slots its alias declaration uses", () => {
+    expect(COLUMN_TYPE_ALIASES.get("DecimalValue")).toEqual({
+      select: "Decimal",
+      write: "Decimal | string",
+      spelledType: "Decimal",
+    });
+  });
+});
+
+describe("mapFieldTypeToColumnType with decimal", () => {
+  test("maps decimal to DecimalValue only when the option is on", () => {
+    expect(mapFieldTypeToColumnType("decimal", { decimal: true })).toBe("DecimalValue");
+    expect(mapFieldTypeToColumnType("decimal")).toBe("string");
+    expect(mapFieldTypeToColumnType("decimal", { decimal: false })).toBe("string");
+  });
+
+  test.each(["uuid", "string", "integer", "float", "bool", "date", "datetime", "time"])(
+    "leaves %s unaffected when decimal is on",
+    (fieldType) => {
+      expect(mapFieldTypeToColumnType(fieldType, { decimal: true })).toBe(
+        mapFieldTypeToColumnType(fieldType),
+      );
+    },
+  );
 });

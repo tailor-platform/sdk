@@ -48,6 +48,7 @@ import {
   generateMigrationTestScript,
 } from "./template-generator";
 import type { EffectiveDateDefault } from "#/runtime/types";
+import type { ColumnTypeOptions } from "#/utils/field-column-type";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 interface ScriptOptions {
@@ -65,18 +66,12 @@ export interface MarkScriptSkippedOptions {
   reason: string;
 }
 
-export interface AddMigrationScriptFilesOptions {
+export interface AddMigrationScriptFilesOptions extends ColumnTypeOptions {
   migrationsDir: string;
   migrationNumber: number;
   withTest?: boolean | undefined;
   /** Whether the project has `@electric-sql/pglite` installed; gates the PGlite test scaffold. */
   pgliteAvailable?: boolean | undefined;
-  /**
-   * Whether date/datetime/time fields in db.ts resolve to their Temporal column types
-   * instead of their `Date`/`string` defaults. Should match whatever `kyselyTypePlugin`
-   * was configured with. Defaults to `false`.
-   */
-  temporal?: boolean | undefined;
   /** Representation applied to `t` date fields that omit `as`; recorded in `diff.json`. */
   dateDefault?: EffectiveDateDefault | undefined;
 }
@@ -192,7 +187,6 @@ export async function addMigrationScriptFiles(
     migrationNumber,
     withTest = false,
     pgliteAvailable = false,
-    temporal = false,
     dateDefault = "legacy",
   } = options;
   const label = formatMigrationNumber(migrationNumber);
@@ -275,7 +269,8 @@ export async function addMigrationScriptFiles(
       diff,
       migrationsDir,
       migrationNumber,
-      temporal,
+      temporal: options.temporal,
+      decimal: options.decimal,
       dateDefault,
     });
     result.dbTypesPath = typeFiles.dbTypesPath;
@@ -350,7 +345,7 @@ async function script(options: ScriptOptions): Promise<void> {
   const { plugins } = loaded;
   const config = configOf(loaded);
   const configDir = path.dirname(config.path);
-  const temporal = resolvePluginConfig(plugins, KyselyGeneratorID)?.temporal ?? false;
+  const kyselyOptions = resolvePluginConfig(plugins, KyselyGeneratorID);
   const dateDefault = effectiveDateDefault(config);
 
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
@@ -414,7 +409,8 @@ async function script(options: ScriptOptions): Promise<void> {
     migrationNumber,
     withTest: options.withTest,
     pgliteAvailable,
-    temporal,
+    temporal: kyselyOptions?.temporal,
+    decimal: kyselyOptions?.decimal,
     dateDefault,
   });
   printMutationResult({

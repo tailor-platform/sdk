@@ -34,7 +34,7 @@ import {
   generateUnifiedKyselyTypes,
   processKyselyFields,
 } from "#/plugin/builtin/kysely-type/type-processor";
-import { isFilledOnCreate } from "#/utils/field-column-type";
+import { type ColumnTypeOptions, isFilledOnCreate } from "#/utils/field-column-type";
 import type { SnapshotFieldConfig } from "#/cli/commands/tailordb/migrate/snapshot-types";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfigFile } from "#/cli/shared/config-loader";
@@ -61,14 +61,17 @@ const GENERATED_DB_TYPES_HEADER = [
 /**
  * Generate the script-scoped `db.ts` contents from a schema snapshot.
  * @param snapshot - Schema snapshot of the target namespace
- * @param temporal - Whether `kyselyTypePlugin` was configured with `{ temporal: true }`
+ * @param options - The `kyselyTypePlugin` options that change column types, such as `temporal`
  * @returns Generated `db.ts` file contents
  */
-export function generateScriptDbTypes(snapshot: SchemaSnapshot, temporal = false): string {
+export function generateScriptDbTypes(
+  snapshot: SchemaSnapshot,
+  options: ColumnTypeOptions = {},
+): string {
   const types = Object.values(snapshot.tables).map((table) =>
-    processKyselyFields(table.name, table.fields, temporal),
+    processKyselyFields(table.name, table.fields, options),
   );
-  const body = generateUnifiedKyselyTypes([{ namespace: snapshot.namespace, types }], temporal);
+  const body = generateUnifiedKyselyTypes([{ namespace: snapshot.namespace, types }], options);
   return `${GENERATED_DB_TYPES_HEADER}\n\n${body}`;
 }
 

@@ -28,6 +28,7 @@ export interface UsedUtilityTypes {
   TemporalDate: boolean;
   TemporalInstant: boolean;
   TemporalTime: boolean;
+  DecimalValue: boolean;
   Serial: boolean;
   ObjectColumnType: boolean;
   ArrayColumnType: boolean;
